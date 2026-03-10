@@ -14,8 +14,8 @@ function fallbackOutput(params: {
     : world.characters.slice(0, 2);
 
   const narrationText = activeEvent
-    ? `${activeEvent.title}. ${activeEvent.summary} The chamber recalibrates around your command: "${input.text}".`
-    : `${world.introNarration} Your latest order echoes through the room: "${input.text}".`;
+    ? `${activeEvent.title}. ${activeEvent.summary} The situation shifts around your choice: "${input.text}".`
+    : `${world.introNarration} Your latest action reshapes the scene: "${input.text}".`;
 
   return {
     narration: [
@@ -36,9 +36,9 @@ function fallbackOutput(params: {
           : `${character.name} weighs the public and political cost, watching for weakness or resolve in equal measure.`,
     })),
     uiChoices: [
-      "Ask an advisor for counsel",
-      "Issue a direct order",
-      "Question the petitioner further",
+      "Ask for more context",
+      "Commit to a direct action",
+      "Probe for hidden consequences",
     ],
     audioDirectives: [
       {
@@ -49,7 +49,7 @@ function fallbackOutput(params: {
       {
         type: "await-input",
         voice: "alloy",
-        text: "The court waits for your next decree.",
+        text: "The scenario waits for your next move.",
       },
     ],
   };
@@ -72,7 +72,7 @@ function buildResponseRequest(params: {
             text: [
               "You are the orchestration layer for Pandora's Box.",
               "Respond as JSON with keys narration, dialogue, uiChoices, audioDirectives.",
-              "Keep the world coherent, historically grounded, and politically consequential.",
+              "Keep the world coherent, grounded in the provided setting, and consequential.",
               `World: ${params.world.title}.`,
               `Setting: ${params.world.setting}.`,
               `Norms: ${params.world.norms.join(" | ")}.`,

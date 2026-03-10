@@ -5,102 +5,11 @@ import {
   getNarratorVoiceProfile,
   normalizeVoiceProfile,
 } from "@/lib/simulation/voice-mapping";
-import type { WorldBuildPolicyError, WorldDefinition } from "@/types/simulation";
+import type { WorldDefinition } from "@/types/simulation";
 import { worldDefinitionSchema } from "@/types/simulation";
-
-const historicalAnchorTerms = [
-  "king",
-  "queen",
-  "emperor",
-  "pharaoh",
-  "sultan",
-  "dynasty",
-  "ancient",
-  "medieval",
-  "bronze age",
-  "iron age",
-  "classical",
-  "roman",
-  "byzantine",
-  "ottoman",
-  "feudal",
-  "biblical",
-  "throne",
-  "court",
-];
-
-const modernPoliticalSignals = [
-  "president",
-  "prime minister",
-  "congress",
-  "senate",
-  "parliament",
-  "election",
-  "campaign",
-  "cabinet",
-  "nato",
-  "united nations",
-  "today",
-  "current",
-  "modern",
-  "202",
-  "203",
-  "breaking news",
-  "twitter",
-  "x.com",
-];
-
-const livingFigureSignals = [
-  "donald trump",
-  "joe biden",
-  "kamala harris",
-  "barack obama",
-  "vladimir putin",
-  "volodymyr zelensky",
-  "benjamin netanyahu",
-  "xi jinping",
-  "narendra modi",
-  "elon musk",
-];
-
-export class WorldBuilderPolicyError extends Error {
-  readonly code: WorldBuildPolicyError["code"];
-
-  constructor(message: string) {
-    super(message);
-    this.code = "NON_HISTORICAL_PROMPT";
-    this.name = "WorldBuilderPolicyError";
-  }
-}
 
 function normalizePrompt(prompt: string) {
   return prompt.trim().replace(/\s+/g, " ");
-}
-
-function passesHistoricalPolicy(normalizedPrompt: string) {
-  const lowered = normalizedPrompt.toLowerCase();
-  const includesLivingFigure = livingFigureSignals.some((term) => lowered.includes(term));
-
-  if (includesLivingFigure) {
-    return {
-      allowed: false as const,
-      reason:
-        "Builder v1 only supports historical eras and cannot generate worlds centered on living real-world figures.",
-    };
-  }
-
-  const isHistoricalIntent = historicalAnchorTerms.some((term) => lowered.includes(term));
-  const includesModernSignal = modernPoliticalSignals.some((term) => lowered.includes(term));
-
-  if (includesModernSignal && !isHistoricalIntent) {
-    return {
-      allowed: false as const,
-      reason:
-        "Builder v1 supports historical-era simulations only. Rephrase the request in a historical setting.",
-    };
-  }
-
-  return { allowed: true as const };
 }
 
 function slugify(input: string) {
@@ -119,7 +28,7 @@ function titleFromPrompt(prompt: string) {
     .trim();
 
   if (!cleaned) {
-    return "Custom Kingdom";
+    return "Custom World";
   }
 
   return cleaned
@@ -418,7 +327,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
   }
 
   const title = asString(parsed.title ?? parsed.name, titleFromPrompt(prompt));
-  const safeSlug = slugify(title) || "historical-world";
+  const safeSlug = slugify(title) || "generated-world";
 
   const safety = asRecord(parsed.safetyProfile ?? parsed.safety) ?? {};
   const historicalThemes = asStringArray(
@@ -444,7 +353,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
       name,
       description: asString(
         record.description ?? record.summary ?? record.agenda,
-        `${name} seeks leverage over the court.`,
+        `${name} is maneuvering to protect its interests.`,
       ),
       influence: clampScore(asNumber(record.influence ?? record.power ?? record.clout, 55)),
       disposition: mapDisposition(record.disposition ?? record.attitude ?? record.stance),
@@ -454,23 +363,23 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
   if (!factions.length) {
     factions.push(
       {
-        id: "court",
-        name: "Court Secretariat",
-        description: "Administrative core that values stability and continuity.",
+        id: "core-group",
+        name: "Core Group",
+        description: "Operational leaders focused on stability and coordination.",
         influence: 62,
         disposition: "supportive",
       },
       {
-        id: "nobility",
-        name: "Regional Nobility",
-        description: "Powerful elites balancing loyalty with private ambition.",
+        id: "rival-group",
+        name: "Rival Group",
+        description: "A competing bloc with different priorities and methods.",
         influence: 58,
         disposition: "volatile",
       },
       {
-        id: "commons",
-        name: "Urban Commons",
-        description: "Merchants and workers sensitive to scarcity and taxes.",
+        id: "stakeholders",
+        name: "Stakeholders",
+        description: "People impacted by outcomes and sensitive to credibility.",
         influence: 51,
         disposition: "neutral",
       },
@@ -572,13 +481,13 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
       title: roleTitle,
       summary: asString(
         record.summary ?? record.description,
-        "You hold authority in a volatile historical power structure.",
+        "You make high-stakes decisions in a volatile environment.",
       ),
       responsibilities: asStringArray(record.responsibilities ?? record.duties).length
         ? asStringArray(record.responsibilities ?? record.duties)
         : [
-            "Issue decrees with political and material consequences.",
-            "Balance state stability, public sentiment, and fiscal capacity.",
+            "Choose actions under pressure with real tradeoffs.",
+            "Balance short-term wins against long-term consequences.",
           ],
     };
   });
@@ -586,11 +495,11 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
   if (!roles.length) {
     roles.push({
       id: "protagonist",
-      title: `Sovereign of ${title}`,
-      summary: "You arbitrate factional conflict while protecting legitimacy.",
+      title: `Lead Decision-Maker of ${title}`,
+      summary: "You navigate conflict, uncertainty, and competing incentives.",
       responsibilities: [
-        "Issue rulings and strategic decrees.",
-        "Balance coercion, legitimacy, and resources.",
+        "Set strategy and make critical calls.",
+        "Manage resources, trust, and momentum.",
       ],
     });
   }
@@ -675,10 +584,10 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
   if (!events.length) {
     events.push(
       {
-        id: "fiscal-shock",
-        title: "Fiscal Shock",
+        id: "resource-shock",
+        title: "Resource Shock",
         category: "economy" as const,
-        summary: "Revenue shortfalls force emergency policy choices.",
+        summary: "A sudden shortage forces emergency tradeoffs.",
         urgency: 72,
         triggerWhen: {
           politicalStabilityBelow: undefined,
@@ -686,15 +595,15 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
           militaryPressureAbove: undefined,
           publicSentimentBelow: undefined,
         },
-        stakes: ["Austerity may stabilize funds but inflame public anger."],
-        narratorPrompt: "Show petitions, supply strain, and competing elite demands.",
+        stakes: ["Stabilizing systems now may trigger backlash later."],
+        narratorPrompt: "Show immediate constraints, stakeholder pressure, and hidden costs.",
         actorIds: characters.slice(0, 2).map((character) => character.id),
       },
       {
-        id: "border-pressure",
-        title: "Border Pressure",
+        id: "external-pressure",
+        title: "External Pressure",
         category: "military" as const,
-        summary: "Frontier conflict tests command credibility.",
+        summary: "Outside threats test leadership credibility.",
         urgency: 76,
         triggerWhen: {
           politicalStabilityBelow: undefined,
@@ -702,15 +611,15 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
           militaryPressureAbove: 40,
           publicSentimentBelow: undefined,
         },
-        stakes: ["Delay risks emboldening rivals and eroding confidence."],
-        narratorPrompt: "Convey urgency through scouts, commanders, and anxious courtiers.",
+        stakes: ["Delay may embolden rivals and drain confidence."],
+        narratorPrompt: "Convey urgency through alarming updates and divided advisors.",
         actorIds: characters.slice(0, 2).map((character) => character.id),
       },
       {
-        id: "elite-defiance",
-        title: "Elite Defiance",
+        id: "internal-fracture",
+        title: "Internal Fracture",
         category: "politics" as const,
-        summary: "A powerful faction publicly challenges central authority.",
+        summary: "An influential bloc openly challenges your direction.",
         urgency: 70,
         triggerWhen: {
           politicalStabilityBelow: 62,
@@ -718,8 +627,8 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
           militaryPressureAbove: undefined,
           publicSentimentBelow: undefined,
         },
-        stakes: ["Concession may buy time but weaken long-term legitimacy."],
-        narratorPrompt: "Describe negotiations charged with threats and veiled bargains.",
+        stakes: ["Compromise may calm conflict now but weaken your position later."],
+        narratorPrompt: "Describe tense negotiation, power plays, and reputational risk.",
         actorIds: characters.slice(0, 2).map((character) => character.id),
       },
     );
@@ -790,39 +699,39 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
     title,
     setting: asString(
       parsed.setting ?? parsed.environment ?? parsed.worldSetting,
-      `A volatile historical arena shaped by scarcity, legitimacy, and power contests in ${title}.`,
+      `A high-pressure environment where trust, scarcity, and conflict shape outcomes in ${title}.`,
     ),
     premise: asString(
       parsed.premise,
-      `You govern ${title} while balancing factional pressure, material constraints, and strategic threats.`,
+      `You navigate ${title} while balancing relationships, resources, and strategic risk.`,
     ),
     introNarration: asString(
       parsed.introNarration ?? parsed.openingNarration,
-      "The chamber tightens with expectation as rival blocs read your first move for signs of strength or weakness.",
+      "Everyone is watching your first move, trying to predict whether you can steer this situation without collapse.",
     ),
     norms: asStringArray(parsed.norms).length
       ? asStringArray(parsed.norms)
       : [
-          "Power is negotiated through institutions, coercion, and ritual.",
+          "Influence is negotiated through trust, leverage, and timing.",
           "Every decree creates winners, losers, and second-order effects.",
         ],
     powerStructures: asStringArray(parsed.powerStructures).length
       ? asStringArray(parsed.powerStructures)
       : [
-          "Central authority is constrained by elite blocs and military realities.",
-          "Legitimacy depends on both material outcomes and symbolic authority.",
+          "No actor has perfect control; coordination and incentives matter.",
+          "Credibility depends on outcomes, communication, and follow-through.",
         ],
     tonalConstraints: asStringArray(parsed.tonalConstraints).length
       ? asStringArray(parsed.tonalConstraints)
       : [
-          "Keep narration grounded in political consequence and tradeoffs.",
+          "Keep narration grounded in consequence, tension, and tradeoffs.",
           "Treat all factions as strategic actors with coherent incentives.",
         ],
     narratorVoice,
     safetyProfile: {
       historicalThemes: historicalThemes.length
         ? historicalThemes
-        : ["war", "scarcity", "class conflict", "coercion"],
+        : ["conflict", "scarcity", "trust", "power"],
       disallowedContent: disallowedContent.length
         ? disallowedContent
         : [
@@ -878,12 +787,12 @@ async function generateWorldWithModel(prompt: string) {
           {
             type: "input_text",
             text: [
-              "You build historically grounded simulation worlds for a strategy engine.",
+              "You build simulation worlds for a strategy engine.",
               "Return strict JSON only. No markdown. No prose outside JSON.",
               "The JSON must include keys:",
               "id,title,setting,premise,introNarration,norms,powerStructures,tonalConstraints,safetyProfile,roles,factions,characters,eventTemplates,initialState.",
               "Constraints:",
-              "- Historical era only (no modern democracies or living political figures).",
+              "- Respect the user's prompt and setting. Do not force a historical frame unless requested.",
               "- Every eventTemplate.actorIds must reference existing characters.",
               "- initialState.factionInfluence must include all factions.",
               "- initialState.characterStates and relationships must include all characters.",
@@ -930,7 +839,7 @@ async function finalizeWorld(raw: unknown, prompt: string) {
   const withVoices = worldDefinitionSchema.parse(voiceEnriched);
 
   const title = withVoices.title.trim() || titleFromPrompt(prompt);
-  const safeSlug = slugify(title) || "historical-world";
+  const safeSlug = slugify(title) || "generated-world";
 
   const world: WorldDefinition = {
     ...withVoices,
@@ -948,12 +857,6 @@ export async function buildWorldDefinitionFromPrompt(prompt: string) {
 
   if (!normalizedPrompt) {
     throw new Error("Prompt is required.");
-  }
-
-  const policy = passesHistoricalPolicy(normalizedPrompt);
-
-  if (!policy.allowed) {
-    throw new WorldBuilderPolicyError(policy.reason);
   }
 
   const raw = await generateWorldWithModel(normalizedPrompt);

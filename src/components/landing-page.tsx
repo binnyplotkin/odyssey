@@ -166,6 +166,9 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
   const heroVideoMp4 =
     process.env.NEXT_PUBLIC_LANDING_HERO_VIDEO_MP4 ??
     "/landing_page_video_optimized.mp4";
+  const heroVideoHdMp4 =
+    process.env.NEXT_PUBLIC_LANDING_HERO_VIDEO_HD_MP4 ??
+    "https://scmrwqpkj7u5w0gc.public.blob.vercel-storage.com/videos/pandoras_box.mp4";
   const heroVideoWebm =
     process.env.NEXT_PUBLIC_LANDING_HERO_VIDEO_WEBM ??
     "/landing_page_video_optimized.webm";
@@ -182,6 +185,51 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
   const dragLastRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const restoreVideoTimeRef = useRef<number | null>(null);
+  const [activeHeroVideoMp4, setActiveHeroVideoMp4] = useState(heroVideoMp4);
+
+  useEffect(() => {
+    if (!heroVideoHdMp4 || heroVideoHdMp4 === heroVideoMp4) {
+      return;
+    }
+
+    let cancelled = false;
+    const preloadVideo = document.createElement("video");
+    preloadVideo.preload = "auto";
+    preloadVideo.muted = true;
+    preloadVideo.playsInline = true;
+    preloadVideo.src = heroVideoHdMp4;
+
+    const handleCanPlayThrough = () => {
+      if (cancelled) {
+        return;
+      }
+
+      restoreVideoTimeRef.current = videoRef.current?.currentTime ?? 0;
+      setActiveHeroVideoMp4(heroVideoHdMp4);
+    };
+
+    preloadVideo.addEventListener("canplaythrough", handleCanPlayThrough, { once: true });
+    preloadVideo.load();
+
+    return () => {
+      cancelled = true;
+      preloadVideo.removeEventListener("canplaythrough", handleCanPlayThrough);
+      preloadVideo.src = "";
+      preloadVideo.load();
+    };
+  }, [heroVideoHdMp4, heroVideoMp4]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+
+    if (!video) {
+      return;
+    }
+
+    video.load();
+    void video.play().catch(() => undefined);
+  }, [activeHeroVideoMp4, useWebmBackground, heroVideoWebm]);
 
   const showcaseWorlds = showcaseMeta.map((item) => ({
     ...item,
@@ -442,7 +490,10 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
   return (
     <main className="min-h-screen bg-[var(--background)] text-white">
       {generationStage ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[rgba(38,29,19,0.45)] px-4 backdrop-blur-md">
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center px-4 backdrop-blur-md"
+          style={{ background: "color-mix(in srgb, var(--foreground) 40%, transparent)" }}
+        >
           <div className="panel w-full max-w-xl rounded-[1.75rem] p-6 md:p-8">
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--border)] bg-white/55">
               <span className="relative block h-10 w-10">
@@ -478,16 +529,16 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
                       current
                         ? {
                             borderColor: "color-mix(in srgb, var(--accent) 65%, white)",
-                            background: "rgba(139,97,55,0.12)",
+                            background: "color-mix(in srgb, var(--accent) 14%, white)",
                           }
                         : complete
                           ? {
                               borderColor: "color-mix(in srgb, var(--success) 62%, white)",
-                              background: "rgba(61,112,85,0.12)",
+                              background: "color-mix(in srgb, var(--success) 14%, white)",
                             }
                           : {
                               borderColor: "var(--border)",
-                              background: "rgba(255,255,255,0.44)",
+                              background: "var(--panel)",
                             }
                     }
                   >
@@ -533,8 +584,21 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
             if (!video || !video.paused) return;
             void video.play().catch(() => undefined);
           }}
+          onLoadedMetadata={() => {
+            const video = videoRef.current;
+            const restoreTime = restoreVideoTimeRef.current;
+
+            if (!video || restoreTime === null) {
+              return;
+            }
+
+            const maxTime =
+              Number.isFinite(video.duration) && video.duration > 0 ? Math.max(video.duration - 0.1, 0) : restoreTime;
+            video.currentTime = Math.min(restoreTime, maxTime);
+            restoreVideoTimeRef.current = null;
+          }}
         >
-          <source src={heroVideoMp4} type="video/mp4" />
+          <source src={activeHeroVideoMp4} type="video/mp4" />
           {useWebmBackground ? <source src={heroVideoWebm} type="video/webm" /> : null}
         </video>
         <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 pb-8 pt-10 text-center md:px-6 lg:px-8">
@@ -549,7 +613,8 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
           </div>
 
           <form
-            className="mx-auto mt-auto mb-8 w-full max-w-xl md:mb-10"
+            className="mx-auto mt-auto mb-8 w-full md:mb-10"
+            style={{ maxWidth: "500px" }}
             onSubmit={(event) => {
               event.preventDefault();
               void beginGeneratedSession();
@@ -558,7 +623,7 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
             <p className="mb-3 text-center text-lg font-medium tracking-[0.03em] text-white/86 md:text-2xl">
               Simulate your desired experience
             </p>
-            <div className="relative rounded-[20px] border border-white/20 bg-white/8 p-2 shadow-[0_12px_44px_rgba(0,0,0,0.18)] backdrop-blur-2xl">
+            <div className="relative w-full rounded-[20px] border border-white/20 bg-white/8 p-2 shadow-[0_12px_44px_rgba(0,0,0,0.18)] backdrop-blur-2xl">
               <input
                 value={chatPrompt}
                 onChange={(event) => setChatPrompt(event.target.value)}
@@ -586,7 +651,7 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
         </div>
       </section>
 
-      <section className="relative bg-[var(--background)] text-[#1f2a30]">
+      <section className="relative bg-[var(--background)] text-[var(--foreground)]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 text-center md:px-6 md:py-16 lg:px-8">
           <div className="mx-auto max-w-6xl">
             <div className="flex items-center justify-center gap-3">
@@ -629,21 +694,25 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
                         filter: `blur(${pose.blur})`,
                         zIndex: pose.zIndex,
                         boxShadow: isActive
-                          ? "0 30px 56px rgba(16, 24, 30, 0.44)"
-                          : "0 16px 30px rgba(20, 28, 34, 0.26)",
+                          ? "0 30px 56px color-mix(in srgb, var(--foreground) 38%, transparent)"
+                          : "0 16px 30px color-mix(in srgb, var(--foreground) 22%, transparent)",
                         transition: isDragging
                           ? "opacity 220ms ease, filter 220ms ease, box-shadow 220ms ease"
                           : "left 520ms ease, top 520ms ease, transform 520ms ease, opacity 420ms ease, filter 420ms ease, box-shadow 420ms ease",
                       }}
                     >
                       <span
-                        className={`pointer-events-none absolute -bottom-3 h-8 rounded-full bg-[#1a252c]/65 blur-xl ${
+                        className={`pointer-events-none absolute -bottom-3 h-8 rounded-full blur-xl ${
                           isActive ? "w-28 md:w-36" : "w-20 md:w-26"
                         }`}
+                        style={{
+                          background:
+                            "color-mix(in srgb, var(--foreground) 62%, transparent)",
+                        }}
                       />
                       <span className="absolute inset-0 overflow-hidden rounded-full">
                         {isActive ? (
-                          <span className="pointer-events-none absolute -inset-3 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.55)_0%,rgba(255,255,255,0.22)_40%,rgba(234,223,201,0)_72%)] blur-xl" />
+                          <span className="pointer-events-none absolute -inset-3 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.55)_0%,rgba(255,255,255,0.22)_40%,rgba(255,255,255,0)_72%)] blur-xl" />
                         ) : null}
                         <Image
                           src={world.image}
@@ -665,16 +734,16 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
                         <span
                           className={`pointer-events-none absolute inset-0 rounded-full ${
                             isActive
-                              ? "bg-[radial-gradient(circle,rgba(255,255,255,0)_40%,rgba(255,255,255,0.16)_62%,rgba(234,223,201,0.82)_100%)]"
-                              : "bg-[radial-gradient(circle,rgba(255,255,255,0)_50%,rgba(234,223,201,0.52)_100%)]"
+                              ? "bg-[radial-gradient(circle,rgba(255,255,255,0)_40%,rgba(255,255,255,0.16)_62%,rgba(220,231,234,0.82)_100%)]"
+                              : "bg-[radial-gradient(circle,rgba(255,255,255,0)_50%,rgba(220,231,234,0.52)_100%)]"
                           }`}
                         />
                       </span>
-                      <span className="absolute -bottom-12 z-10 rounded-full bg-white/86 px-2 py-1 text-center font-mono text-[10px] uppercase tracking-[0.24em] text-[#1d2830] md:-bottom-14 md:text-xs">
+                      <span className="absolute -bottom-12 z-10 rounded-full bg-white/86 px-2 py-1 text-center font-mono text-[10px] uppercase tracking-[0.24em] text-[var(--foreground)] md:-bottom-14 md:text-xs">
                         {world.title.replace(" World", "")}
                       </span>
                       {!world.available ? (
-                        <span className="absolute -bottom-20 rounded-full border border-white/40 bg-white/72 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.24em] text-[#465059] md:-bottom-24 md:text-[9px]">
+                        <span className="absolute -bottom-20 rounded-full border border-white/40 bg-white/72 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.24em] text-[var(--muted)] md:-bottom-24 md:text-[9px]">
                           Incoming
                         </span>
                       ) : null}
@@ -687,7 +756,7 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
             </div>
           </div>
 
-          <div className="mx-auto mt-6 max-w-4xl rounded-[2rem] border border-[#bfa882]/55 bg-white/46 px-5 py-6 shadow-[0_18px_52px_rgba(43,48,45,0.18)] backdrop-blur-2xl md:grid md:grid-cols-[0.88fr_1.12fr] md:items-center md:gap-8 md:px-8">
+          <div className="mx-auto mt-6 max-w-4xl rounded-[2rem] border border-[var(--border)] bg-white/46 px-5 py-6 shadow-[0_18px_52px_rgba(16,33,41,0.2)] backdrop-blur-2xl md:grid md:grid-cols-[0.88fr_1.12fr] md:items-center md:gap-8 md:px-8">
             <div className="relative mx-auto h-48 w-full max-w-sm overflow-hidden rounded-[1.7rem] border border-white/35 bg-black/12 shadow-[0_18px_54px_rgba(0,0,0,0.18)]">
               <Image
                 src={activeWorld.image}
@@ -701,16 +770,16 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
             </div>
 
             <div className="mt-5 md:mt-0 md:text-left">
-              <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#6b5f4e]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-[var(--muted)]">
                 {activeWorld.eyebrow}
               </p>
-              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-[#20272c] md:text-5xl">
+              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-[var(--foreground)] md:text-5xl">
                 {activeWorld.title}
               </h2>
-              <p className="mt-4 text-sm leading-7 text-[#2e3438] md:text-base">
+              <p className="mt-4 text-sm leading-7 text-[var(--foreground)] md:text-base">
                 {activeWorld.description}
               </p>
-              <p className="mt-3 text-sm italic tracking-[-0.01em] text-[#5a5f63]">
+              <p className="mt-3 text-sm italic tracking-[-0.01em] text-[var(--muted)]">
                 {activeWorld.atmosphere}
               </p>
             </div>
@@ -721,7 +790,7 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
               type="button"
               onClick={() => void beginSession()}
               disabled={isPending}
-              className="inline-flex min-w-[16rem] items-center justify-center gap-3 rounded-[1.2rem] border border-[#30434f]/35 bg-[#2f4653]/92 px-8 py-4 text-base font-medium text-[#f5eddc] shadow-[0_12px_32px_rgba(34,47,53,0.22)] transition hover:bg-[#243a46] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-w-[16rem] items-center justify-center gap-3 rounded-[1.2rem] border border-[var(--accent)]/35 bg-[var(--accent-strong)] px-8 py-4 text-base font-medium text-slate-50 shadow-[0_12px_32px_rgba(22,52,64,0.24)] transition hover:bg-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPending
                 ? "Opening reality..."
@@ -731,11 +800,11 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
               <span aria-hidden="true">→</span>
             </button>
 
-            <div className="rounded-[1.2rem] border border-[#bfa882]/55 bg-white/46 px-5 py-4 text-left backdrop-blur-xl">
-              <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-[#6c624f]">
+            <div className="rounded-[1.2rem] border border-[var(--border)] bg-white/46 px-5 py-4 text-left backdrop-blur-xl">
+              <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-[var(--muted)]">
                 Current status
               </p>
-              <p className="mt-2 text-sm text-[#2e3438]">
+              <p className="mt-2 text-sm text-[var(--foreground)]">
                 {activeWorld.available
                   ? "Playable now with session routing and world-state simulation."
                   : "Featured in the selector now. Simulation pack arrives in a later release."}
@@ -746,17 +815,17 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
           <div className="mt-4 flex items-center justify-center">
             <Link
               href="/builder"
-              className="inline-flex items-center gap-2 rounded-full border border-white/22 bg-white/10 px-4 py-2 text-sm text-white/90 backdrop-blur-xl transition hover:bg-white/18"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white/55 px-4 py-2 text-sm text-[var(--foreground)] backdrop-blur-xl transition hover:bg-white/80"
             >
               Build a New World
               <span aria-hidden="true">↗</span>
             </Link>
           </div>
 
-          <p className="mt-8 text-lg italic tracking-[-0.01em] text-white/56">
+          <p className="mt-8 text-lg italic tracking-[-0.01em] text-[var(--muted)]">
             &ldquo;What is it like to become someone else and have the world answer honestly?&rdquo;
           </p>
-          {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
+          {error ? <p className="mt-4 text-sm text-[var(--danger)]">{error}</p> : null}
         </div>
       </section>
     </main>

@@ -14,7 +14,7 @@ const monoFont = IBM_Plex_Mono({
 });
 
 const siteDescription =
-  "Voice-first historical simulation engine built with Next.js, Tailwind, Neon, and OpenAI.";
+  "Voice-first simulation engine built with Next.js, Tailwind, Neon, and OpenAI.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -53,13 +53,13 @@ export const metadata: Metadata = {
     images: ["/og-image.png"],
   },
   other: {
-    "msapplication-TileColor": "#eadfc9",
+    "msapplication-TileColor": "#dce7ea",
     "msapplication-TileImage": "/mstile-150x150.png",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#eadfc9",
+  themeColor: "#dce7ea",
 };
 
 export default function RootLayout({

@@ -182,7 +182,7 @@ export function WorldBuilderConsole() {
           <textarea
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Describe your historical world intent..."
+            placeholder="Describe your world intent..."
             className="min-h-32 rounded-[1.25rem] border border-[var(--border)] bg-white/75 px-4 py-4 text-sm leading-6 outline-none"
           />
 

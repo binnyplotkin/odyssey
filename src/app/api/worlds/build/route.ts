@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildWorldFromPrompt } from "@/lib/simulation/service";
-import { WorldBuilderPolicyError } from "@/lib/simulation/world-builder";
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,16 +8,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    if (error instanceof WorldBuilderPolicyError) {
-      return NextResponse.json(
-        {
-          code: error.code,
-          message: error.message,
-        },
-        { status: 422 },
-      );
-    }
-
     const message = error instanceof Error ? error.message : "Failed to build world.";
     const status =
       message.includes("requires OPENAI_API_KEY") ||

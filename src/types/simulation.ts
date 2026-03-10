@@ -221,11 +221,6 @@ export const worldBuildResponseSchema = z.object({
   published: z.literal(true),
 });
 
-export const worldBuildPolicyErrorSchema = z.object({
-  code: z.literal("NON_HISTORICAL_PROMPT"),
-  message: z.string(),
-});
-
 export const worldRecordSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -240,5 +235,4 @@ export const worldRecordSchema = z.object({
 export type VisibleWorld = z.infer<typeof visibleWorldSchema>;
 export type BuildWorldRequest = z.infer<typeof worldBuildRequestSchema>;
 export type BuildWorldResponse = z.infer<typeof worldBuildResponseSchema>;
-export type WorldBuildPolicyError = z.infer<typeof worldBuildPolicyErrorSchema>;
 export type WorldRecord = z.infer<typeof worldRecordSchema>;
