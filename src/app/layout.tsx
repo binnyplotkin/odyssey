@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     ],
     shortcut: [{ url: "/favicon.ico" }],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
-    other: [{ rel: "mask-icon", url: "/safari-pinned-tab.svg", color: "#111111" }],
+    other: [{ rel: "mask-icon", url: "/safari-pinned-tab.svg", color: "#5f4025" }],
   },
   openGraph: {
     title: "Pandora's Box",
@@ -53,13 +53,13 @@ export const metadata: Metadata = {
     images: ["/og-image.png"],
   },
   other: {
-    "msapplication-TileColor": "#111111",
+    "msapplication-TileColor": "#eadfc9",
     "msapplication-TileImage": "/mstile-150x150.png",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#111111",
+  themeColor: "#eadfc9",
 };
 
 export default function RootLayout({

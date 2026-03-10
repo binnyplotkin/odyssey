@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #dce7ea;
-  --foreground: #102129;
-  --panel: rgba(243, 250, 251, 0.76);
-  --panel-strong: rgba(12, 44, 54, 0.9);
-  --accent: #2d8c8f;
-  --accent-strong: #174d63;
-  --accent-soft: #8fd1cb;
-  --border: rgba(25, 73, 88, 0.18);
-  --muted: #58717a;
-  --success: #207064;
-  --danger: #9b4b3b;
+  --background: #eadfc9;
+  --foreground: #2b2218;
+  --panel: rgba(255, 247, 236, 0.78);
+  --panel-strong: rgba(59, 42, 27, 0.92);
+  --accent: #8b6137;
+  --accent-strong: #5f4025;
+  --accent-soft: #d6b487;
+  --border: rgba(95, 64, 37, 0.24);
+  --muted: #6e5a43;
+  --success: #3d7055;
+  --danger: #9a4a3a;
 }
 
 @theme inline {
@@ -33,7 +33,7 @@ body {
   min-height: 100vh;
   margin: 0;
   color: var(--foreground);
-  background: #eadfc9;
+  background: var(--background);
   font-family: var(--font-display), serif;
 }
 
@@ -43,8 +43,8 @@ body::before {
   pointer-events: none;
   content: "";
   background-image:
-    linear-gradient(rgba(19, 56, 69, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(19, 56, 69, 0.035) 1px, transparent 1px);
+    linear-gradient(rgba(91, 67, 44, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 67, 44, 0.045) 1px, transparent 1px);
   background-size: 28px 28px;
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 90%);
 }
@@ -64,12 +64,12 @@ textarea {
   background: var(--panel);
   backdrop-filter: blur(16px);
   border: 1px solid var(--border);
-  box-shadow: 0 24px 80px rgba(18, 54, 67, 0.14);
+  box-shadow: 0 24px 80px rgba(60, 40, 24, 0.16);
 }
 
 .panel-strong {
   background: var(--panel-strong);
-  color: #f7efdf;
+  color: #fff4e0;
 }
 
 .text-balance {

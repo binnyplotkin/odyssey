@@ -12,6 +12,50 @@ type SessionEnvelope = {
   };
 };
 
+type BuildWorldEnvelope = {
+  worldId: string;
+  roleId: string;
+};
+
+type WorldGenerationStage =
+  | "parsing"
+  | "generating"
+  | "publishing"
+  | "starting"
+  | "navigating";
+
+const worldGenerationStages: Array<{
+  id: WorldGenerationStage;
+  label: string;
+  detail: string;
+}> = [
+  {
+    id: "parsing",
+    label: "Parsing prompt",
+    detail: "Normalizing your request and safety constraints.",
+  },
+  {
+    id: "generating",
+    label: "Generating world",
+    detail: "Composing roles, factions, characters, and events.",
+  },
+  {
+    id: "publishing",
+    label: "Publishing world",
+    detail: "Validating and storing the generated world definition.",
+  },
+  {
+    id: "starting",
+    label: "Starting session",
+    detail: "Creating your live simulation state.",
+  },
+  {
+    id: "navigating",
+    label: "Entering simulation",
+    detail: "Routing you into the live session.",
+  },
+];
+
 type ShowcaseWorld = {
   id: string;
   title: string;
@@ -130,6 +174,7 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [chatPrompt, setChatPrompt] = useState("");
+  const [generationStage, setGenerationStage] = useState<WorldGenerationStage | null>(null);
   const [dragDelta, setDragDelta] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -318,10 +363,149 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
     });
   }
 
+  async function beginGeneratedSession() {
+    const prompt = chatPrompt.trim();
+
+    if (!prompt) {
+      setError("Describe the world you want before generating.");
+      return;
+    }
+
+    setError(null);
+    setGenerationStage("parsing");
+
+    startTransition(async () => {
+      try {
+        setGenerationStage("generating");
+        const buildResponse = await fetch("/api/worlds/build", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt }),
+        });
+
+        const buildPayload = (await buildResponse.json()) as
+          | BuildWorldEnvelope
+          | { error?: string; message?: string };
+
+        if (!buildResponse.ok) {
+          const message =
+            (buildPayload as { message?: string }).message ??
+            (buildPayload as { error?: string }).error ??
+            "Failed to build world.";
+          setGenerationStage(null);
+          setError(message);
+          return;
+        }
+
+        setGenerationStage("publishing");
+        const built = buildPayload as BuildWorldEnvelope;
+
+        setGenerationStage("starting");
+        const sessionResponse = await fetch("/api/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ worldId: built.worldId, roleId: built.roleId }),
+        });
+
+        const sessionPayload = (await sessionResponse.json()) as
+          | SessionEnvelope
+          | { error?: string };
+
+        if (!sessionResponse.ok) {
+          setGenerationStage(null);
+          setError(
+            (sessionPayload as { error?: string }).error ??
+              "World was generated but session start failed.",
+          );
+          return;
+        }
+
+        setGenerationStage("navigating");
+        setChatPrompt("");
+        router.push(`/simulation/${(sessionPayload as SessionEnvelope).session.id}`);
+      } catch (generationError) {
+        setGenerationStage(null);
+        setError(
+          generationError instanceof Error
+            ? generationError.message
+            : "Failed to generate and launch world.",
+        );
+      }
+    });
+  }
+
   const dragProgress = getDragProgress(dragDelta);
+  const activeStageIndex = generationStage
+    ? worldGenerationStages.findIndex((stage) => stage.id === generationStage)
+    : -1;
 
   return (
-    <main className="min-h-screen bg-[#eadfc9] text-white">
+    <main className="min-h-screen bg-[var(--background)] text-white">
+      {generationStage ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[rgba(38,29,19,0.45)] px-4 backdrop-blur-md">
+          <div className="panel w-full max-w-xl rounded-[1.75rem] p-6 md:p-8">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--border)] bg-white/55">
+              <span className="relative block h-10 w-10">
+                <span className="absolute inset-0 rounded-full border-2 border-[var(--accent-soft)]/55" />
+                <span className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[var(--accent-strong)] border-r-[var(--accent)]" />
+                <span
+                  className="absolute inset-[7px] animate-spin rounded-full border-2 border-transparent border-t-[var(--accent)]"
+                  style={{ animationDirection: "reverse", animationDuration: "1.5s" }}
+                />
+              </span>
+            </div>
+
+            <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[var(--muted)]">
+              World Generation
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-[var(--foreground)] md:text-3xl">
+              Building your reality
+            </h2>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Please keep this tab open while we prepare your live simulation.
+            </p>
+
+            <div className="mt-5 space-y-3">
+              {worldGenerationStages.map((stage, index) => {
+                const complete = index < activeStageIndex;
+                const current = index === activeStageIndex;
+
+                return (
+                  <div
+                    key={stage.id}
+                    className="rounded-[1rem] border px-4 py-3 transition"
+                    style={
+                      current
+                        ? {
+                            borderColor: "color-mix(in srgb, var(--accent) 65%, white)",
+                            background: "rgba(139,97,55,0.12)",
+                          }
+                        : complete
+                          ? {
+                              borderColor: "color-mix(in srgb, var(--success) 62%, white)",
+                              background: "rgba(61,112,85,0.12)",
+                            }
+                          : {
+                              borderColor: "var(--border)",
+                              background: "rgba(255,255,255,0.44)",
+                            }
+                    }
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-[var(--foreground)]">{stage.label}</p>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--muted)]">
+                        {complete ? "Done" : current ? "In progress" : "Pending"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--muted)]">{stage.detail}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <section className="relative min-h-screen overflow-hidden">
         <video
           ref={videoRef}
@@ -355,22 +539,20 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
         </video>
         <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 pb-8 pt-10 text-center md:px-6 lg:px-8">
           <div className="mx-auto w-full max-w-4xl">
-            <p className="font-mono text-[11px] uppercase tracking-[0.38em] text-white/72">
-              Pandora&apos;s Box
-            </p>
-
-            <div className="mx-auto flex max-w-4xl items-center justify-center gap-3 rounded-full border border-white/12 bg-white/6 px-3 py-2 backdrop-blur-md">
-              <span className="h-2 w-2 rounded-full bg-cyan-200 shadow-[0_0_18px_rgba(157,244,235,0.9)]" />
-              <p className="font-mono text-[10px] uppercase tracking-[0.34em] text-white/72 md:text-[11px]">
-                Select a reality
-              </p>
-            </div>
+            <Image
+              src="/pandoras-box-icon.svg"
+              alt="Pandora's Box"
+              width={40}
+              height={40}
+              className="mx-auto h-10 w-10 brightness-0 invert"
+            />
           </div>
 
           <form
-            className="mx-auto mt-auto mb-8 w-full max-w-2xl md:mb-10"
+            className="mx-auto mt-auto mb-8 w-full max-w-xl md:mb-10"
             onSubmit={(event) => {
               event.preventDefault();
+              void beginGeneratedSession();
             }}
           >
             <p className="mb-3 text-center text-lg font-medium tracking-[0.03em] text-white/86 md:text-2xl">
@@ -381,21 +563,30 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
                 value={chatPrompt}
                 onChange={(event) => setChatPrompt(event.target.value)}
                 placeholder="Chat with the world selector..."
+                disabled={isPending}
                 className="w-full rounded-[14px] border border-transparent bg-transparent px-4 py-4 pr-14 text-sm text-white placeholder:text-white/55 outline-none md:text-base"
               />
               <button
                 type="submit"
                 aria-label="Send message"
-                className="absolute right-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-[12px] border border-white/24 bg-white/10 text-white transition hover:bg-white/18"
+                disabled={isPending || !chatPrompt.trim()}
+                className="absolute right-3 top-1/2 inline-flex h-9 min-w-9 -translate-y-1/2 items-center justify-center rounded-[12px] border border-white/24 bg-white/10 px-2 text-white transition hover:bg-white/18 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <span className="text-base leading-none">↗</span>
+                <Image
+                  src="/pandoras-box-icon.svg"
+                  alt=""
+                  aria-hidden="true"
+                  width={16}
+                  height={16}
+                  className={`h-4 w-4 brightness-0 invert ${isPending ? "animate-pulse" : ""}`}
+                />
               </button>
             </div>
           </form>
         </div>
       </section>
 
-      <section className="relative bg-[#eadfc9] text-[#1f2a30]">
+      <section className="relative bg-[var(--background)] text-[#1f2a30]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 text-center md:px-6 md:py-16 lg:px-8">
           <div className="mx-auto max-w-6xl">
             <div className="flex items-center justify-center gap-3">
