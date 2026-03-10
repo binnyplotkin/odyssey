@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { SimulationShell } from "@/components/simulation-shell";
-import { getVisibleWorlds } from "@/data/worlds";
-import { createIntroResult, getSessionTurns, resumeSession } from "@/lib/simulation/service";
+import {
+  createIntroResult,
+  getSessionTurns,
+  getVisibleWorldById,
+  resumeSession,
+} from "@/lib/simulation/service";
 
 export default async function SimulationSessionPage({
   params,
@@ -15,7 +19,7 @@ export default async function SimulationSessionPage({
     notFound();
   }
 
-  const world = getVisibleWorlds().find((candidate) => candidate.id === session.worldId);
+  const world = await getVisibleWorldById(session.worldId);
 
   if (!world) {
     notFound();

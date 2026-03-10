@@ -10,6 +10,7 @@ export interface TextGenerationAdapter {
     state: SimulationState;
     activeEvent: EventTemplate | null;
     input: TurnInput;
+    onTextDelta?: (delta: string) => void | Promise<void>;
   }): Promise<Pick<TurnResult, "narration" | "dialogue" | "uiChoices" | "audioDirectives">>;
 }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getVisibleWorlds } from "@/data/worlds";
 import {
   createIntroResult,
+  getVisibleWorldById,
   listRecentSessions,
   startSession,
 } from "@/lib/simulation/service";
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const session = await startSession(body.worldId, body.roleId);
-    const world = getVisibleWorlds().find((candidate) => candidate.id === body.worldId);
+    const world = await getVisibleWorldById(body.worldId);
 
     if (!world) {
       return NextResponse.json({ error: "Unknown world." }, { status: 404 });

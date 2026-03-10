@@ -1,4 +1,8 @@
 import { WorldDefinition } from "@/types/simulation";
+import {
+  getCharacterVoiceProfile,
+  getNarratorVoiceProfile,
+} from "@/lib/simulation/voice-mapping";
 
 export const kingdomWorld: WorldDefinition = {
   id: "the-king",
@@ -23,6 +27,7 @@ export const kingdomWorld: WorldDefinition = {
     "Keep characters emotionally specific and materially motivated.",
     "Narration should feel immediate, severe, and intimate.",
   ],
+  narratorVoice: getNarratorVoiceProfile(),
   safetyProfile: {
     historicalThemes: ["war", "imprisonment", "scarcity", "coercion", "class violence"],
     disallowedContent: [
@@ -84,6 +89,7 @@ export const kingdomWorld: WorldDefinition = {
       motivations: ["preserve order", "protect the crown's legitimacy", "avoid open revolt"],
       emotionalBaseline: { anger: 18, fear: 34, hope: 55, loyalty: 77 },
       speakingStyle: "Measured, dry, politically exact.",
+      voice: getCharacterVoiceProfile("strategist", 0),
     },
     {
       id: "general-sera",
@@ -94,6 +100,7 @@ export const kingdomWorld: WorldDefinition = {
       motivations: ["maintain readiness", "secure pay for troops", "punish threats quickly"],
       emotionalBaseline: { anger: 26, fear: 28, hope: 46, loyalty: 70 },
       speakingStyle: "Direct, martial, impatient with softness.",
+      voice: getCharacterVoiceProfile("commander", 1),
     },
     {
       id: "priest-elan",
@@ -104,6 +111,7 @@ export const kingdomWorld: WorldDefinition = {
       motivations: ["protect the vulnerable", "restrain excess cruelty", "preserve sacred order"],
       emotionalBaseline: { anger: 12, fear: 22, hope: 64, loyalty: 62 },
       speakingStyle: "Gentle but unyielding, wrapped in moral language.",
+      voice: getCharacterVoiceProfile("moral witness", 2),
     },
     {
       id: "noble-cassian",
@@ -114,6 +122,7 @@ export const kingdomWorld: WorldDefinition = {
       motivations: ["expand local autonomy", "test the crown's resolve", "convert disorder into leverage"],
       emotionalBaseline: { anger: 33, fear: 19, hope: 41, loyalty: 38 },
       speakingStyle: "Polished, flattering, faintly threatening.",
+      voice: getCharacterVoiceProfile("rival noble", 3),
     },
   ],
   eventTemplates: [

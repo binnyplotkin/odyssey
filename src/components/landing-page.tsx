@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { VisibleWorld } from "@/types/simulation";
@@ -526,6 +527,19 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
             </div>
           </div>
 
+          <div className="mt-4 flex items-center justify-center">
+            <Link
+              href="/builder"
+              className="inline-flex items-center gap-2 rounded-full border border-white/22 bg-white/10 px-4 py-2 text-sm text-white/90 backdrop-blur-xl transition hover:bg-white/18"
+            >
+              Build a New World
+              <span aria-hidden="true">↗</span>
+            </Link>
+          </div>
+
+          <p className="mt-8 text-lg italic tracking-[-0.01em] text-white/56">
+            &ldquo;What is it like to become someone else and have the world answer honestly?&rdquo;
+          </p>
           {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
         </div>
       </section>

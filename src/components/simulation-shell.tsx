@@ -1,13 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { SessionRecord, TurnRecord, VisibleWorld } from "@/types/simulation";
+
+type AudioDirective = {
+  type: "speak" | "await-input";
+  voice: string;
+  text: string;
+};
+
+type TtsProvider = "openai" | "elevenlabs";
 
 type IntroEnvelope = {
   narration: Array<{ id: string; text: string }>;
   dialogue: Array<{ id: string; speaker: string; role: string; text: string }>;
   uiChoices: string[];
+  audioDirectives: AudioDirective[];
   visibleState: {
     politicalStability: number;
     publicSentiment: number;
@@ -31,6 +40,7 @@ type TurnEnvelope = {
       narration: Array<{ id: string; text: string }>;
       dialogue: Array<{ id: string; speaker: string; role: string; text: string }>;
       uiChoices: string[];
+      audioDirectives: AudioDirective[];
       visibleState: {
         politicalStability: number;
         publicSentiment: number;
@@ -46,15 +56,6 @@ type LogEntry =
   | { type: "narration"; id: string; text: string }
   | { type: "dialogue"; id: string; speaker: string; role: string; text: string }
   | { type: "user"; id: string; text: string };
-
-declare global {
-  interface Window {
-    webkitSpeechRecognition?: typeof SpeechRecognition;
-    SpeechRecognition?: typeof SpeechRecognition;
-  }
-}
-
-type RecognitionInstance = InstanceType<typeof SpeechRecognition>;
 
 function buildInitialLog(intro: IntroEnvelope, turns: TurnRecord[]): LogEntry[] {
   const initialLog: LogEntry[] = [
@@ -107,7 +108,230 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<RecognitionInstance | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceOutputEnabled, setVoiceOutputEnabled] = useState(true);
+  const [voiceProvider, setVoiceProvider] = useState<TtsProvider>("elevenlabs");
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const audioQueueRef = useRef<Array<{ text: string; voice: string }>>([]);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const isPlayingRef = useRef(false);
+
+  function decodeBase64ToBlob(base64: string, mimeType: string) {
+    const binary = window.atob(base64);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+
+    return new Blob([bytes], { type: mimeType });
+  }
+
+  async function playClip(params: { audioBase64: string; mimeType: string }) {
+    const blob = decodeBase64ToBlob(params.audioBase64, params.mimeType);
+    const src = URL.createObjectURL(blob);
+
+    await new Promise<void>((resolve, reject) => {
+      const audio = new Audio(src);
+      audioElementRef.current = audio;
+
+      audio.onended = () => {
+        URL.revokeObjectURL(src);
+        if (audioElementRef.current === audio) {
+          audioElementRef.current = null;
+        }
+        resolve();
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(src);
+        if (audioElementRef.current === audio) {
+          audioElementRef.current = null;
+        }
+        reject(new Error("Audio playback failed."));
+      };
+
+      void audio.play().catch((error: unknown) => {
+        URL.revokeObjectURL(src);
+        if (audioElementRef.current === audio) {
+          audioElementRef.current = null;
+        }
+        reject(error instanceof Error ? error : new Error("Audio playback blocked."));
+      });
+    });
+  }
+
+  async function processAudioQueue() {
+    if (isPlayingRef.current || !voiceOutputEnabled) {
+      return;
+    }
+
+    isPlayingRef.current = true;
+    setIsSpeaking(true);
+
+    try {
+      while (voiceOutputEnabled && audioQueueRef.current.length > 0) {
+        const item = audioQueueRef.current.shift();
+
+        if (!item?.text?.trim()) {
+          continue;
+        }
+
+        const speakResponse = await fetch("/api/audio/speak", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: item.text,
+            voice: voiceProvider === "elevenlabs" ? item.voice : "alloy",
+            provider: voiceProvider,
+          }),
+        });
+
+        const payload = (await speakResponse.json()) as {
+          audioBase64?: string;
+          mimeType?: string;
+          error?: string;
+        };
+
+        if (!speakResponse.ok || !payload.audioBase64 || !payload.mimeType) {
+          throw new Error(payload.error ?? "Voice output failed.");
+        }
+
+        await playClip({
+          audioBase64: payload.audioBase64,
+          mimeType: payload.mimeType,
+        });
+      }
+    } catch (queueError) {
+      setError(queueError instanceof Error ? queueError.message : "Voice output failed.");
+      audioQueueRef.current = [];
+    } finally {
+      isPlayingRef.current = false;
+      setIsSpeaking(false);
+    }
+  }
+
+  function enqueueTurnAudio(result: TurnEnvelope["turn"]["result"]) {
+    if (!voiceOutputEnabled) {
+      return;
+    }
+
+    const directiveLines = result.audioDirectives
+      .filter((directive) => directive.type === "speak" && directive.text.trim())
+      .map((directive) => ({ text: directive.text, voice: directive.voice || "alloy" }));
+
+    if (directiveLines.length) {
+      audioQueueRef.current.push(...directiveLines);
+    } else {
+      const fallbackLines = [
+        ...result.narration.map((segment) => ({ text: segment.text, voice: "alloy" })),
+        ...result.dialogue.map((segment) => ({
+          text: `${segment.speaker}. ${segment.text}`,
+          voice: "alloy",
+        })),
+      ];
+      audioQueueRef.current.push(...fallbackLines);
+    }
+
+    void processAudioQueue();
+  }
+
+  useEffect(() => {
+    if (voiceOutputEnabled) {
+      return;
+    }
+
+    audioQueueRef.current = [];
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+      audioElementRef.current.currentTime = 0;
+      audioElementRef.current = null;
+    }
+    isPlayingRef.current = false;
+    setIsSpeaking(false);
+  }, [voiceOutputEnabled]);
+
+  useEffect(
+    () => () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach((track) => track.stop());
+        micStreamRef.current = null;
+      }
+
+      if (audioElementRef.current) {
+        audioElementRef.current.pause();
+        audioElementRef.current.currentTime = 0;
+        audioElementRef.current = null;
+      }
+    },
+    [],
+  );
+
+  function cleanupMicCapture() {
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((track) => track.stop());
+      micStreamRef.current = null;
+    }
+  }
+
+  async function blobToBase64(blob: Blob) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onerror = () => reject(new Error("Failed to read recorded audio."));
+      reader.onloadend = () => {
+        if (typeof reader.result !== "string") {
+          reject(new Error("Failed to encode recorded audio."));
+          return;
+        }
+
+        const base64 = reader.result.split(",")[1];
+
+        if (!base64) {
+          reject(new Error("Recorded audio was empty."));
+          return;
+        }
+
+        resolve(base64);
+      };
+
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function transcribeAndSend(blob: Blob) {
+    setIsTranscribing(true);
+
+    try {
+      const audioBase64 = await blobToBase64(blob);
+      const response = await fetch("/api/audio/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          audioBase64,
+          mimeType: blob.type || "audio/webm",
+        }),
+      });
+
+      const payload = (await response.json()) as { transcript?: string; error?: string };
+
+      if (!response.ok || !payload.transcript?.trim()) {
+        throw new Error(payload.error ?? "Transcription failed.");
+      }
+
+      const transcript = payload.transcript.trim();
+      setPrompt(transcript);
+      await sendTurn(transcript, "voice");
+    } finally {
+      setIsTranscribing(false);
+    }
+  }
 
   async function sendTurn(text: string, mode: "text" | "voice") {
     if (!text.trim()) {
@@ -125,83 +349,286 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
     setPrompt("");
 
     startTransition(async () => {
-      const response = await fetch(`/api/sessions/${session.id}/turns`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode,
-          text,
-          clientTimestamp: new Date().toISOString(),
-        }),
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string };
-        setError(payload.error ?? "Failed to process turn.");
-        return;
-      }
-
-      const payload = (await response.json()) as TurnEnvelope;
-
-      setSession(payload.session);
-      setSuggestions(payload.turn.result.uiChoices);
-      setStatusPanel(payload.turn.result.visibleState);
+      const streamingEntryId = `stream:${Date.now()}`;
       setLog((current) => [
         ...current,
-        ...payload.turn.result.narration.map((item) => ({
+        {
           type: "narration" as const,
-          id: item.id,
-          text: item.text,
-        })),
-        ...payload.turn.result.dialogue.map((item) => ({
-          type: "dialogue" as const,
-          id: item.id,
-          speaker: item.speaker,
-          role: item.role,
-          text: item.text,
-        })),
+          id: streamingEntryId,
+          text: "...",
+        },
       ]);
+
+      try {
+        const response = await fetch(`/api/sessions/${session.id}/turns`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify({
+            mode,
+            text,
+            clientTimestamp: new Date().toISOString(),
+          }),
+        });
+
+        if (!response.ok) {
+          const payload = (await response.json()) as { error?: string };
+          setError(payload.error ?? "Failed to process turn.");
+          setLog((current) => current.filter((entry) => entry.id !== streamingEntryId));
+          return;
+        }
+
+        const contentType = response.headers.get("content-type") ?? "";
+
+        if (!contentType.includes("text/event-stream") || !response.body) {
+          const payload = (await response.json()) as TurnEnvelope;
+          setSession(payload.session);
+          setSuggestions(payload.turn.result.uiChoices);
+          setStatusPanel(payload.turn.result.visibleState);
+          enqueueTurnAudio(payload.turn.result);
+          setLog((current) => [
+            ...current.filter((entry) => entry.id !== streamingEntryId),
+            ...payload.turn.result.narration.map((item) => ({
+              type: "narration" as const,
+              id: item.id,
+              text: item.text,
+            })),
+            ...payload.turn.result.dialogue.map((item) => ({
+              type: "dialogue" as const,
+              id: item.id,
+              speaker: item.speaker,
+              role: item.role,
+              text: item.text,
+            })),
+          ]);
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let donePayload: TurnEnvelope | null = null;
+        let streamError: string | null = null;
+        let shouldStop = false;
+
+        const handleEventBlock = (rawBlock: string) => {
+          const lines = rawBlock
+            .split("\n")
+            .map((line) => line.trimEnd())
+            .filter((line) => line.length > 0);
+          if (!lines.length) {
+            return;
+          }
+
+          let eventName = "message";
+          const dataLines: string[] = [];
+
+          for (const line of lines) {
+            if (line.startsWith("event:")) {
+              eventName = line.slice("event:".length).trim();
+              continue;
+            }
+
+            if (line.startsWith("data:")) {
+              dataLines.push(line.slice("data:".length).trimStart());
+            }
+          }
+
+          if (!dataLines.length) {
+            return;
+          }
+
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(dataLines.join("\n"));
+          } catch {
+            return;
+          }
+
+          if (eventName === "delta") {
+            const delta = (parsed as { text?: string }).text ?? "";
+            if (!delta) {
+              return;
+            }
+
+            setLog((current) =>
+              current.map((entry) => {
+                if (entry.id !== streamingEntryId || entry.type !== "narration") {
+                  return entry;
+                }
+
+                return {
+                  ...entry,
+                  text: entry.text === "..." ? delta : `${entry.text}${delta}`,
+                };
+              }),
+            );
+            return;
+          }
+
+          if (eventName === "done") {
+            donePayload = parsed as TurnEnvelope;
+            shouldStop = true;
+            return;
+          }
+
+          if (eventName === "error") {
+            streamError = (parsed as { error?: string }).error ?? "Failed to process turn.";
+            shouldStop = true;
+          }
+        };
+
+        while (!shouldStop) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+          let eventSeparatorIndex = buffer.indexOf("\n\n");
+
+          while (eventSeparatorIndex !== -1) {
+            const eventBlock = buffer.slice(0, eventSeparatorIndex);
+            buffer = buffer.slice(eventSeparatorIndex + 2);
+            handleEventBlock(eventBlock);
+
+            if (shouldStop) {
+              break;
+            }
+
+            eventSeparatorIndex = buffer.indexOf("\n\n");
+          }
+        }
+
+        if (streamError) {
+          setError(streamError);
+          setLog((current) => current.filter((entry) => entry.id !== streamingEntryId));
+          return;
+        }
+
+        if (!donePayload) {
+          setError("No streamed turn payload received.");
+          setLog((current) => current.filter((entry) => entry.id !== streamingEntryId));
+          return;
+        }
+
+        const finalizedPayload = donePayload as TurnEnvelope;
+        setSession(finalizedPayload.session);
+        setSuggestions(finalizedPayload.turn.result.uiChoices);
+        setStatusPanel(finalizedPayload.turn.result.visibleState);
+        enqueueTurnAudio(finalizedPayload.turn.result);
+        setLog((current) => [
+          ...current.filter((entry) => entry.id !== streamingEntryId),
+          ...finalizedPayload.turn.result.narration.map((item) => ({
+            type: "narration" as const,
+            id: item.id,
+            text: item.text,
+          })),
+          ...finalizedPayload.turn.result.dialogue.map((item) => ({
+            type: "dialogue" as const,
+            id: item.id,
+            speaker: item.speaker,
+            role: item.role,
+            text: item.text,
+          })),
+        ]);
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Failed to process turn.");
+        setLog((current) => current.filter((entry) => entry.id !== streamingEntryId));
+      }
     });
   }
 
-  function toggleVoiceInput() {
-    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-
-    if (!Recognition) {
-      setError("Speech recognition is not available in this browser. Use chat fallback.");
+  async function toggleVoiceInput() {
+    if (isTranscribing) {
       return;
     }
 
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-      setIsListening(false);
-      return;
-    }
-
-    const recognition = new Recognition();
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = event.results[0]?.[0]?.transcript?.trim();
-
-      if (transcript) {
-        setPrompt(transcript);
-        void sendTurn(transcript, "voice");
+    if (isListening) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      } else {
+        cleanupMicCapture();
+        setIsListening(false);
       }
-    };
-    recognition.onerror = () => {
-      setError("Voice capture failed. Try again or use chat fallback.");
+      return;
+    }
+
+    if (
+      typeof window === "undefined" ||
+      typeof MediaRecorder === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      setError("Voice capture is not available in this browser. Use chat fallback.");
+      return;
+    }
+
+    setError(null);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = stream;
+      recordedChunksRef.current = [];
+
+      const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/mp4",
+      ];
+      const mimeType = candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onerror = () => {
+        setError("Voice capture failed. Try again or use chat fallback.");
+        cleanupMicCapture();
+        mediaRecorderRef.current = null;
+        recordedChunksRef.current = [];
+        setIsListening(false);
+      };
+
+      recorder.onstop = () => {
+        const chunks = recordedChunksRef.current;
+        recordedChunksRef.current = [];
+        mediaRecorderRef.current = null;
+        cleanupMicCapture();
+        setIsListening(false);
+
+        const blobType =
+          recorder.mimeType || (chunks[0] instanceof Blob ? chunks[0].type : "") || "audio/webm";
+        const blob = new Blob(chunks, { type: blobType });
+
+        if (!blob.size) {
+          setError("No audio captured. Try recording again.");
+          return;
+        }
+
+        void transcribeAndSend(blob).catch((captureError) => {
+          setError(captureError instanceof Error ? captureError.message : "Voice transcription failed.");
+        });
+      };
+
+      recorder.start();
+      setIsListening(true);
+    } catch {
+      cleanupMicCapture();
+      mediaRecorderRef.current = null;
+      recordedChunksRef.current = [];
       setIsListening(false);
-    };
-    recognition.onend = () => {
-      setIsListening(false);
-      recognitionRef.current = null;
-    };
-    recognition.start();
-    recognitionRef.current = recognition;
-    setIsListening(true);
+      setError("Microphone access was denied or unavailable.");
+    }
   }
 
   return (
@@ -297,6 +724,31 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
             ))}
           </div>
 
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setVoiceOutputEnabled((current) => !current)}
+              className={`rounded-full px-4 py-2 text-sm font-medium text-white transition ${
+                voiceOutputEnabled ? "bg-[var(--success)]" : "bg-stone-500"
+              }`}
+            >
+              {voiceOutputEnabled ? "Voice output on" : "Voice output off"}
+            </button>
+            <select
+              value={voiceProvider}
+              onChange={(event) => setVoiceProvider(event.target.value as TtsProvider)}
+              className="rounded-full border border-[var(--border)] bg-white/75 px-4 py-2 text-sm text-stone-800"
+            >
+              <option value="elevenlabs">ElevenLabs voice</option>
+              <option value="openai">OpenAI voice</option>
+            </select>
+            {isSpeaking ? (
+              <span className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">
+                Speaking...
+              </span>
+            ) : null}
+          </div>
+
           <form
             className="mt-6 grid gap-3 md:grid-cols-[1fr_auto_auto]"
             onSubmit={(event) => {
@@ -312,12 +764,15 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
             />
             <button
               type="button"
-              onClick={toggleVoiceInput}
+              onClick={() => {
+                void toggleVoiceInput();
+              }}
+              disabled={isTranscribing}
               className={`rounded-[1.5rem] px-5 py-4 text-sm font-medium text-white transition ${
                 isListening ? "bg-[var(--danger)]" : "bg-[var(--success)]"
               }`}
             >
-              {isListening ? "Stop voice" : "Voice input"}
+              {isListening ? "Stop recording" : isTranscribing ? "Transcribing..." : "Voice input"}
             </button>
             <button
               type="submit"

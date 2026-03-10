@@ -20,3 +20,14 @@ export const turnsTable = pgTable("turns", {
   stateDeltaSummary: text("state_delta_summary").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 });
+
+export const worldsTable = pgTable("worlds", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  prompt: text("prompt").notNull(),
+  status: text("status").notNull(),
+  definition: jsonb("definition").notNull(),
+  version: integer("version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+});

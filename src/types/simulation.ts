@@ -7,6 +7,12 @@ const relationshipStateSchema = z.object({
   recentMemory: z.array(z.string()).max(6),
 });
 
+const voiceProfileSchema = z.object({
+  provider: z.enum(["elevenlabs", "openai"]),
+  voiceId: z.string().min(1),
+  label: z.string().optional(),
+});
+
 const characterDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -21,6 +27,7 @@ const characterDefinitionSchema = z.object({
     loyalty: z.number().min(0).max(100),
   }),
   speakingStyle: z.string(),
+  voice: voiceProfileSchema.optional(),
 });
 
 const factionDefinitionSchema = z.object({
@@ -63,7 +70,7 @@ const eventTemplateSchema = z.object({
   actorIds: z.array(z.string()).min(1),
 });
 
-const worldDefinitionSchema = z.object({
+export const worldDefinitionSchema = z.object({
   id: z.string(),
   title: z.string(),
   setting: z.string(),
@@ -72,6 +79,7 @@ const worldDefinitionSchema = z.object({
   norms: z.array(z.string()).min(1),
   powerStructures: z.array(z.string()).min(1),
   tonalConstraints: z.array(z.string()).min(1),
+  narratorVoice: voiceProfileSchema.optional(),
   safetyProfile: z.object({
     historicalThemes: z.array(z.string()),
     disallowedContent: z.array(z.string()),
@@ -199,6 +207,38 @@ export const visibleWorldSchema = worldDefinitionSchema.pick({
   premise: true,
   introNarration: true,
   roles: true,
+  narratorVoice: true,
+});
+
+export const worldBuildRequestSchema = z.object({
+  prompt: z.string().min(1),
+});
+
+export const worldBuildResponseSchema = z.object({
+  world: visibleWorldSchema,
+  worldId: z.string(),
+  roleId: z.string(),
+  published: z.literal(true),
+});
+
+export const worldBuildPolicyErrorSchema = z.object({
+  code: z.literal("NON_HISTORICAL_PROMPT"),
+  message: z.string(),
+});
+
+export const worldRecordSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  prompt: z.string(),
+  status: z.enum(["published", "draft"]).default("published"),
+  definition: worldDefinitionSchema,
+  version: z.number().int().min(1),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 });
 
 export type VisibleWorld = z.infer<typeof visibleWorldSchema>;
+export type BuildWorldRequest = z.infer<typeof worldBuildRequestSchema>;
+export type BuildWorldResponse = z.infer<typeof worldBuildResponseSchema>;
+export type WorldBuildPolicyError = z.infer<typeof worldBuildPolicyErrorSchema>;
+export type WorldRecord = z.infer<typeof worldRecordSchema>;
