@@ -1,9 +1,0 @@
-{
-  "/_global-error/page": "/_global-error",
-  "/_not-found/page": "/_not-found",
-  "/page": "/",
-  "/sessions/[sessionId]/page": "/sessions/[sessionId]",
-  "/sessions/page": "/sessions",
-  "/worlds/[worldId]/page": "/worlds/[worldId]",
-  "/worlds/page": "/worlds"
-}
