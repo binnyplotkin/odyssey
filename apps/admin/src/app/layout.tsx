@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin-nav";
+import { AuthGate } from "@/components/auth-gate";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,12 +16,14 @@ export default function AdminLayout({
   return (
     <html lang="en">
       <body>
-        <div style={{ display: "flex", minHeight: "100vh" }}>
-          <AdminNav />
-          <main style={{ flex: 1, padding: "2rem" }}>
-            {children}
-          </main>
-        </div>
+        <AuthGate>
+          <div style={{ display: "flex", minHeight: "100vh" }}>
+            <AdminNav />
+            <main style={{ flex: 1, padding: "2rem" }}>
+              {children}
+            </main>
+          </div>
+        </AuthGate>
       </body>
     </html>
   );

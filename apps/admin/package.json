@@ -10,6 +10,7 @@
   "dependencies": {
     "@odyssey/types": "*",
     "@odyssey/db": "*",
+    "@odyssey/engine": "*",
     "@odyssey/ui": "*",
     "@odyssey/utils": "*",
     "next": "16.1.6",

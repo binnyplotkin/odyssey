@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { VisibleWorld, WorldDefinition } from "@odyssey/types";
 
 type BuildWorldResponse = {
@@ -23,7 +22,6 @@ type WorldDetailResponse = {
 };
 
 export function WorldBuilderConsole() {
-  const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [buildResult, setBuildResult] = useState<BuildWorldResponse | null>(null);
   const [worldDetail, setWorldDetail] = useState<WorldDefinition | null>(null);
@@ -32,8 +30,6 @@ export function WorldBuilderConsole() {
   const [error, setError] = useState<string | null>(null);
   const [isBuilding, startBuilding] = useTransition();
   const [isSaving, startSaving] = useTransition();
-  const [isStarting, startStarting] = useTransition();
-
   async function loadWorldDetail(worldId: string) {
     const detailResponse = await fetch(`/api/worlds/${worldId}`, {
       cache: "no-store",
@@ -139,35 +135,6 @@ export function WorldBuilderConsole() {
     });
   }
 
-  function startSession() {
-    if (!buildResult) {
-      return;
-    }
-
-    setError(null);
-    setStatus(null);
-
-    startStarting(async () => {
-      const response = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          worldId: buildResult.worldId,
-          roleId: buildResult.roleId,
-        }),
-      });
-
-      const payload = (await response.json()) as { session?: { id: string }; error?: string };
-
-      if (!response.ok || !payload.session?.id) {
-        setError(payload.error ?? "Failed to start session.");
-        return;
-      }
-
-      router.push(`/simulation/${payload.session.id}`);
-    });
-  }
-
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-8 md:px-6 lg:px-8">
       <section className="panel rounded-[2rem] p-6 md:p-8">
@@ -194,15 +161,6 @@ export function WorldBuilderConsole() {
               className="rounded-full bg-[var(--accent-strong)] px-6 py-3 text-sm font-medium text-amber-50 transition hover:bg-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isBuilding ? "Building world..." : "Build World"}
-            </button>
-
-            <button
-              type="button"
-              onClick={startSession}
-              disabled={!buildResult || isStarting}
-              className="rounded-full border border-[var(--border)] bg-white/65 px-6 py-3 text-sm font-medium text-stone-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isStarting ? "Starting session..." : "Start Session"}
             </button>
 
             <button

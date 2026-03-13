@@ -4,6 +4,8 @@
  * Clean, data-focused palette for admin and tooling interfaces.
  * Uses the same forest palette as accents but with neutral surfaces
  * for readability in data-dense layouts.
+ *
+ * Default: dark. Light mode via prefers-color-scheme or data-theme attribute.
  */
 
 :root {
@@ -20,8 +22,72 @@
   --forest-100: #E3FBF2;
   --forest-50:  #DBFDFF;
 
-  /* ── Semantic tokens ────────────────────────────────────── */
+  /* ── Semantic tokens — Dark (default) ─────────────────────── */
 
+  /* Surfaces */
+  --background: #000000;
+  --foreground: #f1f5f9;
+  --panel: rgba(255, 255, 255, 0.05);
+  --panel-strong: rgba(255, 255, 255, 0.12);
+  --panel-strong-text: #E3FBF2;
+
+  /* Borders & shadows */
+  --border: rgba(255, 255, 255, 0.10);
+  --shadow: rgba(0, 0, 0, 0.40);
+
+  /* Accent — lighter teal for dark backgrounds */
+  --accent: #8fd1cb;
+  --accent-strong: #8CE7D2;
+  --accent-soft: rgba(143, 209, 203, 0.12);
+
+  /* Text */
+  --muted: rgba(255, 255, 255, 0.50);
+
+  /* Status */
+  --success: #8CE7D2;
+  --danger: #f87171;
+
+  /* Glass surfaces */
+  --sidebar-glass: rgba(255, 255, 255, 0.04);
+  --sidebar-inset: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Light — OS preference (when no explicit data-theme) ───── */
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    /* Surfaces */
+    --background: #f8f9fb;
+    --foreground: #111827;
+    --panel: #ffffff;
+    --panel-strong: #192922;
+    --panel-strong-text: #E3FBF2;
+
+    /* Borders & shadows */
+    --border: #e5e7eb;
+    --shadow: rgba(0, 0, 0, 0.08);
+
+    /* Accent — forest teal carried through */
+    --accent: #105A59;
+    --accent-strong: #05473F;
+    --accent-soft: #C7F7E5;
+
+    /* Text */
+    --muted: #6b7280;
+
+    /* Status */
+    --success: #05473F;
+    --danger: #dc2626;
+
+    /* Glass surfaces */
+    --sidebar-glass: rgba(255, 255, 255, 0.72);
+    --sidebar-inset: rgba(255, 255, 255, 0.45);
+  }
+}
+
+/* ── Light — explicit toggle override ──────────────────────── */
+
+:root[data-theme="light"] {
   /* Surfaces */
   --background: #f8f9fb;
   --foreground: #111827;
@@ -44,6 +110,10 @@
   /* Status */
   --success: #05473F;
   --danger: #dc2626;
+
+  /* Glass surfaces */
+  --sidebar-glass: rgba(255, 255, 255, 0.72);
+  --sidebar-inset: rgba(255, 255, 255, 0.45);
 }
 
 body {

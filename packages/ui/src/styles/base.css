@@ -106,3 +106,14 @@ textarea {
 .text-balance {
   text-wrap: balance;
 }
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+
+.sidebar-item:hover {
+  background: var(--accent-soft) !important;
+  color: var(--accent-strong) !important;
+}
+
+.sidebar-item:hover span {
+  opacity: 1 !important;
+}

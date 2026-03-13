@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { GoogleAuthButton } from "./google-auth-button";
 
 /**
  * Progressive image tiers ordered from smallest to largest.
@@ -102,40 +103,18 @@ export function LandingPageV3() {
 
           {/* Center nav */}
           <nav className="hidden items-center gap-2 md:flex">
-            {["Worlds", "Engine", "About"].map((item) => (
-              <Link
-                key={item}
-                href={
-                  item === "Worlds"
-                    ? "/builder"
-                    : item === "Engine"
-                      ? "/engine"
-                      : "/about"
-                }
-                className="rounded-full border border-white/15 bg-white/8 px-5 py-1.5 text-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] backdrop-blur-md transition-all hover:border-white/30 hover:bg-white/15 hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]"
-                style={{ fontFamily: "var(--font-mono)" }}
-              >
-                {item}
-              </Link>
-            ))}
+            <Link
+              href="/about"
+              className="rounded-full border border-white/15 bg-white/8 px-5 py-1.5 text-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] backdrop-blur-md transition-all hover:border-white/30 hover:bg-white/15 hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]"
+              style={{ fontFamily: "var(--font-mono)" }}
+            >
+              About
+            </Link>
           </nav>
 
           {/* Right CTAs */}
           <div className="flex items-center gap-2">
-            <Link
-              href="/builder"
-              className="rounded-full border border-white/15 bg-white/8 px-5 py-1.5 text-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] backdrop-blur-md transition-all hover:border-white/30 hover:bg-white/15 hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              Get Started
-            </Link>
-            <Link
-              href="/about"
-              className="rounded-full border border-white/25 bg-white/15 px-5 py-1.5 text-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-lg transition-all hover:border-white/40 hover:bg-white/25 hover:shadow-[inset_0_1px_2px_rgba(255,255,255,0.2)]"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              Contact
-            </Link>
+            <GoogleAuthButton />
           </div>
         </header>
 
@@ -191,7 +170,7 @@ export function LandingPageV3() {
               {/* CTA buttons */}
               <div className="flex flex-wrap gap-3 pt-2">
                 <Link
-                  href="/builder"
+                  href="/about"
                   className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/15 px-6 py-2.5 text-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.15),0_4px_20px_rgba(0,0,0,0.2)] backdrop-blur-lg transition-all hover:scale-[1.03] hover:border-white/40 hover:bg-white/25 hover:shadow-[inset_0_1px_2px_rgba(255,255,255,0.2),0_4px_24px_rgba(0,0,0,0.25)]"
                   style={{ fontFamily: "var(--font-mono)" }}
                 >
@@ -199,22 +178,12 @@ export function LandingPageV3() {
                   <span className="text-white/60">&rarr;</span>
                 </Link>
                 <Link
-                  href="/builder"
+                  href="/about"
                   className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-6 py-2.5 text-sm shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_4px_20px_rgba(0,0,0,0.15)] backdrop-blur-md transition-all hover:scale-[1.03] hover:border-white/30 hover:bg-white/15 hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.15),0_4px_24px_rgba(0,0,0,0.2)]"
                   style={{ fontFamily: "var(--font-mono)" }}
                 >
-                  Build Your Own
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="opacity-60"
-                  >
-                    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-                  </svg>
+                  Learn More
+                  <span className="text-white/60">&rarr;</span>
                 </Link>
               </div>
             </div>

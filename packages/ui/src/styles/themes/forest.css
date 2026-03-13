@@ -4,6 +4,8 @@
  * Immersive, narrative-driven palette extracted from the landing-page
  * hero image (packages/media/landing_page.jpeg).
  *
+ * Default: dark. Light mode via prefers-color-scheme or data-theme attribute.
+ *
  * Palette anchors:
  *   #000500  near-black green    → forest-950
  *   #0F2006  dark forest         → forest-900
@@ -30,8 +32,79 @@
   --forest-100: #E3FBF2;
   --forest-50:  #DBFDFF;
 
-  /* ── Semantic tokens ────────────────────────────────────── */
+  /* ── Semantic tokens — Dark (default) ─────────────────────── */
 
+  /* Surfaces */
+  --background: #000000;
+  --foreground: #f1f5f9;
+  --panel: rgba(255, 255, 255, 0.05);
+  --panel-strong: rgba(255, 255, 255, 0.12);
+  --panel-strong-text: #E3FBF2;
+
+  /* Borders & shadows */
+  --border: rgba(255, 255, 255, 0.10);
+  --shadow: rgba(0, 0, 0, 0.40);
+
+  /* Accent — lighter teal for dark backgrounds */
+  --accent: #8fd1cb;
+  --accent-strong: #8CE7D2;
+  --accent-soft: rgba(143, 209, 203, 0.12);
+
+  /* Text */
+  --muted: rgba(255, 255, 255, 0.50);
+
+  /* Status */
+  --success: #8CE7D2;
+  --danger: #f87171;
+
+  /* Grid overlay (body::before) — subtle light grid on dark */
+  --grid-color: rgba(143, 209, 203, 0.04);
+  --grid-size: 28px;
+
+  /* Glass surfaces */
+  --sidebar-glass: rgba(255, 255, 255, 0.04);
+  --sidebar-inset: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Light — OS preference (when no explicit data-theme) ───── */
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    /* Surfaces */
+    --background: #DBFDFF;
+    --foreground: #000500;
+    --panel: rgba(199, 247, 229, 0.62);
+    --panel-strong: rgba(25, 41, 34, 0.92);
+    --panel-strong-text: #E3FBF2;
+
+    /* Borders & shadows */
+    --border: rgba(5, 71, 63, 0.16);
+    --shadow: rgba(0, 5, 0, 0.14);
+
+    /* Accent */
+    --accent: #105A59;
+    --accent-strong: #05473F;
+    --accent-soft: #8CE7D2;
+
+    /* Text */
+    --muted: #2A4535;
+
+    /* Status */
+    --success: #05473F;
+    --danger: #9b4b3b;
+
+    /* Grid overlay */
+    --grid-color: rgba(15, 32, 6, 0.04);
+
+    /* Glass surfaces */
+    --sidebar-glass: rgba(199, 247, 229, 0.52);
+    --sidebar-inset: rgba(255, 255, 255, 0.35);
+  }
+}
+
+/* ── Light — explicit toggle override ──────────────────────── */
+
+:root[data-theme="light"] {
   /* Surfaces */
   --background: #DBFDFF;
   --foreground: #000500;
@@ -55,9 +128,12 @@
   --success: #05473F;
   --danger: #9b4b3b;
 
-  /* Grid overlay (body::before) */
+  /* Grid overlay */
   --grid-color: rgba(15, 32, 6, 0.04);
-  --grid-size: 28px;
+
+  /* Glass surfaces */
+  --sidebar-glass: rgba(199, 247, 229, 0.52);
+  --sidebar-inset: rgba(255, 255, 255, 0.35);
 }
 
 /* ── Atmospheric grid overlay ─────────────────────────────── */

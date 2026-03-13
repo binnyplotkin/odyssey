@@ -8,6 +8,9 @@
  * Palette constants (for JS/TS when you need raw hex values):
  */
 
+export { Sidebar } from "./components/sidebar";
+export type { SidebarItem, SidebarAction, SidebarProps } from "./components/sidebar";
+
 export const forest = {
   950: "#000500",
   900: "#0F2006",
