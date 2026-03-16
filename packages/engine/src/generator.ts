@@ -55,6 +55,21 @@ function fallbackOutput(params: {
   };
 }
 
+type ResponseCreatePayload = ReturnType<typeof buildResponseRequest>;
+
+type OpenAIResponseStream = AsyncIterable<{ type: string; delta: string }> & {
+  finalResponse: () => Promise<{ output_text?: string | null }>;
+};
+
+type OpenAIResponsesApi = {
+  create: (payload: ResponseCreatePayload) => Promise<{ output_text?: string | null }>;
+  stream: (payload: ResponseCreatePayload) => OpenAIResponseStream;
+};
+
+type OpenAIResponseClient = {
+  responses: OpenAIResponsesApi;
+};
+
 function buildResponseRequest(params: {
   world: WorldDefinition;
   state: SimulationState;
@@ -480,6 +495,13 @@ function buildDisplayTextFromParsedTurn(
 }
 
 export class OpenAITextGenerator implements TextGenerationAdapter {
+  constructor(
+    private readonly dependencies: {
+      clientFactory?: () => unknown;
+      fallback?: TextGenerationAdapter;
+    } = {},
+  ) {}
+
   async generateTurn(params: {
     world: WorldDefinition;
     state: SimulationState;
@@ -487,14 +509,13 @@ export class OpenAITextGenerator implements TextGenerationAdapter {
     input: TurnInput;
     onTextDelta?: (delta: string) => void | Promise<void>;
   }) {
-    const client = getOpenAIClient();
-
-    if (!client) {
-      const fallback = fallbackOutput(params);
+    const fallbackAdapter = this.dependencies.fallback ?? new FallbackTextGenerator();
+    const fallback = async () => {
+      const generated = await fallbackAdapter.generateTurn(params);
       if (params.onTextDelta) {
         const preview = [
-          ...fallback.narration.map((item) => item.text),
-          ...fallback.dialogue.map((item) => item.text),
+          ...generated.narration.map((item) => item.text),
+          ...generated.dialogue.map((item) => item.text),
         ].join("\n\n");
 
         if (preview) {
@@ -502,57 +523,80 @@ export class OpenAITextGenerator implements TextGenerationAdapter {
         }
       }
 
-      return fallback;
+      return generated;
+    };
+
+    const clientFactory = this.dependencies.clientFactory ?? getOpenAIClient;
+    const client = clientFactory() as OpenAIResponseClient | null;
+
+    if (!client) {
+      return fallback();
     }
 
-    const requestBody = buildResponseRequest(params);
-    let text = "";
+    try {
+      const requestBody = buildResponseRequest(params);
+      let text = "";
 
-    if (params.onTextDelta) {
-      const stream = client.responses.stream(requestBody);
-      let streamed = "";
-      const extractor = new StructuredTextDeltaExtractor();
-      let emittedDisplay = "";
+      if (params.onTextDelta) {
+        const stream = client.responses.stream(requestBody);
+        let streamed = "";
+        const extractor = new StructuredTextDeltaExtractor();
+        let emittedDisplay = "";
 
-      for await (const event of stream) {
-        if (event.type !== "response.output_text.delta") {
-          continue;
+        for await (const event of stream) {
+          if (event.type !== "response.output_text.delta") {
+            continue;
+          }
+
+          streamed += event.delta;
+          const delta = extractor.feed(event.delta);
+          if (delta) {
+            emittedDisplay += delta;
+            await params.onTextDelta(delta);
+          }
         }
 
-        streamed += event.delta;
-        const delta = extractor.feed(event.delta);
-        if (delta) {
-          emittedDisplay += delta;
-          await params.onTextDelta(delta);
+        const finalResponse = await stream.finalResponse();
+        text = finalResponse.output_text ?? streamed;
+
+        const parsedFromStream = JSON.parse(text) as Pick<
+          TurnResult,
+          "narration" | "dialogue" | "uiChoices" | "audioDirectives"
+        >;
+        const finalDisplay = buildDisplayTextFromParsedTurn(parsedFromStream);
+        if (finalDisplay.startsWith(emittedDisplay) && finalDisplay.length > emittedDisplay.length) {
+          await params.onTextDelta(finalDisplay.slice(emittedDisplay.length));
         }
+        return parsedFromStream;
       }
 
-      const finalResponse = await stream.finalResponse();
-      text = finalResponse.output_text ?? streamed;
+      const completion = await client.responses.create(requestBody);
+      text = completion.output_text ?? "";
 
-      const parsedFromStream = JSON.parse(text) as Pick<
+      if (!text) {
+        return fallback();
+      }
+
+      const parsed = JSON.parse(text) as Pick<
         TurnResult,
         "narration" | "dialogue" | "uiChoices" | "audioDirectives"
       >;
-      const finalDisplay = buildDisplayTextFromParsedTurn(parsedFromStream);
-      if (finalDisplay.startsWith(emittedDisplay) && finalDisplay.length > emittedDisplay.length) {
-        await params.onTextDelta(finalDisplay.slice(emittedDisplay.length));
-      }
-      return parsedFromStream;
-    } else {
-      const completion = await client.responses.create(requestBody);
-      text = completion.output_text ?? "";
+
+      return parsed;
+    } catch {
+      return fallback();
     }
+  }
+}
 
-    if (!text) {
-      return fallbackOutput(params);
-    }
-
-    const parsed = JSON.parse(text) as Pick<
-      TurnResult,
-      "narration" | "dialogue" | "uiChoices" | "audioDirectives"
-    >;
-
-    return parsed;
+export class FallbackTextGenerator implements TextGenerationAdapter {
+  async generateTurn(params: {
+    world: WorldDefinition;
+    state: SimulationState;
+    activeEvent: EventTemplate | null;
+    input: TurnInput;
+    onTextDelta?: (delta: string) => void | Promise<void>;
+  }) {
+    return fallbackOutput(params);
   }
 }

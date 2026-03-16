@@ -12,5 +12,6 @@ export const {
   listRecentSessions,
   processTurn,
   getSessionTurns,
+  replaySession,
   createIntroResult,
 } = createSimulationService(getWorldDefinitions());

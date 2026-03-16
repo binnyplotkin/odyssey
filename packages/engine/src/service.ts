@@ -6,11 +6,17 @@ import { HeuristicStateReducer } from "./state-reducer";
 import { TurnProcessor, TurnTraceStep } from "./turn-processor";
 import { buildWorldDefinitionFromPrompt } from "./world-builder";
 import { StaticWorldLoader } from "./world-loader";
+import {
+  createDefaultTextGenerationProvider,
+  getDeterministicTextGenerationAdapter,
+} from "./text-generation-provider";
+import { TextGenerationAdapter, TextGenerationProvider } from "./interfaces";
 import { createId, isoNow } from "@odyssey/utils";
 import {
   BuildWorldResponse,
   sessionRecordSchema,
   SessionRecord,
+  TurnRecord,
   turnInputSchema,
   visibleWorldSchema,
   VisibleWorld,
@@ -20,14 +26,60 @@ import {
   WorldDefinition,
 } from "@odyssey/types";
 
-export function createSimulationService(staticWorlds: WorldDefinition[] = []) {
-  const worldLoader = new StaticWorldLoader(staticWorlds);
-  const turnProcessor = new TurnProcessor(
+type CreateSimulationServiceOptions = {
+  textGenerationProvider?: TextGenerationProvider;
+  textGenerationAdapter?: TextGenerationAdapter;
+};
+
+function createTurnProcessor(adapter: TextGenerationAdapter) {
+  return new TurnProcessor(
     new HeuristicStateReducer(),
     new RuleBasedEventSelector(),
     new RollingMemorySummarizer(),
     new DefaultPolicyGuard(),
+    adapter,
   );
+}
+
+function buildSeedSession(session: SessionRecord, world: WorldDefinition) {
+  return sessionRecordSchema.parse({
+    id: session.id,
+    worldId: session.worldId,
+    roleId: session.roleId,
+    status: session.status,
+    createdAt: session.createdAt,
+    lastActiveAt: session.createdAt,
+    currentStateVersion: 1,
+    state: {
+      ...world.initialState,
+      turnCount: 0,
+      activeEventId: null,
+      lastEventIds: [],
+    },
+  });
+}
+
+function buildVisibleState(state: SessionRecord["state"]) {
+  return {
+    politicalStability: state.politicalStability,
+    publicSentiment: state.publicSentiment,
+    treasury: state.treasury,
+    militaryPressure: state.militaryPressure,
+    factionInfluence: state.factionInfluence,
+  };
+}
+
+export function createSimulationService(
+  staticWorlds: WorldDefinition[] = [],
+  options: CreateSimulationServiceOptions = {},
+) {
+  const worldLoader = new StaticWorldLoader(staticWorlds);
+  const generationAdapter =
+    options.textGenerationAdapter ??
+    options.textGenerationProvider?.createAdapter() ??
+    createDefaultTextGenerationProvider().createAdapter();
+  const turnProcessor = createTurnProcessor(generationAdapter);
+  const replayTurnProcessor = createTurnProcessor(getDeterministicTextGenerationAdapter());
 
   async function listWorlds(): Promise<VisibleWorld[]> {
     const worlds = await getWorldRepository(staticWorlds).listWorlds();
@@ -165,18 +217,9 @@ export function createSimulationService(staticWorlds: WorldDefinition[] = []) {
       throw new Error(`Unknown world: ${session.worldId}`);
     }
 
-    const { session: updatedSession, turn } = await turnProcessor.process(world, session, input);
-
-    if (options?.onTextDelta) {
-      const deltas = [
-        ...turn.result.narration.map((segment) => segment.text),
-        ...turn.result.dialogue.map((segment) => `${segment.speaker}: ${segment.text}`),
-      ];
-
-      for (const delta of deltas) {
-        await options.onTextDelta(delta);
-      }
-    }
+    const { session: updatedSession, turn } = await turnProcessor.process(world, session, input, {
+      onTextDelta: options?.onTextDelta,
+    });
 
     await store.updateSession(updatedSession);
     await store.appendTurn(turn);
@@ -189,6 +232,96 @@ export function createSimulationService(staticWorlds: WorldDefinition[] = []) {
 
   async function getSessionTurns(sessionId: string) {
     return getPersistenceStore().getTurns(sessionId);
+  }
+
+  async function replaySession(sessionId: string) {
+    const store = getPersistenceStore();
+    const session = await store.getSession(sessionId);
+
+    if (!session) {
+      throw new Error(`Unknown session: ${sessionId}`);
+    }
+
+    const world = await worldLoader.getWorld(session.worldId);
+
+    if (!world) {
+      throw new Error(`Unknown world: ${session.worldId}`);
+    }
+
+    const turns = (await store.getTurns(sessionId)).slice().sort((a, b) => {
+      if (a.stateVersion === b.stateVersion) {
+        return a.createdAt.localeCompare(b.createdAt);
+      }
+
+      return a.stateVersion - b.stateVersion;
+    });
+
+    let replaySessionState = buildSeedSession(session, world);
+    const mismatches: Array<{
+      turnId: string;
+      stateVersion: number;
+      reason: string;
+    }> = [];
+    const replayedTurns: TurnRecord[] = [];
+
+    for (const persistedTurn of turns) {
+      const replayed = await replayTurnProcessor.process(
+        world,
+        replaySessionState,
+        persistedTurn.input,
+      );
+      replaySessionState = replayed.session;
+      replayedTurns.push(replayed.turn);
+
+      const visibleStateMatches =
+        JSON.stringify(buildVisibleState(replayed.session.state)) ===
+        JSON.stringify(persistedTurn.result.visibleState);
+      const summaryMatches = replayed.turn.stateDeltaSummary === persistedTurn.stateDeltaSummary;
+      const stateVersionMatches = replayed.turn.stateVersion === persistedTurn.stateVersion;
+
+      if (!summaryMatches) {
+        mismatches.push({
+          turnId: persistedTurn.id,
+          stateVersion: persistedTurn.stateVersion,
+          reason: "State summary changed during replay.",
+        });
+      }
+
+      if (!stateVersionMatches) {
+        mismatches.push({
+          turnId: persistedTurn.id,
+          stateVersion: persistedTurn.stateVersion,
+          reason: "State version diverged during replay.",
+        });
+      }
+
+      if (!visibleStateMatches) {
+        mismatches.push({
+          turnId: persistedTurn.id,
+          stateVersion: persistedTurn.stateVersion,
+          reason: "Replay visible state diverged from persisted turn state.",
+        });
+      }
+    }
+
+    if (session.currentStateVersion !== replaySessionState.currentStateVersion) {
+      mismatches.push({
+        turnId: "final-session",
+        stateVersion: replaySessionState.currentStateVersion,
+        reason: "Final session state version diverged from persisted session record.",
+      });
+    }
+
+    return {
+      sessionId,
+      worldId: session.worldId,
+      turnCount: turns.length,
+      matches: mismatches.length === 0,
+      mismatches,
+      finalStateVersion: replaySessionState.currentStateVersion,
+      finalState: replaySessionState.state,
+      replayedTurns,
+    };
   }
 
   async function traceTurnPipeline(rawInput: unknown) {
@@ -258,9 +391,13 @@ export function createSimulationService(staticWorlds: WorldDefinition[] = []) {
       },
     ];
 
-    const processed = await turnProcessor.process(world, session, input, (step) => {
-      trace.push(step);
+    const traceStartedAt = Date.now();
+    const processed = await turnProcessor.process(world, session, input, {
+      recordTrace: (step) => {
+        trace.push(step);
+      },
     });
+    const durationMs = Date.now() - traceStartedAt;
 
     trace.push({
       id: "persistence-preview",
@@ -276,6 +413,15 @@ export function createSimulationService(staticWorlds: WorldDefinition[] = []) {
       label: "API Response Envelope",
       data: processed,
     });
+    trace.push({
+      id: "trace-metrics",
+      label: "Trace Metrics",
+      data: {
+        durationMs,
+        estimatedCostUsd: null,
+        estimatedCostReason: "Usage metadata is not yet exposed by the generation adapter.",
+      },
+    });
 
     return {
       meta: {
@@ -287,6 +433,8 @@ export function createSimulationService(staticWorlds: WorldDefinition[] = []) {
           ? "openai-with-fallback"
           : "fallback-only",
         persistenceMode: process.env.DATABASE_URL ? "neon" : "memory",
+        durationMs,
+        estimatedCostUsd: null,
       },
       trace,
     };
@@ -344,6 +492,7 @@ export function createSimulationService(staticWorlds: WorldDefinition[] = []) {
     listRecentSessions,
     processTurn,
     getSessionTurns,
+    replaySession,
     traceTurnPipeline,
     createIntroResult,
   };

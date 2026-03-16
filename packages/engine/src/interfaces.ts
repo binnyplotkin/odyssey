@@ -14,6 +14,11 @@ export interface TextGenerationAdapter {
   }): Promise<Pick<TurnResult, "narration" | "dialogue" | "uiChoices" | "audioDirectives">>;
 }
 
+export interface TextGenerationProvider {
+  readonly id: string;
+  createAdapter(): TextGenerationAdapter;
+}
+
 export interface TextToSpeechAdapter {
   synthesize(params: { text: string; voice: string }): Promise<{ audioBase64: string; mimeType: string } | null>;
 }

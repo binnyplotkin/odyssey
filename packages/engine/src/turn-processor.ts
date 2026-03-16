@@ -1,9 +1,9 @@
-import { OpenAITextGenerator } from "./generator";
 import {
   EventSelector,
   MemorySummarizer,
   PolicyGuard,
   StateReducer,
+  TextGenerationAdapter,
 } from "./interfaces";
 import { createId } from "@odyssey/utils";
 import {
@@ -61,17 +61,20 @@ export class TurnProcessor {
     private readonly eventSelector: EventSelector,
     private readonly memorySummarizer: MemorySummarizer,
     private readonly policyGuard: PolicyGuard,
-    private readonly textGenerator = new OpenAITextGenerator(),
+    private readonly textGenerator: TextGenerationAdapter,
   ) {}
 
   async process(
     world: WorldDefinition,
     session: SessionRecord,
     input: TurnInput,
-    recordTrace?: TraceRecorder,
+    options?: {
+      recordTrace?: TraceRecorder;
+      onTextDelta?: (delta: string) => void | Promise<void>;
+    },
   ) {
     const trace = (id: string, label: string, data: unknown) => {
-      recordTrace?.({ id, label, data });
+      options?.recordTrace?.({ id, label, data });
     };
 
     const policy = this.policyGuard.check(input, world);
@@ -166,6 +169,7 @@ export class TurnProcessor {
       state: nextState,
       activeEvent,
       input,
+      onTextDelta: options?.onTextDelta,
     });
     const awaitInputDirective = generated.audioDirectives.find(
       (directive) => directive.type === "await-input",

@@ -6,9 +6,16 @@ export { HeuristicStateReducer } from "./state-reducer";
 export { RollingMemorySummarizer } from "./memory-summarizer";
 export { DefaultPolicyGuard } from "./policy-guard";
 export { OpenAITextGenerator } from "./generator";
+export { FallbackTextGenerator } from "./generator";
 export { StaticWorldLoader } from "./world-loader";
 export { buildWorldDefinitionFromPrompt } from "./world-builder";
 export { getOpenAIClient } from "./openai-client";
+export {
+  OpenAITextGenerationProvider,
+  FallbackTextGenerationProvider,
+  createDefaultTextGenerationProvider,
+  getDeterministicTextGenerationAdapter,
+} from "./text-generation-provider";
 export {
   OpenAISpeechToTextAdapter,
   OpenAITextToSpeechAdapter,
@@ -30,6 +37,7 @@ export type {
   SpeechToTextAdapter,
   TextGenerationAdapter,
   TextToSpeechAdapter,
+  TextGenerationProvider,
   WorldLoader,
   EventSelector,
   StateReducer,
