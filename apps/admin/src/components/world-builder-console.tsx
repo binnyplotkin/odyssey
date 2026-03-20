@@ -22,6 +22,33 @@ type WorldDetailResponse = {
   } | null;
 };
 
+type InterviewProfile = {
+  jobType: string;
+  interviewType:
+    | "job-interview"
+    | "technical-interview"
+    | "case-interview"
+    | "startup-pitch"
+    | "panel-presentation"
+    | "press-interview"
+    | "high-stakes-qa";
+  industry: string;
+  difficultyLevel: number;
+  interviewerCount: number;
+  tone: "supportive" | "balanced" | "aggressive";
+  timeLimitMinutes: number;
+  specificityLevel?: "broad" | "balanced" | "high";
+  constraints?: {
+    characterRoles?: string[];
+    emotionalDynamics?: string;
+    scenarioStructure?: string;
+    knowledgeDomain?: string;
+    toneStyle?: string;
+    environmentalDetails?: string;
+    pressurePattern?: string;
+  };
+};
+
 export function WorldBuilderConsole() {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
@@ -33,7 +60,7 @@ export function WorldBuilderConsole() {
   const [isBuilding, startBuilding] = useTransition();
   const [isSaving, startSaving] = useTransition();
 
-  function resolveInterviewMode(worldPrompt: string) {
+  function resolveInterviewMode(worldPrompt: string): InterviewProfile | null {
     const lowerPrompt = worldPrompt.toLowerCase();
     const janeStreet =
       /jane\s*street/.test(lowerPrompt) ||
@@ -43,6 +70,7 @@ export function WorldBuilderConsole() {
       /interview|mock interview|practice interview|interview prep|prepare for interview/.test(
         lowerPrompt,
       ) ||
+      /practice for|prepare for|interview for/.test(lowerPrompt) ||
       /panel interview|panel presentation|startup pitch|investor pitch|press interview/.test(
         lowerPrompt,
       ) ||
@@ -150,7 +178,25 @@ export function WorldBuilderConsole() {
     worldTitle: string;
     worldPrompt: string;
   }) {
-    const profile = resolveInterviewMode(params.worldPrompt);
+    let profile: InterviewProfile | null = resolveInterviewMode(params.worldPrompt);
+
+    if (profile) {
+      try {
+        const profileResponse = await fetch("/api/communication/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: params.worldPrompt }),
+        });
+        if (profileResponse.ok) {
+          const payload = (await profileResponse.json()) as { profile?: InterviewProfile };
+          if (payload.profile) {
+            profile = payload.profile;
+          }
+        }
+      } catch {
+        // Fall back to local heuristic profile.
+      }
+    }
 
     if (!profile) {
       return false;

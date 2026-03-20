@@ -1,4 +1,9 @@
-import { ScoreBreakdown, SimulationFeedbackReport, SimulationTurnRecord } from "./types";
+import {
+  InterviewFramework,
+  ScoreBreakdown,
+  SimulationFeedbackReport,
+  SimulationTurnRecord,
+} from "./types";
 
 function aggregateBreakdown(turns: SimulationTurnRecord[]): ScoreBreakdown {
   const totals = turns.reduce(
@@ -69,12 +74,59 @@ function topWeaknesses(breakdown: ScoreBreakdown) {
     .map(([label]) => label);
 }
 
+function isServiceScenario(turns: SimulationTurnRecord[]) {
+  const joinedPrompts = turns.map((turn) => turn.prompt.toLowerCase()).join(" ");
+  return /availability|transportation|rude customer|order|crew member|manager lisa|lunch rush/.test(
+    joinedPrompts,
+  );
+}
+
+function buildServiceEvaluation(turns: SimulationTurnRecord[]) {
+  const latest = turns[turns.length - 1];
+  const sorted = [...turns].sort((a, b) => b.score.overall - a.score.overall);
+  const lowest = [...turns].sort((a, b) => a.score.overall - b.score.overall);
+  const best = sorted[0];
+  const weak = lowest[0];
+  const vague =
+    turns.find((turn) => turn.transcript.trim().split(/\s+/).length < 10) ?? weak ?? latest;
+  const avg = (values: number[]) =>
+    Math.round(values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length));
+
+  return {
+    confidence: avg(turns.map((turn) => turn.score.confidence)),
+    clarity: avg(turns.map((turn) => turn.score.clarityStructure)),
+    professionalism: avg(turns.map((turn) => turn.score.composure)),
+    customerServiceReadiness: avg(turns.map((turn) => (turn.score.adaptability + turn.score.persuasion) / 2)),
+    reliabilityHireability: avg(turns.map((turn) => turn.score.answerQuality)),
+    strongestMoment: best
+      ? `Turn ${best.turnNumber}: "${best.prompt}" (${best.score.overall}/100).`
+      : "No strong moment captured yet.",
+    weakestMoment: weak
+      ? `Turn ${weak.turnNumber}: "${weak.prompt}" (${weak.score.overall}/100).`
+      : "No weak moment captured yet.",
+    bestAnswer: best?.transcript ?? "No answer captured.",
+    tooVagueAnswer: vague?.transcript ?? "No vague answer detected.",
+    followUpSuggestion:
+      "Practice direct 20-30 second answers that include reliability, availability, and a calm customer-service approach.",
+  };
+}
+
 export function buildSimulationFeedbackReport(
   turns: SimulationTurnRecord[],
+  framework?: InterviewFramework,
 ): SimulationFeedbackReport {
   const breakdown = aggregateBreakdown(turns);
   const allCorrect = turns.length > 0 && turns.every((turn) => turn.answeredCorrectly);
   const overallScore = allCorrect ? 100 : breakdown.overall;
+  const communicationScore = Math.round(
+    breakdown.clarityStructure * 0.4 + breakdown.confidence * 0.3 + breakdown.composure * 0.3,
+  );
+  const hireabilityScore = Math.round(
+    breakdown.answerQuality * 0.35 +
+      breakdown.adaptability * 0.2 +
+      breakdown.concision * 0.15 +
+      communicationScore * 0.3,
+  );
   const strengths = topStrengths(breakdown).map(
     (item) => `${item}: consistently above your session average.`,
   );
@@ -85,10 +137,27 @@ export function buildSimulationFeedbackReport(
     (turn) =>
       `Turn ${turn.turnNumber}: scored ${turn.score.overall}/100 after prompt "${turn.prompt}"`,
   );
+  const serviceEvaluation = isServiceScenario(turns) ? buildServiceEvaluation(turns) : undefined;
+  const roleSpecificFeedback = framework
+    ? framework.evaluationCriteria.map((criterion) =>
+        breakdown.overall >= 75
+          ? `${criterion}: strong signal in this session.`
+          : `${criterion}: needs stronger evidence in your answers.`,
+      )
+    : ["Provide more role-specific examples tied to outcomes."];
+  const missedOpportunities = turns
+    .filter((turn) => turn.score.overall < 65)
+    .slice(0, 3)
+    .map((turn) => `Turn ${turn.turnNumber}: missed chance to answer "${turn.prompt}" with a concrete example.`);
 
   return {
     overallScore,
     breakdown,
+    communicationScore,
+    hireabilityScore,
+    roleSpecificFeedback,
+    missedOpportunities,
+    serviceEvaluation,
     strengths,
     weaknesses,
     keyMoments,

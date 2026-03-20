@@ -11,6 +11,7 @@ type SessionOverview = {
     goal: string;
     interviewType: string;
     industry: string;
+    specificityLevel?: "broad" | "balanced" | "high";
   };
   currentPrompt: string;
   activeDifficulty: number;
@@ -65,6 +66,22 @@ type TurnResponse = {
 type FeedbackResponse = {
   feedback: {
     overallScore: number;
+    communicationScore: number;
+    hireabilityScore: number;
+    roleSpecificFeedback: string[];
+    missedOpportunities: string[];
+    serviceEvaluation?: {
+      confidence: number;
+      clarity: number;
+      professionalism: number;
+      customerServiceReadiness: number;
+      reliabilityHireability: number;
+      strongestMoment: string;
+      weakestMoment: string;
+      bestAnswer: string;
+      tooVagueAnswer: string;
+      followUpSuggestion: string;
+    };
     strengths: string[];
     weaknesses: string[];
     keyMoments: string[];
@@ -239,7 +256,10 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
     if (!session) {
       return "Loading simulation...";
     }
-    return `${session.scenario.role} • ${session.scenario.industry} • difficulty ${session.activeDifficulty}/10`;
+    const specificity = session.scenario.specificityLevel;
+    return `${session.scenario.role} • ${session.scenario.industry} • difficulty ${session.activeDifficulty}/10${
+      specificity ? ` • specificity ${specificity}` : ""
+    }`;
   }, [session]);
 
   const interviewTitle = useMemo(() => {
@@ -266,6 +286,21 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
       ];
     }
 
+    const isServiceInterview =
+      session.scenario.interviewType === "job-interview" &&
+      (/cashier|crew|barista|retail|customer service|front counter|restaurant/i.test(
+        session.scenario.role,
+      ) ||
+        /service|retail|restaurant|hospitality/i.test(session.scenario.industry));
+
+    if (isServiceInterview) {
+      return [
+        "Scene starts in a busy store with light background noise.",
+        "A crew member greets you first, then the manager joins and starts the interview in a casual tone.",
+        "Keep answers clear and practical. They are checking reliability, attitude, schedule flexibility, and customer service.",
+      ];
+    }
+
     return [
       "Hi, nice to meet you. Thanks for being here today.",
       "We will begin with introductions, then move into scenario-based questions.",
@@ -283,7 +318,12 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
     );
   }, [session]);
 
-  function beginInterview() {
+  async function beginInterview() {
+    if (targetInterview.trim()) {
+      await regenerateInterviewFromTarget();
+      return;
+    }
+
     setInterviewStarted(true);
     setPanelReactions(
       openingLines.map((line) => ({
@@ -323,6 +363,16 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
           interviewerCount: number;
           tone: "supportive" | "balanced" | "aggressive";
           timeLimitMinutes: number;
+          specificityLevel?: "broad" | "balanced" | "high";
+          constraints?: {
+            characterRoles?: string[];
+            emotionalDynamics?: string;
+            scenarioStructure?: string;
+            knowledgeDomain?: string;
+            toneStyle?: string;
+            environmentalDetails?: string;
+            pressurePattern?: string;
+          };
           reasoning: string;
           webEnhanced: boolean;
         };
@@ -428,10 +478,10 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
           </div>
           <button
             type="button"
-            onClick={beginInterview}
+            onClick={() => void beginInterview()}
             className="mt-5 rounded-full bg-[var(--accent-strong)] px-6 py-3 text-sm font-medium text-amber-50 transition hover:bg-[var(--accent)]"
           >
-            Begin Interview
+            {targetInterview.trim() ? "Generate & Begin Interview" : "Begin Interview"}
           </button>
         </section>
       ) : null}
@@ -611,6 +661,33 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
         <section className="panel rounded-[2rem] p-6 md:p-8">
           <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Final Feedback</p>
           <h2 className="mt-3 text-2xl font-semibold text-stone-900">Overall Score: {feedback.overallScore}/100</h2>
+          <div className="mt-2 grid gap-2 text-sm text-stone-700 md:grid-cols-2">
+            <p>
+              Communication score: <span className="font-semibold text-stone-900">{feedback.communicationScore}/100</span>
+            </p>
+            <p>
+              Hireability score: <span className="font-semibold text-stone-900">{feedback.hireabilityScore}/100</span>
+            </p>
+          </div>
+          {feedback.serviceEvaluation ? (
+            <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white/70 p-4 text-sm text-stone-700">
+              <p className="font-medium text-stone-900">Service Interview Categories</p>
+              <div className="mt-2 grid gap-1 md:grid-cols-2">
+                <p>Confidence: {feedback.serviceEvaluation.confidence}/100</p>
+                <p>Clarity: {feedback.serviceEvaluation.clarity}/100</p>
+                <p>Professionalism: {feedback.serviceEvaluation.professionalism}/100</p>
+                <p>Customer-service readiness: {feedback.serviceEvaluation.customerServiceReadiness}/100</p>
+                <p>Reliability / hireability: {feedback.serviceEvaluation.reliabilityHireability}/100</p>
+              </div>
+              <div className="mt-3 space-y-1 text-xs">
+                <p>Strongest moment: {feedback.serviceEvaluation.strongestMoment}</p>
+                <p>Weakest moment: {feedback.serviceEvaluation.weakestMoment}</p>
+                <p>Best answer: {feedback.serviceEvaluation.bestAnswer}</p>
+                <p>Too vague: {feedback.serviceEvaluation.tooVagueAnswer}</p>
+                <p>Follow-up: {feedback.serviceEvaluation.followUpSuggestion}</p>
+              </div>
+            </div>
+          ) : null}
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <div>
               <p className="font-medium text-stone-900">Strengths</p>
@@ -621,6 +698,18 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
             <div>
               <p className="font-medium text-stone-900">Weaknesses</p>
               {feedback.weaknesses.map((item) => (
+                <p key={item} className="mt-1 text-sm text-stone-700">• {item}</p>
+              ))}
+            </div>
+            <div>
+              <p className="font-medium text-stone-900">Role-Specific Feedback</p>
+              {feedback.roleSpecificFeedback.map((item) => (
+                <p key={item} className="mt-1 text-sm text-stone-700">• {item}</p>
+              ))}
+            </div>
+            <div>
+              <p className="font-medium text-stone-900">Missed Opportunities</p>
+              {feedback.missedOpportunities.map((item) => (
                 <p key={item} className="mt-1 text-sm text-stone-700">• {item}</p>
               ))}
             </div>

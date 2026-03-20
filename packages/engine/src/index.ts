@@ -13,6 +13,10 @@ export { getOpenAIClient } from "./openai-client";
 export { AudioCommunicationSimulationEngine } from "./communication";
 export {
   generateCommunicationScenario,
+  HeuristicKnowledgeTransformer,
+  NullKnowledgeRetriever,
+  OpenAIWebKnowledgeRetriever,
+  shouldActivateRetrieval,
   analyzeSpeechTurn,
   scoreCommunicationTurn,
   scaleDifficulty,
@@ -59,8 +63,14 @@ export type {
   ProcessCommunicationTurnInput,
   ProcessCommunicationTurnResult,
   ScenarioTone,
+  RealismMode,
+  SpecificityLevel,
   ScoreBreakdown,
   SimulationFeedbackReport,
   SimulationPersona,
+  WorldKnowledgeFact,
+  WorldKnowledgeModel,
+  WorldModel,
   SpeechTurnSignal,
+  WorldScenarioType,
 } from "./communication";

@@ -1,9 +1,23 @@
 import { createId, isoNow } from "@odyssey/utils";
-import { chooseNextPrompt, generatePersonaReactions } from "./dialogue-policy-engine";
 import { scaleDifficulty } from "./difficulty-scaler";
-import { buildSimulationFeedbackReport } from "./feedback-engine";
+import {
+  classroomSpecialization,
+  debateSpecialization,
+  historicalImmersionSpecialization,
+  negotiationSpecialization,
+  presentationSpecialization,
+  trainingSpecialization,
+} from "./generic-specializations";
+import { interviewSpecialization } from "./interview-specialization";
+import {
+  ExternalKnowledgeRetriever,
+  HeuristicKnowledgeTransformer,
+  KnowledgeTransformer,
+  NullKnowledgeRetriever,
+  shouldActivateRetrieval,
+} from "./retrieval-layer";
 import { generateCommunicationScenario } from "./scenario-generator";
-import { scoreCommunicationTurn } from "./scoring-engine";
+import { ScenarioSpecialization } from "./specialization";
 import { analyzeSpeechTurn } from "./speech-analysis";
 import {
   CommunicationScenarioInput,
@@ -27,33 +41,104 @@ function clampDifficulty(level: number): 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 
     | 10;
 }
 
-function openingPrompt(type: CommunicationScenarioInput["interviewType"]) {
-  switch (type) {
-    case "startup-pitch":
-      return "Give us your 60-second opening pitch, including the problem and why now.";
-    case "technical-interview":
-      return "Start with a concise summary of your most technically complex recent project.";
-    case "press-interview":
-      return "Give your opening statement in under 45 seconds.";
-    default:
-      return "Begin with your opening response and core thesis in under 60 seconds.";
-  }
-}
-
 export class AudioCommunicationSimulationEngine {
+  private readonly specializationRegistry: Record<string, ScenarioSpecialization>;
+  private readonly knowledgeRetriever: ExternalKnowledgeRetriever;
+  private readonly knowledgeTransformer: KnowledgeTransformer;
+
+  constructor(
+    options?: {
+      specializationRegistry?: Record<string, ScenarioSpecialization>;
+      knowledgeRetriever?: ExternalKnowledgeRetriever;
+      knowledgeTransformer?: KnowledgeTransformer;
+    },
+  ) {
+    this.specializationRegistry = options?.specializationRegistry ?? {
+      interview: interviewSpecialization,
+      presentation: presentationSpecialization,
+      negotiation: negotiationSpecialization,
+      "historical-immersion": historicalImmersionSpecialization,
+      classroom: classroomSpecialization,
+      debate: debateSpecialization,
+      training: trainingSpecialization,
+    };
+    this.knowledgeRetriever = options?.knowledgeRetriever ?? new NullKnowledgeRetriever();
+    this.knowledgeTransformer = options?.knowledgeTransformer ?? new HeuristicKnowledgeTransformer();
+  }
+
+  private resolveSpecialization(session: CommunicationSimulationSession) {
+    return (
+      this.specializationRegistry[session.scenario.scenarioType] ??
+      this.specializationRegistry.interview
+    );
+  }
+
   startSession(input: CommunicationScenarioInput): CommunicationSimulationSession {
     const scenario = generateCommunicationScenario(input);
     const now = isoNow();
-
-    return {
+    const skeletonSession: CommunicationSimulationSession = {
       sessionId: createId("comms_session"),
       scenario,
       startedAt: now,
       updatedAt: now,
       remainingSeconds: scenario.timeLimitSeconds,
       activeDifficulty: clampDifficulty(scenario.difficultyLevel),
-      currentPrompt: openingPrompt(scenario.interviewType),
+      currentPrompt: "",
       turns: [],
+    };
+    const specialization = this.resolveSpecialization(skeletonSession);
+
+    return {
+      ...skeletonSession,
+      currentPrompt: specialization.buildOpeningPrompt(skeletonSession),
+    };
+  }
+
+  async startSessionWithRetrieval(
+    input: CommunicationScenarioInput,
+    mode: "off" | "auto" | "on" = "auto",
+  ): Promise<CommunicationSimulationSession> {
+    const session = this.startSession(input);
+    const retrievalContext = {
+      scenarioType: session.scenario.scenarioType,
+      realismMode: session.scenario.realismMode,
+      role: session.scenario.role,
+      industry: session.scenario.industry,
+      goal: session.scenario.goal,
+      specificityLevel: session.scenario.specificityLevel,
+      constraints: {
+        knowledgeDomain: session.scenario.constraints?.knowledgeDomain,
+        pressurePattern: session.scenario.constraints?.pressurePattern,
+        scenarioStructure: session.scenario.constraints?.scenarioStructure,
+      },
+    } as const;
+    const shouldUse =
+      mode === "on" || (mode === "auto" && shouldActivateRetrieval(retrievalContext));
+
+    if (!shouldUse) {
+      return session;
+    }
+
+    const docs = await this.knowledgeRetriever.retrieve(retrievalContext);
+    if (!docs.length) {
+      return session;
+    }
+
+    const transformed = this.knowledgeTransformer.transform(
+      retrievalContext,
+      docs,
+      session.scenario.worldModel.knowledgeModel,
+    );
+
+    return {
+      ...session,
+      scenario: {
+        ...session.scenario,
+        worldModel: {
+          ...session.scenario.worldModel,
+          knowledgeModel: transformed,
+        },
+      },
     };
   }
 
@@ -66,34 +151,35 @@ export class AudioCommunicationSimulationEngine {
     }
 
     const analysis = analyzeSpeechTurn(input);
-    const score = scoreCommunicationTurn({
+    const specialization = this.resolveSpecialization(session);
+    const score = specialization.scoreTurn({
+      session,
       input,
       analysis,
-      priorPrompt: session.currentPrompt,
     });
     const difficultyAfter = scaleDifficulty({
       currentLevel: session.activeDifficulty,
       score,
       turnCount: session.turns.length + 1,
     });
-    const reactions = generatePersonaReactions({
-      personas: session.scenario.personas,
+    const reactions = specialization.generateReactions({
+      session,
       score,
       difficulty: difficultyAfter,
       transcript: input.transcript,
     });
-    const nextPrompt = chooseNextPrompt({
-      interviewType: session.scenario.interviewType,
-      turnNumber: session.turns.length + 1,
+    const next = specialization.selectNextPrompt({
+      session,
+      turnNumber: session.turns.length + 2,
       difficulty: difficultyAfter,
       priorScore: score,
-      roleContext: session.scenario.role,
-      industry: session.scenario.industry,
     });
 
     const spent = Math.max(20, input.signal?.durationSeconds ?? 45);
     const turn = {
       turnNumber: session.turns.length + 1,
+      phase: next.phase,
+      questionCategory: next.category,
       prompt: session.currentPrompt,
       transcript: input.transcript,
       analysis,
@@ -109,7 +195,7 @@ export class AudioCommunicationSimulationEngine {
       updatedAt: isoNow(),
       activeDifficulty: difficultyAfter,
       remainingSeconds: Math.max(0, session.remainingSeconds - spent),
-      currentPrompt: nextPrompt,
+      currentPrompt: next.prompt,
       turns: [...session.turns, turn],
     };
 
@@ -122,7 +208,7 @@ export class AudioCommunicationSimulationEngine {
     return {
       session: updatedSession,
       latestTurn: turn,
-      nextPrompt,
+      nextPrompt: next.prompt,
       shouldEnd: updatedSession.remainingSeconds <= 0 || updatedSession.turns.length >= 12,
       liveCoaching,
       scoreDelta:
@@ -134,6 +220,6 @@ export class AudioCommunicationSimulationEngine {
   }
 
   finalize(session: CommunicationSimulationSession): SimulationFeedbackReport {
-    return buildSimulationFeedbackReport(session.turns);
+    return this.resolveSpecialization(session).buildFeedback(session);
   }
 }
