@@ -82,7 +82,7 @@ export function WorldBuilderConsole() {
 
   function looksLikeCommunicationSimulation(worldPrompt: string) {
     const lower = worldPrompt.toLowerCase();
-    return /interview|prepare for|practice interview|experience being|feel what it'?s like|simulate working as|presentation|pitch|negotiat|debate|classroom|historical|social scenario|training|rehearse|drill/.test(
+    return /interview|prepare for|practice interview|experience being|simulate being|feel what it'?s like|put me in|enter a world|simulate working as|presentation|pitch|negotiat|debate|classroom|historical|social scenario|training|rehearse|drill/.test(
       lower,
     );
   }

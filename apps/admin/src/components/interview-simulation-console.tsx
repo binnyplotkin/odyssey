@@ -300,6 +300,15 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
     if (!session) {
       return [];
     }
+    const scenarioType = session.scenario.scenarioType ?? "interview";
+
+    if (scenarioType === "role-experience") {
+      return [
+        "You are in the role now. The world responds to your actions in real time.",
+        "Focus on decisions, task handling, and how you manage pressure in the environment.",
+        "This is not an interview round; it is an in-role experience simulation.",
+      ];
+    }
 
     const isJaneStreetContext =
       /jane\s*street|janestreet/i.test(session.scenario.role) ||

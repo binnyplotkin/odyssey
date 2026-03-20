@@ -115,16 +115,19 @@ function classifyWorldIntent(lower: string): {
   scenarioType: ScenarioType;
   intentGoal: Profile["intentGoal"];
 } {
-  const interviewIntent =
-    /prepare for an? interview|practice interview|interview me|simulate (an|the) interview|hiring process|what would they ask me|get ready for (an|the) interview/.test(
+  const hasInterviewWord = /\binterview\b/.test(lower);
+  const explicitInterviewPrep =
+    /prepare for an? interview|practice interview|interview me|simulate (an|the) interview|hiring process|what would they ask me|get ready for (an|the) interview|mock interview/.test(
       lower,
     );
+  const explicitInterviewOptOut =
+    /not an interview|no interview|without interview|already hired|already in the role/.test(lower);
   const roleExperienceIntent =
-    /feel what (it'?s|it is) like|experience being|simulate working as|let me be in the role|what the job (is|feels) like|simulate a real shift|already in the role/.test(
+    /feel what (it'?s|it is) like|experience being|simulate being|simulate working as|let me be in|put me in|enter (a|the) world|what the job (is|feels) like|simulate a real shift|experience a shift/.test(
       lower,
     );
 
-  if (interviewIntent) {
+  if ((hasInterviewWord && !explicitInterviewOptOut) || explicitInterviewPrep) {
     return { scenarioType: "interview", intentGoal: "get-hired" };
   }
   if (roleExperienceIntent) {
@@ -151,7 +154,7 @@ function classifyWorldIntent(lower: string): {
   if (/train|practice|drill|rehearse/.test(lower)) {
     return { scenarioType: "training", intentGoal: "train-skill" };
   }
-  return { scenarioType: "interview", intentGoal: "get-hired" };
+  return { scenarioType: "role-experience", intentGoal: "experience-role" };
 }
 
 function heuristicProfile(query: string): Profile {
@@ -185,6 +188,9 @@ function heuristicProfile(query: string): Profile {
         ? ("balanced" as const)
         : ("broad" as const);
   const interviewType: InterviewType =
+    classification.scenarioType === "role-experience"
+      ? "job-interview"
+      : 
     classification.scenarioType === "presentation"
       ? "panel-presentation"
       : classification.scenarioType === "negotiation"

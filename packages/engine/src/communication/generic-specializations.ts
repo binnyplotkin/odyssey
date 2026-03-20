@@ -99,25 +99,33 @@ function buildGenericSpecialization(id: string): ScenarioSpecialization {
         framework: session.scenario.framework,
       }),
     generateReactions: ({ session, score, difficulty }) =>
-      session.scenario.personas.map((persona, index) => ({
-        personaId: persona.id,
-        text:
-          score.overall >= 80
-            ? "Strong response. Continue with precision."
-            : score.overall < 55
-              ? "This is unclear. Be more specific and structured."
-              : "Reasonable answer. Tighten the conclusion.",
-        interrupt: difficulty >= 7 && index === 0,
-        expression:
-          score.overall >= 85
-            ? "approving"
-            : score.overall < 50
-              ? "critical"
-              : score.overall < 70
-                ? "skeptical"
-                : "neutral",
-        emotionalImpact: score.overall >= 85 ? "calming" : score.overall < 60 ? "pressuring" : "neutral",
-      })),
+      session.scenario.personas.map((persona, index) => {
+        const roleExperience = session.scenario.scenarioType === "role-experience";
+        return {
+          personaId: persona.id,
+          text: roleExperience
+            ? score.overall >= 80
+              ? "World consequence: flow stabilizes and trust improves."
+              : score.overall < 55
+                ? "World consequence: pressure builds, queue grows, and mistakes become more likely."
+                : "World consequence: situation remains manageable but fragile."
+            : score.overall >= 80
+              ? "Strong response. Continue with precision."
+              : score.overall < 55
+                ? "This is unclear. Be more specific and structured."
+                : "Reasonable answer. Tighten the conclusion.",
+          interrupt: difficulty >= 7 && index === 0,
+          expression:
+            score.overall >= 85
+              ? "approving"
+              : score.overall < 50
+                ? "critical"
+                : score.overall < 70
+                  ? "skeptical"
+                  : "neutral",
+          emotionalImpact: score.overall >= 85 ? "calming" : score.overall < 60 ? "pressuring" : "neutral",
+        };
+      }),
     selectNextPrompt: ({ session, turnNumber, priorScore }) =>
       genericPrompt(session.scenario.scenarioType, turnNumber, priorScore.overall),
     buildFeedback: (session) => buildSimulationFeedbackReport(session.turns, session.scenario.framework),
