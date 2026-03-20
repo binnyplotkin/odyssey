@@ -57,7 +57,7 @@ function WorldCard({ world, index }: { world: DashboardWorld; index: number }) {
       href={`/dashboard/worlds/${world.id}`}
       className="flex flex-col overflow-hidden rounded-2xl border border-white/6 bg-[#161616] transition-all hover:border-white/12 hover:brightness-110"
     >
-      <div className="relative h-[140px] w-full" style={{ background: gradient }}>
+      <div className="relative h-[90px] w-full md:h-[140px]" style={{ background: gradient }}>
         <div className="absolute right-3 top-3">
           <StatusBadge status={world.status} />
         </div>
@@ -114,14 +114,14 @@ function EmptyWorldsState() {
 
 function StatCard({ value, label, icon }: { value: string | number; label: string; icon: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-white/6 bg-[#161616] p-4">
+    <div className="flex items-center justify-between rounded-xl border border-white/6 bg-[#161616] p-3.5 md:p-4">
       <div className="flex flex-col gap-0.5">
-        <span className="text-2xl font-semibold text-white" style={{ fontFamily: heading }}>
+        <span className="text-[22px] font-semibold text-white md:text-2xl" style={{ fontFamily: heading }}>
           {value}
         </span>
-        <span className="text-xs text-white/35">{label}</span>
+        <span className="text-[11px] text-white/35 md:text-xs">{label}</span>
       </div>
-      <div className="text-white/15">{icon}</div>
+      {icon && <div className="text-white/15">{icon}</div>}
     </div>
   );
 }
@@ -138,17 +138,17 @@ export function DashboardContent({ firstName, worlds, stats, activity }: Dashboa
   const liveCount = worlds.filter((w) => w.status === "live").length;
 
   return (
-    <div className="flex h-full flex-col gap-8 p-8 lg:p-10">
+    <div className="flex h-full flex-col gap-6 p-5 md:gap-8 md:p-8 lg:p-10">
       {/* Top Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h1
-            className="text-[28px] font-semibold text-white"
+            className="text-2xl font-semibold text-white md:text-[28px]"
             style={{ fontFamily: heading, letterSpacing: "-0.03em" }}
           >
             Welcome back, {firstName}
           </h1>
-          <p className="text-sm text-white/40">
+          <p className="text-[13px] text-white/40 md:text-sm">
             {worlds.length === 0
               ? "Ready to create your first world"
               : `${draftCount} in progress · ${liveCount} live`}
@@ -156,7 +156,7 @@ export function DashboardContent({ firstName, worlds, stats, activity }: Dashboa
         </div>
         <Link
           href="/dashboard/worlds/new"
-          className="flex items-center gap-2 rounded-xl bg-[#8fd1cb] px-5 py-2.5 text-sm font-semibold text-[#0a0a0a] transition-all hover:brightness-110"
+          className="flex items-center justify-center gap-2 rounded-xl bg-[#8fd1cb] px-5 py-3 text-sm font-semibold text-[#0a0a0a] transition-all hover:brightness-110 md:w-fit md:py-2.5"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M12 5v14" />
@@ -181,18 +181,27 @@ export function DashboardContent({ firstName, worlds, stats, activity }: Dashboa
         {worlds.length === 0 ? (
           <EmptyWorldsState />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="flex gap-3 overflow-x-auto pb-1 md:grid md:grid-cols-2 md:gap-4 md:overflow-visible md:pb-0 lg:grid-cols-3">
             {worlds.slice(0, 3).map((world, i) => (
-              <WorldCard key={world.id} world={world} index={i} />
+              <div key={world.id} className="w-[220px] shrink-0 md:w-auto">
+                <WorldCard world={world} index={i} />
+              </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Stats + Activity */}
-      <div className="flex flex-1 gap-4 overflow-hidden">
-        {/* Stats */}
-        <div className="flex w-[280px] shrink-0 flex-col gap-3">
+      {/* Stats — compact row on mobile, sidebar on desktop */}
+      <div className="grid grid-cols-3 gap-2 md:hidden">
+        <StatCard value={stats.totalWorlds} label="Worlds" icon={null} />
+        <StatCard value={stats.sessionsPlayed} label="Sessions" icon={null} />
+        <StatCard value={stats.totalTurns} label="Turns" icon={null} />
+      </div>
+
+      {/* Stats + Activity — desktop layout */}
+      <div className="flex flex-1 flex-col gap-4 overflow-hidden md:flex-row">
+        {/* Stats — desktop only */}
+        <div className="hidden w-[280px] shrink-0 flex-col gap-3 md:flex">
           <span className="text-[11px] uppercase tracking-[0.2em] text-white/35" style={{ fontFamily: mono }}>
             Stats
           </span>

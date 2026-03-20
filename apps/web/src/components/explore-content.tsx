@@ -44,10 +44,10 @@ function FeaturedCard({ world }: { world: ExploreWorld }) {
   return (
     <Link
       href={`/dashboard/explore/${world.id}`}
-      className="flex overflow-hidden rounded-2xl border border-white/6 bg-[#161616] transition-all hover:border-white/12 hover:brightness-110"
+      className="flex flex-col overflow-hidden rounded-2xl border border-white/6 bg-[#161616] transition-all hover:border-white/12 hover:brightness-110 md:flex-row"
     >
       <div
-        className="relative w-[340px] shrink-0"
+        className="relative h-[120px] w-full shrink-0 md:h-auto md:w-[340px]"
         style={{ background: "linear-gradient(135deg, #0e2a1a 0%, #16503a 40%, #1a4a45 70%, #8fd1cb 100%)" }}
       >
         <div className="absolute bottom-4 left-5 flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: "rgba(143,209,203,0.2)", backdropFilter: "blur(8px)" }}>
@@ -57,9 +57,9 @@ function FeaturedCard({ world }: { world: ExploreWorld }) {
           <span className="text-[10px] font-medium text-[#8fd1cb]" style={{ fontFamily: mono }}>FEATURED</span>
         </div>
       </div>
-      <div className="flex flex-1 flex-col justify-center gap-2.5 p-7">
+      <div className="flex flex-1 flex-col justify-center gap-1.5 p-3.5 md:gap-2.5 md:p-7">
         <h3
-          className="text-[22px] font-semibold text-white"
+          className="text-[17px] font-semibold text-white md:text-[22px]"
           style={{ fontFamily: heading, letterSpacing: "-0.02em" }}
         >
           {world.title}
@@ -149,19 +149,19 @@ export function ExploreContent({ worlds, featured }: ExploreContentProps) {
     : filtered;
 
   return (
-    <div className="flex h-full flex-col gap-8 p-8 lg:p-10">
+    <div className="flex h-full flex-col gap-5 p-5 md:gap-8 md:p-8 lg:p-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-1">
           <h1
-            className="text-[28px] font-semibold text-white"
+            className="text-2xl font-semibold text-white md:text-[28px]"
             style={{ fontFamily: heading, letterSpacing: "-0.03em" }}
           >
             Explore
           </h1>
-          <p className="text-sm text-white/40">Discover worlds built by the community</p>
+          <p className="text-[13px] text-white/40 md:text-sm">Discover worlds built by the community</p>
         </div>
-        <div className="flex items-center gap-2 rounded-[10px] border border-white/8 bg-white/[0.03] px-3.5 py-2 w-[280px]">
+        <div className="flex items-center gap-2 rounded-[10px] border border-white/8 bg-white/[0.03] px-3.5 py-2.5 md:w-[280px] md:py-2">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="shrink-0 text-white/35">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
@@ -213,7 +213,7 @@ export function ExploreContent({ worlds, featured }: ExploreContentProps) {
               <span className="text-[11px] uppercase tracking-[0.2em] text-white/35" style={{ fontFamily: mono }}>
                 Community Worlds
               </span>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 md:gap-4 lg:grid-cols-4">
                 {gridWorlds.map((world, i) => (
                   <ExploreCard key={world.id} world={world} index={i} />
                 ))}

@@ -132,17 +132,17 @@ export function MyWorldsContent({ worlds, counts }: MyWorldsContentProps) {
   ];
 
   return (
-    <div className="flex h-full flex-col gap-8 p-8 lg:p-10">
+    <div className="flex h-full flex-col gap-5 p-5 md:gap-8 md:p-8 lg:p-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-1">
           <h1
-            className="text-[28px] font-semibold text-white"
+            className="text-2xl font-semibold text-white md:text-[28px]"
             style={{ fontFamily: heading, letterSpacing: "-0.03em" }}
           >
             My Worlds
           </h1>
-          <p className="text-sm text-white/40">
+          <p className="text-[13px] text-white/40 md:text-sm">
             {counts.all === 0
               ? "Ready to create your first world"
               : `${counts.all} ${counts.all === 1 ? "world" : "worlds"} · ${counts.live} live · ${counts.draft} ${counts.draft === 1 ? "draft" : "drafts"}`}
@@ -150,8 +150,8 @@ export function MyWorldsContent({ worlds, counts }: MyWorldsContentProps) {
         </div>
         <div className="flex items-center gap-3">
           {/* Search */}
-          <div className="flex items-center gap-2 rounded-[10px] border border-white/8 bg-white/[0.03] px-3.5 py-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-white/35">
+          <div className="flex flex-1 items-center gap-2 rounded-[10px] border border-white/8 bg-white/[0.03] px-3.5 py-2.5 md:flex-initial md:py-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="shrink-0 text-white/35">
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.35-4.35" />
             </svg>
@@ -160,13 +160,13 @@ export function MyWorldsContent({ worlds, counts }: MyWorldsContentProps) {
               placeholder="Search worlds..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-transparent text-[13px] text-white/80 placeholder:text-white/30 outline-none w-40"
+              className="w-full bg-transparent text-[13px] text-white/80 placeholder:text-white/30 outline-none md:w-40"
             />
           </div>
-          {/* Create */}
+          {/* Create — hidden on mobile, shown on desktop */}
           <Link
             href="/dashboard/worlds/new"
-            className="flex items-center gap-2 rounded-xl bg-[#8fd1cb] px-5 py-2.5 text-sm font-semibold text-[#0a0a0a] transition-all hover:brightness-110"
+            className="hidden items-center gap-2 rounded-xl bg-[#8fd1cb] px-5 py-2.5 text-sm font-semibold text-[#0a0a0a] transition-all hover:brightness-110 md:flex"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M12 5v14" />
