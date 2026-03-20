@@ -9,8 +9,19 @@ type SessionOverview = {
     role: string;
     setting: string;
     goal: string;
+    scenarioType?:
+      | "interview"
+      | "role-experience"
+      | "presentation"
+      | "negotiation"
+      | "social"
+      | "historical-immersion"
+      | "classroom"
+      | "debate"
+      | "training";
     interviewType: string;
     industry: string;
+    realismMode?: "fictional" | "real-world-grounded" | "hybrid";
     specificityLevel?: "broad" | "balanced" | "high";
   };
   currentPrompt: string;
@@ -264,9 +275,25 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
 
   const interviewTitle = useMemo(() => {
     if (!session) {
-      return "Interview Simulation";
+      return "Simulation";
     }
     return `${session.scenario.role} • L${session.activeDifficulty}/10`;
+  }, [session]);
+
+  const simulationLabel = useMemo(() => {
+    const type = session?.scenario.scenarioType ?? "interview";
+    const labels: Record<string, string> = {
+      interview: "Interview Simulation",
+      "role-experience": "Role Experience Simulation",
+      presentation: "Presentation Simulation",
+      negotiation: "Negotiation Simulation",
+      social: "Social Scenario Simulation",
+      "historical-immersion": "Historical Immersion Simulation",
+      classroom: "Classroom Simulation",
+      debate: "Debate Simulation",
+      training: "Training Simulation",
+    };
+    return labels[type] ?? "Simulation";
   }, [session]);
 
   const openingLines = useMemo(() => {
@@ -295,8 +322,8 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
 
     if (isServiceInterview) {
       return [
-        "Scene starts in a busy store with light background noise.",
-        "A crew member greets you first, then the manager joins and starts the interview in a casual tone.",
+        "Manager begins the interview in a casual, practical tone.",
+        "The focus is role fit: reliability, schedule flexibility, customer service, and attitude.",
         "Keep answers clear and practical. They are checking reliability, attitude, schedule flexibility, and customer service.",
       ];
     }
@@ -313,6 +340,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
       return false;
     }
     return (
+      (session.scenario.scenarioType ?? "interview") === "interview" &&
       session.scenario.interviewType === "job-interview" &&
       /general interview candidate/i.test(session.scenario.role)
     );
@@ -350,6 +378,16 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
       const profilePayload = (await profileResponse.json()) as {
         profile?: {
           jobType: string;
+          scenarioType?:
+            | "interview"
+            | "role-experience"
+            | "presentation"
+            | "negotiation"
+            | "social"
+            | "historical-immersion"
+            | "classroom"
+            | "debate"
+            | "training";
           interviewType:
             | "job-interview"
             | "technical-interview"
@@ -363,6 +401,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
           interviewerCount: number;
           tone: "supportive" | "balanced" | "aggressive";
           timeLimitMinutes: number;
+          realismMode?: "fictional" | "real-world-grounded" | "hybrid";
           specificityLevel?: "broad" | "balanced" | "high";
           constraints?: {
             characterRoles?: string[];
@@ -405,23 +444,14 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
   }
 
   const isInterviewMode = useMemo(() => {
-    const type = session?.scenario.interviewType ?? "";
-    return [
-      "job-interview",
-      "technical-interview",
-      "case-interview",
-      "startup-pitch",
-      "panel-presentation",
-      "press-interview",
-      "high-stakes-qa",
-    ].includes(type);
+    return (session?.scenario.scenarioType ?? "interview") === "interview";
   }, [session]);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-8 md:px-6">
       <section className="panel rounded-[2rem] p-6 md:p-8">
         <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
-          Interview Simulation
+          {simulationLabel}
         </p>
         <h1 className="mt-3 text-3xl font-semibold text-stone-900 md:text-5xl">
           {interviewTitle}
@@ -454,13 +484,14 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
           ) : null}
           <div className="mt-4 rounded-xl border border-[var(--border)] bg-white/70 p-3">
             <p className="text-xs text-stone-700">
-              Want a more specific interview? Set it here and regenerate before you begin.
+              Want a more specific simulation? Set it here and regenerate before you begin.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <input
                 value={targetInterview}
                 onChange={(event) => setTargetInterview(event.target.value)}
                 placeholder="e.g. Jane Street quant interview, McKinsey case"
+                
                 className="min-w-[260px] flex-1 rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm outline-none"
               />
               <button
@@ -469,7 +500,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
                 disabled={!targetInterview.trim() || isRegenerating}
                 className="rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isRegenerating ? "Regenerating..." : "Regenerate Interview"}
+                {isRegenerating ? "Regenerating..." : "Regenerate Simulation"}
               </button>
             </div>
             {profileReasoning ? (
@@ -481,7 +512,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
             onClick={() => void beginInterview()}
             className="mt-5 rounded-full bg-[var(--accent-strong)] px-6 py-3 text-sm font-medium text-amber-50 transition hover:bg-[var(--accent)]"
           >
-            {targetInterview.trim() ? "Generate & Begin Interview" : "Begin Interview"}
+            {targetInterview.trim() ? "Generate & Begin Simulation" : "Begin Simulation"}
           </button>
         </section>
       ) : null}

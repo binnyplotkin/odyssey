@@ -10,6 +10,7 @@ function clamp(value: number, min = 0, max = 100) {
 }
 
 function isServiceContext(params: {
+  scenarioType?: string;
   interviewType: string;
   roleContext?: string;
   industry?: string;
@@ -20,6 +21,7 @@ function isServiceContext(params: {
   const promptLower = params.priorPrompt.toLowerCase();
 
   return (
+    (params.scenarioType ?? "interview") === "interview" &&
     params.interviewType === "job-interview" &&
     (/cashier|crew|barista|retail|customer service|front counter|restaurant/.test(roleLower) ||
       /service|retail|restaurant|hospitality/.test(industryLower) ||
@@ -151,12 +153,14 @@ export function scoreCommunicationTurn(params: {
   input: ProcessCommunicationTurnInput;
   analysis: SpeechAnalysis;
   priorPrompt: string;
+  scenarioType?: string;
   interviewType: string;
   roleContext?: string;
   industry?: string;
   framework: InterviewFramework;
 }): ScoreBreakdown {
   const serviceMode = isServiceContext({
+    scenarioType: params.scenarioType,
     interviewType: params.interviewType,
     roleContext: params.roleContext,
     industry: params.industry,

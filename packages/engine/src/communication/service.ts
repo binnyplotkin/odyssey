@@ -6,6 +6,7 @@ import {
   historicalImmersionSpecialization,
   negotiationSpecialization,
   presentationSpecialization,
+  roleExperienceSpecialization,
   trainingSpecialization,
 } from "./generic-specializations";
 import { interviewSpecialization } from "./interview-specialization";
@@ -55,6 +56,7 @@ export class AudioCommunicationSimulationEngine {
   ) {
     this.specializationRegistry = options?.specializationRegistry ?? {
       interview: interviewSpecialization,
+      "role-experience": roleExperienceSpecialization,
       presentation: presentationSpecialization,
       negotiation: negotiationSpecialization,
       "historical-immersion": historicalImmersionSpecialization,

@@ -2,6 +2,7 @@ export { AudioCommunicationSimulationEngine } from "./service";
 export { generateCommunicationScenario } from "./scenario-generator";
 export { interviewSpecialization } from "./interview-specialization";
 export {
+  roleExperienceSpecialization,
   presentationSpecialization,
   negotiationSpecialization,
   historicalImmersionSpecialization,

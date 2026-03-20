@@ -51,6 +51,7 @@ export type SpecificityLevel = "broad" | "balanced" | "high";
 export type RealismMode = "fictional" | "real-world-grounded" | "hybrid";
 export type WorldScenarioType =
   | "interview"
+  | "role-experience"
   | "presentation"
   | "negotiation"
   | "historical-immersion"

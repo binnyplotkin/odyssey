@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOpenAIClient } from "@odyssey/engine";
 
+type ScenarioType =
+  | "interview"
+  | "role-experience"
+  | "presentation"
+  | "negotiation"
+  | "social"
+  | "historical-immersion"
+  | "classroom"
+  | "debate"
+  | "training";
+
 type InterviewType =
   | "job-interview"
   | "technical-interview"
@@ -11,6 +22,16 @@ type InterviewType =
   | "high-stakes-qa";
 
 type Profile = {
+  scenarioType: ScenarioType;
+  intentGoal:
+    | "get-hired"
+    | "experience-role"
+    | "train-skill"
+    | "persuade"
+    | "negotiate"
+    | "social-dynamics"
+    | "historical-immersion"
+    | "learn";
   jobType: string;
   interviewType: InterviewType;
   industry: string;
@@ -61,6 +82,10 @@ function extractRoleAndCompany(query: string) {
       "",
     )
     .replace(/^(interview|interviewing)\s+(for\s+)?/i, "")
+    .replace(/^simulate working as\s+(a|an)\s+/i, "")
+    .replace(/^working as\s+(a|an)\s+/i, "")
+    .replace(/^experience being\s+(a|an)\s+/i, "")
+    .replace(/^feel what it'?s like to be\s+(a|an)\s+/i, "")
     .replace(/^as\s+(a|an)\s+/i, "")
     .replace(/^for\s+/i, "")
     .replace(/\b(position|role|interview)\b/gi, "")
@@ -86,8 +111,52 @@ function extractRoleAndCompany(query: string) {
   };
 }
 
+function classifyWorldIntent(lower: string): {
+  scenarioType: ScenarioType;
+  intentGoal: Profile["intentGoal"];
+} {
+  const interviewIntent =
+    /prepare for an? interview|practice interview|interview me|simulate (an|the) interview|hiring process|what would they ask me|get ready for (an|the) interview/.test(
+      lower,
+    );
+  const roleExperienceIntent =
+    /feel what (it'?s|it is) like|experience being|simulate working as|let me be in the role|what the job (is|feels) like|simulate a real shift|already in the role/.test(
+      lower,
+    );
+
+  if (interviewIntent) {
+    return { scenarioType: "interview", intentGoal: "get-hired" };
+  }
+  if (roleExperienceIntent) {
+    return { scenarioType: "role-experience", intentGoal: "experience-role" };
+  }
+  if (/pitch|presentation|public speaking|present to/.test(lower)) {
+    return { scenarioType: "presentation", intentGoal: "persuade" };
+  }
+  if (/negotiat|term sheet|counteroffer|deal terms/.test(lower)) {
+    return { scenarioType: "negotiation", intentGoal: "negotiate" };
+  }
+  if (/debate|argue against|opponent/.test(lower)) {
+    return { scenarioType: "debate", intentGoal: "persuade" };
+  }
+  if (/classroom|teacher|student|lesson|oral exam/.test(lower)) {
+    return { scenarioType: "classroom", intentGoal: "learn" };
+  }
+  if (/historical|history|napoleon|ancient|ww2|civil war/.test(lower)) {
+    return { scenarioType: "historical-immersion", intentGoal: "historical-immersion" };
+  }
+  if (/social|party|networking|dating|friendship|conversation/.test(lower)) {
+    return { scenarioType: "social", intentGoal: "social-dynamics" };
+  }
+  if (/train|practice|drill|rehearse/.test(lower)) {
+    return { scenarioType: "training", intentGoal: "train-skill" };
+  }
+  return { scenarioType: "interview", intentGoal: "get-hired" };
+}
+
 function heuristicProfile(query: string): Profile {
   const lower = query.toLowerCase();
+  const classification = classifyWorldIntent(lower);
   const janeStreet = /jane\s*street|janestreet|jantestreet/.test(lower);
   const technical =
     janeStreet ||
@@ -115,21 +184,36 @@ function heuristicProfile(query: string): Profile {
       : query.length > 80 || /at |for |with |under/.test(lower)
         ? ("balanced" as const)
         : ("broad" as const);
-  const interviewType: InterviewType = janeStreet
-    ? "technical-interview"
-    : caseInterview
-      ? "case-interview"
-      : startupPitch
-        ? "startup-pitch"
-        : panel
-          ? "panel-presentation"
-          : press
-            ? "press-interview"
-            : highStakesQa
-              ? "high-stakes-qa"
-              : technical
-                ? "technical-interview"
-                : "job-interview";
+  const interviewType: InterviewType =
+    classification.scenarioType === "presentation"
+      ? "panel-presentation"
+      : classification.scenarioType === "negotiation"
+        ? "high-stakes-qa"
+        : classification.scenarioType === "debate"
+          ? "press-interview"
+          : classification.scenarioType === "historical-immersion"
+            ? "case-interview"
+            : classification.scenarioType === "classroom"
+              ? "panel-presentation"
+              : classification.scenarioType === "social"
+                ? "press-interview"
+                : classification.scenarioType === "training"
+                  ? "high-stakes-qa"
+                  : janeStreet
+                    ? "technical-interview"
+                    : caseInterview
+                      ? "case-interview"
+                      : startupPitch
+                        ? "startup-pitch"
+                        : panel
+                          ? "panel-presentation"
+                          : press
+                            ? "press-interview"
+                            : highStakesQa
+                              ? "high-stakes-qa"
+                              : technical
+                                ? "technical-interview"
+                                : "job-interview";
 
   const difficulty = janeStreet
     ? 10
@@ -158,23 +242,44 @@ function heuristicProfile(query: string): Profile {
     : specificityLevel === "high"
       ? ("hybrid" as const)
       : ("hybrid" as const);
-  const jobLabelBase = janeStreet
-    ? "Jane Street Quant Interview Candidate"
-    : serviceRole
-      ? "Service Crew Candidate"
-    : marketing
-      ? "Marketing Interview Candidate"
-      : technical
-        ? "Technical Interview Candidate"
-        : "General Interview Candidate";
+  const jobLabelBase =
+    classification.scenarioType === "role-experience"
+      ? "Role Experience Simulation"
+      : classification.scenarioType === "presentation"
+        ? "Presentation Simulation"
+        : classification.scenarioType === "negotiation"
+          ? "Negotiation Simulation"
+          : classification.scenarioType === "classroom"
+            ? "Classroom Simulation"
+            : classification.scenarioType === "debate"
+              ? "Debate Simulation"
+              : janeStreet
+                ? "Jane Street Quant Interview Candidate"
+                : serviceRole
+                  ? "Service Crew Candidate"
+                  : marketing
+                    ? "Marketing Interview Candidate"
+                    : technical
+                      ? "Technical Interview Candidate"
+                      : "General Interview Candidate";
   const titledRole = extractedRole ? toTitleCase(extractedRole) : null;
-  const jobType = titledRole
+  const roleWithCompany = titledRole
     ? company
       ? `${titledRole} at ${company}`
       : titledRole
     : company
       ? `${jobLabelBase} at ${company}`
       : jobLabelBase;
+  const jobType =
+    classification.scenarioType === "interview"
+      ? company && titledRole
+        ? `Applying for ${titledRole} Position at ${company}`
+        : `Interview Simulation: ${roleWithCompany}`
+      : classification.scenarioType === "role-experience"
+        ? company && titledRole
+          ? `Working as ${titledRole} at ${company}`
+          : `Role Experience: ${roleWithCompany}`
+        : roleWithCompany;
 
   const constraints: Profile["constraints"] =
     specificityLevel === "broad"
@@ -189,7 +294,9 @@ function heuristicProfile(query: string): Profile {
             ? "adapt to user confidence and maintain realistic social pressure"
             : undefined,
           scenarioStructure: /arrival|warm-up|deep|closing|flow/.test(lower)
-            ? "arrival, warm-up, core evaluation, deep-dive, closing"
+            ? classification.scenarioType === "interview"
+              ? "arrival, warm-up, core evaluation, deep-dive, closing"
+              : "introduction, task phase, challenge escalation, outcome phase"
             : undefined,
           knowledgeDomain: company ?? (technical ? "technical role domain" : marketing ? "marketing domain" : undefined),
           toneStyle: serviceRole ? "casual practical language" : technical ? "precise and analytical" : "professional",
@@ -206,6 +313,8 @@ function heuristicProfile(query: string): Profile {
         };
 
   return {
+    scenarioType: classification.scenarioType,
+    intentGoal: classification.intentGoal,
     jobType,
     interviewType,
     industry: janeStreet
@@ -227,7 +336,7 @@ function heuristicProfile(query: string): Profile {
     company,
     confidence: 0.45,
     reasoning:
-      "Heuristic mapping based on detected role/company intent and interview keywords.",
+      `Heuristic mapping based on detected world intent (${classification.scenarioType}) and role/company language.`,
     webEnhanced: false,
   };
 }
@@ -259,7 +368,7 @@ export async function POST(request: NextRequest) {
               {
                 type: "input_text",
                 text:
-                  "You generate interview simulation profiles. Use web search for company/interview context when helpful. For sparse prompts, infer plausible defaults. For detailed prompts, preserve specificity in tone, dynamics, structure, environment, and pressure pattern. For entry-level service roles (cashier, crew, retail), keep difficulty low and tone conversational. Return JSON only.",
+                  "You generate world simulation profiles (not only interviews). Classify intent first, then produce scenario settings. Use web search for company/domain context when helpful. For sparse prompts infer defaults; for detailed prompts preserve specificity. Return JSON only.",
               },
             ],
           },
@@ -268,10 +377,10 @@ export async function POST(request: NextRequest) {
             content: [
               {
                 type: "input_text",
-                text: `Create an interview simulation profile for: "${query}".
-Decide interview type, realistic difficulty (1-10), interviewer count, tone, and time limit.
-If input is vague, default to general interview at L5.
-If company implies harder process, increase difficulty accordingly.
+                text: `Create a world simulation profile for: "${query}".
+First classify scenario type (interview, role-experience, presentation, negotiation, social, historical-immersion, classroom, debate, training).
+Then set realistic difficulty (1-10), participant count, tone, and time limit.
+If input is vague, infer sensible defaults.
 Infer specificity level (broad/balanced/high) and include constraints when details are provided.
 `,
               },
@@ -286,6 +395,33 @@ Infer specificity level (broad/balanced/high) and include constraints when detai
               type: "object",
               additionalProperties: false,
               properties: {
+                scenarioType: {
+                  type: "string",
+                  enum: [
+                    "interview",
+                    "role-experience",
+                    "presentation",
+                    "negotiation",
+                    "social",
+                    "historical-immersion",
+                    "classroom",
+                    "debate",
+                    "training",
+                  ],
+                },
+                intentGoal: {
+                  type: "string",
+                  enum: [
+                    "get-hired",
+                    "experience-role",
+                    "train-skill",
+                    "persuade",
+                    "negotiate",
+                    "social-dynamics",
+                    "historical-immersion",
+                    "learn",
+                  ],
+                },
                 jobType: { type: "string" },
                 interviewType: {
                   type: "string",
@@ -333,6 +469,8 @@ Infer specificity level (broad/balanced/high) and include constraints when detai
                 reasoning: { type: "string" },
               },
               required: [
+                "scenarioType",
+                "intentGoal",
                 "jobType",
                 "interviewType",
                 "industry",

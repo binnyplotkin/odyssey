@@ -18,7 +18,7 @@ function openingPromptForInterview(params: {
     ) || /service|retail|restaurant|hospitality/.test(industryLower));
 
   if (serviceContext) {
-    return "Scene opens at the front counter. Crew member: 'Hey, can I help you?' Respond naturally and say why you are here.";
+    return "Manager: Hi, thanks for coming in. Let's get started. Can you tell me a little about yourself and why you want to work here?";
   }
 
   if (params.roleLevel <= 2) {
@@ -51,6 +51,7 @@ export const interviewSpecialization: ScenarioSpecialization = {
       input,
       analysis,
       priorPrompt: session.currentPrompt,
+      scenarioType: session.scenario.scenarioType,
       interviewType: session.scenario.interviewType,
       roleContext: session.scenario.role,
       industry: session.scenario.industry,

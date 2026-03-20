@@ -48,6 +48,7 @@ function inferStructureType(
   input: CommunicationScenarioInput,
   roleLevel: 1 | 2 | 3 | 4 | 5,
 ): InterviewStructureType {
+  if ((input.scenarioType ?? "interview") === "role-experience") return "casual-conversational";
   if (input.interviewType === "technical-interview") return "technical";
   if (input.interviewType === "case-interview") return "case-based";
   if (input.interviewType === "panel-presentation") return "panel";
@@ -97,6 +98,9 @@ function inferEvaluationCriteria(
   roleLevel: 1 | 2 | 3 | 4 | 5,
   input: CommunicationScenarioInput,
 ) {
+  if ((input.scenarioType ?? "interview") === "role-experience") {
+    return ["task execution", "composure", "prioritization", "customer/stakeholder handling"];
+  }
   if (roleLevel === 1) {
     return ["clarity", "politeness", "reliability", "energy", "coachability"];
   }
@@ -303,6 +307,10 @@ function defaultSetting(type: CommunicationScenarioInput["interviewType"]) {
 }
 
 function defaultGoal(input: CommunicationScenarioInput) {
+  if ((input.scenarioType ?? "interview") === "role-experience") {
+    return `Experience what it is like to perform as ${input.jobType} under realistic conditions.`;
+  }
+
   if (isServiceRole(input)) {
     return `Practice a realistic ${input.jobType} interview with conversational pressure and clear hiring signals.`;
   }
@@ -333,6 +341,10 @@ function defaultTimeLimitMinutes(input: CommunicationScenarioInput) {
   if (isJaneStreet) {
     // Practical approximation of Jane Street interview-day duration.
     return 300;
+  }
+
+  if ((input.scenarioType ?? "interview") === "role-experience") {
+    return 20;
   }
 
   if (isServiceRole(input)) {

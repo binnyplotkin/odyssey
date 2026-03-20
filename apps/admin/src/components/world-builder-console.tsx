@@ -22,7 +22,26 @@ type WorldDetailResponse = {
   } | null;
 };
 
-type InterviewProfile = {
+type SimulationProfile = {
+  scenarioType:
+    | "interview"
+    | "role-experience"
+    | "presentation"
+    | "negotiation"
+    | "social"
+    | "historical-immersion"
+    | "classroom"
+    | "debate"
+    | "training";
+  intentGoal?:
+    | "get-hired"
+    | "experience-role"
+    | "train-skill"
+    | "persuade"
+    | "negotiate"
+    | "social-dynamics"
+    | "historical-immersion"
+    | "learn";
   jobType: string;
   interviewType:
     | "job-interview"
@@ -37,6 +56,7 @@ type InterviewProfile = {
   interviewerCount: number;
   tone: "supportive" | "balanced" | "aggressive";
   timeLimitMinutes: number;
+  realismMode?: "fictional" | "real-world-grounded" | "hybrid";
   specificityLevel?: "broad" | "balanced" | "high";
   constraints?: {
     characterRoles?: string[];
@@ -60,153 +80,40 @@ export function WorldBuilderConsole() {
   const [isBuilding, startBuilding] = useTransition();
   const [isSaving, startSaving] = useTransition();
 
-  function resolveInterviewMode(worldPrompt: string): InterviewProfile | null {
-    const lowerPrompt = worldPrompt.toLowerCase();
-    const janeStreet =
-      /jane\s*street/.test(lowerPrompt) ||
-      lowerPrompt.includes("janestreet") ||
-      lowerPrompt.includes("jantestreet");
-    const mentionsInterviewIntent =
-      /interview|mock interview|practice interview|interview prep|prepare for interview/.test(
-        lowerPrompt,
-      ) ||
-      /practice for|prepare for|interview for/.test(lowerPrompt) ||
-      /panel interview|panel presentation|startup pitch|investor pitch|press interview/.test(
-        lowerPrompt,
-      ) ||
-      /high[-\s]?stakes q&a|high[-\s]?stakes qa/.test(lowerPrompt);
-    const mentionsInterview = janeStreet || mentionsInterviewIntent;
-
-    if (!mentionsInterview) {
-      return null;
-    }
-
-    const technical = janeStreet || /technical|engineer|quant|trading|system design/.test(lowerPrompt);
-    const caseInterview = /case interview|case study|consulting/.test(lowerPrompt);
-    const pitch = /startup pitch|investor pitch|pitch/.test(lowerPrompt);
-    const panel = /panel/.test(lowerPrompt);
-    const press = /press/.test(lowerPrompt);
-    const highStakesQa = /high-stakes q&a|high stakes q&a|high-stakes qa|high stakes qa/.test(
-      lowerPrompt,
+  function looksLikeCommunicationSimulation(worldPrompt: string) {
+    const lower = worldPrompt.toLowerCase();
+    return /interview|prepare for|practice interview|experience being|feel what it'?s like|simulate working as|presentation|pitch|negotiat|debate|classroom|historical|social scenario|training|rehearse|drill/.test(
+      lower,
     );
-
-    if (technical) {
-      return {
-        jobType: janeStreet ? "Jane Street Quant Interview Candidate" : "Technical Interview Candidate",
-        interviewType: "technical-interview" as const,
-        industry: janeStreet ? "Finance" : "Technology",
-        difficultyLevel: janeStreet ? 10 : 7,
-        interviewerCount: janeStreet ? 3 : 2,
-        tone: janeStreet ? ("aggressive" as const) : ("balanced" as const),
-        timeLimitMinutes: janeStreet ? 300 : 35,
-      };
-    }
-
-    if (caseInterview) {
-      return {
-        jobType: "Case Interview Candidate",
-        interviewType: "case-interview" as const,
-        industry: "Consulting",
-        difficultyLevel: 6,
-        interviewerCount: 2,
-        tone: "balanced" as const,
-        timeLimitMinutes: 40,
-      };
-    }
-
-    if (pitch) {
-      return {
-        jobType: "Startup Pitch Presenter",
-        interviewType: "startup-pitch" as const,
-        industry: "Startups",
-        difficultyLevel: 6,
-        interviewerCount: 3,
-        tone: "balanced" as const,
-        timeLimitMinutes: 20,
-      };
-    }
-
-    if (panel) {
-      return {
-        jobType: "Panel Presentation Candidate",
-        interviewType: "panel-presentation" as const,
-        industry: "General",
-        difficultyLevel: 6,
-        interviewerCount: 3,
-        tone: "balanced" as const,
-        timeLimitMinutes: 30,
-      };
-    }
-
-    if (press) {
-      return {
-        jobType: "Press Interview Candidate",
-        interviewType: "press-interview" as const,
-        industry: "Media",
-        difficultyLevel: 6,
-        interviewerCount: 2,
-        tone: "balanced" as const,
-        timeLimitMinutes: 25,
-      };
-    }
-
-    if (highStakesQa) {
-      return {
-        jobType: "High-Stakes Q&A Candidate",
-        interviewType: "high-stakes-qa" as const,
-        industry: "General",
-        difficultyLevel: 8,
-        interviewerCount: 3,
-        tone: "aggressive" as const,
-        timeLimitMinutes: 25,
-      };
-    }
-
-    // Vague interview intent defaults to general interview at average difficulty.
-    return {
-      jobType: "General Interview Candidate",
-      interviewType: "job-interview" as const,
-      industry: "General",
-      difficultyLevel: 5,
-      interviewerCount: 2,
-      tone: "balanced" as const,
-      timeLimitMinutes: 30,
-    };
   }
 
-  async function launchInterviewSimulation(params: {
+  async function launchCommunicationSimulation(params: {
     worldTitle: string;
     worldPrompt: string;
   }) {
-    let profile: InterviewProfile | null = resolveInterviewMode(params.worldPrompt);
-
-    if (profile) {
-      try {
-        const profileResponse = await fetch("/api/communication/profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: params.worldPrompt }),
-        });
-        if (profileResponse.ok) {
-          const payload = (await profileResponse.json()) as { profile?: InterviewProfile };
-          if (payload.profile) {
-            profile = payload.profile;
-          }
-        }
-      } catch {
-        // Fall back to local heuristic profile.
-      }
+    if (!looksLikeCommunicationSimulation(params.worldPrompt)) {
+      return false;
     }
 
-    if (!profile) {
-      return false;
+    const profileResponse = await fetch("/api/communication/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: params.worldPrompt }),
+    });
+    const profilePayload = (await profileResponse.json()) as {
+      profile?: SimulationProfile;
+      error?: string;
+    };
+    if (!profileResponse.ok || !profilePayload.profile) {
+      throw new Error(profilePayload.error ?? "Failed to classify simulation intent.");
     }
 
     const response = await fetch("/api/communication/scenario", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...profile,
+        ...profilePayload.profile,
+        enableRetrieval: "auto",
       }),
     });
 
@@ -284,12 +191,12 @@ export function WorldBuilderConsole() {
         const detail = await loadWorldDetail(built.worldId);
         const nextRoleId = detail.world.roles[0]?.id ?? built.roleId;
         setBuildResult({ ...built, roleId: nextRoleId });
-        const launched = await launchInterviewSimulation({
+        const launched = await launchCommunicationSimulation({
           worldTitle: built.world.title,
           worldPrompt: prompt,
         });
         if (launched) {
-          setStatus(`World published: ${built.world.title}. Launching interview simulation...`);
+          setStatus(`World published: ${built.world.title}. Launching simulation...`);
         } else {
           setStatus(`World published: ${built.world.title}. Launching world simulation...`);
           await launchWorldSimulation({

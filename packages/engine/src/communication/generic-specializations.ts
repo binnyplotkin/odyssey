@@ -4,6 +4,8 @@ import { ScenarioSpecialization, SpecializationNextPrompt } from "./specializati
 
 function genericOpening(scenarioType: string) {
   switch (scenarioType) {
+    case "role-experience":
+      return "Your shift starts now. A queue is forming and the register is open. Take your first action.";
     case "presentation":
       return "You are now on stage. Give your opening summary in 30 seconds.";
     case "negotiation":
@@ -36,7 +38,9 @@ function genericPrompt(
           : "closing";
 
   const category =
-    scenarioType === "classroom"
+    scenarioType === "role-experience"
+      ? "situational"
+      : scenarioType === "classroom"
       ? "situational"
       : scenarioType === "presentation"
         ? "behavioral"
@@ -53,6 +57,8 @@ function genericPrompt(
 
   const prompt = (() => {
     switch (scenarioType) {
+      case "role-experience":
+        return `Handle the live task in front of you (customers, pace, and mistakes) and explain your next move. ${depthHint}`;
       case "presentation":
         return `Address audience concerns and clarify your main message. ${depthHint}`;
       case "negotiation":
@@ -82,11 +88,12 @@ function buildGenericSpecialization(id: string): ScenarioSpecialization {
     id,
     buildOpeningPrompt: (session) => genericOpening(session.scenario.scenarioType),
     scoreTurn: ({ session, input, analysis }) =>
-      scoreCommunicationTurn({
-        input,
-        analysis,
-        priorPrompt: session.currentPrompt,
-        interviewType: session.scenario.interviewType,
+    scoreCommunicationTurn({
+      input,
+      analysis,
+      priorPrompt: session.currentPrompt,
+      scenarioType: session.scenario.scenarioType,
+      interviewType: session.scenario.interviewType,
         roleContext: session.scenario.role,
         industry: session.scenario.industry,
         framework: session.scenario.framework,
@@ -119,8 +126,8 @@ function buildGenericSpecialization(id: string): ScenarioSpecialization {
 
 export const presentationSpecialization = buildGenericSpecialization("presentation");
 export const negotiationSpecialization = buildGenericSpecialization("negotiation");
+export const roleExperienceSpecialization = buildGenericSpecialization("role-experience");
 export const historicalImmersionSpecialization = buildGenericSpecialization("historical-immersion");
 export const classroomSpecialization = buildGenericSpecialization("classroom");
 export const debateSpecialization = buildGenericSpecialization("debate");
 export const trainingSpecialization = buildGenericSpecialization("training");
-
