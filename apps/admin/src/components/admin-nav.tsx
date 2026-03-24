@@ -10,7 +10,9 @@ const items: SidebarItem[] = [
   { href: "/worlds", label: "Worlds", section: "Data" },
   { href: "/sessions", label: "Sessions", section: "Data" },
   { href: "/engine", label: "Engine", section: "Tools" },
+  { href: "/editor", label: "Editor", section: "Tools" },
   { href: "/builder", label: "Builder", section: "Tools" },
+  { href: "/voice-test", label: "Voice Test", section: "Tools" },
   { href: "/roadmap", label: "Roadmap", section: "Tools" },
 ];
 
