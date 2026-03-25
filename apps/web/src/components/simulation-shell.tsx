@@ -49,6 +49,45 @@ type TurnEnvelope = {
   };
 };
 
+type LegacyVisibleState = {
+  politicalStability?: number;
+  publicSentiment?: number;
+  treasury?: number;
+  militaryPressure?: number;
+  factionInfluence?: Record<string, number>;
+};
+
+type NormalizedVisibleState = {
+  politicalStability: number;
+  publicSentiment: number;
+  treasury: number;
+  militaryPressure: number;
+  factionInfluence: Record<string, number>;
+};
+
+function toLegacyVisibleState(
+  state: TurnRecord["result"]["visibleState"] | LegacyVisibleState,
+): NormalizedVisibleState {
+  if ("politicalStability" in state) {
+    return {
+      politicalStability: state.politicalStability ?? 50,
+      publicSentiment: state.publicSentiment ?? 50,
+      treasury: state.treasury ?? 50,
+      militaryPressure: state.militaryPressure ?? 50,
+      factionInfluence: state.factionInfluence ?? {},
+    };
+  }
+
+  const modern = state as TurnRecord["result"]["visibleState"];
+  return {
+    politicalStability: modern.stability ?? 50,
+    publicSentiment: modern.morale ?? 50,
+    treasury: modern.resources ?? 50,
+    militaryPressure: modern.pressure ?? 50,
+    factionInfluence: modern.groupInfluence ?? {},
+  };
+}
+
 type LogEntry =
   | { type: "narration"; id: string; text: string }
   | { type: "dialogue"; id: string; speaker: string; role: string; text: string }
@@ -99,8 +138,8 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
   const [suggestions, setSuggestions] = useState<string[]>(
     latestTurn?.result.uiChoices ?? initialData.intro.uiChoices,
   );
-  const [statusPanel, setStatusPanel] = useState<IntroEnvelope["visibleState"]>(
-    latestTurn?.result.visibleState ?? initialData.intro.visibleState,
+  const [statusPanel, setStatusPanel] = useState<NormalizedVisibleState>(
+    toLegacyVisibleState(latestTurn?.result.visibleState ?? initialData.intro.visibleState),
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -383,7 +422,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
           const payload = (await response.json()) as TurnEnvelope;
           setSession(payload.session);
           setSuggestions(payload.turn.result.uiChoices);
-          setStatusPanel(payload.turn.result.visibleState);
+          setStatusPanel(toLegacyVisibleState(payload.turn.result.visibleState));
           enqueueTurnAudio(payload.turn.result);
           setLog((current) => [
             ...current.filter((entry) => entry.id !== streamingEntryId),
@@ -514,7 +553,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
         const finalizedPayload = donePayload as TurnEnvelope;
         setSession(finalizedPayload.session);
         setSuggestions(finalizedPayload.turn.result.uiChoices);
-        setStatusPanel(finalizedPayload.turn.result.visibleState);
+        setStatusPanel(toLegacyVisibleState(finalizedPayload.turn.result.visibleState));
         enqueueTurnAudio(finalizedPayload.turn.result);
         setLog((current) => [
           ...current.filter((entry) => entry.id !== streamingEntryId),

@@ -165,6 +165,11 @@ const eventTemplateSchema = z.object({
       resourcesBelow: z.number().optional(),
       pressureAbove: z.number().optional(),
       moraleBelow: z.number().optional(),
+      // legacy aliases
+      politicalStabilityBelow: z.number().optional(),
+      treasuryBelow: z.number().optional(),
+      militaryPressureAbove: z.number().optional(),
+      publicSentimentBelow: z.number().optional(),
     })
     .default({}),
   // v2 format — array of metric-based conditions
@@ -196,7 +201,7 @@ export const worldDefinitionSchema = z.object({
   progressionModel: progressionModelSchema.optional(),
   difficulty: difficultyConfigSchema.optional(),
   roles: z.array(roleDefinitionSchema).min(1),
-  groups: z.array(groupDefinitionSchema).min(1),
+  groups: z.array(groupDefinitionSchema).default([]),
   characters: z.array(characterDefinitionSchema).min(1),
   // v2 — top-level relationship definitions (when absent, falls back to initialState.relationships)
   relationships: z.array(relationshipDefinitionSchema).optional(),
@@ -207,9 +212,16 @@ export const worldDefinitionSchema = z.object({
     morale: z.number().min(0).max(100).optional(),
     resources: z.number().min(0).max(100).optional(),
     pressure: z.number().min(0).max(100).optional(),
+    // legacy aliases retained for compatibility with older engine paths
+    politicalStability: z.number().min(0).max(100).optional(),
+    publicSentiment: z.number().min(0).max(100).optional(),
+    treasury: z.number().min(0).max(100).optional(),
+    militaryPressure: z.number().min(0).max(100).optional(),
     // v2 — dynamic metric values keyed by metric id
     metricValues: z.record(z.string(), z.number().min(0).max(100)).default({}),
-    groupInfluence: z.record(z.string(), z.number().min(0).max(100)),
+    groupInfluence: z.record(z.string(), z.number().min(0).max(100)).default({}),
+    // legacy alias retained for compatibility
+    factionInfluence: z.record(z.string(), z.number().min(0).max(100)).optional(),
     characterStates: z.record(
       z.string(),
       z.object({
@@ -256,9 +268,16 @@ export const visibleStateSchema = z.object({
   morale: z.number().min(0).max(100).optional(),
   resources: z.number().min(0).max(100).optional(),
   pressure: z.number().min(0).max(100).optional(),
+  // legacy aliases retained for compatibility with UI/engine callers
+  politicalStability: z.number().min(0).max(100).optional(),
+  publicSentiment: z.number().min(0).max(100).optional(),
+  treasury: z.number().min(0).max(100).optional(),
+  militaryPressure: z.number().min(0).max(100).optional(),
   // v2 — dynamic metric values
   metricValues: z.record(z.string(), z.number().min(0).max(100)).default({}),
-  groupInfluence: z.record(z.string(), z.number().min(0).max(100)),
+  groupInfluence: z.record(z.string(), z.number().min(0).max(100)).default({}),
+  // legacy alias retained for compatibility
+  factionInfluence: z.record(z.string(), z.number().min(0).max(100)).optional(),
 });
 
 export const simulationStateSchema = worldDefinitionSchema.shape.initialState.extend({
