@@ -327,12 +327,13 @@ export default function AboutPage() {
         {/* Founder Cards */}
         <div className="mx-auto mt-12 grid max-w-[1200px] gap-5 px-6 sm:grid-cols-2 sm:px-10 lg:px-20">
           <div className="overflow-hidden rounded-3xl border border-white/8 bg-white/[0.03]">
-            <div className="relative aspect-[16/10] overflow-hidden">
+            <div className="relative aspect-[5/4] overflow-hidden">
               <Image
-                src="/founders-binny.jpg"
+                src="/founders-binny-2026-v2.png"
                 alt="Binny Plotkin, Co-founder of Odyssey"
                 fill
-                className="object-cover object-center"
+                className="object-cover"
+                style={{ objectPosition: "center 34%", filter: "brightness(0.84) saturate(0.95)" }}
               />
             </div>
             <div className="space-y-2 p-8">
@@ -355,12 +356,13 @@ export default function AboutPage() {
           </div>
 
           <div className="overflow-hidden rounded-3xl border border-white/8 bg-white/[0.03]">
-            <div className="relative aspect-[16/10] overflow-hidden">
+            <div className="relative aspect-[5/4] overflow-hidden">
               <Image
-                src="/founders-josh.jpg"
+                src="/founders-josh-2026-v2.png"
                 alt="Josh Sassoon, Co-founder of Odyssey"
                 fill
-                className="object-cover object-center"
+                className="object-cover"
+                style={{ objectPosition: "center 11%" }}
               />
             </div>
             <div className="space-y-2 p-8">
