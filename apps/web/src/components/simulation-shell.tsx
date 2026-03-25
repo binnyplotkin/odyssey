@@ -63,10 +63,12 @@ type NormalizedVisibleState = {
   treasury: number;
   militaryPressure: number;
   factionInfluence: Record<string, number>;
+  groupInfluence: Record<string, number>;
+  metricValues?: Record<string, number>;
 };
 
 function toLegacyVisibleState(
-  state: TurnRecord["result"]["visibleState"] | LegacyVisibleState,
+  state: TurnRecord["result"]["visibleState"] | VisibleState | LegacyVisibleState,
 ): NormalizedVisibleState {
   if ("politicalStability" in state) {
     return {
@@ -75,16 +77,20 @@ function toLegacyVisibleState(
       treasury: state.treasury ?? 50,
       militaryPressure: state.militaryPressure ?? 50,
       factionInfluence: state.factionInfluence ?? {},
+      groupInfluence: state.factionInfluence ?? {},
+      metricValues: undefined,
     };
   }
 
-  const modern = state as TurnRecord["result"]["visibleState"];
+  const modern = state as VisibleState;
   return {
     politicalStability: modern.stability ?? 50,
     publicSentiment: modern.morale ?? 50,
     treasury: modern.resources ?? 50,
     militaryPressure: modern.pressure ?? 50,
     factionInfluence: modern.groupInfluence ?? {},
+    groupInfluence: modern.groupInfluence ?? {},
+    metricValues: modern.metricValues,
   };
 }
 
