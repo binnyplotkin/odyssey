@@ -34,7 +34,7 @@ export default async function WorldsPage() {
             <th style={{ textAlign: "left", padding: "0.5rem 1rem", color: "var(--muted)", fontWeight: 500 }}>Title</th>
             <th style={{ textAlign: "left", padding: "0.5rem 1rem", color: "var(--muted)", fontWeight: 500 }}>Roles</th>
             <th style={{ textAlign: "left", padding: "0.5rem 1rem", color: "var(--muted)", fontWeight: 500 }}>Characters</th>
-            <th style={{ textAlign: "left", padding: "0.5rem 1rem", color: "var(--muted)", fontWeight: 500 }}>Factions</th>
+            <th style={{ textAlign: "left", padding: "0.5rem 1rem", color: "var(--muted)", fontWeight: 500 }}>Groups</th>
             <th style={{ textAlign: "left", padding: "0.5rem 1rem", color: "var(--muted)", fontWeight: 500 }}>Events</th>
           </tr>
         </thead>
@@ -52,7 +52,7 @@ export default async function WorldsPage() {
               <td style={{ padding: "0.5rem 1rem", fontWeight: 500 }}>{world.title}</td>
               <td style={{ padding: "0.5rem 1rem" }}>{world.roles.length}</td>
               <td style={{ padding: "0.5rem 1rem" }}>{world.characters.length}</td>
-              <td style={{ padding: "0.5rem 1rem" }}>{world.factions.length}</td>
+              <td style={{ padding: "0.5rem 1rem" }}>{world.groups.length}</td>
               <td style={{ padding: "0.5rem 1rem" }}>{world.eventTemplates.length}</td>
             </tr>
           ))}

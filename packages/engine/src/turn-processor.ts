@@ -13,6 +13,7 @@ import {
   turnResultSchema,
   WorldDefinition,
 } from "@odyssey/types";
+import { buildVisibleState } from "./metric-helpers";
 
 function buildVoiceDirectedAudio(params: {
   world: WorldDefinition;
@@ -98,13 +99,7 @@ export class TurnProcessor {
         ],
         dialogue: [],
         uiChoices: ["Rephrase the command", "Ask for a lawful alternative"],
-        visibleState: {
-          politicalStability: session.state.politicalStability,
-          publicSentiment: session.state.publicSentiment,
-          treasury: session.state.treasury,
-          militaryPressure: session.state.militaryPressure,
-          factionInfluence: session.state.factionInfluence,
-        },
+        visibleState: buildVisibleState(session.state, world),
         privateStateVersion: session.currentStateVersion,
         event: null,
         audioDirectives: blockedAudio,
@@ -188,13 +183,7 @@ export class TurnProcessor {
       narration: generated.narration,
       dialogue: generated.dialogue,
       uiChoices: generated.uiChoices,
-      visibleState: {
-        politicalStability: nextState.politicalStability,
-        publicSentiment: nextState.publicSentiment,
-        treasury: nextState.treasury,
-        militaryPressure: nextState.militaryPressure,
-        factionInfluence: nextState.factionInfluence,
-      },
+      visibleState: buildVisibleState(nextState, world),
       privateStateVersion: session.currentStateVersion + 1,
       event: activeEvent
         ? {

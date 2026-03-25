@@ -29,8 +29,8 @@ describe("simulation service", () => {
     });
 
     expect(result.session.currentStateVersion).toBe(2);
-    expect(result.turn.result.visibleState.publicSentiment).toBeGreaterThan(
-      session.state.publicSentiment,
+    expect(result.turn.result.visibleState.morale!).toBeGreaterThan(
+      session.state.morale!,
     );
     expect(result.turn.result.narration.length).toBeGreaterThan(0);
   });

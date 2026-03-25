@@ -57,6 +57,72 @@ function getStaticWorld(staticWorlds: WorldDefinition[], worldId: string) {
   return staticWorlds.find((world) => world.id === worldId) ?? null;
 }
 
+/**
+ * Normalize a world definition that may use pre-rename field names
+ * (factions→groups, factionId→groupId, politicalStability→stability, etc.)
+ */
+function normalizeDefinition(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const def = raw as Record<string, unknown>;
+
+  // groups / factions
+  const groups = Array.isArray(def.groups)
+    ? def.groups
+    : Array.isArray(def.factions)
+      ? def.factions
+      : undefined;
+
+  // characters: factionId → groupId
+  const characters = Array.isArray(def.characters)
+    ? def.characters.map((c: unknown) => {
+        if (!c || typeof c !== "object") return c;
+        const ch = c as Record<string, unknown>;
+        if (ch.groupId === undefined && ch.factionId !== undefined) {
+          const { factionId, ...rest } = ch;
+          return { ...rest, groupId: factionId };
+        }
+        return ch;
+      })
+    : undefined;
+
+  // initialState: old field names → new
+  let initialState = def.initialState as Record<string, unknown> | undefined;
+  if (initialState && typeof initialState === "object") {
+    const s = initialState;
+    const stability = (s.stability ?? s.politicalStability) as number | undefined;
+    const morale = (s.morale ?? s.publicSentiment) as number | undefined;
+    const resources = (s.resources ?? s.treasury) as number | undefined;
+    const pressure = (s.pressure ?? s.militaryPressure ?? s.warPressure) as number | undefined;
+
+    // Synthesize metricValues from legacy flat fields if absent
+    let metricValues = s.metricValues as Record<string, number> | undefined;
+    if (!metricValues || Object.keys(metricValues).length === 0) {
+      metricValues = {};
+      if (stability !== undefined) metricValues.stability = stability;
+      if (morale !== undefined) metricValues.morale = morale;
+      if (resources !== undefined) metricValues.resources = resources;
+      if (pressure !== undefined) metricValues.pressure = pressure;
+    }
+
+    initialState = {
+      ...s,
+      stability,
+      morale,
+      resources,
+      pressure,
+      metricValues,
+      groupInfluence: s.groupInfluence ?? s.factionInfluence,
+    };
+  }
+
+  return {
+    ...def,
+    ...(groups !== undefined ? { groups } : {}),
+    ...(characters !== undefined ? { characters } : {}),
+    ...(initialState !== undefined ? { initialState } : {}),
+  };
+}
+
 function parseWorldRow(row: {
   id: string;
   title: string;
@@ -72,7 +138,7 @@ function parseWorldRow(row: {
     title: row.title,
     prompt: row.prompt,
     status: row.status,
-    definition: row.definition,
+    definition: normalizeDefinition(row.definition),
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

@@ -59,8 +59,8 @@ describe("TurnProcessor contract", () => {
     });
 
     expect(processed.session.currentStateVersion).toBe(2);
-    expect(processed.turn.result.visibleState.publicSentiment).toBeGreaterThan(
-      seededSession.state.publicSentiment,
+    expect(processed.turn.result.visibleState.morale).toBeGreaterThan(
+      seededSession.state.morale,
     );
     expect(processed.turn.result.privateStateVersion).toBe(2);
   });

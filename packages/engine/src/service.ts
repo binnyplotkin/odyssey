@@ -11,6 +11,7 @@ import {
   getDeterministicTextGenerationAdapter,
 } from "./text-generation-provider";
 import { TextGenerationAdapter, TextGenerationProvider } from "./interfaces";
+import { resolveRelationships } from "./metric-helpers";
 import { createId, isoNow } from "@odyssey/utils";
 import {
   BuildWorldResponse,
@@ -52,6 +53,7 @@ function buildSeedSession(session: SessionRecord, world: WorldDefinition) {
     currentStateVersion: 1,
     state: {
       ...world.initialState,
+      relationships: resolveRelationships(world),
       turnCount: 0,
       activeEventId: null,
       lastEventIds: [],
@@ -61,11 +63,12 @@ function buildSeedSession(session: SessionRecord, world: WorldDefinition) {
 
 function buildVisibleState(state: SessionRecord["state"]) {
   return {
-    politicalStability: state.politicalStability,
-    publicSentiment: state.publicSentiment,
-    treasury: state.treasury,
-    militaryPressure: state.militaryPressure,
-    factionInfluence: state.factionInfluence,
+    stability: state.stability,
+    morale: state.morale,
+    resources: state.resources,
+    pressure: state.pressure,
+    metricValues: state.metricValues,
+    groupInfluence: state.groupInfluence,
   };
 }
 
@@ -462,13 +465,7 @@ export function createSimulationService(
           "Ask the chancellor for a briefing",
           "Demand the military report",
         ],
-        visibleState: {
-          politicalStability: session.state.politicalStability,
-          publicSentiment: session.state.publicSentiment,
-          treasury: session.state.treasury,
-          militaryPressure: session.state.militaryPressure,
-          factionInfluence: session.state.factionInfluence,
-        },
+        visibleState: buildVisibleState(session.state),
         privateStateVersion: session.currentStateVersion,
         event: null,
         audioDirectives: [

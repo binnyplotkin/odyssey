@@ -46,10 +46,10 @@ export default async function SessionDetailPage({
           { label: "Role", value: session.roleId },
           { label: "Status", value: session.status },
           { label: "Version", value: session.currentStateVersion },
-          { label: "Stability", value: session.state.politicalStability },
-          { label: "Sentiment", value: session.state.publicSentiment },
-          { label: "Treasury", value: session.state.treasury },
-          { label: "Military", value: session.state.militaryPressure },
+          { label: "Stability", value: session.state.stability },
+          { label: "Morale", value: session.state.morale },
+          { label: "Resources", value: session.state.resources },
+          { label: "Pressure", value: session.state.pressure },
         ].map(({ label, value }) => (
           <div
             key={label}

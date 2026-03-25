@@ -13,6 +13,9 @@ const items: SidebarItem[] = [
   { href: "/editor", label: "Editor", section: "Tools" },
   { href: "/builder", label: "Builder", section: "Tools" },
   { href: "/voice-test", label: "Voice Test", section: "Tools" },
+  { href: "/voice-test-2", label: "Voice Test 2", section: "Tools" },
+  { href: "/voice-test-3", label: "Waveform", section: "Tools" },
+  { href: "/voice-test-4", label: "3D Waveform", section: "Tools" },
   { href: "/roadmap", label: "Roadmap", section: "Tools" },
 ];
 

@@ -12,18 +12,21 @@ type AudioDirective = {
 
 type TtsProvider = "openai" | "elevenlabs";
 
+type VisibleState = {
+  stability?: number;
+  morale?: number;
+  resources?: number;
+  pressure?: number;
+  metricValues?: Record<string, number>;
+  groupInfluence: Record<string, number>;
+};
+
 type IntroEnvelope = {
   narration: Array<{ id: string; text: string }>;
   dialogue: Array<{ id: string; speaker: string; role: string; text: string }>;
   uiChoices: string[];
   audioDirectives: AudioDirective[];
-  visibleState: {
-    politicalStability: number;
-    publicSentiment: number;
-    treasury: number;
-    militaryPressure: number;
-    factionInfluence: Record<string, number>;
-  };
+  visibleState: VisibleState;
 };
 
 type SimulationBootstrap = {
@@ -41,13 +44,7 @@ type TurnEnvelope = {
       dialogue: Array<{ id: string; speaker: string; role: string; text: string }>;
       uiChoices: string[];
       audioDirectives: AudioDirective[];
-      visibleState: {
-        politicalStability: number;
-        publicSentiment: number;
-        treasury: number;
-        militaryPressure: number;
-        factionInfluence: Record<string, number>;
-      };
+      visibleState: VisibleState;
     };
   };
 };
@@ -790,31 +787,36 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
           <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">World status</p>
 
           <div className="mt-6 grid gap-4">
-            {[
-              ["Political stability", statusPanel.politicalStability],
-              ["Public sentiment", statusPanel.publicSentiment],
-              ["Treasury", statusPanel.treasury],
-              ["Military pressure", statusPanel.militaryPressure],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-[1.4rem] border border-[var(--border)] bg-white/60 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm text-stone-700">{label}</p>
-                  <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">{value}</p>
+            {(initialData.world.metrics ?? [
+              { id: "stability", label: "Stability", initialValue: 50, direction: "higher-better" as const },
+              { id: "morale", label: "Morale", initialValue: 50, direction: "higher-better" as const },
+              { id: "resources", label: "Resources", initialValue: 50, direction: "higher-better" as const },
+              { id: "pressure", label: "Pressure", initialValue: 50, direction: "lower-better" as const },
+            ]).map((metric) => {
+              const value = statusPanel.metricValues?.[metric.id]
+                ?? (statusPanel as Record<string, unknown>)[metric.id] as number | undefined
+                ?? metric.initialValue;
+              return (
+                <div key={metric.id} className="rounded-[1.4rem] border border-[var(--border)] bg-white/60 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-stone-700">{metric.label}</p>
+                    <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">{value}</p>
+                  </div>
+                  <div className="mt-3 h-2 rounded-full bg-stone-200">
+                    <div className="h-2 rounded-full bg-[var(--accent-strong)]" style={{ width: `${value}%` }} />
+                  </div>
                 </div>
-                <div className="mt-3 h-2 rounded-full bg-stone-200">
-                  <div className="h-2 rounded-full bg-[var(--accent-strong)]" style={{ width: `${value}%` }} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="mt-6 rounded-[1.5rem] bg-white/55 p-4">
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Faction map</p>
+            <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Group map</p>
             <div className="mt-4 space-y-3">
-              {Object.entries(statusPanel.factionInfluence).map(([faction, value]) => (
-                <div key={faction}>
+              {Object.entries(statusPanel.groupInfluence).map(([group, value]) => (
+                <div key={group}>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="capitalize">{faction}</span>
+                    <span className="capitalize">{group}</span>
                     <span className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">{value}</span>
                   </div>
                   <div className="mt-2 h-2 rounded-full bg-stone-200">

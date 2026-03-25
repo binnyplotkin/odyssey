@@ -10,10 +10,11 @@ describe("RuleBasedEventSelector", () => {
       turnCount: 0,
       activeEventId: null,
       lastEventIds: [],
-      militaryPressure: 60,
-      treasury: 40,
-      politicalStability: 55,
-      publicSentiment: 50,
+      pressure: 60,
+      resources: 40,
+      stability: 55,
+      morale: 50,
+      metricValues: { stability: 55, morale: 50, resources: 40, pressure: 60 },
     });
 
     expect(event?.id).toBe("border-raid");

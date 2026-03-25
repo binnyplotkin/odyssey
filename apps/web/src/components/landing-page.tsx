@@ -37,7 +37,7 @@ const worldGenerationStages: Array<{
   {
     id: "generating",
     label: "Generating world",
-    detail: "Composing roles, factions, characters, and events.",
+    detail: "Composing roles, groups, characters, and events.",
   },
   {
     id: "publishing",

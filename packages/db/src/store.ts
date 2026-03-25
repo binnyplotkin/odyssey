@@ -8,6 +8,40 @@ import {
   TurnRecord,
 } from "@odyssey/types";
 
+/**
+ * Normalize simulation state from pre-rename DB records
+ * (politicalStability→stability, factionInfluence→groupInfluence, etc.)
+ */
+function normalizeState(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const s = raw as Record<string, unknown>;
+
+  const stability = (s.stability ?? s.politicalStability) as number | undefined;
+  const morale = (s.morale ?? s.publicSentiment) as number | undefined;
+  const resources = (s.resources ?? s.treasury) as number | undefined;
+  const pressure = (s.pressure ?? s.militaryPressure ?? s.warPressure) as number | undefined;
+
+  // Synthesize metricValues from legacy flat fields if absent
+  let metricValues = s.metricValues as Record<string, number> | undefined;
+  if (!metricValues || Object.keys(metricValues).length === 0) {
+    metricValues = {};
+    if (stability !== undefined) metricValues.stability = stability;
+    if (morale !== undefined) metricValues.morale = morale;
+    if (resources !== undefined) metricValues.resources = resources;
+    if (pressure !== undefined) metricValues.pressure = pressure;
+  }
+
+  return {
+    ...s,
+    stability,
+    morale,
+    resources,
+    pressure,
+    metricValues,
+    groupInfluence: s.groupInfluence ?? s.factionInfluence,
+  };
+}
+
 type StoreState = {
   sessions: Map<string, SessionRecord>;
   turns: Map<string, TurnRecord[]>;
@@ -106,7 +140,7 @@ class NeonPersistenceStore implements PersistenceStore {
       roleId: row.roleId,
       status: row.status,
       currentStateVersion: row.currentStateVersion,
-      state: row.state,
+      state: normalizeState(row.state),
       createdAt: row.createdAt.toISOString(),
       lastActiveAt: row.lastActiveAt.toISOString(),
     });
@@ -146,7 +180,7 @@ class NeonPersistenceStore implements PersistenceStore {
         roleId: row.roleId,
         status: row.status,
         currentStateVersion: row.currentStateVersion,
-        state: row.state,
+        state: normalizeState(row.state),
         createdAt: row.createdAt.toISOString(),
         lastActiveAt: row.lastActiveAt.toISOString(),
       }),

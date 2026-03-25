@@ -8,20 +8,25 @@
     "start": "next start"
   },
   "dependencies": {
-    "@odyssey/types": "*",
     "@odyssey/db": "*",
     "@odyssey/engine": "*",
+    "@odyssey/types": "*",
     "@odyssey/ui": "*",
     "@odyssey/utils": "*",
+    "@paper-design/shaders-react": "^0.0.72",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
     "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "three": "^0.183.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.183.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

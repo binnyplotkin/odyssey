@@ -28,10 +28,10 @@ describe("golden turn regression", () => {
     const progression: Array<{
       turn: number;
       eventId: string | null;
-      publicSentiment: number;
-      politicalStability: number;
-      treasury: number;
-      militaryPressure: number;
+      morale: number;
+      stability: number;
+      resources: number;
+      pressure: number;
       stateDeltaSummary: string;
     }> = [];
 
@@ -45,10 +45,10 @@ describe("golden turn regression", () => {
       progression.push({
         turn: index + 1,
         eventId: result.turn.result.event?.id ?? null,
-        publicSentiment: result.turn.result.visibleState.publicSentiment,
-        politicalStability: result.turn.result.visibleState.politicalStability,
-        treasury: result.turn.result.visibleState.treasury,
-        militaryPressure: result.turn.result.visibleState.militaryPressure,
+        morale: result.turn.result.visibleState.morale!,
+        stability: result.turn.result.visibleState.stability!,
+        resources: result.turn.result.visibleState.resources!,
+        pressure: result.turn.result.visibleState.pressure!,
         stateDeltaSummary: result.turn.stateDeltaSummary,
       });
     }
@@ -57,102 +57,102 @@ describe("golden turn regression", () => {
       {
         turn: 1,
         eventId: "empty-granaries",
-        publicSentiment: 52,
-        politicalStability: 64,
-        treasury: 47,
-        militaryPressure: 41,
+        morale: 52,
+        stability: 64,
+        resources: 47,
+        pressure: 41,
         stateDeltaSummary:
-          "Public sentiment rose to 52. Political stability shifted to 64. Treasury is now 47. Military pressure is now 41.",
+          "Morale rose to 52. Stability shifted to 64. Resources now 47. Pressure is now 41.",
       },
       {
         turn: 2,
         eventId: "prisoner-plea",
-        publicSentiment: 56,
-        politicalStability: 65,
-        treasury: 47,
-        militaryPressure: 41,
+        morale: 56,
+        stability: 65,
+        resources: 47,
+        pressure: 41,
         stateDeltaSummary:
-          "Public sentiment rose to 56. Political stability shifted to 65. Treasury is now 47. Military pressure is now 41.",
+          "Morale rose to 56. Stability shifted to 65. Resources now 47. Pressure is now 41.",
       },
       {
         turn: 3,
         eventId: "prisoner-plea",
-        publicSentiment: 56,
-        politicalStability: 65,
-        treasury: 52,
-        militaryPressure: 41,
+        morale: 56,
+        stability: 65,
+        resources: 52,
+        pressure: 41,
         stateDeltaSummary:
-          "Public sentiment rose to 56. Political stability shifted to 65. Treasury is now 52. Military pressure is now 41.",
+          "Morale rose to 56. Stability shifted to 65. Resources now 52. Pressure is now 41.",
       },
       {
         turn: 4,
         eventId: "prisoner-plea",
-        publicSentiment: 55,
-        politicalStability: 67,
-        treasury: 52,
-        militaryPressure: 36,
+        morale: 55,
+        stability: 67,
+        resources: 52,
+        pressure: 36,
         stateDeltaSummary:
-          "Public sentiment rose to 55. Political stability shifted to 67. Treasury is now 52. Military pressure is now 36.",
+          "Morale rose to 55. Stability shifted to 67. Resources now 52. Pressure is now 36.",
       },
       {
         turn: 5,
         eventId: "prisoner-plea",
-        publicSentiment: 55,
-        politicalStability: 67,
-        treasury: 52,
-        militaryPressure: 41,
+        morale: 55,
+        stability: 67,
+        resources: 52,
+        pressure: 41,
         stateDeltaSummary:
-          "Public sentiment rose to 55. Political stability shifted to 67. Treasury is now 52. Military pressure is now 41.",
+          "Morale rose to 55. Stability shifted to 67. Resources now 52. Pressure is now 41.",
       },
       {
         turn: 6,
         eventId: "prisoner-plea",
-        publicSentiment: 54,
-        politicalStability: 69,
-        treasury: 57,
-        militaryPressure: 38,
+        morale: 54,
+        stability: 69,
+        resources: 57,
+        pressure: 38,
         stateDeltaSummary:
-          "Public sentiment rose to 54. Political stability shifted to 69. Treasury is now 57. Military pressure is now 38.",
+          "Morale rose to 54. Stability shifted to 69. Resources now 57. Pressure is now 38.",
       },
       {
         turn: 7,
         eventId: "prisoner-plea",
-        publicSentiment: 50,
-        politicalStability: 68,
-        treasury: 57,
-        militaryPressure: 38,
+        morale: 50,
+        stability: 68,
+        resources: 57,
+        pressure: 38,
         stateDeltaSummary:
-          "Public sentiment fell to 50. Political stability shifted to 68. Treasury is now 57. Military pressure is now 38.",
+          "Morale fell to 50. Stability shifted to 68. Resources now 57. Pressure is now 38.",
       },
       {
         turn: 8,
         eventId: "prisoner-plea",
-        publicSentiment: 50,
-        politicalStability: 68,
-        treasury: 52,
-        militaryPressure: 38,
+        morale: 50,
+        stability: 68,
+        resources: 52,
+        pressure: 38,
         stateDeltaSummary:
-          "Public sentiment rose to 50. Political stability shifted to 68. Treasury is now 52. Military pressure is now 38.",
+          "Morale rose to 50. Stability shifted to 68. Resources now 52. Pressure is now 38.",
       },
       {
         turn: 9,
         eventId: "empty-granaries",
-        publicSentiment: 48,
-        politicalStability: 72,
-        treasury: 52,
-        militaryPressure: 32,
+        morale: 48,
+        stability: 72,
+        resources: 52,
+        pressure: 32,
         stateDeltaSummary:
-          "Public sentiment rose to 48. Political stability shifted to 72. Treasury is now 52. Military pressure is now 32.",
+          "Morale rose to 48. Stability shifted to 72. Resources now 52. Pressure is now 32.",
       },
       {
         turn: 10,
         eventId: "prisoner-plea",
-        publicSentiment: 48,
-        politicalStability: 72,
-        treasury: 52,
-        militaryPressure: 32,
+        morale: 48,
+        stability: 72,
+        resources: 52,
+        pressure: 32,
         stateDeltaSummary:
-          "Public sentiment rose to 48. Political stability shifted to 72. Treasury is now 52. Military pressure is now 32.",
+          "Morale rose to 48. Stability shifted to 72. Resources now 52. Pressure is now 32.",
       },
     ]);
   });
