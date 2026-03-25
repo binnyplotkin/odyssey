@@ -362,7 +362,7 @@ export default function AboutPage() {
                 alt="Josh Sassoon, Co-founder of Odyssey"
                 fill
                 className="object-cover"
-                style={{ objectPosition: "center 11%" }}
+                style={{ objectPosition: "center 11%", filter: "brightness(0.84) saturate(0.95)" }}
               />
             </div>
             <div className="space-y-2 p-8">
