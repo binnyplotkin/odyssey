@@ -39,17 +39,17 @@ function titleFromPrompt(prompt: string) {
 }
 
 function assertWorldIntegrity(world: WorldDefinition) {
-  const factionIds = new Set(world.factions.map((faction) => faction.id));
+  const groupIds = new Set(world.groups.map((group) => group.id));
   const characterIds = new Set(world.characters.map((character) => character.id));
 
-  const missingCharacterFaction = world.characters.find(
-    (character) => !factionIds.has(character.factionId),
-  );
-
-  if (missingCharacterFaction) {
-    throw new Error(
-      `Invalid world integrity: character ${missingCharacterFaction.id} references unknown faction ${missingCharacterFaction.factionId}.`,
-    );
+  for (const character of world.characters) {
+    const charGroupIds = character.groupIds ?? (character.groupId ? [character.groupId] : []);
+    const missingGroup = charGroupIds.find((gid) => !groupIds.has(gid));
+    if (missingGroup) {
+      throw new Error(
+        `Invalid world integrity: character ${character.id} references unknown group ${missingGroup}.`,
+      );
+    }
   }
 
   for (const event of world.eventTemplates) {
@@ -62,10 +62,10 @@ function assertWorldIntegrity(world: WorldDefinition) {
     }
   }
 
-  for (const faction of world.factions) {
-    if (world.initialState.factionInfluence[faction.id] === undefined) {
+  for (const group of world.groups) {
+    if (world.initialState.groupInfluence[group.id] === undefined) {
       throw new Error(
-        `Invalid world integrity: missing factionInfluence for faction ${faction.id}.`,
+        `Invalid world integrity: missing groupInfluence for group ${group.id}.`,
       );
     }
   }
@@ -296,9 +296,9 @@ function mapEventCategory(value: unknown): "politics" | "economy" | "military" |
   return "politics";
 }
 
-function resolveFactionId(
+function resolveGroupId(
   value: unknown,
-  factions: Array<{ id: string; name: string }>,
+  groups: Array<{ id: string; name: string }>,
   fallbackId: string,
 ) {
   const candidate = asString(value);
@@ -307,14 +307,14 @@ function resolveFactionId(
     return fallbackId;
   }
 
-  const byId = factions.find((faction) => faction.id === candidate);
+  const byId = groups.find((group) => group.id === candidate);
 
   if (byId) {
     return byId.id;
   }
 
   const candidateSlug = slugify(candidate);
-  const byName = factions.find((faction) => slugify(faction.name) === candidateSlug);
+  const byName = groups.find((group) => slugify(group.name) === candidateSlug);
 
   return byName?.id ?? fallbackId;
 }
@@ -337,16 +337,55 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
     safety.disallowedContent ?? safety.disallowed ?? safety.prohibitedContent,
   );
 
-  const sourceFactions = Array.isArray(parsed.factions)
-    ? parsed.factions
-    : Array.isArray(parsed.groups)
-      ? parsed.groups
+  const sourceGroups = Array.isArray(parsed.groups)
+    ? parsed.groups
+    : Array.isArray(parsed.factions)
+      ? parsed.factions
       : [];
 
-  const factions = sourceFactions.map((entry, index) => {
+  const groups = sourceGroups.map((entry, index) => {
     const record = asRecord(entry) ?? {};
-    const name = asString(record.name ?? record.title ?? record.id, `Faction ${index + 1}`);
-    const id = asString(record.id, slugify(name) || `faction-${index + 1}`);
+    const name = asString(record.name ?? record.title ?? record.id, `Group ${index + 1}`);
+    const id = asString(record.id, slugify(name) || `group-${index + 1}`);
+
+    // v2 — extract disposition triggers
+    const rawDispTriggers = Array.isArray(record.dispositionTriggers) ? record.dispositionTriggers : [];
+    const dispositionTriggers = rawDispTriggers
+      .map((dt) => {
+        const dtRec = asRecord(dt) ?? {};
+        const condition = asString(dtRec.condition ?? dtRec.when);
+        const shift = asString(dtRec.dispositionShift ?? dtRec.shift ?? dtRec.to);
+        if (!condition || !shift) return null;
+        const validShifts = ["supportive", "neutral", "hostile", "volatile"];
+        const normalizedShift = validShifts.find((s) => shift.toLowerCase().includes(s)) ?? "hostile";
+        return {
+          condition,
+          dispositionShift: normalizedShift as "supportive" | "neutral" | "hostile" | "volatile",
+          ...(dtRec.priority !== undefined ? { priority: asNumber(dtRec.priority) } : {}),
+        };
+      })
+      .filter(Boolean) as Array<{ condition: string; dispositionShift: "supportive" | "neutral" | "hostile" | "volatile"; priority?: number }>;
+
+    // v2 — extract group relationships
+    const rawGroupRels = Array.isArray(record.groupRelationships) ? record.groupRelationships : [];
+    const groupRelationships = rawGroupRels
+      .map((rel) => {
+        const relRec = asRecord(rel) ?? {};
+        const targetGroupId = asString(relRec.targetGroupId ?? relRec.target ?? relRec.groupId);
+        const attitude = asString(relRec.attitude ?? relRec.stance ?? relRec.disposition);
+        if (!targetGroupId || !attitude) return null;
+        return {
+          targetGroupId,
+          attitude,
+          ...(relRec.context ? { context: asString(relRec.context) } : {}),
+        };
+      })
+      .filter(Boolean) as Array<{ targetGroupId: string; attitude: string; context?: string }>;
+
+    // v2 — map power type
+    const rawPower = asString(record.powerType ?? record.power_type ?? record.leverageType).toLowerCase();
+    const powerTypeMap: Record<string, string> = { military: "military", economic: "economic", religious: "religious", political: "political", popular: "popular" };
+    const powerType = Object.keys(powerTypeMap).find((k) => rawPower.includes(k));
 
     return {
       id,
@@ -357,17 +396,37 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
       ),
       influence: clampScore(asNumber(record.influence ?? record.power ?? record.clout, 55)),
       disposition: mapDisposition(record.disposition ?? record.attitude ?? record.stance),
+      // v2 optional fields
+      ...(asStringArray(record.goals ?? record.objectives ?? record.agenda).length
+        ? { goals: asStringArray(record.goals ?? record.objectives ?? record.agenda) }
+        : {}),
+      ...(record.leaderId ? { leaderId: asString(record.leaderId ?? record.leader) } : {}),
+      ...(powerType ? { powerType: powerType as "military" | "economic" | "religious" | "political" | "popular" } : {}),
+      ...(record.backstory ? { backstory: asString(record.backstory) } : {}),
+      volatility: clampScore(asNumber(record.volatility ?? record.temperament, 50)),
+      ...(record.cohesion !== undefined ? { cohesion: clampScore(asNumber(record.cohesion, 60)) } : {}),
+      ...(dispositionTriggers.length ? { dispositionTriggers } : {}),
+      ...(asStringArray(record.demands ?? record.requests).length ? { demands: asStringArray(record.demands ?? record.requests) } : {}),
+      ...(groupRelationships.length ? { groupRelationships } : {}),
+      ...(asStringArray(record.assets ?? record.resources ?? record.controls).length
+        ? { assets: asStringArray(record.assets ?? record.resources ?? record.controls) }
+        : {}),
+      ...(record.collectiveVoice ? { collectiveVoice: asString(record.collectiveVoice) } : {}),
+      ...(record.visualIdentity ? { visualIdentity: asString(record.visualIdentity ?? record.appearance) } : {}),
+      ...(record.collapseCondition ? { collapseCondition: asString(record.collapseCondition) } : {}),
+      ...(asStringArray(record.tags ?? record.labels).length ? { tags: asStringArray(record.tags ?? record.labels) } : {}),
     };
   });
 
-  if (!factions.length) {
-    factions.push(
+  if (!groups.length) {
+    groups.push(
       {
         id: "core-group",
         name: "Core Group",
         description: "Operational leaders focused on stability and coordination.",
         influence: 62,
         disposition: "supportive",
+        volatility: 30,
       },
       {
         id: "rival-group",
@@ -375,6 +434,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         description: "A competing bloc with different priorities and methods.",
         influence: 58,
         disposition: "volatile",
+        volatility: 70,
       },
       {
         id: "stakeholders",
@@ -382,6 +442,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         description: "People impacted by outcomes and sensitive to credibility.",
         influence: 51,
         disposition: "neutral",
+        volatility: 50,
       },
     );
   }
@@ -394,7 +455,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         ? parsed.npcs
         : [];
 
-  const primaryFactionId = factions[0].id;
+  const primaryGroupId = groups[0].id;
   const characters = sourceCharacters.map((entry, index) => {
     const record = asRecord(entry) ?? {};
     const name = asString(record.name ?? record.title ?? record.id, `Figure ${index + 1}`);
@@ -402,16 +463,51 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
     const emotions = asRecord(record.emotionalBaseline ?? record.emotions) ?? {};
     const archetype = asString(record.archetype ?? record.persona ?? record.role, "operator");
 
+    const groupId = resolveGroupId(
+      record.groupId ?? record.group ?? record.faction,
+      groups,
+      primaryGroupId,
+    );
+
+    // v2 — extract behavior triggers
+    const rawTriggers = Array.isArray(record.behaviorTriggers) ? record.behaviorTriggers : [];
+    const behaviorTriggers = rawTriggers
+      .map((bt) => {
+        const btRec = asRecord(bt) ?? {};
+        const condition = asString(btRec.condition ?? btRec.when);
+        const behavior = asString(btRec.behavior ?? btRec.action ?? btRec.response);
+        if (!condition || !behavior) return null;
+        return {
+          condition,
+          behavior,
+          ...(btRec.priority !== undefined ? { priority: asNumber(btRec.priority) } : {}),
+        };
+      })
+      .filter(Boolean) as Array<{ condition: string; behavior: string; priority?: number }>;
+
+    // v2 — extract NPC relationships
+    const rawNpcRels = Array.isArray(record.npcRelationships) ? record.npcRelationships : [];
+    const npcRelationships = rawNpcRels
+      .map((rel) => {
+        const relRec = asRecord(rel) ?? {};
+        const targetCharacterId = asString(relRec.targetCharacterId ?? relRec.target ?? relRec.characterId);
+        const attitude = asString(relRec.attitude ?? relRec.stance ?? relRec.disposition);
+        if (!targetCharacterId || !attitude) return null;
+        return {
+          targetCharacterId,
+          attitude,
+          ...(relRec.context ? { context: asString(relRec.context) } : {}),
+        };
+      })
+      .filter(Boolean) as Array<{ targetCharacterId: string; attitude: string; context?: string }>;
+
     return {
       id,
       name,
       title: asString(record.title ?? record.role, "Advisor"),
       archetype,
-      factionId: resolveFactionId(
-        record.factionId ?? record.faction ?? record.group,
-        factions,
-        primaryFactionId,
-      ),
+      groupId,
+      groupIds: [groupId],
       motivations: asStringArray(record.motivations ?? record.goals ?? record.objectives).length
         ? asStringArray(record.motivations ?? record.goals ?? record.objectives)
         : ["Preserve influence while surviving the current crisis."],
@@ -420,12 +516,27 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         fear: clampScore(asNumber(emotions.fear ?? emotions.anxiety, 30)),
         hope: clampScore(asNumber(emotions.hope ?? emotions.optimism, 48)),
         loyalty: clampScore(asNumber(emotions.loyalty ?? emotions.commitment, 55)),
+        volatility: clampScore(asNumber(emotions.volatility ?? emotions.temperament, 50)),
       },
       speakingStyle: asString(
         record.speakingStyle ?? record.voiceStyle ?? record.dialogueStyle,
         "Measured, strategic, and politically cautious.",
       ),
       voice: normalizeVoiceProfile(record.voice ?? record.voiceProfile),
+      // v2 optional fields
+      ...(record.backstory ? { backstory: asString(record.backstory) } : {}),
+      ...(record.visualDescription ? { visualDescription: asString(record.visualDescription ?? record.appearance) } : {}),
+      ...(asStringArray(record.knowledgeDomains ?? record.expertise ?? record.domains).length
+        ? { knowledgeDomains: asStringArray(record.knowledgeDomains ?? record.expertise ?? record.domains) }
+        : {}),
+      ...(behaviorTriggers.length ? { behaviorTriggers } : {}),
+      ...(asStringArray(record.dialogueExamples ?? record.exampleDialogue ?? record.sampleLines).length
+        ? { dialogueExamples: asStringArray(record.dialogueExamples ?? record.exampleDialogue ?? record.sampleLines).slice(0, 6) }
+        : {}),
+      ...(asStringArray(record.secrets).length ? { secrets: asStringArray(record.secrets) } : {}),
+      ...(record.deathCondition ? { deathCondition: asString(record.deathCondition ?? record.removalCondition) } : {}),
+      ...(asStringArray(record.tags ?? record.labels).length ? { tags: asStringArray(record.tags ?? record.labels) } : {}),
+      ...(npcRelationships.length ? { npcRelationships } : {}),
     };
   });
 
@@ -436,9 +547,10 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         name: "Arden",
         title: "Chancellor",
         archetype: "strategist",
-        factionId: primaryFactionId,
+        groupId: primaryGroupId,
+        groupIds: [primaryGroupId],
         motivations: ["Protect regime legitimacy and prevent unrest."],
-        emotionalBaseline: { anger: 18, fear: 28, hope: 50, loyalty: 70 },
+        emotionalBaseline: { anger: 18, fear: 28, hope: 50, loyalty: 70, volatility: 30 },
         speakingStyle: "Deliberate and diplomatic.",
         voice: undefined,
       },
@@ -447,9 +559,10 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         name: "Sera",
         title: "Marshal",
         archetype: "commander",
-        factionId: factions[1]?.id ?? primaryFactionId,
+        groupId: groups[1]?.id ?? primaryGroupId,
+        groupIds: [groups[1]?.id ?? primaryGroupId],
         motivations: ["Maintain security and discipline."],
-        emotionalBaseline: { anger: 24, fear: 26, hope: 44, loyalty: 66 },
+        emotionalBaseline: { anger: 24, fear: 26, hope: 44, loyalty: 66, volatility: 55 },
         speakingStyle: "Direct and tactical.",
         voice: undefined,
       },
@@ -458,9 +571,10 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         name: "Elan",
         title: "High Priest",
         archetype: "moral witness",
-        factionId: primaryFactionId,
+        groupId: primaryGroupId,
+        groupIds: [primaryGroupId],
         motivations: ["Protect moral order and civilian welfare."],
-        emotionalBaseline: { anger: 12, fear: 20, hope: 60, loyalty: 58 },
+        emotionalBaseline: { anger: 12, fear: 20, hope: 60, loyalty: 58, volatility: 25 },
         speakingStyle: "Calm and morally pointed.",
         voice: undefined,
       },
@@ -553,21 +667,21 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
       ),
       urgency: clampScore(asNumber(record.urgency ?? record.pressure ?? record.risk, 68)),
       triggerWhen: {
-        politicalStabilityBelow:
-          triggerRaw.politicalStabilityBelow !== undefined
-            ? clampScore(asNumber(triggerRaw.politicalStabilityBelow, 0))
+        stabilityBelow:
+          triggerRaw.stabilityBelow !== undefined
+            ? clampScore(asNumber(triggerRaw.stabilityBelow, 0))
             : undefined,
-        treasuryBelow:
-          triggerRaw.treasuryBelow !== undefined
-            ? clampScore(asNumber(triggerRaw.treasuryBelow, 0))
+        resourcesBelow:
+          triggerRaw.resourcesBelow !== undefined
+            ? clampScore(asNumber(triggerRaw.resourcesBelow, 0))
             : undefined,
-        militaryPressureAbove:
-          triggerRaw.militaryPressureAbove !== undefined
-            ? clampScore(asNumber(triggerRaw.militaryPressureAbove, 0))
+        pressureAbove:
+          triggerRaw.pressureAbove !== undefined
+            ? clampScore(asNumber(triggerRaw.pressureAbove, 0))
             : undefined,
-        publicSentimentBelow:
-          triggerRaw.publicSentimentBelow !== undefined
-            ? clampScore(asNumber(triggerRaw.publicSentimentBelow, 0))
+        moraleBelow:
+          triggerRaw.moraleBelow !== undefined
+            ? clampScore(asNumber(triggerRaw.moraleBelow, 0))
             : undefined,
       },
       stakes: asStringArray(record.stakes ?? record.consequences ?? record.outcomes).length
@@ -575,7 +689,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         : ["A misstep could trigger political fracture and material decline."],
       narratorPrompt: asString(
         record.narratorPrompt ?? record.scenePrompt ?? record.prompt,
-        "Describe immediate stakes, pressure points, and visible faction reactions.",
+        "Describe immediate stakes, pressure points, and visible group reactions.",
       ),
       actorIds: normalizedActorIds,
     };
@@ -590,10 +704,10 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         summary: "A sudden shortage forces emergency tradeoffs.",
         urgency: 72,
         triggerWhen: {
-          politicalStabilityBelow: undefined,
-          treasuryBelow: 58,
-          militaryPressureAbove: undefined,
-          publicSentimentBelow: undefined,
+          stabilityBelow: undefined,
+          resourcesBelow: 58,
+          pressureAbove: undefined,
+          moraleBelow: undefined,
         },
         stakes: ["Stabilizing systems now may trigger backlash later."],
         narratorPrompt: "Show immediate constraints, stakeholder pressure, and hidden costs.",
@@ -606,10 +720,10 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         summary: "Outside threats test leadership credibility.",
         urgency: 76,
         triggerWhen: {
-          politicalStabilityBelow: undefined,
-          treasuryBelow: undefined,
-          militaryPressureAbove: 40,
-          publicSentimentBelow: undefined,
+          stabilityBelow: undefined,
+          resourcesBelow: undefined,
+          pressureAbove: 40,
+          moraleBelow: undefined,
         },
         stakes: ["Delay may embolden rivals and drain confidence."],
         narratorPrompt: "Convey urgency through alarming updates and divided advisors.",
@@ -622,10 +736,10 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         summary: "An influential bloc openly challenges your direction.",
         urgency: 70,
         triggerWhen: {
-          politicalStabilityBelow: 62,
-          treasuryBelow: undefined,
-          militaryPressureAbove: undefined,
-          publicSentimentBelow: undefined,
+          stabilityBelow: 62,
+          resourcesBelow: undefined,
+          pressureAbove: undefined,
+          moraleBelow: undefined,
         },
         stakes: ["Compromise may calm conflict now but weaken your position later."],
         narratorPrompt: "Describe tense negotiation, power plays, and reputational risk.",
@@ -635,18 +749,18 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
   }
 
   const state = asRecord(parsed.initialState ?? parsed.state ?? parsed.worldState) ?? {};
-  const factionInfluenceRaw = asRecord(state.factionInfluence ?? state.factions) ?? {};
+  const groupInfluenceRaw = asRecord(state.groupInfluence ?? state.factionInfluence ?? state.groups ?? state.factions) ?? {};
   const characterStatesRaw = asRecord(state.characterStates ?? state.characters) ?? {};
   const relationshipsRaw = asRecord(state.relationships ?? state.relations) ?? {};
 
-  const factionInfluence = Object.fromEntries(
-    factions.map((faction) => {
-      const valueById = factionInfluenceRaw[faction.id];
-      const valueByName = factionInfluenceRaw[slugify(faction.name)];
+  const groupInfluence = Object.fromEntries(
+    groups.map((group) => {
+      const valueById = groupInfluenceRaw[group.id];
+      const valueByName = groupInfluenceRaw[slugify(group.name)];
       const influence = clampScore(
-        asNumber(valueById ?? valueByName ?? faction.influence, faction.influence),
+        asNumber(valueById ?? valueByName ?? group.influence, group.influence),
       );
-      return [faction.id, influence];
+      return [group.id, influence];
     }),
   );
 
@@ -725,7 +839,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
       ? asStringArray(parsed.tonalConstraints)
       : [
           "Keep narration grounded in consequence, tension, and tradeoffs.",
-          "Treat all factions as strategic actors with coherent incentives.",
+          "Treat all groups as strategic actors with coherent incentives.",
         ],
     narratorVoice,
     safetyProfile: {
@@ -742,7 +856,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
           ],
     },
     roles,
-    factions,
+    groups,
     characters: characters.map((character, index) => ({
       ...character,
       voice: normalizeVoiceProfile(
@@ -751,21 +865,28 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
       ),
     })),
     eventTemplates: events,
-    initialState: {
-      politicalStability: clampScore(
-        asNumber(state.politicalStability ?? state.stability ?? state.order, 62),
-      ),
-      publicSentiment: clampScore(
-        asNumber(state.publicSentiment ?? state.morale ?? state.support, 54),
-      ),
-      treasury: clampScore(asNumber(state.treasury ?? state.wealth ?? state.resources, 50)),
-      militaryPressure: clampScore(
-        asNumber(state.militaryPressure ?? state.threat ?? state.warPressure, 43),
-      ),
-      factionInfluence,
-      characterStates,
-      relationships,
-    },
+    initialState: (() => {
+      const stability = clampScore(
+        asNumber(state.stability ?? state.politicalStability ?? state.order, 62),
+      );
+      const morale = clampScore(
+        asNumber(state.morale ?? state.publicSentiment ?? state.support, 54),
+      );
+      const resources = clampScore(asNumber(state.resources ?? state.treasury ?? state.wealth, 50));
+      const pressure = clampScore(
+        asNumber(state.pressure ?? state.militaryPressure ?? state.threat ?? state.warPressure, 43),
+      );
+      return {
+        stability,
+        morale,
+        resources,
+        pressure,
+        metricValues: { stability, morale, resources, pressure },
+        groupInfluence,
+        characterStates,
+        relationships,
+      };
+    })(),
   };
 }
 
@@ -790,14 +911,18 @@ async function generateWorldWithModel(prompt: string) {
               "You build simulation worlds for a strategy engine.",
               "Return strict JSON only. No markdown. No prose outside JSON.",
               "The JSON must include keys:",
-              "id,title,setting,premise,introNarration,norms,powerStructures,tonalConstraints,safetyProfile,roles,factions,characters,eventTemplates,initialState.",
+              "id,title,setting,premise,introNarration,norms,powerStructures,tonalConstraints,safetyProfile,roles,groups,characters,eventTemplates,initialState.",
               "Constraints:",
               "- Respect the user's prompt and setting. Do not force a historical frame unless requested.",
               "- Every eventTemplate.actorIds must reference existing characters.",
-              "- initialState.factionInfluence must include all factions.",
+              "- initialState.groupInfluence must include all groups.",
               "- initialState.characterStates and relationships must include all characters.",
               "- Keep all state scores in [0,100].",
-              "- Provide at least 1 role, 3 factions, 3 characters, and 3 eventTemplates.",
+              "- Provide at least 1 role, 3 groups, 3 characters, and 3 eventTemplates.",
+              "- Each character should include: backstory (1-2 sentences), visualDescription, knowledgeDomains (array), dialogueExamples (2 example lines), behaviorTriggers (array of {condition, behavior, priority}), secrets (array), tags (array), and emotionalBaseline.volatility (0-100).",
+              "- Characters may include npcRelationships: [{targetCharacterId, attitude, context}] for inter-NPC attitudes.",
+              "- Each group should include: goals (array), powerType (military/economic/religious/political/popular), backstory (1-2 sentences), volatility (0-100), cohesion (0-100), demands (array), assets (array), tags (array).",
+              "- Groups may include: leaderId (character id), collectiveVoice, visualIdentity, dispositionTriggers [{condition, dispositionShift, priority}], groupRelationships [{targetGroupId, attitude, context}].",
             ].join(" "),
           },
         ],

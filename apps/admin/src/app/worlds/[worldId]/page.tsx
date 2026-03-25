@@ -98,9 +98,32 @@ export default async function WorldDetailPage({
               <div style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: "0.25rem" }}>
                 {character.title} &middot; {character.archetype}
               </div>
-              <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-                Faction: {character.factionId}
+              <div style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: "0.25rem" }}>
+                Group: {(character.groupIds ?? (character.groupId ? [character.groupId] : [])).join(", ")}
               </div>
+              {character.backstory && (
+                <div style={{ fontSize: "0.8rem", marginTop: "0.5rem", lineHeight: 1.4 }}>
+                  {character.backstory}
+                </div>
+              )}
+              {character.tags && character.tags.length > 0 && (
+                <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+                  {character.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      style={{
+                        fontSize: "0.7rem",
+                        padding: "0.1rem 0.4rem",
+                        borderRadius: "9999px",
+                        background: "rgba(232, 121, 160, 0.15)",
+                        color: "#E879A0",
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -108,12 +131,12 @@ export default async function WorldDetailPage({
 
       <section style={{ marginBottom: "2rem" }}>
         <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.75rem" }}>
-          Factions ({world.factions.length})
+          Groups ({world.groups.length})
         </h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "0.75rem" }}>
-          {world.factions.map((faction) => (
+          {world.groups.map((group) => (
             <div
-              key={faction.id}
+              key={group.id}
               style={{
                 background: "var(--panel)",
                 border: "1px solid var(--border)",
@@ -121,11 +144,33 @@ export default async function WorldDetailPage({
                 padding: "1rem",
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>{faction.name}</div>
+              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>{group.name}</div>
               <div style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: "0.25rem" }}>
-                Influence: {faction.influence} &middot; {faction.disposition}
+                Influence: {group.influence} &middot; {group.disposition}
+                {group.powerType && <> &middot; {group.powerType}</>}
               </div>
-              <div style={{ fontSize: "0.8rem" }}>{faction.description}</div>
+              <div style={{ fontSize: "0.8rem", marginBottom: "0.25rem" }}>{group.description}</div>
+              {group.backstory && (
+                <div style={{ fontSize: "0.8rem", color: "var(--muted)", marginTop: "0.25rem" }}>{group.backstory}</div>
+              )}
+              {group.tags && group.tags.length > 0 && (
+                <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+                  {group.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      style={{
+                        fontSize: "0.7rem",
+                        padding: "0.1rem 0.4rem",
+                        borderRadius: "9999px",
+                        background: "rgba(109, 184, 137, 0.15)",
+                        color: "#6DB889",
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

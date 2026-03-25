@@ -13,29 +13,136 @@ const voiceProfileSchema = z.object({
   label: z.string().optional(),
 });
 
+// ── v2 schemas ──────────────────────────────────────────────
+
+const narratorConfigSchema = z.object({
+  perspective: z.enum(["first", "second", "third", "omniscient"]),
+  tense: z.enum(["present", "past"]),
+  style: z.string(),
+});
+
+const metricDefinitionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  description: z.string().optional(),
+  initialValue: z.number().min(0).max(100),
+  direction: z.enum(["higher-better", "lower-better"]),
+});
+
+const eventCategoryDefinitionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  description: z.string().optional(),
+});
+
+const progressionModelSchema = z.object({
+  type: z.enum(["linear", "branching", "open-ended", "cyclical"]),
+  phases: z.number().int().min(1).max(20),
+});
+
+const difficultyConfigSchema = z.object({
+  level: z.enum(["easy", "medium", "hard", "senior", "extreme"]),
+  adaptive: z.boolean(),
+});
+
+const triggerConditionSchema = z.object({
+  metricId: z.string(),
+  condition: z.enum(["above", "below"]),
+  threshold: z.number().min(0).max(100),
+});
+
+const relationshipDefinitionSchema = z.object({
+  id: z.string(),
+  sourceCharacterId: z.string(),
+  targetCharacterId: z.string(),
+  metrics: z.object({
+    trust: z.number().min(0).max(100),
+    fear: z.number().min(0).max(100),
+    loyalty: z.number().min(0).max(100),
+    respect: z.number().min(0).max(100),
+  }),
+  tone: z.string().optional(),
+  stance: z.array(z.string()).optional(),
+  recentMemory: z.array(z.string()).max(6),
+});
+
+const behaviorTriggerSchema = z.object({
+  condition: z.string(),
+  behavior: z.string(),
+  priority: z.number().optional(),
+});
+
+const npcRelationshipSchema = z.object({
+  targetCharacterId: z.string(),
+  attitude: z.string(),
+  context: z.string().optional(),
+});
+
+// ── entity schemas ──────────────────────────────────────────
+
 const characterDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
   title: z.string(),
   archetype: z.string(),
-  factionId: z.string(),
+  // v2: supports multiple groups; legacy groupId accepted via union
+  groupId: z.string().optional(),
+  groupIds: z.array(z.string()).min(1).optional(),
   motivations: z.array(z.string()).min(1),
   emotionalBaseline: z.object({
     anger: z.number().min(0).max(100),
     fear: z.number().min(0).max(100),
     hope: z.number().min(0).max(100),
     loyalty: z.number().min(0).max(100),
+    volatility: z.number().min(0).max(100).optional(),
   }),
   speakingStyle: z.string(),
   voice: voiceProfileSchema.optional(),
+  // v2 additions (all optional)
+  backstory: z.string().optional(),
+  visualDescription: z.string().optional(),
+  knowledgeDomains: z.array(z.string()).optional(),
+  behaviorTriggers: z.array(behaviorTriggerSchema).optional(),
+  dialogueExamples: z.array(z.string()).max(6).optional(),
+  secrets: z.array(z.string()).optional(),
+  deathCondition: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  npcRelationships: z.array(npcRelationshipSchema).optional(),
 });
 
-const factionDefinitionSchema = z.object({
+const dispositionTriggerSchema = z.object({
+  condition: z.string(),
+  dispositionShift: z.enum(["supportive", "neutral", "hostile", "volatile"]),
+  priority: z.number().optional(),
+});
+
+const groupRelationshipSchema = z.object({
+  targetGroupId: z.string(),
+  attitude: z.string(),
+  context: z.string().optional(),
+});
+
+const groupDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
   influence: z.number().min(0).max(100),
   disposition: z.enum(["supportive", "neutral", "hostile", "volatile"]),
+  // v2 additions (all optional)
+  goals: z.array(z.string()).min(1).optional(),
+  leaderId: z.string().optional(),
+  powerType: z.enum(["military", "economic", "religious", "political", "popular"]).optional(),
+  backstory: z.string().optional(),
+  volatility: z.number().min(0).max(100).optional(),
+  cohesion: z.number().min(0).max(100).optional(),
+  dispositionTriggers: z.array(dispositionTriggerSchema).optional(),
+  demands: z.array(z.string()).optional(),
+  groupRelationships: z.array(groupRelationshipSchema).optional(),
+  assets: z.array(z.string()).optional(),
+  collectiveVoice: z.string().optional(),
+  visualIdentity: z.string().optional(),
+  collapseCondition: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 const roleDefinitionSchema = z.object({
@@ -48,23 +155,20 @@ const roleDefinitionSchema = z.object({
 const eventTemplateSchema = z.object({
   id: z.string(),
   title: z.string(),
-  category: z.enum([
-    "politics",
-    "economy",
-    "military",
-    "morality",
-    "personal",
-  ]),
+  category: z.string(),
   summary: z.string(),
   urgency: z.number().min(0).max(100),
+  // legacy format — kept for backward compat, prefer triggerConditions
   triggerWhen: z
     .object({
-      politicalStabilityBelow: z.number().optional(),
-      treasuryBelow: z.number().optional(),
-      militaryPressureAbove: z.number().optional(),
-      publicSentimentBelow: z.number().optional(),
+      stabilityBelow: z.number().optional(),
+      resourcesBelow: z.number().optional(),
+      pressureAbove: z.number().optional(),
+      moraleBelow: z.number().optional(),
     })
     .default({}),
+  // v2 format — array of metric-based conditions
+  triggerConditions: z.array(triggerConditionSchema).optional(),
   stakes: z.array(z.string()).min(1),
   narratorPrompt: z.string(),
   actorIds: z.array(z.string()).min(1),
@@ -80,20 +184,32 @@ export const worldDefinitionSchema = z.object({
   powerStructures: z.array(z.string()).min(1),
   tonalConstraints: z.array(z.string()).min(1),
   narratorVoice: voiceProfileSchema.optional(),
+  narratorConfig: narratorConfigSchema.optional(),
   safetyProfile: z.object({
     historicalThemes: z.array(z.string()),
     disallowedContent: z.array(z.string()),
   }),
+  // v2 — dynamic metrics (when absent, engine falls back to legacy 4)
+  metrics: z.array(metricDefinitionSchema).optional(),
+  // v2 — dynamic event categories (when absent, engine falls back to legacy 5)
+  eventCategories: z.array(eventCategoryDefinitionSchema).optional(),
+  progressionModel: progressionModelSchema.optional(),
+  difficulty: difficultyConfigSchema.optional(),
   roles: z.array(roleDefinitionSchema).min(1),
-  factions: z.array(factionDefinitionSchema).min(1),
+  groups: z.array(groupDefinitionSchema).min(1),
   characters: z.array(characterDefinitionSchema).min(1),
+  // v2 — top-level relationship definitions (when absent, falls back to initialState.relationships)
+  relationships: z.array(relationshipDefinitionSchema).optional(),
   eventTemplates: z.array(eventTemplateSchema).min(1),
   initialState: z.object({
-    politicalStability: z.number().min(0).max(100),
-    publicSentiment: z.number().min(0).max(100),
-    treasury: z.number().min(0).max(100),
-    militaryPressure: z.number().min(0).max(100),
-    factionInfluence: z.record(z.string(), z.number().min(0).max(100)),
+    // legacy flat metrics — kept for backward compat
+    stability: z.number().min(0).max(100).optional(),
+    morale: z.number().min(0).max(100).optional(),
+    resources: z.number().min(0).max(100).optional(),
+    pressure: z.number().min(0).max(100).optional(),
+    // v2 — dynamic metric values keyed by metric id
+    metricValues: z.record(z.string(), z.number().min(0).max(100)).default({}),
+    groupInfluence: z.record(z.string(), z.number().min(0).max(100)),
     characterStates: z.record(
       z.string(),
       z.object({
@@ -135,11 +251,14 @@ export const audioDirectiveSchema = z.object({
 });
 
 export const visibleStateSchema = z.object({
-  politicalStability: z.number().min(0).max(100),
-  publicSentiment: z.number().min(0).max(100),
-  treasury: z.number().min(0).max(100),
-  militaryPressure: z.number().min(0).max(100),
-  factionInfluence: z.record(z.string(), z.number().min(0).max(100)),
+  // legacy flat metrics — kept for backward compat
+  stability: z.number().min(0).max(100).optional(),
+  morale: z.number().min(0).max(100).optional(),
+  resources: z.number().min(0).max(100).optional(),
+  pressure: z.number().min(0).max(100).optional(),
+  // v2 — dynamic metric values
+  metricValues: z.record(z.string(), z.number().min(0).max(100)).default({}),
+  groupInfluence: z.record(z.string(), z.number().min(0).max(100)),
 });
 
 export const simulationStateSchema = worldDefinitionSchema.shape.initialState.extend({
@@ -188,8 +307,19 @@ export const turnRecordSchema = z.object({
 });
 
 export type RelationshipState = z.infer<typeof relationshipStateSchema>;
+export type NarratorConfig = z.infer<typeof narratorConfigSchema>;
+export type MetricDefinition = z.infer<typeof metricDefinitionSchema>;
+export type EventCategoryDefinition = z.infer<typeof eventCategoryDefinitionSchema>;
+export type ProgressionModel = z.infer<typeof progressionModelSchema>;
+export type DifficultyConfig = z.infer<typeof difficultyConfigSchema>;
+export type TriggerCondition = z.infer<typeof triggerConditionSchema>;
+export type RelationshipDefinition = z.infer<typeof relationshipDefinitionSchema>;
+export type BehaviorTrigger = z.infer<typeof behaviorTriggerSchema>;
+export type NpcRelationship = z.infer<typeof npcRelationshipSchema>;
+export type DispositionTrigger = z.infer<typeof dispositionTriggerSchema>;
+export type GroupRelationship = z.infer<typeof groupRelationshipSchema>;
 export type CharacterDefinition = z.infer<typeof characterDefinitionSchema>;
-export type FactionDefinition = z.infer<typeof factionDefinitionSchema>;
+export type GroupDefinition = z.infer<typeof groupDefinitionSchema>;
 export type RoleDefinition = z.infer<typeof roleDefinitionSchema>;
 export type EventTemplate = z.infer<typeof eventTemplateSchema>;
 export type WorldDefinition = z.infer<typeof worldDefinitionSchema>;
@@ -208,6 +338,7 @@ export const visibleWorldSchema = worldDefinitionSchema.pick({
   introNarration: true,
   roles: true,
   narratorVoice: true,
+  metrics: true,
 });
 
 export const worldBuildRequestSchema = z.object({

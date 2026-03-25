@@ -2,6 +2,7 @@ import { getOpenAIClient } from "./openai-client";
 import { TextGenerationAdapter } from "./interfaces";
 import { createId } from "@odyssey/utils";
 import { EventTemplate, SimulationState, TurnInput, TurnResult, WorldDefinition } from "@odyssey/types";
+import { buildCharacterContext, buildGroupContext, formatMetricsForPrompt } from "./metric-helpers";
 
 function fallbackOutput(params: {
   world: WorldDefinition;
@@ -91,7 +92,9 @@ function buildResponseRequest(params: {
               `World: ${params.world.title}.`,
               `Setting: ${params.world.setting}.`,
               `Norms: ${params.world.norms.join(" | ")}.`,
-              `State: stability ${params.state.politicalStability}, sentiment ${params.state.publicSentiment}, treasury ${params.state.treasury}, military ${params.state.militaryPressure}.`,
+              `State: ${formatMetricsForPrompt(params.state, params.world)}.`,
+              `Groups:\n${buildGroupContext(params.world, params.state)}`,
+              `Characters:\n${buildCharacterContext(params.world, params.state)}`,
               params.activeEvent
                 ? `Active event: ${params.activeEvent.title} - ${params.activeEvent.summary}.`
                 : "No active event selected.",

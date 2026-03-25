@@ -9,6 +9,20 @@ export { OpenAITextGenerator } from "./generator";
 export { FallbackTextGenerator } from "./generator";
 export { StaticWorldLoader } from "./world-loader";
 export { buildWorldDefinitionFromPrompt } from "./world-builder";
+export {
+  resolveMetrics,
+  resolveCategories,
+  getMetricValue,
+  setMetricValue,
+  buildVisibleState,
+  formatMetricsForPrompt,
+  resolveRelationships,
+  resolveGroupIds,
+  evaluateBehaviorCondition,
+  buildCharacterContext,
+  evaluateGroupCondition,
+  buildGroupContext,
+} from "./metric-helpers";
 export { getOpenAIClient } from "./openai-client";
 export { AudioCommunicationSimulationEngine } from "./communication";
 export {
