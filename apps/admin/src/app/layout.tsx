@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AdminNav } from "@/components/admin-nav";
+import { AdminShell } from "@/components/admin-shell";
 import { AuthGate } from "@/components/auth-gate";
 import "./globals.css";
 
@@ -17,12 +17,7 @@ export default function AdminLayout({
     <html lang="en">
       <body>
         <AuthGate>
-          <div style={{ display: "flex", minHeight: "100vh" }}>
-            <AdminNav />
-            <main style={{ flex: 1, padding: "2rem" }}>
-              {children}
-            </main>
-          </div>
+          <AdminShell>{children}</AdminShell>
         </AuthGate>
       </body>
     </html>

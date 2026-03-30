@@ -33,6 +33,24 @@ export class HeuristicStateReducer implements StateReducer {
     const nextState = copyState(state);
     nextState.turnCount += 1;
 
+    // v2: ensure all v2 fields are initialized (safe for inline state objects)
+    nextState.eventOccurrenceCounts ??= {};
+    nextState.eventLastFiredTurn ??= {};
+    nextState.completedEventIds ??= [];
+    nextState.groupDispositions ??= {};
+    nextState.groupCohesion ??= {};
+    nextState.groupVolatility ??= {};
+    nextState.characterActive ??= {};
+    nextState.currentPhase ??= 1;
+    nextState.turnsInPhase ??= 0;
+    nextState.worldFlags ??= {};
+    nextState.narrativeMomentum ??= "stable";
+    nextState.decisionsLog ??= [];
+    nextState.playerReputation ??= 50;
+    nextState.activeObjectives ??= [];
+    nextState.npcRelationshipDeltas ??= [];
+    nextState.environmentState ??= {};
+
     const mercyScore = scoreText(
       input.text,
       ["mercy", "pardon", "forgive", "release", "feed", "reduce taxes", "negotiate"],
@@ -66,15 +84,87 @@ export class HeuristicStateReducer implements StateReducer {
     if (activeEvent) {
       nextState.activeEventId = activeEvent.id;
       nextState.lastEventIds = [...nextState.lastEventIds, activeEvent.id].slice(-5);
+
+      // v2: event tracking
+      nextState.eventOccurrenceCounts[activeEvent.id] = (nextState.eventOccurrenceCounts[activeEvent.id] ?? 0) + 1;
+      nextState.eventLastFiredTurn[activeEvent.id] = nextState.turnCount;
+
+      // Check if event reached maxOccurrences
+      const eventDef = world.eventTemplates.find((e) => e.id === activeEvent.id);
+      if (eventDef?.maxOccurrences !== undefined && nextState.eventOccurrenceCounts[activeEvent.id] >= eventDef.maxOccurrences) {
+        if (!nextState.completedEventIds.includes(activeEvent.id)) {
+          nextState.completedEventIds.push(activeEvent.id);
+        }
+      }
+    }
+
+    // v2: progression tracking
+    nextState.turnsInPhase += 1;
+
+    // v2: decisions log (cap at 50 entries)
+    nextState.decisionsLog.push({
+      turnNumber: nextState.turnCount,
+      eventId: activeEvent?.id ?? "free-action",
+      choice: input.text.slice(0, 200),
+    });
+    if (nextState.decisionsLog.length > 50) {
+      nextState.decisionsLog = nextState.decisionsLog.slice(-50);
+    }
+
+    // v2: player reputation
+    nextState.playerReputation = clamp(nextState.playerReputation + mercyScore * 2 + forceScore);
+
+    // v2: time context
+    if (nextState.timeContext) {
+      const timeSteps = ["morning", "afternoon", "evening", "night"] as const;
+      const currentIdx = timeSteps.indexOf(nextState.timeContext.timeOfDay ?? "morning");
+      const nextIdx = (currentIdx + 1) % timeSteps.length;
+      nextState.timeContext.timeOfDay = timeSteps[nextIdx];
+      if (nextIdx === 0) {
+        nextState.timeContext.day += 1;
+      }
     }
 
     // Apply group volatility scaling to groupInfluence deltas
     for (const group of world.groups) {
       const current = nextState.groupInfluence[group.id];
       if (current === undefined) continue;
-      const groupVolatility = (group.volatility ?? 50) / 50;
-      const influenceDelta = Math.round((mercyScore + forceScore) * groupVolatility);
+      const groupVol = nextState.groupVolatility[group.id] ?? group.volatility ?? 50;
+      const groupVolatilityMultiplier = groupVol / 50;
+      const influenceDelta = Math.round((mercyScore + forceScore) * groupVolatilityMultiplier);
       nextState.groupInfluence[group.id] = clamp(current + influenceDelta);
+
+      // v2: update runtime group cohesion and volatility based on influence changes
+      const cohesion = nextState.groupCohesion[group.id] ?? group.cohesion ?? 50;
+      const volatility = nextState.groupVolatility[group.id] ?? group.volatility ?? 50;
+      // Cohesion erodes slightly when influence changes sharply
+      nextState.groupCohesion[group.id] = clamp(cohesion + (influenceDelta > 0 ? 1 : -1));
+      // Volatility increases with large swings
+      nextState.groupVolatility[group.id] = clamp(volatility + (Math.abs(influenceDelta) > 2 ? 1 : -1));
+
+      // v2: evaluate disposition triggers against runtime state
+      if (group.dispositionTriggers?.length) {
+        const influence = nextState.groupInfluence[group.id];
+        const runtimeCohesion = nextState.groupCohesion[group.id] ?? group.cohesion ?? 50;
+        for (const dt of [...group.dispositionTriggers].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))) {
+          const condMatch = dt.condition.match(/^(influence|cohesion)\s*(>|<|>=|<=)\s*(\d+)$/);
+          if (!condMatch) continue;
+          const [, metric, operator, thresholdStr] = condMatch;
+          const val = metric === "cohesion" ? runtimeCohesion : influence;
+          const threshold = Number(thresholdStr);
+          let triggered = false;
+          switch (operator) {
+            case ">": triggered = val > threshold; break;
+            case "<": triggered = val < threshold; break;
+            case ">=": triggered = val >= threshold; break;
+            case "<=": triggered = val <= threshold; break;
+          }
+          if (triggered) {
+            nextState.groupDispositions[group.id] = dt.dispositionShift;
+            break;
+          }
+        }
+      }
     }
 
     Object.entries(nextState.relationships).forEach(([characterId, relationship]) => {
@@ -87,9 +177,33 @@ export class HeuristicStateReducer implements StateReducer {
       const fearDelta = Math.max(forceScore, 0) * 3 - Math.max(mercyScore, 0);
       const loyaltyDelta = trustDelta > 0 ? 2 : -1;
 
+      const prevTrust = relationship.trust;
+      const prevFear = relationship.fear;
+      const prevLoyalty = relationship.loyalty;
       relationship.trust = updateCharacterState(relationship.trust, trustDelta);
       relationship.fear = updateCharacterState(relationship.fear, fearDelta);
       relationship.loyalty = updateCharacterState(relationship.loyalty, loyaltyDelta);
+
+      // v2: respect tracks combined trust + loyalty signals
+      if (relationship.respect !== undefined) {
+        const respectDelta = Math.round((trustDelta + loyaltyDelta) / 2);
+        relationship.respect = updateCharacterState(relationship.respect, respectDelta);
+      }
+
+      // v2: NPC relationship deltas (cap at 100 entries)
+      const eventTitle = activeEvent ? world.eventTemplates.find((e) => e.id === activeEvent.id)?.title : undefined;
+      if (relationship.trust !== prevTrust) {
+        nextState.npcRelationshipDeltas.push({ characterId, metricId: "trust", delta: relationship.trust - prevTrust, reason: eventTitle, turnNumber: nextState.turnCount });
+      }
+      if (relationship.fear !== prevFear) {
+        nextState.npcRelationshipDeltas.push({ characterId, metricId: "fear", delta: relationship.fear - prevFear, reason: eventTitle, turnNumber: nextState.turnCount });
+      }
+      if (relationship.loyalty !== prevLoyalty) {
+        nextState.npcRelationshipDeltas.push({ characterId, metricId: "loyalty", delta: relationship.loyalty - prevLoyalty, reason: eventTitle, turnNumber: nextState.turnCount });
+      }
+      if (nextState.npcRelationshipDeltas.length > 100) {
+        nextState.npcRelationshipDeltas = nextState.npcRelationshipDeltas.slice(-100);
+      }
 
       const characterState = nextState.characterStates[characterId];
       if (characterState) {
@@ -99,6 +213,19 @@ export class HeuristicStateReducer implements StateReducer {
         characterState.loyalty = updateCharacterState(characterState.loyalty, Math.round(loyaltyDelta * volatilityMultiplier));
       }
     });
+
+    // v2: narrative momentum heuristic
+    const stability = getMetricValue(nextState, "stability");
+    const pressure = getMetricValue(nextState, "pressure");
+    if (stability < 25 && pressure > 70) {
+      nextState.narrativeMomentum = "climax";
+    } else if (mercyScore + forceScore > 0) {
+      nextState.narrativeMomentum = "rising";
+    } else if (mercyScore + forceScore < 0) {
+      nextState.narrativeMomentum = "falling";
+    } else {
+      nextState.narrativeMomentum = "stable";
+    }
 
     const summary = [
       `Morale ${mercyScore >= 0 ? "rose" : "fell"} to ${getMetricValue(nextState, "morale")}.`,

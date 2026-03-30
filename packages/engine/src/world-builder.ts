@@ -587,9 +587,32 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
       ? parsed.playerRoles
       : [];
 
+  const validAuthority = new Set(["military", "economic", "judicial", "religious", "diplomatic", "domestic", "political"]);
+  const validDifficulty = new Set(["beginner", "standard", "advanced", "expert"]);
+  const validStance = new Set(["allied", "neutral", "opposed"]);
+
   const roles = sourceRoles.map((entry, index) => {
     const record = asRecord(entry) ?? {};
     const roleTitle = asString(record.title ?? record.name ?? record.role, `Role ${index + 1}`);
+
+    const authorityRaw = asStringArray(record.authority);
+    const authority = authorityRaw.filter((a) => validAuthority.has(a)) as ("military" | "economic" | "judicial" | "religious" | "diplomatic" | "domestic")[];
+
+    const diffHint = asString(record.difficultyHint ?? record.difficulty, "");
+    const difficultyHint = validDifficulty.has(diffHint) ? (diffHint as "beginner" | "standard" | "advanced" | "expert") : undefined;
+
+    const rawAlignments = Array.isArray(record.groupAlignments) ? record.groupAlignments : [];
+    const groupAlignments = rawAlignments
+      .map((a) => {
+        const r = asRecord(a);
+        if (!r) return null;
+        const groupId = asString(r.groupId, "");
+        const stance = asString(r.stance, "");
+        if (!groupId || !validStance.has(stance)) return null;
+        return { groupId, stance: stance as "allied" | "neutral" | "opposed" };
+      })
+      .filter(Boolean) as { groupId: string; stance: "allied" | "neutral" | "opposed" }[];
+
     return {
       id: asString(record.id, slugify(roleTitle) || `role-${index + 1}`),
       title: roleTitle,
@@ -603,6 +626,22 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
             "Choose actions under pressure with real tradeoffs.",
             "Balance short-term wins against long-term consequences.",
           ],
+      ...(asString(record.backstory, "") ? { backstory: asString(record.backstory, "") } : {}),
+      ...(asString(record.legitimacy, "") ? { legitimacy: asString(record.legitimacy, "") } : {}),
+      ...(asString(record.speakingStyle, "") ? { speakingStyle: asString(record.speakingStyle, "") } : {}),
+      ...(asString(record.visualIdentity, "") ? { visualIdentity: asString(record.visualIdentity, "") } : {}),
+      ...(asStringArray(record.goals).length ? { goals: asStringArray(record.goals) } : {}),
+      ...(authority.length ? { authority } : {}),
+      ...(difficultyHint ? { difficultyHint } : {}),
+      ...(asStringArray(record.constraints).length ? { constraints: asStringArray(record.constraints) } : {}),
+      ...(asStringArray(record.visibleMetrics).length ? { visibleMetrics: asStringArray(record.visibleMetrics) } : {}),
+      ...(groupAlignments.length ? { groupAlignments } : {}),
+      ...(asStringArray(record.innerCircle).length ? { innerCircle: asStringArray(record.innerCircle) } : {}),
+      ...(asStringArray(record.vulnerabilities).length ? { vulnerabilities: asStringArray(record.vulnerabilities) } : {}),
+      ...(asString(record.onboardingNarration, "") ? { onboardingNarration: asString(record.onboardingNarration, "") } : {}),
+      ...(asString(record.successCondition, "") ? { successCondition: asString(record.successCondition, "") } : {}),
+      ...(asString(record.failureCondition, "") ? { failureCondition: asString(record.failureCondition, "") } : {}),
+      ...(asStringArray(record.tags).length ? { tags: asStringArray(record.tags) } : {}),
     };
   });
 
@@ -657,6 +696,57 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
 
     const triggerRaw = asRecord(record.triggerWhen ?? record.trigger ?? record.triggers) ?? {};
 
+    // v2 — extract tone
+    const validTones = new Set(["tense", "somber", "urgent", "celebratory", "conspiratorial", "intimate"]);
+    const rawTone = asString(record.tone ?? record.mood).toLowerCase();
+    const tone = validTones.has(rawTone) ? rawTone as "tense" | "somber" | "urgent" | "celebratory" | "conspiratorial" | "intimate" : undefined;
+
+    // v2 — extract group conditions
+    const rawGroupConds = Array.isArray(record.groupConditions) ? record.groupConditions : [];
+    const validGroupMetrics = new Set(["influence", "cohesion", "volatility"]);
+    const validConditions = new Set(["above", "below"]);
+    const groupConditions = rawGroupConds
+      .map((gc) => {
+        const gcRec = asRecord(gc) ?? {};
+        const groupId = asString(gcRec.groupId);
+        const metric = asString(gcRec.metric).toLowerCase();
+        const condition = asString(gcRec.condition).toLowerCase();
+        const threshold = asNumber(gcRec.threshold, -1);
+        if (!groupId || !validGroupMetrics.has(metric) || !validConditions.has(condition) || threshold < 0) return null;
+        return {
+          groupId,
+          metric: metric as "influence" | "cohesion" | "volatility",
+          condition: condition as "above" | "below",
+          threshold: clampScore(threshold),
+        };
+      })
+      .filter(Boolean) as Array<{ groupId: string; metric: "influence" | "cohesion" | "volatility"; condition: "above" | "below"; threshold: number }>;
+
+    // v2 — extract metric hints
+    const rawMetricHints = Array.isArray(record.metricHints) ? record.metricHints : [];
+    const validDirections = new Set(["increase", "decrease"]);
+    const validMagnitudes = new Set(["small", "medium", "large"]);
+    const metricHints = rawMetricHints
+      .map((mh) => {
+        const mhRec = asRecord(mh) ?? {};
+        const metricId = asString(mhRec.metricId);
+        const direction = asString(mhRec.direction).toLowerCase();
+        const magnitude = asString(mhRec.magnitude).toLowerCase();
+        if (!metricId || !validDirections.has(direction) || !validMagnitudes.has(magnitude)) return null;
+        return {
+          metricId,
+          direction: direction as "increase" | "decrease",
+          magnitude: magnitude as "small" | "medium" | "large",
+        };
+      })
+      .filter(Boolean) as Array<{ metricId: string; direction: "increase" | "decrease"; magnitude: "small" | "medium" | "large" }>;
+
+    // v2 — extract turn range
+    const rawTurnRange = asRecord(record.turnRange) ?? {};
+    const turnRangeMin = asNumber(rawTurnRange.min, -1);
+    const turnRangeMax = asNumber(rawTurnRange.max, -1);
+    const turnRange = turnRangeMin >= 0 && turnRangeMax > turnRangeMin ? { min: Math.round(turnRangeMin), max: Math.round(turnRangeMax) } : undefined;
+
     return {
       id: asString(record.id, slugify(eventTitle) || `event-${index + 1}`),
       title: eventTitle,
@@ -692,6 +782,32 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         "Describe immediate stakes, pressure points, and visible group reactions.",
       ),
       actorIds: normalizedActorIds,
+      // v2 optional fields
+      ...(asStringArray(record.prerequisiteEventIds ?? record.prerequisites).length
+        ? { prerequisiteEventIds: asStringArray(record.prerequisiteEventIds ?? record.prerequisites) }
+        : {}),
+      ...(asString(record.escalationEventId ?? record.escalation, "") ? { escalationEventId: asString(record.escalationEventId ?? record.escalation, "") } : {}),
+      ...(asStringArray(record.mutuallyExclusiveWith ?? record.exclusiveWith).length
+        ? { mutuallyExclusiveWith: asStringArray(record.mutuallyExclusiveWith ?? record.exclusiveWith) }
+        : {}),
+      ...(record.cooldownTurns !== undefined ? { cooldownTurns: Math.max(0, Math.round(asNumber(record.cooldownTurns))) } : {}),
+      ...(record.maxOccurrences !== undefined ? { maxOccurrences: Math.max(1, Math.round(asNumber(record.maxOccurrences))) } : {}),
+      ...(record.expiresAfterTurns !== undefined ? { expiresAfterTurns: Math.max(1, Math.round(asNumber(record.expiresAfterTurns))) } : {}),
+      ...(turnRange ? { turnRange } : {}),
+      weight: asNumber(record.weight, 1),
+      ...(tone ? { tone } : {}),
+      ...(asString(record.location ?? record.setting, "") ? { location: asString(record.location ?? record.setting, "") } : {}),
+      ...(asString(record.backstory, "") ? { backstory: asString(record.backstory, "") } : {}),
+      ...(asStringArray(record.involvedGroupIds ?? record.involvedGroups).length
+        ? { involvedGroupIds: asStringArray(record.involvedGroupIds ?? record.involvedGroups) }
+        : {}),
+      ...(asStringArray(record.suggestedApproaches ?? record.approaches).length
+        ? { suggestedApproaches: asStringArray(record.suggestedApproaches ?? record.approaches) }
+        : {}),
+      ...(groupConditions.length ? { groupConditions } : {}),
+      ...(metricHints.length ? { metricHints } : {}),
+      ...(asString(record.resolutionNarration ?? record.resolution, "") ? { resolutionNarration: asString(record.resolutionNarration ?? record.resolution, "") } : {}),
+      ...(asStringArray(record.tags ?? record.labels).length ? { tags: asStringArray(record.tags ?? record.labels) } : {}),
     };
   });
 
@@ -712,6 +828,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         stakes: ["Stabilizing systems now may trigger backlash later."],
         narratorPrompt: "Show immediate constraints, stakeholder pressure, and hidden costs.",
         actorIds: characters.slice(0, 2).map((character) => character.id),
+        weight: 1,
       },
       {
         id: "external-pressure",
@@ -728,6 +845,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         stakes: ["Delay may embolden rivals and drain confidence."],
         narratorPrompt: "Convey urgency through alarming updates and divided advisors.",
         actorIds: characters.slice(0, 2).map((character) => character.id),
+        weight: 1,
       },
       {
         id: "internal-fracture",
@@ -744,6 +862,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
         stakes: ["Compromise may calm conflict now but weaken your position later."],
         narratorPrompt: "Describe tense negotiation, power plays, and reputational risk.",
         actorIds: characters.slice(0, 2).map((character) => character.id),
+        weight: 1,
       },
     );
   }
@@ -795,6 +914,7 @@ function normalizeGeneratedWorld(raw: unknown, prompt: string) {
           trust: clampScore(asNumber(source.trust, 52)),
           fear: clampScore(asNumber(source.fear, 24)),
           loyalty: clampScore(asNumber(source.loyalty, defaultLoyalty)),
+          respect: clampScore(asNumber(source.respect, 50)),
           recentMemory: asStringArray(source.recentMemory).length
             ? asStringArray(source.recentMemory).slice(0, 6)
             : [`You assumed power in ${title} under immediate pressure.`],

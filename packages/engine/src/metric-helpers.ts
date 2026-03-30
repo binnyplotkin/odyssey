@@ -1,4 +1,4 @@
-import type { CharacterDefinition, MetricDefinition, RelationshipState, SimulationState, WorldDefinition } from "@odyssey/types";
+import type { CharacterDefinition, EventTemplate, MetricDefinition, RelationshipState, SimulationState, WorldDefinition } from "@odyssey/types";
 
 /** Legacy metric IDs for worlds that predate the dynamic metrics system. */
 const LEGACY_METRICS: MetricDefinition[] = [
@@ -94,6 +94,7 @@ export function resolveRelationships(world: WorldDefinition): Record<string, Rel
         trust: rel.metrics.trust,
         fear: rel.metrics.fear,
         loyalty: rel.metrics.loyalty,
+        respect: rel.metrics.respect,
         recentMemory: [...rel.recentMemory],
       };
     }
@@ -170,7 +171,8 @@ export function buildCharacterContext(
       }
     }
     if (relationship) {
-      parts.push(`Relationship with player: trust ${relationship.trust}, fear ${relationship.fear}, loyalty ${relationship.loyalty}`);
+      const respectStr = relationship.respect !== undefined ? `, respect ${relationship.respect}` : "";
+      parts.push(`Relationship with player: trust ${relationship.trust}, fear ${relationship.fear}, loyalty ${relationship.loyalty}${respectStr}`);
       if (relationship.recentMemory.length > 0) {
         parts.push(`Recent memory: ${relationship.recentMemory[relationship.recentMemory.length - 1]}`);
       }
@@ -218,8 +220,12 @@ export function buildGroupContext(
   const lines: string[] = [];
   for (const group of world.groups) {
     const influence = state.groupInfluence[group.id] ?? group.influence;
+    // v2: read runtime disposition, cohesion, volatility from state (fall back to world definition)
+    const disposition = (state.groupDispositions ?? {})[group.id] ?? group.disposition;
+    const cohesion = (state.groupCohesion ?? {})[group.id] ?? group.cohesion;
+    const volatility = (state.groupVolatility ?? {})[group.id] ?? group.volatility;
     const parts: string[] = [
-      `${group.name} (${group.disposition}, influence ${influence})`,
+      `${group.name} (${disposition}, influence ${influence})`,
       `Description: ${group.description}`,
     ];
 
@@ -230,18 +236,18 @@ export function buildGroupContext(
     if (group.visualIdentity) parts.push(`Visual identity: ${group.visualIdentity}`);
     if (group.assets?.length) parts.push(`Assets: ${group.assets.join(", ")}`);
     if (group.demands?.length) parts.push(`Active demands: ${group.demands.join("; ")}`);
-    if (group.cohesion !== undefined) parts.push(`Internal cohesion: ${group.cohesion}`);
-    if (group.volatility !== undefined) parts.push(`Volatility: ${group.volatility}`);
+    if (cohesion !== undefined) parts.push(`Internal cohesion: ${cohesion}`);
+    if (volatility !== undefined) parts.push(`Volatility: ${volatility}`);
 
     if (group.leaderId) {
       const leader = world.characters.find((c) => c.id === group.leaderId);
       if (leader) parts.push(`Leader: ${leader.name}`);
     }
 
-    // Evaluate active disposition triggers
+    // Evaluate active disposition triggers (using runtime state values)
     if (group.dispositionTriggers?.length) {
       const active = group.dispositionTriggers
-        .filter((dt) => evaluateGroupCondition(dt.condition, { influence, cohesion: group.cohesion }))
+        .filter((dt) => evaluateGroupCondition(dt.condition, { influence, cohesion }))
         .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
       if (active.length > 0) {
         parts.push(`Active disposition shifts: ${active.map((dt) => `${dt.condition} → ${dt.dispositionShift}`).join("; ")}`);
@@ -261,6 +267,98 @@ export function buildGroupContext(
     lines.push(parts.join(". ") + ".");
   }
   return lines.join("\n");
+}
+
+/** Build role context string for LLM prompt injection. */
+export function buildRoleContext(
+  world: WorldDefinition,
+  roleId?: string,
+): string {
+  const role = roleId
+    ? world.roles.find((r) => r.id === roleId)
+    : world.roles[0];
+  if (!role) return "";
+
+  const parts: string[] = [
+    `${role.title} — ${role.summary}`,
+    `Responsibilities: ${role.responsibilities.join("; ")}`,
+  ];
+
+  if (role.backstory) parts.push(`Backstory: ${role.backstory}`);
+  if (role.legitimacy) parts.push(`Legitimacy: ${role.legitimacy}`);
+  if (role.speakingStyle) parts.push(`Speaking style: ${role.speakingStyle}`);
+  if (role.visualIdentity) parts.push(`Visual identity: ${role.visualIdentity}`);
+  if (role.goals?.length) parts.push(`Goals: ${role.goals.join("; ")}`);
+  if (role.authority?.length) parts.push(`Authority domains: ${role.authority.join(", ")}`);
+  if (role.constraints?.length) parts.push(`Constraints: ${role.constraints.join("; ")}`);
+  if (role.vulnerabilities?.length) parts.push(`Vulnerabilities: ${role.vulnerabilities.join("; ")}`);
+
+  if (role.innerCircle?.length) {
+    const names = role.innerCircle
+      .map((cid) => world.characters.find((c) => c.id === cid))
+      .filter(Boolean)
+      .map((c) => `${c!.name} (${c!.title})`);
+    if (names.length) parts.push(`Inner circle: ${names.join(", ")}`);
+  }
+
+  if (role.groupAlignments?.length) {
+    const alignments = role.groupAlignments.map((a) => {
+      const group = world.groups.find((g) => g.id === a.groupId);
+      return `${a.stance} with ${group?.name ?? a.groupId}`;
+    });
+    parts.push(`Political alignments: ${alignments.join("; ")}`);
+  }
+
+  if (role.successCondition) parts.push(`Success condition: ${role.successCondition}`);
+  if (role.failureCondition) parts.push(`Failure condition: ${role.failureCondition}`);
+
+  return parts.join(". ") + ".";
+}
+
+/** Build event context string for LLM prompt injection. */
+export function buildEventContext(
+  event: EventTemplate,
+  world: WorldDefinition,
+): string {
+  const parts: string[] = [
+    `${event.title} (${event.category}) — ${event.summary}`,
+    `Urgency: ${event.urgency}`,
+    `Stakes: ${event.stakes.join("; ")}`,
+  ];
+
+  if (event.tone) parts.push(`Tone: ${event.tone}`);
+  if (event.location) parts.push(`Location: ${event.location}`);
+  if (event.backstory) parts.push(`Backstory: ${event.backstory}`);
+  if (event.narratorPrompt) parts.push(`Narrator guidance: ${event.narratorPrompt}`);
+
+  if (event.involvedGroupIds?.length) {
+    const names = event.involvedGroupIds
+      .map((gid) => world.groups.find((g) => g.id === gid))
+      .filter(Boolean)
+      .map((g) => g!.name);
+    if (names.length) parts.push(`Involved groups: ${names.join(", ")}`);
+  }
+
+  if (event.suggestedApproaches?.length) {
+    parts.push(`Suggested approaches: ${event.suggestedApproaches.join("; ")}`);
+  }
+
+  if (event.metricHints?.length) {
+    const hints = event.metricHints.map((h) => `${h.metricId} ${h.direction} (${h.magnitude})`);
+    parts.push(`Expected metric shifts: ${hints.join(", ")}`);
+  }
+
+  if (event.resolutionNarration) {
+    parts.push(`Resolution guidance: ${event.resolutionNarration}`);
+  }
+
+  const actors = event.actorIds
+    .map((id) => world.characters.find((c) => c.id === id))
+    .filter(Boolean)
+    .map((c) => `${c!.name} (${c!.title})`);
+  if (actors.length) parts.push(`Actors: ${actors.join(", ")}`);
+
+  return parts.join(". ") + ".";
 }
 
 /** Format metrics as a human-readable string for LLM prompts. */

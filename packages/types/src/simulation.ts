@@ -5,6 +5,33 @@ const relationshipStateSchema = z.object({
   fear: z.number().min(0).max(100),
   loyalty: z.number().min(0).max(100),
   recentMemory: z.array(z.string()).max(6),
+  // v2: respect metric
+  respect: z.number().min(0).max(100).optional(),
+});
+
+// ── v2 state sub-schemas ──────────────────────────────────────
+
+const decisionEntrySchema = z.object({
+  turnNumber: z.number(),
+  eventId: z.string(),
+  choice: z.string(),
+  outcome: z.string().optional(),
+});
+
+const objectiveSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  status: z.enum(["active", "completed", "failed"]),
+  turnCreated: z.number(),
+});
+
+const relDeltaSchema = z.object({
+  characterId: z.string(),
+  metricId: z.string(),
+  delta: z.number(),
+  reason: z.string().optional(),
+  turnNumber: z.number(),
 });
 
 const voiceProfileSchema = z.object({
@@ -145,11 +172,46 @@ const groupDefinitionSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
+const groupAlignmentSchema = z.object({
+  groupId: z.string(),
+  stance: z.enum(["allied", "neutral", "opposed"]),
+});
+
 const roleDefinitionSchema = z.object({
   id: z.string(),
   title: z.string(),
   summary: z.string(),
   responsibilities: z.array(z.string()).min(1),
+  // v2 additions (all optional)
+  backstory: z.string().optional(),
+  legitimacy: z.string().optional(),
+  speakingStyle: z.string().optional(),
+  visualIdentity: z.string().optional(),
+  goals: z.array(z.string()).min(1).optional(),
+  authority: z.array(z.enum(["military", "economic", "judicial", "religious", "diplomatic", "domestic", "political"])).optional(),
+  difficultyHint: z.enum(["beginner", "standard", "advanced", "expert"]).optional(),
+  constraints: z.array(z.string()).optional(),
+  visibleMetrics: z.array(z.string()).optional(),
+  groupAlignments: z.array(groupAlignmentSchema).optional(),
+  innerCircle: z.array(z.string()).optional(),
+  vulnerabilities: z.array(z.string()).optional(),
+  onboardingNarration: z.string().optional(),
+  successCondition: z.string().optional(),
+  failureCondition: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+const groupConditionSchema = z.object({
+  groupId: z.string(),
+  metric: z.enum(["influence", "cohesion", "volatility"]),
+  condition: z.enum(["above", "below"]),
+  threshold: z.number().min(0).max(100),
+});
+
+const metricHintSchema = z.object({
+  metricId: z.string(),
+  direction: z.enum(["increase", "decrease"]),
+  magnitude: z.enum(["small", "medium", "large"]),
 });
 
 const eventTemplateSchema = z.object({
@@ -177,6 +239,33 @@ const eventTemplateSchema = z.object({
   stakes: z.array(z.string()).min(1),
   narratorPrompt: z.string(),
   actorIds: z.array(z.string()).min(1),
+  // v2 additions (all optional)
+  // Chaining & flow
+  prerequisiteEventIds: z.array(z.string()).optional(),
+  escalationEventId: z.string().optional(),
+  mutuallyExclusiveWith: z.array(z.string()).optional(),
+  // Temporal
+  cooldownTurns: z.number().int().min(0).optional(),
+  maxOccurrences: z.number().int().min(1).optional(),
+  expiresAfterTurns: z.number().int().min(1).optional(),
+  turnRange: z.object({
+    min: z.number().int().min(0),
+    max: z.number().int().min(0),
+  }).optional(),
+  // Selection
+  weight: z.number().min(0).default(1),
+  // Context
+  tone: z.enum(["tense", "somber", "urgent", "celebratory", "conspiratorial", "intimate"]).optional(),
+  location: z.string().optional(),
+  backstory: z.string().optional(),
+  involvedGroupIds: z.array(z.string()).optional(),
+  suggestedApproaches: z.array(z.string()).optional(),
+  // Group triggers
+  groupConditions: z.array(groupConditionSchema).optional(),
+  // Outcomes
+  metricHints: z.array(metricHintSchema).optional(),
+  resolutionNarration: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 export const worldDefinitionSchema = z.object({
@@ -284,6 +373,45 @@ export const simulationStateSchema = worldDefinitionSchema.shape.initialState.ex
   turnCount: z.number().int().min(0),
   activeEventId: z.string().nullable(),
   lastEventIds: z.array(z.string()).max(5),
+
+  // ── v2: Event Tracking ──
+  eventOccurrenceCounts: z.record(z.string(), z.number()).optional().default({}),
+  eventLastFiredTurn: z.record(z.string(), z.number()).optional().default({}),
+  completedEventIds: z.array(z.string()).optional().default([]),
+
+  // ── v2: Group Dynamics ──
+  groupDispositions: z.record(z.string(), z.enum(["supportive", "neutral", "hostile", "volatile"])).optional().default({}),
+  groupCohesion: z.record(z.string(), z.number()).optional().default({}),
+  groupVolatility: z.record(z.string(), z.number()).optional().default({}),
+
+  // ── v2: Character Tracking ──
+  characterActive: z.record(z.string(), z.boolean()).optional().default({}),
+
+  // ── v2: Progression ──
+  currentPhase: z.number().int().min(1).optional().default(1),
+  turnsInPhase: z.number().int().min(0).optional().default(0),
+
+  // ── v2: Narrative Intelligence ──
+  worldFlags: z.record(z.string(), z.any()).optional().default({}),
+  narrativeMomentum: z.enum(["rising", "falling", "stable", "climax"]).optional().default("stable"),
+  decisionsLog: z.array(decisionEntrySchema).optional().default([]),
+  playerReputation: z.number().min(0).max(100).optional().default(50),
+
+  // ── v2: Time Context ──
+  timeContext: z.object({
+    day: z.number().int().min(1),
+    season: z.enum(["spring", "summer", "autumn", "winter"]).optional(),
+    timeOfDay: z.enum(["morning", "afternoon", "evening", "night"]).optional(),
+  }).optional(),
+
+  // ── v2: Objectives ──
+  activeObjectives: z.array(objectiveSchema).optional().default([]),
+
+  // ── v2: NPC Relationship Deltas ──
+  npcRelationshipDeltas: z.array(relDeltaSchema).optional().default([]),
+
+  // ── v2: Environment ──
+  environmentState: z.record(z.string(), z.any()).optional().default({}),
 });
 
 export const turnResultSchema = z.object({
@@ -326,6 +454,9 @@ export const turnRecordSchema = z.object({
 });
 
 export type RelationshipState = z.infer<typeof relationshipStateSchema>;
+export type DecisionEntry = z.infer<typeof decisionEntrySchema>;
+export type Objective = z.infer<typeof objectiveSchema>;
+export type RelDelta = z.infer<typeof relDeltaSchema>;
 export type NarratorConfig = z.infer<typeof narratorConfigSchema>;
 export type MetricDefinition = z.infer<typeof metricDefinitionSchema>;
 export type EventCategoryDefinition = z.infer<typeof eventCategoryDefinitionSchema>;
@@ -337,6 +468,9 @@ export type BehaviorTrigger = z.infer<typeof behaviorTriggerSchema>;
 export type NpcRelationship = z.infer<typeof npcRelationshipSchema>;
 export type DispositionTrigger = z.infer<typeof dispositionTriggerSchema>;
 export type GroupRelationship = z.infer<typeof groupRelationshipSchema>;
+export type GroupAlignment = z.infer<typeof groupAlignmentSchema>;
+export type GroupCondition = z.infer<typeof groupConditionSchema>;
+export type MetricHint = z.infer<typeof metricHintSchema>;
 export type CharacterDefinition = z.infer<typeof characterDefinitionSchema>;
 export type GroupDefinition = z.infer<typeof groupDefinitionSchema>;
 export type RoleDefinition = z.infer<typeof roleDefinitionSchema>;

@@ -110,7 +110,7 @@ function MiniBar({ value, max = 100, color }: { value: number; max?: number; col
   );
 }
 
-function Badge({ text, color }: { text: string; color?: string }) {
+function Badge({ text, color, textColor }: { text: string; color?: string; textColor?: string }) {
   return (
     <span style={{
       display: "inline-block",
@@ -119,7 +119,7 @@ function Badge({ text, color }: { text: string; color?: string }) {
       fontSize: "0.6rem",
       fontWeight: 500,
       background: color ? `${color}20` : "rgba(255,255,255,0.06)",
-      color: color ?? "var(--muted)",
+      color: textColor ?? color ?? "var(--muted)",
       lineHeight: 1.4,
     }}>
       {text}
@@ -435,10 +435,14 @@ function CharacterContent({ char, world }: { char: CharacterDefinition; world: W
   );
 }
 
-function GroupContent({ group }: { group: GroupDefinition }) {
+function GroupContent({ group, world }: { group: GroupDefinition; world: WorldDefinition }) {
+  const leader = group.leaderId ? world.characters.find((c) => c.id === group.leaderId) : undefined;
   return (
     <div style={{ marginTop: "0.375rem" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.375rem" }}>
+      <p style={{ fontSize: "0.7rem", color: "var(--muted)", marginBottom: "0.375rem", lineHeight: 1.3 }}>
+        {group.description.length > 80 ? group.description.slice(0, 78) + "…" : group.description}
+      </p>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.375rem", flexWrap: "wrap" }}>
         {group.powerType && <Badge text={group.powerType} />}
         <Badge
           text={group.disposition}
@@ -450,14 +454,26 @@ function GroupContent({ group }: { group: GroupDefinition }) {
           }
         />
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.375rem" }}>
-        <span style={{ fontSize: "0.6rem", color: "var(--muted)" }}>Influence</span>
-        <MiniBar value={group.influence} color={NODE_COLORS.group.dot} />
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.375rem" }}>
+        <span style={{ fontSize: "0.65rem", fontWeight: 600 }}>{group.influence}</span>
+        <span style={{ fontSize: "0.65rem", fontWeight: 600 }}>{group.cohesion ?? 50}</span>
+        <span style={{ fontSize: "0.65rem", fontWeight: 600 }}>{group.volatility ?? 50}</span>
       </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.375rem", marginTop: "-0.25rem" }}>
+        <span style={{ fontSize: "0.5rem", color: "var(--muted)", textTransform: "uppercase" }}>inf</span>
+        <span style={{ fontSize: "0.5rem", color: "var(--muted)", textTransform: "uppercase" }}>coh</span>
+        <span style={{ fontSize: "0.5rem", color: "var(--muted)", textTransform: "uppercase" }}>vol</span>
+      </div>
+      {leader && (
+        <div style={{ fontSize: "0.6rem", color: "var(--muted)", marginBottom: "0.375rem" }}>
+          <span style={{ fontSize: "0.5rem", textTransform: "uppercase", marginRight: "0.25rem" }}>leader</span>
+          {leader.name}
+        </div>
+      )}
       {group.tags && group.tags.length > 0 && (
-        <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.375rem" }}>
+        <div style={{ display: "flex", gap: "0.2rem", flexWrap: "wrap", marginBottom: "0.375rem" }}>
           {group.tags.map((tag) => (
-            <Badge key={tag} text={tag} color={NODE_COLORS.group.dot} />
+            <span key={tag} style={{ fontSize: "0.5rem", padding: "0.1rem 0.3rem", borderRadius: "0.2rem", background: "rgba(109,184,137,0.12)", color: "rgba(109,184,137,0.7)" }}>{tag}</span>
           ))}
         </div>
       )}
@@ -468,17 +484,45 @@ function GroupContent({ group }: { group: GroupDefinition }) {
   );
 }
 
-function RoleContent({ role }: { role: RoleDefinition }) {
+function RoleContent({ role, world }: { role: RoleDefinition; world: WorldDefinition }) {
+  const innerCircleNames = (role.innerCircle ?? [])
+    .map((cid) => world.characters.find((c) => c.id === cid))
+    .filter(Boolean)
+    .map((c) => c!.name);
   return (
     <div style={{ marginTop: "0.375rem" }}>
-      <p style={{ fontSize: "0.7rem", color: "var(--muted)", lineHeight: 1.4, marginBottom: "0.5rem" }}>
-        {role.summary.slice(0, 80)}
+      <p style={{ fontSize: "0.7rem", color: "var(--muted)", lineHeight: 1.4, marginBottom: "0.375rem" }}>
+        {role.summary.length > 80 ? role.summary.slice(0, 78) + "…" : role.summary}
       </p>
-      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
-        {role.responsibilities.slice(0, 3).map((r, i) => (
-          <Badge key={i} text={r.length > 20 ? r.slice(0, 18) + "..." : r} />
+      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.375rem", flexWrap: "wrap" }}>
+        {(role.authority ?? []).map((a) => (
+          <Badge key={a} text={a} color={NODE_COLORS.role.dot} />
         ))}
+        {role.difficultyHint && (
+          <Badge
+            text={role.difficultyHint}
+            color={
+              role.difficultyHint === "beginner" ? "#6DB889"
+              : role.difficultyHint === "advanced" ? "#E2A55A"
+              : role.difficultyHint === "expert" ? "#EF5B5B"
+              : undefined
+            }
+          />
+        )}
       </div>
+      {innerCircleNames.length > 0 && (
+        <div style={{ marginBottom: "0.375rem" }}>
+          <span style={{ fontSize: "0.5rem", color: "var(--muted)", textTransform: "uppercase", marginRight: "0.25rem" }}>inner circle</span>
+          <span style={{ fontSize: "0.6rem", color: "var(--fg)" }}>{innerCircleNames.join(", ")}</span>
+        </div>
+      )}
+      {role.tags && role.tags.length > 0 && (
+        <div style={{ display: "flex", gap: "0.2rem", flexWrap: "wrap", marginBottom: "0.375rem" }}>
+          {role.tags.map((tag) => (
+            <span key={tag} style={{ fontSize: "0.5rem", padding: "0.1rem 0.3rem", borderRadius: "0.2rem", background: "rgba(226,165,90,0.12)", color: "rgba(226,165,90,0.7)" }}>{tag}</span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -495,6 +539,13 @@ function EventContent({ event, world }: { event: EventTemplate; world: WorldDefi
       <p style={{ fontSize: "0.7rem", color: "var(--muted)", lineHeight: 1.4, marginBottom: "0.375rem" }}>
         {event.summary.slice(0, 80)}...
       </p>
+      {/* v2 badges: tone + location */}
+      {(event.tone || event.location) && (
+        <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.375rem" }}>
+          {event.tone && <Badge text={event.tone} color="#8B6FC0" />}
+          {event.location && <Badge text={event.location.slice(0, 24)} color="#6B7280" />}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.375rem" }}>
         <span style={{ fontSize: "0.6rem", color: "var(--muted)" }}>Urgency</span>
         <MiniBar value={event.urgency} color={event.urgency > 70 ? "#EF5B5B" : "#E2A55A"} />
@@ -504,36 +555,97 @@ function EventContent({ event, world }: { event: EventTemplate; world: WorldDefi
           Trigger: {triggerParts.join(", ")}
         </p>
       )}
-      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+      {/* v2: turn range + weight */}
+      {(event.turnRange || (event.weight ?? 1) > 1) && (
+        <p style={{ fontSize: "0.6rem", color: "var(--muted)", marginBottom: "0.375rem" }}>
+          {event.turnRange ? `Turns ${event.turnRange.min}–${event.turnRange.max}` : ""}
+          {event.turnRange && (event.weight ?? 1) > 1 ? " · " : ""}
+          {(event.weight ?? 1) > 1 ? `wt ${event.weight}` : ""}
+        </p>
+      )}
+      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
         <span style={{ fontSize: "0.55rem", color: "var(--muted)", marginRight: "0.125rem" }}>Actors:</span>
         {event.actorIds.map((id) => {
           const char = world.characters.find((c) => c.id === id);
           return <Badge key={id} text={char?.name ?? id} color={NODE_COLORS.character.dot} />;
         })}
       </div>
+      {/* v2: involved groups */}
+      {event.involvedGroupIds && event.involvedGroupIds.length > 0 && (
+        <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
+          <span style={{ fontSize: "0.55rem", color: "var(--muted)", marginRight: "0.125rem" }}>Groups:</span>
+          {event.involvedGroupIds.map((id) => {
+            const group = world.groups.find((g) => g.id === id);
+            return <Badge key={id} text={group?.name ?? id} color={NODE_COLORS.group.dot} />;
+          })}
+        </div>
+      )}
+      {/* v2: tags */}
+      {event.tags && event.tags.length > 0 && (
+        <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+          {event.tags.map((tag) => (
+            <Badge key={tag} text={tag} color="#8DF0C8" textColor="#0A0A0A" />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function InitialStateContent({ world }: { world: WorldDefinition }) {
   const s = world.initialState;
+  const metrics = world.metrics ?? [
+    { id: "stability", label: "Stability", initialValue: 50, direction: "higher-better" as const },
+    { id: "morale", label: "Morale", initialValue: 50, direction: "higher-better" as const },
+    { id: "resources", label: "Resources", initialValue: 50, direction: "higher-better" as const },
+    { id: "pressure", label: "Pressure", initialValue: 50, direction: "lower-better" as const },
+  ];
+  const metricColors = ["#6DB889", "#E2A55A", "#5B8DEF", "#EF5B5B", "#8B6FC0", "#8DF0C8"];
   return (
     <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-        <span style={{ fontSize: "0.6rem", color: "var(--muted)", width: 56 }}>Stability</span>
-        <MiniBar value={s.stability ?? 50} color="#6DB889" />
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-        <span style={{ fontSize: "0.6rem", color: "var(--muted)", width: 56 }}>Morale</span>
-        <MiniBar value={s.morale ?? 50} color="#E2A55A" />
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-        <span style={{ fontSize: "0.6rem", color: "var(--muted)", width: 56 }}>Resources</span>
-        <MiniBar value={s.resources ?? 50} color="#5B8DEF" />
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-        <span style={{ fontSize: "0.6rem", color: "var(--muted)", width: 56 }}>Pressure</span>
-        <MiniBar value={s.pressure ?? 50} color="#EF5B5B" />
+      {metrics.map((m, i) => (
+        <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+          <span style={{ fontSize: "0.6rem", color: "var(--muted)", width: 56 }}>{m.label}</span>
+          <MiniBar value={s.metricValues[m.id] ?? (s as Record<string, unknown>)[m.id] as number ?? m.initialValue} color={metricColors[i % metricColors.length]} />
+        </div>
+      ))}
+      {/* v2: Groups with dispositions */}
+      {world.groups.length > 0 && (
+        <div style={{ marginTop: "0.25rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+          <span style={{ fontSize: "0.55rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Groups</span>
+          {world.groups.map((g) => {
+            const influence = s.groupInfluence[g.id] ?? g.influence;
+            return (
+              <div key={g.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6rem" }}>
+                <span style={{ color: "var(--muted)" }}>{g.name}</span>
+                <span style={{ fontWeight: 600 }}>
+                  <span style={{ color: "#6DB889" }}>{influence}</span>
+                  {" "}
+                  <span style={{ color: g.disposition === "hostile" ? "#EF5B5B" : g.disposition === "volatile" ? "#E2A55A" : "var(--muted)", fontSize: "0.5rem" }}>
+                    {g.disposition}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {/* v2: Phase / Momentum / Time */}
+      {world.progressionModel && (
+        <div style={{ marginTop: "0.25rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6rem" }}>
+            <span style={{ color: "var(--muted)" }}>Phase</span>
+            <span style={{ fontWeight: 600 }}>1 / {world.progressionModel.phases}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6rem" }}>
+            <span style={{ color: "var(--muted)" }}>Momentum</span>
+            <span style={{ fontWeight: 600, color: "#8B6FC0" }}>stable</span>
+          </div>
+        </div>
+      )}
+      {/* v2: Summary */}
+      <div style={{ marginTop: "0.25rem", fontSize: "0.55rem", color: "#8B6FC0" }}>
+        {world.characters.length} characters · {Object.keys(s.relationships).length} rels
       </div>
     </div>
   );
@@ -730,6 +842,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
           id, title: "New Event", category: "politics" as const, summary: "", urgency: 50,
           triggerWhen: {}, stakes: [""], narratorPrompt: "",
           actorIds: world.characters[0] ? [world.characters[0].id] : [],
+          weight: 1,
         }] };
         break;
       }
@@ -870,11 +983,11 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
       }
       case "group": {
         const g = world.groups.find((gr) => gr.id === node.entityId);
-        return g ? <GroupContent group={g} /> : null;
+        return g ? <GroupContent group={g} world={world} /> : null;
       }
       case "role": {
         const r = world.roles.find((ro) => ro.id === node.entityId);
-        return r ? <RoleContent role={r} /> : null;
+        return r ? <RoleContent role={r} world={world} /> : null;
       }
       case "event": {
         const e = world.eventTemplates.find((ev) => ev.id === node.entityId);

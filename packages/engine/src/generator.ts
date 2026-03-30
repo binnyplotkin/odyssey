@@ -2,7 +2,7 @@ import { getOpenAIClient } from "./openai-client";
 import { TextGenerationAdapter } from "./interfaces";
 import { createId } from "@odyssey/utils";
 import { EventTemplate, SimulationState, TurnInput, TurnResult, WorldDefinition } from "@odyssey/types";
-import { buildCharacterContext, buildGroupContext, formatMetricsForPrompt } from "./metric-helpers";
+import { buildCharacterContext, buildEventContext, buildGroupContext, buildRoleContext, formatMetricsForPrompt } from "./metric-helpers";
 
 function fallbackOutput(params: {
   world: WorldDefinition;
@@ -93,10 +93,13 @@ function buildResponseRequest(params: {
               `Setting: ${params.world.setting}.`,
               `Norms: ${params.world.norms.join(" | ")}.`,
               `State: ${formatMetricsForPrompt(params.state, params.world)}.`,
+              `Role:\n${buildRoleContext(params.world)}`,
               `Groups:\n${buildGroupContext(params.world, params.state)}`,
               `Characters:\n${buildCharacterContext(params.world, params.state)}`,
+              `Narrative momentum: ${params.state.narrativeMomentum}. Phase: ${params.state.currentPhase}, turns in phase: ${params.state.turnsInPhase}. Player reputation: ${params.state.playerReputation}/100.`,
+              params.state.timeContext ? `Time: day ${params.state.timeContext.day}${params.state.timeContext.season ? `, ${params.state.timeContext.season}` : ""}${params.state.timeContext.timeOfDay ? `, ${params.state.timeContext.timeOfDay}` : ""}.` : "",
               params.activeEvent
-                ? `Active event: ${params.activeEvent.title} - ${params.activeEvent.summary}.`
+                ? `Active event:\n${buildEventContext(params.activeEvent, params.world)}`
                 : "No active event selected.",
             ].join(" "),
           },

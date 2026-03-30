@@ -805,37 +805,197 @@ function GroupPanel({
   );
 }
 
+type RoleTab = "identity" | "authority" | "relations" | "objectives";
+
+const AUTHORITY_OPTIONS = ["military", "economic", "judicial", "religious", "diplomatic", "domestic", "political"] as const;
+const DIFFICULTY_OPTIONS = ["beginner", "standard", "advanced", "expert"] as const;
+const STANCE_OPTIONS = ["allied", "neutral", "opposed"] as const;
+
 function RolePanel({
   role,
+  world,
   onUpdate,
 }: {
   role: RoleDefinition;
+  world: WorldDefinition;
   onUpdate: (updater: (r: RoleDefinition) => RoleDefinition) => void;
 }) {
+  const [tab, setTab] = useState<RoleTab>("identity");
+
   return (
     <div style={bodyStyle}>
-      <Field label="Title">
-        <input
-          value={role.title}
-          onChange={(e) => onUpdate((r) => ({ ...r, title: e.target.value }))}
-          style={inputStyle}
-        />
-      </Field>
-      <Field label="Summary">
-        <textarea
-          value={role.summary}
-          onChange={(e) => onUpdate((r) => ({ ...r, summary: e.target.value }))}
-          style={textareaStyle}
-        />
-      </Field>
-      <StringListEditor
-        label="Responsibilities"
-        items={role.responsibilities}
-        onChange={(responsibilities) => onUpdate((r) => ({ ...r, responsibilities }))}
-      />
+      <div style={{ display: "flex", gap: "0.25rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+        {(["identity", "authority", "relations", "objectives"] as RoleTab[]).map((t) => (
+          <TabButton key={t} label={t.charAt(0).toUpperCase() + t.slice(1)} active={tab === t} onClick={() => setTab(t)} />
+        ))}
+      </div>
+
+      {tab === "identity" && (
+        <>
+          <Field label="Title">
+            <input value={role.title} onChange={(e) => onUpdate((r) => ({ ...r, title: e.target.value }))} style={inputStyle} />
+          </Field>
+          <Field label="Summary">
+            <textarea value={role.summary} onChange={(e) => onUpdate((r) => ({ ...r, summary: e.target.value }))} style={textareaStyle} />
+          </Field>
+          <Field label="Backstory">
+            <textarea value={role.backstory ?? ""} onChange={(e) => onUpdate((r) => ({ ...r, backstory: e.target.value || undefined }))} style={textareaStyle} />
+          </Field>
+          <Field label="Legitimacy">
+            <textarea value={role.legitimacy ?? ""} onChange={(e) => onUpdate((r) => ({ ...r, legitimacy: e.target.value || undefined }))} style={textareaStyle} />
+          </Field>
+          <Field label="Speaking Style">
+            <input value={role.speakingStyle ?? ""} onChange={(e) => onUpdate((r) => ({ ...r, speakingStyle: e.target.value || undefined }))} style={inputStyle} />
+          </Field>
+          <Field label="Visual Identity">
+            <input value={role.visualIdentity ?? ""} onChange={(e) => onUpdate((r) => ({ ...r, visualIdentity: e.target.value || undefined }))} style={inputStyle} />
+          </Field>
+          <StringListEditor label="Responsibilities" items={role.responsibilities} onChange={(responsibilities) => onUpdate((r) => ({ ...r, responsibilities }))} />
+          <StringListEditor label="Tags" items={role.tags ?? []} onChange={(items) => onUpdate((r) => ({ ...r, tags: items }))} />
+        </>
+      )}
+
+      {tab === "authority" && (
+        <>
+          <div style={labelStyle}>Authority Domains</div>
+          <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+            {AUTHORITY_OPTIONS.map((a) => {
+              const active = (role.authority ?? []).includes(a);
+              return (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => onUpdate((r) => {
+                    const current = r.authority ?? [];
+                    return { ...r, authority: active ? current.filter((x) => x !== a) : [...current, a] };
+                  })}
+                  style={{ border: "none", padding: "0.3rem 0.6rem", borderRadius: "0.25rem", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" as const, background: active ? "rgba(226,165,90,0.15)" : "rgba(255,255,255,0.05)", color: active ? "#F0F0F0" : "var(--muted)", fontWeight: active ? 600 : 400 }}
+                >
+                  {a}
+                </button>
+              );
+            })}
+          </div>
+          <Field label="Difficulty">
+            <select
+              value={role.difficultyHint ?? ""}
+              onChange={(e) => onUpdate((r) => ({ ...r, difficultyHint: (e.target.value || undefined) as RoleDefinition["difficultyHint"] }))}
+              style={selectStyle}
+            >
+              <option value="">None</option>
+              {DIFFICULTY_OPTIONS.map((d) => (
+                <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+              ))}
+            </select>
+          </Field>
+          <StringListEditor label="Constraints" items={role.constraints ?? []} onChange={(items) => onUpdate((r) => ({ ...r, constraints: items }))} />
+          <div style={labelStyle}>Visible Metrics</div>
+          <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+            {(world.metrics ?? []).map((m) => {
+              const active = (role.visibleMetrics ?? []).includes(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => onUpdate((r) => {
+                    const current = r.visibleMetrics ?? [];
+                    return { ...r, visibleMetrics: active ? current.filter((x) => x !== m.id) : [...current, m.id] };
+                  })}
+                  style={{ border: "none", padding: "0.3rem 0.6rem", borderRadius: "0.25rem", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" as const, background: active ? "rgba(226,165,90,0.15)" : "rgba(255,255,255,0.05)", color: active ? "#F0F0F0" : "var(--muted)", fontWeight: active ? 600 : 400 }}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: "0.7rem", color: "var(--muted)" }}>Select which metrics this role can see. Leave empty for all.</div>
+        </>
+      )}
+
+      {tab === "relations" && (
+        <>
+          <div style={labelStyle}>Group Alignments</div>
+          {(role.groupAlignments ?? []).map((al, i) => (
+            <div key={i} style={{ display: "flex", gap: "0.25rem", alignItems: "center", marginBottom: "0.25rem" }}>
+              <select
+                value={al.groupId}
+                onChange={(e) => onUpdate((r) => {
+                  const aligns = [...(r.groupAlignments ?? [])];
+                  aligns[i] = { ...aligns[i], groupId: e.target.value };
+                  return { ...r, groupAlignments: aligns };
+                })}
+                style={{ ...selectStyle, flex: 1 }}
+              >
+                <option value="">Select group…</option>
+                {world.groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+              <select
+                value={al.stance}
+                onChange={(e) => onUpdate((r) => {
+                  const aligns = [...(r.groupAlignments ?? [])];
+                  aligns[i] = { ...aligns[i], stance: e.target.value as "allied" | "neutral" | "opposed" };
+                  return { ...r, groupAlignments: aligns };
+                })}
+                style={{ ...selectStyle, width: 90, flexShrink: 0 }}
+              >
+                {STANCE_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <button type="button" onClick={() => onUpdate((r) => ({ ...r, groupAlignments: (r.groupAlignments ?? []).filter((_, j) => j !== i) }))} style={{ border: "none", background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>×</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => onUpdate((r) => ({ ...r, groupAlignments: [...(r.groupAlignments ?? []), { groupId: "", stance: "neutral" as const }] }))} style={{ border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>+ Add alignment</button>
+
+          <div style={{ ...labelStyle, marginTop: "0.75rem" }}>Inner Circle</div>
+          {world.characters.map((c) => {
+            const active = (role.innerCircle ?? []).includes(c.id);
+            return (
+              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={() => onUpdate((r) => {
+                    const current = r.innerCircle ?? [];
+                    return { ...r, innerCircle: active ? current.filter((x) => x !== c.id) : [...current, c.id] };
+                  })}
+                />
+                <span style={{ fontSize: "0.8rem" }}>{c.name}</span>
+                <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>{c.title}</span>
+              </div>
+            );
+          })}
+
+          <StringListEditor label="Vulnerabilities" items={role.vulnerabilities ?? []} onChange={(items) => onUpdate((r) => ({ ...r, vulnerabilities: items }))} />
+        </>
+      )}
+
+      {tab === "objectives" && (
+        <>
+          <StringListEditor label="Goals" items={role.goals ?? []} onChange={(items) => onUpdate((r) => ({ ...r, goals: items }))} />
+          <Field label="Onboarding Narration">
+            <textarea value={role.onboardingNarration ?? ""} onChange={(e) => onUpdate((r) => ({ ...r, onboardingNarration: e.target.value || undefined }))} style={{ ...textareaStyle, minHeight: "5rem" }} />
+          </Field>
+          <Field label="Success Condition">
+            <textarea value={role.successCondition ?? ""} onChange={(e) => onUpdate((r) => ({ ...r, successCondition: e.target.value || undefined }))} style={textareaStyle} />
+          </Field>
+          <Field label="Failure Condition">
+            <textarea value={role.failureCondition ?? ""} onChange={(e) => onUpdate((r) => ({ ...r, failureCondition: e.target.value || undefined }))} style={textareaStyle} />
+          </Field>
+        </>
+      )}
     </div>
   );
 }
+
+const TONE_OPTIONS = ["tense", "somber", "urgent", "celebratory", "conspiratorial", "intimate"] as const;
+const GROUP_METRIC_OPTIONS = ["influence", "cohesion", "volatility"] as const;
+const METRIC_DIRECTION_OPTIONS = ["increase", "decrease"] as const;
+const METRIC_MAGNITUDE_OPTIONS = ["small", "medium", "large"] as const;
+
+type EventTab = "core" | "triggers" | "context" | "outcomes";
 
 function EventPanel({
   event,
@@ -846,226 +1006,652 @@ function EventPanel({
   world: WorldDefinition;
   onUpdate: (updater: (e: EventTemplate) => EventTemplate) => void;
 }) {
+  const [tab, setTab] = useState<EventTab>("core");
+
   return (
-    <div style={bodyStyle}>
-      <Field label="Title">
-        <input
-          value={event.title}
-          onChange={(e) => onUpdate((ev) => ({ ...ev, title: e.target.value }))}
-          style={inputStyle}
-        />
-      </Field>
-      <Field label="Category">
-        <select
-          value={event.category}
-          onChange={(e) => onUpdate((ev) => ({ ...ev, category: e.target.value }))}
-          style={selectStyle}
-        >
-          {(world.eventCategories ?? [
-            { id: "politics", label: "Politics" },
-            { id: "economy", label: "Economy" },
-            { id: "military", label: "Military" },
-            { id: "morality", label: "Morality" },
-            { id: "personal", label: "Personal" },
-          ]).map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.label}</option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Summary">
-        <textarea
-          value={event.summary}
-          onChange={(e) => onUpdate((ev) => ({ ...ev, summary: e.target.value }))}
-          style={textareaStyle}
-        />
-      </Field>
-      <RangeField
-        label="Urgency"
-        value={event.urgency}
-        onChange={(v) => onUpdate((ev) => ({ ...ev, urgency: v }))}
-      />
-      <Field label="Narrator Prompt">
-        <textarea
-          value={event.narratorPrompt}
-          onChange={(e) => onUpdate((ev) => ({ ...ev, narratorPrompt: e.target.value }))}
-          style={{ ...textareaStyle, minHeight: "5rem" }}
-        />
-      </Field>
-      <StringListEditor
-        label="Stakes"
-        items={event.stakes}
-        onChange={(stakes) => onUpdate((ev) => ({ ...ev, stakes }))}
-      />
-
-      {/* Trigger conditions — v2 dynamic format */}
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
-        <div style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>Trigger Conditions</span>
-          <button
-            type="button"
-            onClick={() =>
-              onUpdate((ev) => ({
-                ...ev,
-                triggerConditions: [
-                  ...(ev.triggerConditions ?? []),
-                  { metricId: world.metrics?.[0]?.id ?? "stability", condition: "below" as const, threshold: 50 },
-                ],
-              }))
-            }
-            style={{
-              border: "none",
-              background: "transparent",
-              color: "var(--accent)",
-              cursor: "pointer",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-            }}
-          >
-            + Add
-          </button>
-        </div>
-        {(event.triggerConditions ?? []).map((tc, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              gap: "0.375rem",
-              alignItems: "center",
-              marginTop: "0.375rem",
-            }}
-          >
-            <select
-              value={tc.metricId}
-              onChange={(e) =>
-                onUpdate((ev) => ({
-                  ...ev,
-                  triggerConditions: (ev.triggerConditions ?? []).map((c, j) =>
-                    j === i ? { ...c, metricId: e.target.value } : c,
-                  ),
-                }))
-              }
-              style={{ ...selectStyle, flex: 1 }}
-            >
-              {(world.metrics ?? []).map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
-            <select
-              value={tc.condition}
-              onChange={(e) =>
-                onUpdate((ev) => ({
-                  ...ev,
-                  triggerConditions: (ev.triggerConditions ?? []).map((c, j) =>
-                    j === i ? { ...c, condition: e.target.value as "above" | "below" } : c,
-                  ),
-                }))
-              }
-              style={{ ...selectStyle, width: "5rem", flex: "none" }}
-            >
-              <option value="above">Above</option>
-              <option value="below">Below</option>
-            </select>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={tc.threshold}
-              onChange={(e) =>
-                onUpdate((ev) => ({
-                  ...ev,
-                  triggerConditions: (ev.triggerConditions ?? []).map((c, j) =>
-                    j === i ? { ...c, threshold: Number(e.target.value) } : c,
-                  ),
-                }))
-              }
-              style={{ ...inputStyle, width: "3.5rem", flex: "none" }}
-            />
-            <button
-              type="button"
-              onClick={() =>
-                onUpdate((ev) => ({
-                  ...ev,
-                  triggerConditions: (ev.triggerConditions ?? []).filter((_, j) => j !== i),
-                }))
-              }
-              style={{
-                border: "1px solid var(--border)",
-                background: "transparent",
-                color: "var(--danger)",
-                cursor: "pointer",
-                borderRadius: "0.375rem",
-                padding: "0 0.5rem",
-                fontSize: "0.75rem",
-                flex: "none",
-              }}
-            >
-              &times;
-            </button>
-          </div>
-        ))}
-        {/* Legacy trigger display (read-only) if no v2 conditions but triggerWhen exists */}
-        {!event.triggerConditions?.length && event.triggerWhen && (
-          <div style={{ marginTop: "0.375rem" }}>
-            <p style={{ fontSize: "0.7rem", color: "var(--muted)", fontStyle: "italic", marginBottom: "0.25rem" }}>
-              Legacy triggers (add v2 conditions above to migrate):
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-              {event.triggerWhen.stabilityBelow != null && (
-                <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Stability &lt; {event.triggerWhen.stabilityBelow}</span>
-              )}
-              {event.triggerWhen.moraleBelow != null && (
-                <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Morale &lt; {event.triggerWhen.moraleBelow}</span>
-              )}
-              {event.triggerWhen.resourcesBelow != null && (
-                <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Resources &lt; {event.triggerWhen.resourcesBelow}</span>
-              )}
-              {event.triggerWhen.pressureAbove != null && (
-                <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Pressure &gt; {event.triggerWhen.pressureAbove}</span>
-              )}
-            </div>
-          </div>
-        )}
+    <>
+      <div style={tabBarStyle}>
+        <TabButton active={tab === "core"} label="Core" onClick={() => setTab("core")} />
+        <TabButton active={tab === "triggers"} label="Triggers" onClick={() => setTab("triggers")} />
+        <TabButton active={tab === "context"} label="Context" onClick={() => setTab("context")} />
+        <TabButton active={tab === "outcomes"} label="Outcomes" onClick={() => setTab("outcomes")} />
       </div>
-
-      {/* Actor selection */}
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
-        <div style={labelStyle}>Actors</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem", marginTop: "0.375rem" }}>
-          {world.characters.map((char) => {
-            const isActor = event.actorIds.includes(char.id);
-            return (
-              <label
-                key={char.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  fontSize: "0.8125rem",
-                  cursor: "pointer",
-                  padding: "0.25rem 0",
-                }}
+      <div style={bodyStyle}>
+        {tab === "core" && (
+          <>
+            <Field label="Title">
+              <input
+                value={event.title}
+                onChange={(e) => onUpdate((ev) => ({ ...ev, title: e.target.value }))}
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Category">
+              <select
+                value={event.category}
+                onChange={(e) => onUpdate((ev) => ({ ...ev, category: e.target.value }))}
+                style={selectStyle}
               >
-                <input
-                  type="checkbox"
-                  checked={isActor}
-                  onChange={() =>
+                {(world.eventCategories ?? [
+                  { id: "politics", label: "Politics" },
+                  { id: "economy", label: "Economy" },
+                  { id: "military", label: "Military" },
+                  { id: "morality", label: "Morality" },
+                  { id: "personal", label: "Personal" },
+                ]).map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Summary">
+              <textarea
+                value={event.summary}
+                onChange={(e) => onUpdate((ev) => ({ ...ev, summary: e.target.value }))}
+                style={textareaStyle}
+              />
+            </Field>
+            <RangeField
+              label="Urgency"
+              value={event.urgency}
+              onChange={(v) => onUpdate((ev) => ({ ...ev, urgency: v }))}
+            />
+            <Field label="Narrator Prompt">
+              <textarea
+                value={event.narratorPrompt}
+                onChange={(e) => onUpdate((ev) => ({ ...ev, narratorPrompt: e.target.value }))}
+                style={{ ...textareaStyle, minHeight: "5rem" }}
+              />
+            </Field>
+            <StringListEditor
+              label="Stakes"
+              items={event.stakes}
+              onChange={(stakes) => onUpdate((ev) => ({ ...ev, stakes }))}
+            />
+            {/* Actor selection */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+              <div style={labelStyle}>Actors</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem", marginTop: "0.375rem" }}>
+                {world.characters.map((char) => {
+                  const isActor = event.actorIds.includes(char.id);
+                  return (
+                    <label
+                      key={char.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.8125rem",
+                        cursor: "pointer",
+                        padding: "0.25rem 0",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isActor}
+                        onChange={() =>
+                          onUpdate((ev) => ({
+                            ...ev,
+                            actorIds: isActor
+                              ? ev.actorIds.filter((id) => id !== char.id)
+                              : [...ev.actorIds, char.id],
+                          }))
+                        }
+                        style={{ accentColor: "var(--accent)" }}
+                      />
+                      {char.name}
+                      <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>{char.title}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <StringListEditor
+              label="Tags"
+              items={event.tags ?? []}
+              onChange={(tags) => onUpdate((ev) => ({ ...ev, tags }))}
+            />
+          </>
+        )}
+
+        {tab === "triggers" && (
+          <>
+            {/* Metric trigger conditions */}
+            <div>
+              <div style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Metric Conditions</span>
+                <button
+                  type="button"
+                  onClick={() =>
                     onUpdate((ev) => ({
                       ...ev,
-                      actorIds: isActor
-                        ? ev.actorIds.filter((id) => id !== char.id)
-                        : [...ev.actorIds, char.id],
+                      triggerConditions: [
+                        ...(ev.triggerConditions ?? []),
+                        { metricId: world.metrics?.[0]?.id ?? "stability", condition: "below" as const, threshold: 50 },
+                      ],
                     }))
                   }
-                  style={{ accentColor: "var(--accent)" }}
+                  style={{ border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600 }}
+                >
+                  + Add
+                </button>
+              </div>
+              {(event.triggerConditions ?? []).map((tc, i) => (
+                <div key={i} style={{ display: "flex", gap: "0.375rem", alignItems: "center", marginTop: "0.375rem" }}>
+                  <select
+                    value={tc.metricId}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        triggerConditions: (ev.triggerConditions ?? []).map((c, j) =>
+                          j === i ? { ...c, metricId: e.target.value } : c,
+                        ),
+                      }))
+                    }
+                    style={{ ...selectStyle, flex: 1 }}
+                  >
+                    {(world.metrics ?? []).map((m) => (
+                      <option key={m.id} value={m.id}>{m.label}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={tc.condition}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        triggerConditions: (ev.triggerConditions ?? []).map((c, j) =>
+                          j === i ? { ...c, condition: e.target.value as "above" | "below" } : c,
+                        ),
+                      }))
+                    }
+                    style={{ ...selectStyle, width: "5rem", flex: "none" }}
+                  >
+                    <option value="above">Above</option>
+                    <option value="below">Below</option>
+                  </select>
+                  <input
+                    type="number" min={0} max={100} value={tc.threshold}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        triggerConditions: (ev.triggerConditions ?? []).map((c, j) =>
+                          j === i ? { ...c, threshold: Number(e.target.value) } : c,
+                        ),
+                      }))
+                    }
+                    style={{ ...inputStyle, width: "3.5rem", flex: "none" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onUpdate((ev) => ({ ...ev, triggerConditions: (ev.triggerConditions ?? []).filter((_, j) => j !== i) }))}
+                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", cursor: "pointer", borderRadius: "0.375rem", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Group conditions */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+              <div style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Group Conditions</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdate((ev) => ({
+                      ...ev,
+                      groupConditions: [
+                        ...(ev.groupConditions ?? []),
+                        { groupId: world.groups[0]?.id ?? "", metric: "influence" as const, condition: "below" as const, threshold: 50 },
+                      ],
+                    }))
+                  }
+                  style={{ border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600 }}
+                >
+                  + Add
+                </button>
+              </div>
+              {(event.groupConditions ?? []).map((gc, i) => (
+                <div key={i} style={{ display: "flex", gap: "0.375rem", alignItems: "center", marginTop: "0.375rem" }}>
+                  <select
+                    value={gc.groupId}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        groupConditions: (ev.groupConditions ?? []).map((c, j) =>
+                          j === i ? { ...c, groupId: e.target.value } : c,
+                        ),
+                      }))
+                    }
+                    style={{ ...selectStyle, flex: 1 }}
+                  >
+                    {world.groups.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={gc.metric}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        groupConditions: (ev.groupConditions ?? []).map((c, j) =>
+                          j === i ? { ...c, metric: e.target.value as "influence" | "cohesion" | "volatility" } : c,
+                        ),
+                      }))
+                    }
+                    style={{ ...selectStyle, width: "5.5rem", flex: "none" }}
+                  >
+                    {GROUP_METRIC_OPTIONS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={gc.condition}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        groupConditions: (ev.groupConditions ?? []).map((c, j) =>
+                          j === i ? { ...c, condition: e.target.value as "above" | "below" } : c,
+                        ),
+                      }))
+                    }
+                    style={{ ...selectStyle, width: "4.5rem", flex: "none" }}
+                  >
+                    <option value="above">Above</option>
+                    <option value="below">Below</option>
+                  </select>
+                  <input
+                    type="number" min={0} max={100} value={gc.threshold}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        groupConditions: (ev.groupConditions ?? []).map((c, j) =>
+                          j === i ? { ...c, threshold: Number(e.target.value) } : c,
+                        ),
+                      }))
+                    }
+                    style={{ ...inputStyle, width: "3.5rem", flex: "none" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onUpdate((ev) => ({ ...ev, groupConditions: (ev.groupConditions ?? []).filter((_, j) => j !== i) }))}
+                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", cursor: "pointer", borderRadius: "0.375rem", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Turn range */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem", display: "flex", gap: "0.75rem" }}>
+              <Field label="Min Turn">
+                <input
+                  type="number" min={0}
+                  value={event.turnRange?.min ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? undefined : Number(e.target.value);
+                    onUpdate((ev) => ({
+                      ...ev,
+                      turnRange: v !== undefined ? { min: v, max: ev.turnRange?.max ?? 999 } : undefined,
+                    }));
+                  }}
+                  style={inputStyle}
+                  placeholder="0"
                 />
-                {char.name}
-                <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>{char.title}</span>
-              </label>
-            );
-          })}
-        </div>
+              </Field>
+              <Field label="Max Turn">
+                <input
+                  type="number" min={0}
+                  value={event.turnRange?.max ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? undefined : Number(e.target.value);
+                    onUpdate((ev) => ({
+                      ...ev,
+                      turnRange: v !== undefined ? { min: ev.turnRange?.min ?? 0, max: v } : undefined,
+                    }));
+                  }}
+                  style={inputStyle}
+                  placeholder="999"
+                />
+              </Field>
+            </div>
+
+            {/* Prerequisites */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+              <div style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Prerequisite Events</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const available = world.eventTemplates.filter((e) => e.id !== event.id && !(event.prerequisiteEventIds ?? []).includes(e.id));
+                    if (available.length === 0) return;
+                    onUpdate((ev) => ({ ...ev, prerequisiteEventIds: [...(ev.prerequisiteEventIds ?? []), available[0].id] }));
+                  }}
+                  style={{ border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600 }}
+                >
+                  + Add
+                </button>
+              </div>
+              {(event.prerequisiteEventIds ?? []).map((pid, i) => {
+                const prereqEvent = world.eventTemplates.find((e) => e.id === pid);
+                return (
+                  <div key={i} style={{ display: "flex", gap: "0.375rem", alignItems: "center", marginTop: "0.375rem" }}>
+                    <select
+                      value={pid}
+                      onChange={(e) =>
+                        onUpdate((ev) => ({
+                          ...ev,
+                          prerequisiteEventIds: (ev.prerequisiteEventIds ?? []).map((id, j) => j === i ? e.target.value : id),
+                        }))
+                      }
+                      style={{ ...selectStyle, flex: 1 }}
+                    >
+                      {world.eventTemplates.filter((e) => e.id !== event.id).map((e) => (
+                        <option key={e.id} value={e.id}>{e.title}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => onUpdate((ev) => ({ ...ev, prerequisiteEventIds: (ev.prerequisiteEventIds ?? []).filter((_, j) => j !== i) }))}
+                      style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", cursor: "pointer", borderRadius: "0.375rem", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Temporal controls */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem", display: "flex", gap: "0.5rem" }}>
+              <Field label="Cooldown">
+                <input
+                  type="number" min={0}
+                  value={event.cooldownTurns ?? ""}
+                  onChange={(e) => onUpdate((ev) => ({ ...ev, cooldownTurns: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                  style={inputStyle}
+                  placeholder="—"
+                />
+              </Field>
+              <Field label="Max Occurs">
+                <input
+                  type="number" min={1}
+                  value={event.maxOccurrences ?? ""}
+                  onChange={(e) => onUpdate((ev) => ({ ...ev, maxOccurrences: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                  style={inputStyle}
+                  placeholder="—"
+                />
+              </Field>
+              <Field label="Expires">
+                <input
+                  type="number" min={1}
+                  value={event.expiresAfterTurns ?? ""}
+                  onChange={(e) => onUpdate((ev) => ({ ...ev, expiresAfterTurns: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                  style={inputStyle}
+                  placeholder="—"
+                />
+              </Field>
+            </div>
+
+            {/* Mutual exclusion */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+              <div style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Mutually Exclusive With</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const available = world.eventTemplates.filter((e) => e.id !== event.id && !(event.mutuallyExclusiveWith ?? []).includes(e.id));
+                    if (available.length === 0) return;
+                    onUpdate((ev) => ({ ...ev, mutuallyExclusiveWith: [...(ev.mutuallyExclusiveWith ?? []), available[0].id] }));
+                  }}
+                  style={{ border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600 }}
+                >
+                  + Add
+                </button>
+              </div>
+              {(event.mutuallyExclusiveWith ?? []).map((eid, i) => (
+                <div key={i} style={{ display: "flex", gap: "0.375rem", alignItems: "center", marginTop: "0.375rem" }}>
+                  <select
+                    value={eid}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        mutuallyExclusiveWith: (ev.mutuallyExclusiveWith ?? []).map((id, j) => j === i ? e.target.value : id),
+                      }))
+                    }
+                    style={{ ...selectStyle, flex: 1 }}
+                  >
+                    {world.eventTemplates.filter((e) => e.id !== event.id).map((e) => (
+                      <option key={e.id} value={e.id}>{e.title}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => onUpdate((ev) => ({ ...ev, mutuallyExclusiveWith: (ev.mutuallyExclusiveWith ?? []).filter((_, j) => j !== i) }))}
+                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", cursor: "pointer", borderRadius: "0.375rem", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Weight */}
+            <RangeField
+              label="Weight"
+              value={Math.round((event.weight ?? 1) * 20)}
+              onChange={(v) => onUpdate((ev) => ({ ...ev, weight: Math.max(0, v / 20) }))}
+            />
+            <p style={{ fontSize: "0.7rem", color: "var(--muted)", marginTop: "-0.5rem" }}>
+              Higher weight = more likely to be selected (current: {event.weight ?? 1})
+            </p>
+          </>
+        )}
+
+        {tab === "context" && (
+          <>
+            <Field label="Tone">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem" }}>
+                {TONE_OPTIONS.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => onUpdate((ev) => ({ ...ev, tone: ev.tone === t ? undefined : t }))}
+                    style={{
+                      padding: "0.3rem 0.6rem",
+                      borderRadius: "1rem",
+                      border: "none",
+                      fontSize: "0.75rem",
+                      fontWeight: event.tone === t ? 600 : 400,
+                      background: event.tone === t ? "var(--accent)" : "var(--bg-elevated)",
+                      color: event.tone === t ? "#fff" : "var(--muted)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Location">
+              <input
+                value={event.location ?? ""}
+                onChange={(e) => onUpdate((ev) => ({ ...ev, location: e.target.value || undefined }))}
+                style={inputStyle}
+                placeholder="e.g. The rain-soaked throne room"
+              />
+            </Field>
+            <Field label="Backstory">
+              <textarea
+                value={event.backstory ?? ""}
+                onChange={(e) => onUpdate((ev) => ({ ...ev, backstory: e.target.value || undefined }))}
+                style={textareaStyle}
+                placeholder="Context that shaped this event..."
+              />
+            </Field>
+
+            {/* Involved groups */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+              <div style={labelStyle}>Involved Groups</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem", marginTop: "0.375rem" }}>
+                {world.groups.map((group) => {
+                  const isInvolved = (event.involvedGroupIds ?? []).includes(group.id);
+                  return (
+                    <label
+                      key={group.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.8125rem",
+                        cursor: "pointer",
+                        padding: "0.25rem 0",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isInvolved}
+                        onChange={() =>
+                          onUpdate((ev) => ({
+                            ...ev,
+                            involvedGroupIds: isInvolved
+                              ? (ev.involvedGroupIds ?? []).filter((id) => id !== group.id)
+                              : [...(ev.involvedGroupIds ?? []), group.id],
+                          }))
+                        }
+                        style={{ accentColor: "#6DB889" }}
+                      />
+                      {group.name}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <StringListEditor
+              label="Suggested Approaches"
+              items={event.suggestedApproaches ?? []}
+              onChange={(approaches) => onUpdate((ev) => ({ ...ev, suggestedApproaches: approaches.length ? approaches : undefined }))}
+            />
+          </>
+        )}
+
+        {tab === "outcomes" && (
+          <>
+            {/* Metric hints */}
+            <div>
+              <div style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Metric Hints</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdate((ev) => ({
+                      ...ev,
+                      metricHints: [
+                        ...(ev.metricHints ?? []),
+                        { metricId: world.metrics?.[0]?.id ?? "stability", direction: "decrease" as const, magnitude: "medium" as const },
+                      ],
+                    }))
+                  }
+                  style={{ border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600 }}
+                >
+                  + Add
+                </button>
+              </div>
+              <p style={{ fontSize: "0.7rem", color: "var(--muted)", marginBottom: "0.375rem" }}>
+                Guides the LLM on expected metric shifts
+              </p>
+              {(event.metricHints ?? []).map((mh, i) => (
+                <div key={i} style={{ display: "flex", gap: "0.375rem", alignItems: "center", marginTop: "0.375rem" }}>
+                  <select
+                    value={mh.metricId}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        metricHints: (ev.metricHints ?? []).map((h, j) =>
+                          j === i ? { ...h, metricId: e.target.value } : h,
+                        ),
+                      }))
+                    }
+                    style={{ ...selectStyle, flex: 1 }}
+                  >
+                    {(world.metrics ?? []).map((m) => (
+                      <option key={m.id} value={m.id}>{m.label}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={mh.direction}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        metricHints: (ev.metricHints ?? []).map((h, j) =>
+                          j === i ? { ...h, direction: e.target.value as "increase" | "decrease" } : h,
+                        ),
+                      }))
+                    }
+                    style={{ ...selectStyle, width: "5.5rem", flex: "none" }}
+                  >
+                    {METRIC_DIRECTION_OPTIONS.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={mh.magnitude}
+                    onChange={(e) =>
+                      onUpdate((ev) => ({
+                        ...ev,
+                        metricHints: (ev.metricHints ?? []).map((h, j) =>
+                          j === i ? { ...h, magnitude: e.target.value as "small" | "medium" | "large" } : h,
+                        ),
+                      }))
+                    }
+                    style={{ ...selectStyle, width: "5rem", flex: "none" }}
+                  >
+                    {METRIC_MAGNITUDE_OPTIONS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => onUpdate((ev) => ({ ...ev, metricHints: (ev.metricHints ?? []).filter((_, j) => j !== i) }))}
+                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", cursor: "pointer", borderRadius: "0.375rem", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Escalation event */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+              <Field label="Escalation Event">
+                <select
+                  value={event.escalationEventId ?? ""}
+                  onChange={(e) => onUpdate((ev) => ({ ...ev, escalationEventId: e.target.value || undefined }))}
+                  style={selectStyle}
+                >
+                  <option value="">None</option>
+                  {world.eventTemplates.filter((e) => e.id !== event.id).map((e) => (
+                    <option key={e.id} value={e.id}>{e.title}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            {/* Resolution narration */}
+            <Field label="Resolution Narration">
+              <textarea
+                value={event.resolutionNarration ?? ""}
+                onChange={(e) => onUpdate((ev) => ({ ...ev, resolutionNarration: e.target.value || undefined }))}
+                style={textareaStyle}
+                placeholder="Describe how this event wraps up..."
+              />
+            </Field>
+          </>
+        )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -1711,6 +2297,33 @@ function InitialStatePanel({
           );
         })}
       </div>
+
+      {/* v2: Relationship Respect */}
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+        <div style={labelStyle}>Relationship Respect <span style={{ fontSize: "0.6rem", color: "#8DF0C8", marginLeft: "0.25rem" }}>v2</span></div>
+        {Object.entries(state.relationships).map(([charId, rel]) => {
+          const char = world.characters.find((c) => c.id === charId);
+          return (
+            <RangeField
+              key={charId}
+              label={char?.name ?? charId}
+              value={rel.respect ?? 50}
+              onChange={(v) =>
+                onUpdate((w) => ({
+                  ...w,
+                  initialState: {
+                    ...w.initialState,
+                    relationships: {
+                      ...w.initialState.relationships,
+                      [charId]: { ...w.initialState.relationships[charId], respect: v },
+                    },
+                  },
+                }))
+              }
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1847,6 +2460,7 @@ export function WorldEditorPanel({
         return role ? (
           <RolePanel
             role={role}
+            world={world}
             onUpdate={(updater) => onUpdateRole(role.id, updater)}
           />
         ) : null;

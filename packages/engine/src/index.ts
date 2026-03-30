@@ -22,6 +22,8 @@ export {
   buildCharacterContext,
   evaluateGroupCondition,
   buildGroupContext,
+  buildRoleContext,
+  buildEventContext,
 } from "./metric-helpers";
 export { getOpenAIClient } from "./openai-client";
 export { AudioCommunicationSimulationEngine } from "./communication";

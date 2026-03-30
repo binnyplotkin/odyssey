@@ -66,6 +66,27 @@ export const kingdomWorld: WorldDefinition = {
         "Manage fiscal and military stability.",
         "Preserve legitimacy across groups.",
       ],
+      backstory: "Crowned three years ago after the old king's sudden death. Some whisper poison, others say providence. You inherited a fractured realm and a treasury half-empty.",
+      legitimacy: "Heir by blood, confirmed by the High Confessor's anointing, but contested by the Provincial Nobility who backed a rival claimant.",
+      speakingStyle: "Formal, measured, uses the royal 'we' in public address. In private counsel, more direct and searching.",
+      visualIdentity: "Crimson robes edged with gold thread, an iron crown set with a single amber stone, ink-stained fingers from late-night dispatches.",
+      goals: ["Stabilize the realm through the first winter", "Prevent noble rebellion", "Secure the northern grain supply"],
+      authority: ["political", "judicial", "economic", "diplomatic"],
+      difficultyHint: "standard",
+      constraints: ["Cannot override the High Confessor on matters of faith", "Must consult the war council before military mobilization"],
+      visibleMetrics: ["stability", "morale", "resources", "pressure"],
+      groupAlignments: [
+        { groupId: "court", stance: "allied" },
+        { groupId: "nobility", stance: "opposed" },
+        { groupId: "commons", stance: "neutral" },
+        { groupId: "military", stance: "allied" },
+      ],
+      innerCircle: ["advisor-marcell", "priest-elan"],
+      vulnerabilities: ["Untested in genuine crisis", "No personal military experience", "Dependent on Marcell for institutional knowledge"],
+      onboardingNarration: "The crown is heavy, and the court is watching. Three years on the throne and you've yet to face a true test — until now. The northern dispatches grow grimmer by the week, the nobles sharpen their knives, and the commons grow hungry.",
+      successCondition: "Survive 20 turns with stability above 40 and no group in open revolt.",
+      failureCondition: "Stability drops below 15 or two or more groups turn hostile simultaneously.",
+      tags: ["protagonist", "political", "hereditary"],
     },
   ],
   groups: [
@@ -347,6 +368,27 @@ export const kingdomWorld: WorldDefinition = {
       narratorPrompt:
         "Describe a rain-soaked petition in the throne room with the prisoner desperate, the court tense, and the room awaiting the crown's judgment.",
       actorIds: ["advisor-marcell", "priest-elan", "noble-cassian"],
+      // v2 additions
+      tone: "somber",
+      location: "The rain-soaked throne room",
+      backstory: "The prisoner was arrested during a drought when grain prices tripled. His village has sent petitions for weeks.",
+      involvedGroupIds: ["commons", "nobility"],
+      suggestedApproaches: [
+        "Show mercy to win popular support",
+        "Enforce the law to maintain noble respect",
+      ],
+      groupConditions: [
+        { groupId: "commons", metric: "influence", condition: "below", threshold: 40 },
+      ],
+      metricHints: [
+        { metricId: "stability", direction: "decrease", magnitude: "medium" },
+        { metricId: "morale", direction: "increase", magnitude: "small" },
+      ],
+      resolutionNarration: "Describe the crowd's reaction as the prisoner is led away — relief or fury, depending on the verdict.",
+      escalationEventId: "noble-defiance",
+      turnRange: { min: 3, max: 15 },
+      weight: 2,
+      tags: ["crisis", "political"],
     },
     {
       id: "empty-granaries",
@@ -367,6 +409,24 @@ export const kingdomWorld: WorldDefinition = {
       narratorPrompt:
         "Frame the scene around ledgers, stale wheat, and the smell of panic spreading through the court.",
       actorIds: ["advisor-marcell", "noble-cassian"],
+      // v2 additions
+      tone: "urgent",
+      location: "The treasury counting house",
+      backstory: "A dry summer and border disruptions have cut grain imports by half. The court's reserve figures were quietly inflated for months.",
+      involvedGroupIds: ["commons", "court"],
+      suggestedApproaches: [
+        "Negotiate with merchant guilds for emergency imports",
+        "Impose rationing to stretch remaining stores",
+        "Seize noble grain hoards by decree",
+      ],
+      metricHints: [
+        { metricId: "resources", direction: "decrease", magnitude: "large" },
+        { metricId: "morale", direction: "decrease", magnitude: "medium" },
+      ],
+      cooldownTurns: 5,
+      maxOccurrences: 2,
+      weight: 1,
+      tags: ["economy", "crisis"],
     },
     {
       id: "border-raid",
@@ -387,6 +447,26 @@ export const kingdomWorld: WorldDefinition = {
       narratorPrompt:
         "Convey hooves in mud, burned wagons, and the court's sudden awareness that the frontier is slipping.",
       actorIds: ["general-sera", "advisor-marcell"],
+      // v2 additions
+      tone: "tense",
+      location: "The war council chamber",
+      backstory: "The northern road is the kingdom's lifeline for grain and trade. Raiders have grown bold as crown patrols thinned to save coin.",
+      involvedGroupIds: ["military"],
+      suggestedApproaches: [
+        "Send the legions to crush the raiders and secure the road",
+        "Negotiate a truce with the raiders' chieftain",
+        "Hire mercenaries to avoid committing crown forces",
+      ],
+      groupConditions: [
+        { groupId: "military", metric: "influence", condition: "above", threshold: 50 },
+      ],
+      metricHints: [
+        { metricId: "pressure", direction: "increase", magnitude: "large" },
+        { metricId: "resources", direction: "decrease", magnitude: "small" },
+      ],
+      mutuallyExclusiveWith: ["noble-defiance"],
+      weight: 1,
+      tags: ["military", "urgent"],
     },
     {
       id: "noble-defiance",
@@ -407,6 +487,28 @@ export const kingdomWorld: WorldDefinition = {
       narratorPrompt:
         "Describe sealed letters, muttered accusations of incompetence, and courtiers calculating whether defiance will spread.",
       actorIds: ["noble-cassian", "advisor-marcell", "general-sera"],
+      // v2 additions
+      tone: "conspiratorial",
+      location: "The private audience chamber",
+      backstory: "Cassian has been quietly building a coalition of disaffected lords for months, waiting for the right moment to challenge the crown publicly.",
+      involvedGroupIds: ["nobility", "court"],
+      suggestedApproaches: [
+        "Offer concessions to split the noble coalition",
+        "Make an example of Cassian to deter others",
+        "Summon a royal council to publicly address grievances",
+      ],
+      groupConditions: [
+        { groupId: "nobility", metric: "cohesion", condition: "above", threshold: 40 },
+      ],
+      metricHints: [
+        { metricId: "stability", direction: "decrease", magnitude: "large" },
+        { metricId: "pressure", direction: "increase", magnitude: "medium" },
+      ],
+      prerequisiteEventIds: ["prisoner-plea"],
+      expiresAfterTurns: 18,
+      mutuallyExclusiveWith: ["border-raid"],
+      weight: 1,
+      tags: ["political", "escalation"],
     },
   ],
   initialState: {
@@ -432,24 +534,28 @@ export const kingdomWorld: WorldDefinition = {
         trust: 71,
         fear: 24,
         loyalty: 79,
+        respect: 75,
         recentMemory: ["You inherited a brittle court and kept Marcell in place."],
       },
       "general-sera": {
         trust: 63,
         fear: 17,
         loyalty: 68,
+        respect: 60,
         recentMemory: ["You promised the legions their arrears would be addressed."],
       },
       "priest-elan": {
         trust: 58,
         fear: 12,
         loyalty: 61,
+        respect: 70,
         recentMemory: ["Elan believes your conscience is still in contest with the throne."],
       },
       "noble-cassian": {
         trust: 34,
         fear: 22,
         loyalty: 37,
+        respect: 30,
         recentMemory: ["Cassian suspects the crown can be maneuvered under pressure."],
       },
     },
