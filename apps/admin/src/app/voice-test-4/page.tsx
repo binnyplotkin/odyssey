@@ -282,6 +282,7 @@ function OceanField() {
   const oceanRef = useRef<OceanRef | null>(null);
   const smoothRef = useRef({ energy: 0, bass: 0, mid: 0, high: 0, peak: 0 });
   const modeRef = useRef({ activity: 0, loud: 0, presence: 0 });
+  const rollRef = useRef({ offset: 0, speed: 0 });
   const phaseRef = useRef({ a: Math.random() * TAU, b: Math.random() * TAU });
   const sparkCursorRef = useRef(0);
   const frameRef = useRef(0);
@@ -630,6 +631,13 @@ function OceanField() {
     const loudness = m.loud;
     const geomDrive = clamp01(response * 0.22 + energy * 1.85 + peak * 0.52);
     const seaDrive = 0.64 + geomDrive * 0.48;
+    const roll = rollRef.current;
+    const volumeFactor = clamp01(energy * 1.35 + peak * 0.65);
+    const shapedVolume = Math.pow(volumeFactor, 1.2);
+    const targetRollSpeed = response * (0.003 + shapedVolume * 0.018);
+    roll.speed += (targetRollSpeed - roll.speed) * 0.06;
+    if (roll.speed < 0) roll.speed = 0;
+    roll.offset += roll.speed * (dt * 60);
 
     const lowDrive = bass * (0.24 + geomDrive * (1.36 + loudness * 1.12));
     const midDrive = mid * (0.2 + geomDrive * (1.02 + loudness * 0.84));
@@ -654,8 +662,7 @@ function OceanField() {
           const z = -zn * FIELD_DEPTH + 6 + layer.zShift;
           const xw = x / (FIELD_WIDTH * 0.5);
           const zw = zn * 2 - 1 + li * 0.28;
-          const micRoll = response * (0.01 + loudness * 0.024);
-          const xFlow = xw + layerTime * micRoll * (0.58 + li * 0.08);
+          const xFlow = xw + roll.offset * (0.58 + li * 0.08);
           const zwFlow = zw;
           const regionRand = 0.68 + (((Math.sin((xw * 17.13 + zw * 23.91 + li * 3.7) * 12.9898) * 43758.5453) % 1 + 1) % 1) * 0.74;
 
