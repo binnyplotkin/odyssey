@@ -281,7 +281,7 @@ function OceanField() {
   const groupRef = useRef<Group>(null);
   const oceanRef = useRef<OceanRef | null>(null);
   const smoothRef = useRef({ energy: 0, bass: 0, mid: 0, high: 0, peak: 0 });
-  const modeRef = useRef({ activity: 0, loud: 0, presence: 0 });
+  const modeRef = useRef({ activity: 0, loud: 0, presence: 0, engage: 0 });
   const rollRef = useRef({ offset: 0, speed: 0 });
   const phaseRef = useRef({ a: Math.random() * TAU, b: Math.random() * TAU });
   const sparkCursorRef = useRef(0);
@@ -608,11 +608,16 @@ function OceanField() {
     const t = performance.now() * 0.001;
 
     const s = smoothRef.current;
-    s.energy += ((AUDIO.active ? AUDIO.energy : 0) - s.energy) * 0.08;
-    s.bass += ((AUDIO.active ? AUDIO.bass : 0) - s.bass) * 0.06;
-    s.mid += ((AUDIO.active ? AUDIO.mid : 0) - s.mid) * 0.07;
-    s.high += ((AUDIO.active ? AUDIO.high : 0) - s.high) * 0.08;
-    s.peak += ((AUDIO.active ? AUDIO.peak : 0) - s.peak) * 0.1;
+    const m = modeRef.current;
+    m.presence += ((AUDIO.active ? 1 : 0) - m.presence) * 0.045;
+    m.engage += ((AUDIO.active ? 1 : 0) - m.engage) * (AUDIO.active ? 0.028 : 0.04);
+    const activeGate = smoothstep(0, 1, m.engage) ** 1.5;
+
+    s.energy += (((AUDIO.active ? AUDIO.energy : 0) * activeGate) - s.energy) * 0.08;
+    s.bass += (((AUDIO.active ? AUDIO.bass : 0) * activeGate) - s.bass) * 0.06;
+    s.mid += (((AUDIO.active ? AUDIO.mid : 0) * activeGate) - s.mid) * 0.07;
+    s.high += (((AUDIO.active ? AUDIO.high : 0) * activeGate) - s.high) * 0.08;
+    s.peak += (((AUDIO.active ? AUDIO.peak : 0) * activeGate) - s.peak) * 0.1;
 
     const energy = s.energy;
     const bass = 0.05 + s.bass * 0.95;
@@ -620,12 +625,10 @@ function OceanField() {
     const high = 0.04 + s.high * 0.96;
     const peak = s.peak;
 
-    const m = modeRef.current;
-    const detected = AUDIO.active ? smoothstep(0.003, 0.05, energy + peak * 0.26) : 0;
-    const loudTarget = AUDIO.active ? smoothstep(0.05, 0.22, energy + peak * 0.58) : 0;
-    m.presence += ((AUDIO.active ? 1 : 0) - m.presence) * 0.05;
-    m.activity += (detected - m.activity) * 0.08;
-    m.loud += (loudTarget - m.loud) * 0.07;
+    const detected = smoothstep(0.003, 0.05, energy + peak * 0.26) * activeGate;
+    const loudTarget = smoothstep(0.05, 0.22, energy + peak * 0.58) * activeGate;
+    m.activity += (detected - m.activity) * 0.06;
+    m.loud += (loudTarget - m.loud) * 0.055;
 
     const response = m.activity;
     const loudness = m.loud;
@@ -642,7 +645,8 @@ function OceanField() {
     const lowDrive = bass * (0.24 + geomDrive * (1.36 + loudness * 1.12));
     const midDrive = mid * (0.2 + geomDrive * (1.02 + loudness * 0.84));
     const highDrive = high * (0.14 + geomDrive * (0.78 + loudness * 0.62));
-    const globalShimmer = clamp01(0.34 + response * 0.44 + loudness * 0.24 + peak * 0.16);
+    const activeBlend = m.presence;
+    const globalShimmer = clamp01(0.18 + (1 - response) * 0.12 + activeBlend * 0.14 + response * 0.38 + loudness * 0.24 + peak * 0.14);
 
     const tmp = new Color();
     const { a, b } = phaseRef.current;
@@ -651,7 +655,7 @@ function OceanField() {
       const layer = ocean.layers[li];
       const layerTime = t * (1 + li * 0.13);
       const layerDepthNorm = li / Math.max(1, ocean.layers.length - 1);
-      const idleSpeedBoost = 1 + (1 - response) * 0.85;
+      const idleSpeedBoost = 1 + (1 - response) * 3.7;
 
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
@@ -662,8 +666,19 @@ function OceanField() {
           const z = -zn * FIELD_DEPTH + 6 + layer.zShift;
           const xw = x / (FIELD_WIDTH * 0.5);
           const zw = zn * 2 - 1 + li * 0.28;
-          const xFlow = xw + roll.offset * (0.58 + li * 0.08);
-          const zwFlow = zw;
+          const idleBlend = 1 - activeGate;
+          const idleFactor = 1 - response;
+          const idleFlow = layerTime * (0.076 + idleFactor * (0.17 + li * 0.018));
+          const idleSway = Math.sin(layerTime * (0.27 + li * 0.024) + zw * 1.6 + li * 0.4) * (0.028 + idleFactor * 0.05);
+          const acrossRippleA = Math.sin((zw * 0.92 + xw * 0.28) * TAU - layerTime * (0.36 * idleSpeedBoost) + li * 0.31);
+          const acrossRippleB = Math.sin((zw * 1.24 - xw * 0.18) * TAU - layerTime * (0.31 * idleSpeedBoost) + li * 0.57);
+          const rippleDrift = (acrossRippleA * 0.03 + acrossRippleB * 0.024) * (0.56 + idleFactor * 1.05);
+          const xFlow = xw + roll.offset * (0.58 + li * 0.08) + (idleFlow + idleSway + rippleDrift) * idleBlend;
+          const zwFlow =
+            zw +
+            (Math.sin(layerTime * (0.22 + li * 0.022) + xw * 1.8 + li * 0.35) * (0.011 + idleFactor * 0.018) +
+              acrossRippleB * (0.006 + idleFactor * 0.01)) *
+              idleBlend;
           const regionRand = 0.68 + (((Math.sin((xw * 17.13 + zw * 23.91 + li * 3.7) * 12.9898) * 43758.5453) % 1 + 1) % 1) * 0.74;
 
           layer.positions[i * 3] = x;
@@ -767,7 +782,9 @@ function OceanField() {
           const majorSwellA = Math.sin((xFlow * 0.92 + zwFlow * 0.34) * TAU * (1.04 + layerDepthNorm * 0.08) - layerTime * (0.2 - layerDepthNorm * 0.03) + li * 0.74);
           const majorSwellB = Math.sin((xFlow * -0.62 + zwFlow * 0.48) * TAU * (0.92 + layerDepthNorm * 0.14) - layerTime * (0.17 - layerDepthNorm * 0.025) + li * 0.52 + 1.1);
           const majorSwellC = Math.sin((xFlow * 0.34 - zwFlow * 0.82) * TAU * (0.78 + layerDepthNorm * 0.2) - layerTime * (0.14 - layerDepthNorm * 0.02) + li * 0.4 + 2.0);
-          const driftSwell = Math.sin((xFlow * 0.22 + zwFlow * 0.26) * TAU * 0.66 - layerTime * (0.11 * idleSpeedBoost) + li * 0.3);
+          const driftSwell =
+            Math.sin((xFlow * 0.22 + zwFlow * 0.26) * TAU * 0.66 - layerTime * (0.11 * idleSpeedBoost) + li * 0.3) +
+            Math.sin((xFlow * -0.17 + zwFlow * 0.31) * TAU * 0.54 - layerTime * (0.085 * idleSpeedBoost) + li * 0.47) * 0.62;
           const backFamily =
             Math.sin((xFlow * (0.18 + layerDepthNorm * 0.46) + zwFlow * (0.94 - layerDepthNorm * 0.22)) * TAU - layerTime * (0.1 + layerDepthNorm * 0.05) + li * 0.9) * 0.4 +
             Math.sin((xFlow * (-0.14 - layerDepthNorm * 0.38) + zwFlow * (0.72 + layerDepthNorm * 0.2)) * TAU - layerTime * (0.09 + layerDepthNorm * 0.04) + li * 0.6) * 0.32;
@@ -807,14 +824,22 @@ function OceanField() {
           const swellTravel =
             Math.sin((xFlow * 0.42 + zwFlow * 0.2) * TAU - layerTime * 0.21 + li * 0.7) * lowDrive * 0.46 +
             Math.sin((xFlow * -0.24 + zwFlow * 0.38) * TAU - layerTime * 0.18 + li * 0.4) * midDrive * 0.36;
-          const idleMotionGain = 0.12 + (1 - response) * 0.16;
+          const idleMotionGain = (0.17 + (1 - response) * 0.22) * idleBlend;
           const audioEnvelope = clamp01(localAudioField * 0.9 + packetField * 0.42);
           const peakShape = Math.pow(Math.max(0, baseWave), 1.74);
           const canyonShape = Math.pow(Math.max(0, -baseWave), 1.42);
           const sculpted = peakShape * (0.4 + audioEnvelope * 0.84) - canyonShape * (0.3 + audioEnvelope * 0.66);
 
           const audioTopoDrive = clamp01(localAudioField * 0.74 + response * 0.28 + loudness * 0.24);
-          const micPeakBoost = AUDIO.active ? smoothstep(0.04, 0.4, response + loudness * 0.7) : 0;
+          const micPeakBoost = smoothstep(0.04, 0.4, response + loudness * 0.7) * activeGate;
+          const windLift =
+            Math.sin((xFlow * 0.16 + zwFlow * 0.22) * TAU - layerTime * (0.072 * idleSpeedBoost) + li * 0.22) *
+            (0.004 + idleFactor * 0.008) *
+            idleBlend;
+          const idleBackWash =
+            Math.sin((xFlow * 0.11 - zwFlow * 0.19) * TAU - layerTime * (0.066 * idleSpeedBoost) + li * 0.31) *
+            (0.003 + idleFactor * 0.007) *
+            idleBlend;
           const yTarget =
             -0.03 - li * 0.05 +
             (baseWave * baseAmp +
@@ -822,6 +847,8 @@ function OceanField() {
               pointedTops * (audioTopoDrive * (0.1 + micPeakBoost * (0.9 + layer.amp * 0.5))) * (0.64 + regionRand * 0.52 + peakMask * 1.2) +
               sculpted * (0.03 + micPeakBoost * (0.22 + localAudioField * 0.38 + loudness * 0.24)) +
               driftSwell * idleMotionGain +
+              windLift +
+              idleBackWash +
               tideRoll * (0.08 + geomDrive * 0.12) +
               audioWave * localAudioAmp +
               swellTravel +
@@ -838,18 +865,25 @@ function OceanField() {
           layer.prevY[i] = y;
           layer.prevRise[i] = rise;
 
-          const crest = clamp01(
-            Math.abs(y + 0.03) * (0.66 + bass * 0.2 + response * 0.24) +
-              localEnergy * (lowDrive + midDrive) * (0.18 + response * 0.24) +
-              peak * (0.1 + loudness * 0.18),
+          const motionGlow = clamp01(
+            Math.abs(rise) * 210 +
+              Math.max(0, rise - prevRise * 0.42) * 320 +
+              Math.abs(yTarget - y) * 34,
           );
-          const bright = clamp01(crest * (0.66 + globalShimmer * 0.78) + loudness * 0.1 + (1 - response) * 0.3);
+          const crest = clamp01(
+            motionGlow * (0.78 + globalShimmer * 0.42) +
+              localEnergy * (lowDrive + midDrive) * (0.12 + response * 0.18) +
+              peak * (0.08 + loudness * 0.16),
+          );
+          const bright = clamp01(
+            crest * (0.56 + globalShimmer * 0.82) + motionGlow * (0.24 + response * 0.26) + loudness * 0.09,
+          );
 
           tmp.copy(C_DEEP);
-          tmp.lerp(C_BASE, 0.68 + bright * 0.2);
-          tmp.lerp(C_GLOW, bright * (0.62 + response * 0.24) + 0.24);
-          tmp.lerp(C_HIGHLIGHT, bright * (0.44 + response * 0.32 + loudness * 0.2));
-          tmp.lerp(C_CORE, bright * (0.1 + response * 0.3 + loudness * 0.24) + peak * 0.14);
+          tmp.lerp(C_BASE, 0.6 + bright * 0.22);
+          tmp.lerp(C_GLOW, bright * (0.66 + response * 0.26) + motionGlow * 0.16 + 0.16);
+          tmp.lerp(C_HIGHLIGHT, bright * (0.46 + response * 0.34 + loudness * 0.22) + motionGlow * 0.2);
+          tmp.lerp(C_CORE, bright * (0.12 + response * 0.32 + loudness * 0.26) + motionGlow * 0.12 + peak * 0.1);
           tmp.multiplyScalar((1.04 + (1 - zn) * (0.94 + response * 0.22)) * layer.alpha);
 
           layer.colors[i * 3] = tmp.r;
@@ -863,7 +897,15 @@ function OceanField() {
             foregroundBoost;
 
           const crestWindow = rise > 0.0015 && rise < Math.max(0.0024, prevRise * 0.64);
-          if (li <= 1 && geomDrive > 0.08 && crestWindow && y > -0.006 && Math.random() < 0.00034 + loudness * 0.00095) {
+          if (
+            activeGate > 0.35 &&
+            li <= 1 &&
+            response > 0.06 &&
+            geomDrive > 0.08 &&
+            crestWindow &&
+            y > -0.006 &&
+            Math.random() < 0.00006 + response * 0.00028 + loudness * 0.0007
+          ) {
             const sparks = ocean.sparks;
             const slot = sparkCursorRef.current;
             sparkCursorRef.current = (sparkCursorRef.current + 1) % SPARK_COUNT;
@@ -877,7 +919,7 @@ function OceanField() {
             sparks.ages[slot] = 0;
             sparks.life[slot] = 0.45 + Math.random() * (0.6 + loudness * 0.45);
             sparks.sizes[slot] = 0.42 + Math.random() * (0.72 + loudness * 0.9);
-            sparks.alphas[slot] = 0.14 + response * 0.22 + loudness * 0.3;
+            sparks.alphas[slot] = 0.05 + response * 0.18 + loudness * 0.28;
             sparks.colors[s3] = tmp.r;
             sparks.colors[s3 + 1] = tmp.g;
             sparks.colors[s3 + 2] = tmp.b;
@@ -901,7 +943,7 @@ function OceanField() {
           (line.geo.attributes.position as BufferAttribute).needsUpdate = true;
           (line.geo.attributes.color as BufferAttribute).needsUpdate = true;
           const distanceFade = 1 - li / (ocean.layers.length - 1);
-          line.mat.opacity = (0.18 + globalShimmer * 0.24 + loudness * 0.12) * layer.alpha * (0.72 + distanceFade * 0.48);
+          line.mat.opacity = (0.08 + globalShimmer * 0.2 + loudness * 0.1) * layer.alpha * (0.72 + distanceFade * 0.48);
         }
       }
 
@@ -910,7 +952,7 @@ function OceanField() {
       (layer.pointsGeo.attributes.aSize as BufferAttribute).needsUpdate = true;
       const distanceFade = 1 - li / (ocean.layers.length - 1);
       layer.pointsMat.uniforms.uFade.value =
-        (0.9 + globalShimmer * 0.34 + loudness * 0.16 + peak * 0.12) * layer.alpha * (0.74 + distanceFade * 0.56);
+        (0.52 + globalShimmer * 0.28 + loudness * 0.14 + peak * 0.1) * layer.alpha * (0.74 + distanceFade * 0.56);
     }
 
     const sparks = ocean.sparks;
@@ -929,13 +971,13 @@ function OceanField() {
       sparks.positions[i3] += sparks.vel[i3] * dt * 60;
       sparks.positions[i3 + 1] += sparks.vel[i3 + 1] * dt * 60;
       sparks.positions[i3 + 2] += sparks.vel[i3 + 2] * dt * 60;
-      sparks.alphas[i] = (1 - lifeT) * (0.16 + response * 0.26 + loudness * 0.38);
+      sparks.alphas[i] = (1 - lifeT) * (0.04 + response * 0.2 + loudness * 0.34);
     }
     (sparks.geo.attributes.position as BufferAttribute).needsUpdate = true;
     (sparks.geo.attributes.color as BufferAttribute).needsUpdate = true;
     (sparks.geo.attributes.aSize as BufferAttribute).needsUpdate = true;
     (sparks.geo.attributes.aAlpha as BufferAttribute).needsUpdate = true;
-    sparks.mat.uniforms.uGlow.value = 0.16 + response * 0.34 + loudness * 0.46;
+    sparks.mat.uniforms.uGlow.value = 0.08 + response * 0.26 + loudness * 0.4;
 
     const floats = ocean.floats;
     for (let i = 0; i < FLOAT_COUNT; i++) {
