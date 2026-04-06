@@ -181,8 +181,8 @@ function useAudioAnalysis() {
       const ctx = new AudioContext();
       await ctx.resume();
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.34;
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.3;
 
       const src = ctx.createMediaStreamSource(stream);
       src.connect(analyser);
@@ -609,8 +609,8 @@ function OceanField() {
 
     const s = smoothRef.current;
     const m = modeRef.current;
-    m.presence += ((AUDIO.active ? 1 : 0) - m.presence) * 0.045;
-    m.engage += ((AUDIO.active ? 1 : 0) - m.engage) * (AUDIO.active ? 0.028 : 0.04);
+    m.presence += ((AUDIO.active ? 1 : 0) - m.presence) * 0.07;
+    m.engage += ((AUDIO.active ? 1 : 0) - m.engage) * (AUDIO.active ? 0.075 : 0.06);
     const activeGate = smoothstep(0, 1, m.engage) ** 1.5;
 
     s.energy += (((AUDIO.active ? AUDIO.energy : 0) * activeGate) - s.energy) * 0.08;
@@ -627,8 +627,8 @@ function OceanField() {
 
     const detected = smoothstep(0.003, 0.05, energy + peak * 0.26) * activeGate;
     const loudTarget = smoothstep(0.05, 0.22, energy + peak * 0.58) * activeGate;
-    m.activity += (detected - m.activity) * 0.06;
-    m.loud += (loudTarget - m.loud) * 0.055;
+    m.activity += (detected - m.activity) * 0.12;
+    m.loud += (loudTarget - m.loud) * 0.1;
 
     const response = m.activity;
     const loudness = m.loud;
@@ -897,11 +897,13 @@ function OceanField() {
             foregroundBoost;
 
           const crestWindow = rise > 0.0015 && rise < Math.max(0.0024, prevRise * 0.64);
+          const sparkSampleGate = ((r + c + frameRef.current) & 1) === 0;
           if (
             activeGate > 0.35 &&
             li <= 1 &&
             response > 0.06 &&
             geomDrive > 0.08 &&
+            sparkSampleGate &&
             crestWindow &&
             y > -0.006 &&
             Math.random() < 0.00006 + response * 0.00028 + loudness * 0.0007
