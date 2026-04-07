@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import {
   AdditiveBlending,
@@ -89,6 +89,35 @@ const EMITTERS = [
   { ox: -0.62, oz: -0.56, radius: 0.29, speed: 0.09, phase: 2.3 },
   { ox: 0.0, oz: 0.0, radius: 0.34, speed: 0.08, phase: 3.0 },
 ] as const;
+
+/* ── Debug config (mutable, read every frame) ── */
+const DEBUG = {
+  // Wave
+  waveAmplitude: 1.0,
+  waveSpeed: 1.0,
+  swellIntensity: 1.0,
+  // Audio response
+  audioSensitivity: 1.0,
+  geomDriveScale: 1.0,
+  audioSmoothing: 1.0,
+  // Visual
+  pointSizeScale: 1.0,
+  glowIntensity: 1.0,
+  lineOpacity: 1.0,
+  fogNear: 8,
+  fogFar: 66,
+  // Particles
+  sparksEnabled: true,
+  floatsEnabled: true,
+  sparkRate: 1.0,
+  sparkGravity: 1.0,
+  // Colors
+  baseColor: COLORS.base as string,
+  glowColor: COLORS.glow as string,
+  highlightColor: COLORS.highlight as string,
+  coreColor: COLORS.core as string,
+  deepColor: COLORS.deep as string,
+};
 
 function clamp01(v: number) {
   return Math.max(0, Math.min(1, v));
@@ -613,11 +642,20 @@ function OceanField() {
     m.engage += ((AUDIO.active ? 1 : 0) - m.engage) * (AUDIO.active ? 0.075 : 0.06);
     const activeGate = smoothstep(0, 1, m.engage) ** 1.5;
 
-    s.energy += (((AUDIO.active ? AUDIO.energy : 0) * activeGate) - s.energy) * 0.08;
-    s.bass += (((AUDIO.active ? AUDIO.bass : 0) * activeGate) - s.bass) * 0.06;
-    s.mid += (((AUDIO.active ? AUDIO.mid : 0) * activeGate) - s.mid) * 0.07;
-    s.high += (((AUDIO.active ? AUDIO.high : 0) * activeGate) - s.high) * 0.08;
-    s.peak += (((AUDIO.active ? AUDIO.peak : 0) * activeGate) - s.peak) * 0.1;
+    /* Debug: rebuild colors each frame so color picker changes are live */
+    const _cBase = new Color(DEBUG.baseColor);
+    const _cGlow = new Color(DEBUG.glowColor);
+    const _cHighlight = new Color(DEBUG.highlightColor);
+    const _cCore = new Color(DEBUG.coreColor);
+    const _cDeep = new Color(DEBUG.deepColor);
+    const dSens = DEBUG.audioSensitivity;
+    const dSmooth = DEBUG.audioSmoothing;
+
+    s.energy += (((AUDIO.active ? AUDIO.energy * dSens : 0) * activeGate) - s.energy) * (0.08 * dSmooth);
+    s.bass += (((AUDIO.active ? AUDIO.bass * dSens : 0) * activeGate) - s.bass) * (0.06 * dSmooth);
+    s.mid += (((AUDIO.active ? AUDIO.mid * dSens : 0) * activeGate) - s.mid) * (0.07 * dSmooth);
+    s.high += (((AUDIO.active ? AUDIO.high * dSens : 0) * activeGate) - s.high) * (0.08 * dSmooth);
+    s.peak += (((AUDIO.active ? AUDIO.peak * dSens : 0) * activeGate) - s.peak) * (0.1 * dSmooth);
 
     const energy = s.energy;
     const bass = 0.05 + s.bass * 0.95;
@@ -632,7 +670,7 @@ function OceanField() {
 
     const response = m.activity;
     const loudness = m.loud;
-    const geomDrive = clamp01(response * 0.22 + energy * 1.85 + peak * 0.52);
+    const geomDrive = clamp01((response * 0.22 + energy * 1.85 + peak * 0.52) * DEBUG.geomDriveScale);
     const seaDrive = 0.64 + geomDrive * 0.48;
     const roll = rollRef.current;
     const volumeFactor = clamp01(energy * 1.35 + peak * 0.65);
@@ -689,7 +727,7 @@ function OceanField() {
           for (let wi = 0; wi < BROAD_WAVES.length; wi++) {
             const w = BROAD_WAVES[wi];
             const q = xFlow * w.nx + zwFlow * w.nz;
-            const speedScale = seaDrive * (0.74 + wi * 0.06 + li * 0.04);
+            const speedScale = seaDrive * (0.74 + wi * 0.06 + li * 0.04) * DEBUG.waveSpeed;
             const phase = q * TAU * w.freq * 30 - layerTime * (w.speed * speedScale) + w.phase + a * 0.2;
             const comp =
               Math.sin(phase) +
@@ -722,8 +760,8 @@ function OceanField() {
             const bandBias = 0.5 + 0.5 * Math.sin(layerTime * (0.12 + wi * 0.02) + w.phase * 1.6 + li * 0.7);
             const delta = bandBase * (0.3 + bandBias * 0.7) * ((f1 - f2) * 1.02 + travel * 0.28) * 0.5;
 
-            broad += comp * w.amp;
-            audioBroad += comp * w.amp * delta;
+            broad += comp * w.amp * DEBUG.waveAmplitude;
+            audioBroad += comp * w.amp * delta * DEBUG.waveAmplitude;
           }
 
           let midField = 0;
@@ -731,7 +769,7 @@ function OceanField() {
           for (let mi = 0; mi < MID_WAVES.length; mi++) {
             const w = MID_WAVES[mi];
             const q = xFlow * w.nx + zwFlow * w.nz;
-            const speedScale = seaDrive * (0.76 + mi * 0.07 + li * 0.05);
+            const speedScale = seaDrive * (0.76 + mi * 0.07 + li * 0.05) * DEBUG.waveSpeed;
             const phase = q * TAU * w.freq * 22 - layerTime * (w.speed * speedScale) + w.phase + b * 0.16;
             const comp = Math.sin(phase) + Math.sin(phase * 0.66 + w.phase * 1.3) * 0.26;
 
@@ -753,8 +791,8 @@ function OceanField() {
             const bandBias = 0.5 + 0.5 * Math.sin(layerTime * (0.16 + mi * 0.03) + w.phase * 1.5 + li * 0.5);
             const delta = (midDrive * 0.95 + highDrive * 0.9) * (0.24 + bandBias * 0.44 + bandLocal * 0.72) * ((falloff - 0.36) * 0.96 + detail * 0.34) * 0.42;
 
-            midField += comp * w.amp;
-            audioMid += comp * w.amp * delta;
+            midField += comp * w.amp * DEBUG.waveAmplitude;
+            audioMid += comp * w.amp * delta * DEBUG.waveAmplitude;
           }
 
           let localEnergy = 0;
@@ -791,7 +829,8 @@ function OceanField() {
           const tideRoll =
             Math.sin((xFlow * 0.12 + zwFlow * 0.86) * TAU - layerTime * (0.12 * idleSpeedBoost) + li * 0.28) * 0.58 +
             Math.sin((xFlow * -0.08 + zwFlow * 0.64) * TAU - layerTime * (0.09 * idleSpeedBoost) + li * 0.44) * 0.32;
-          const baseWave = (majorSwellA * 0.92 + majorSwellB * 0.76 + majorSwellC * 0.56 + driftSwell * 0.34 + broad * 0.34 + midField * 0.22 + backFamily) * depthBand;
+          const dSwell = DEBUG.swellIntensity;
+          const baseWave = (majorSwellA * 0.92 * dSwell + majorSwellB * 0.76 * dSwell + majorSwellC * 0.56 * dSwell + driftSwell * 0.34 * dSwell + broad * 0.34 + midField * 0.22 + backFamily) * depthBand;
           const audioWave = (audioBroad * 0.72 + audioMid) * depthBand;
 
           const packetA = Math.sin((xFlow * 0.64 + zwFlow * 0.36) * TAU - layerTime * 0.28 + li * 0.7) * 0.5 + 0.5;
@@ -879,11 +918,11 @@ function OceanField() {
             crest * (0.56 + globalShimmer * 0.82) + motionGlow * (0.24 + response * 0.26) + loudness * 0.09,
           );
 
-          tmp.copy(C_DEEP);
-          tmp.lerp(C_BASE, 0.6 + bright * 0.22);
-          tmp.lerp(C_GLOW, bright * (0.66 + response * 0.26) + motionGlow * 0.16 + 0.16);
-          tmp.lerp(C_HIGHLIGHT, bright * (0.46 + response * 0.34 + loudness * 0.22) + motionGlow * 0.2);
-          tmp.lerp(C_CORE, bright * (0.12 + response * 0.32 + loudness * 0.26) + motionGlow * 0.12 + peak * 0.1);
+          tmp.copy(_cDeep);
+          tmp.lerp(_cBase, 0.6 + bright * 0.22);
+          tmp.lerp(_cGlow, bright * (0.66 + response * 0.26) + motionGlow * 0.16 + 0.16);
+          tmp.lerp(_cHighlight, bright * (0.46 + response * 0.34 + loudness * 0.22) + motionGlow * 0.2);
+          tmp.lerp(_cCore, bright * (0.12 + response * 0.32 + loudness * 0.26) + motionGlow * 0.12 + peak * 0.1);
           tmp.multiplyScalar((1.04 + (1 - zn) * (0.94 + response * 0.22)) * layer.alpha);
 
           layer.colors[i * 3] = tmp.r;
@@ -894,11 +933,13 @@ function OceanField() {
             (0.52 + bright * (0.92 + globalShimmer * 1.26 + loudness * 0.58)) *
             (0.88 + (1 - zn) * 0.22) *
             layer.glow *
-            foregroundBoost;
+            foregroundBoost *
+            DEBUG.pointSizeScale;
 
           const crestWindow = rise > 0.0015 && rise < Math.max(0.0024, prevRise * 0.64);
           const sparkSampleGate = ((r + c + frameRef.current) & 1) === 0;
           if (
+            DEBUG.sparksEnabled &&
             activeGate > 0.35 &&
             li <= 1 &&
             response > 0.06 &&
@@ -906,7 +947,7 @@ function OceanField() {
             sparkSampleGate &&
             crestWindow &&
             y > -0.006 &&
-            Math.random() < 0.00006 + response * 0.00028 + loudness * 0.0007
+            Math.random() < (0.00006 + response * 0.00028 + loudness * 0.0007) * DEBUG.sparkRate
           ) {
             const sparks = ocean.sparks;
             const slot = sparkCursorRef.current;
@@ -945,7 +986,7 @@ function OceanField() {
           (line.geo.attributes.position as BufferAttribute).needsUpdate = true;
           (line.geo.attributes.color as BufferAttribute).needsUpdate = true;
           const distanceFade = 1 - li / (ocean.layers.length - 1);
-          line.mat.opacity = (0.08 + globalShimmer * 0.2 + loudness * 0.1) * layer.alpha * (0.72 + distanceFade * 0.48);
+          line.mat.opacity = (0.08 + globalShimmer * 0.2 + loudness * 0.1) * layer.alpha * (0.72 + distanceFade * 0.48) * DEBUG.lineOpacity;
         }
       }
 
@@ -955,6 +996,7 @@ function OceanField() {
       const distanceFade = 1 - li / (ocean.layers.length - 1);
       layer.pointsMat.uniforms.uFade.value =
         (0.52 + globalShimmer * 0.28 + loudness * 0.14 + peak * 0.1) * layer.alpha * (0.74 + distanceFade * 0.56);
+      layer.pointsMat.uniforms.uGlow.value = layer.glow * DEBUG.glowIntensity;
     }
 
     const sparks = ocean.sparks;
@@ -968,7 +1010,7 @@ function OceanField() {
       const i3 = i * 3;
       sparks.vel[i3] *= 0.985;
       sparks.vel[i3 + 2] *= 0.985;
-      sparks.vel[i3 + 1] = sparks.vel[i3 + 1] * 0.968 - (0.004 + loudness * 0.004) * dt * 60;
+      sparks.vel[i3 + 1] = sparks.vel[i3 + 1] * 0.968 - (0.004 + loudness * 0.004) * DEBUG.sparkGravity * dt * 60;
 
       sparks.positions[i3] += sparks.vel[i3] * dt * 60;
       sparks.positions[i3 + 1] += sparks.vel[i3 + 1] * dt * 60;
@@ -982,6 +1024,7 @@ function OceanField() {
     sparks.mat.uniforms.uGlow.value = 0.08 + response * 0.26 + loudness * 0.4;
 
     const floats = ocean.floats;
+    floats.mat.uniforms.uFade.value = DEBUG.floatsEnabled ? (0.2 + response * 0.18 + loudness * 0.2) : 0;
     for (let i = 0; i < FLOAT_COUNT; i++) {
       const i3 = i * 3;
       floats.positions[i3] += floats.drift[i3] * (dt * 60);
@@ -996,7 +1039,6 @@ function OceanField() {
       if (floats.positions[i3 + 2] > 5 || floats.positions[i3 + 2] < -FIELD_DEPTH) floats.drift[i3 + 2] *= -1;
     }
     (floats.geo.attributes.position as BufferAttribute).needsUpdate = true;
-    floats.mat.uniforms.uFade.value = 0.2 + response * 0.18 + loudness * 0.2;
 
     if (groupRef.current) {
       groupRef.current.position.y = -0.32;
@@ -1008,11 +1050,24 @@ function OceanField() {
   return <group ref={groupRef} />;
 }
 
+function FogUpdater() {
+  const { scene } = useThree();
+  useFrame(() => {
+    const fog = scene.fog as import("three").Fog | null;
+    if (fog) {
+      fog.near = DEBUG.fogNear;
+      fog.far = DEBUG.fogFar;
+    }
+  });
+  return null;
+}
+
 function Scene() {
   return (
     <>
       <color attach="background" args={["#041215"]} />
       <fog attach="fog" args={["#052229", 8, 66]} />
+      <FogUpdater />
       <OrbitControls
         enableRotate
         enablePan
@@ -1026,6 +1081,315 @@ function Scene() {
       />
       <OceanField />
     </>
+  );
+}
+
+/* ── Debug Panel ── */
+
+type Section = "wave" | "audio" | "visual" | "particles" | "colors";
+
+const PANEL_STYLE: React.CSSProperties = {
+  position: "absolute",
+  top: 12,
+  right: 12,
+  zIndex: 100,
+  fontFamily: "'SF Mono', 'Cascadia Code', 'Fira Code', monospace",
+  fontSize: 10,
+  color: "#c8ebe7",
+  userSelect: "none",
+};
+
+const SECTION_STYLE: React.CSSProperties = {
+  background: "rgba(4,18,21,0.88)",
+  backdropFilter: "blur(12px)",
+  border: "1px solid rgba(143,209,203,0.18)",
+  borderRadius: 8,
+  padding: "6px 10px",
+  marginBottom: 4,
+};
+
+function Slider({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 2,
+  step = 0.01,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, height: 18 }}>
+      <span style={{ width: 90, opacity: 0.7, flexShrink: 0 }}>{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ flex: 1, accentColor: "#8FD1CB", height: 3 }}
+      />
+      <span style={{ width: 36, textAlign: "right", opacity: 0.5 }}>{value.toFixed(2)}</span>
+    </div>
+  );
+}
+
+function Toggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, height: 18 }}>
+      <span style={{ width: 90, opacity: 0.7, flexShrink: 0 }}>{label}</span>
+      <button
+        onClick={() => onChange(!value)}
+        style={{
+          background: value ? "rgba(143,209,203,0.28)" : "rgba(255,255,255,0.06)",
+          border: value ? "1px solid rgba(143,209,203,0.5)" : "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 4,
+          color: value ? "#bff5ef" : "#667",
+          fontSize: 9,
+          padding: "1px 8px",
+          cursor: "pointer",
+          letterSpacing: "0.04em",
+        }}
+      >
+        {value ? "ON" : "OFF"}
+      </button>
+    </div>
+  );
+}
+
+function ColorInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, height: 18 }}>
+      <span style={{ width: 62, opacity: 0.7, flexShrink: 0 }}>{label}</span>
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ width: 22, height: 14, padding: 0, border: "none", borderRadius: 3, cursor: "pointer", background: "transparent" }}
+      />
+      <span style={{ opacity: 0.4, fontSize: 9 }}>{value}</span>
+    </div>
+  );
+}
+
+function DebugPanel() {
+  const [open, setOpen] = useState(false);
+  const [openSections, setOpenSections] = useState<Record<Section, boolean>>({
+    wave: true,
+    audio: true,
+    visual: true,
+    particles: true,
+    colors: false,
+  });
+  const [, forceRender] = useState(0);
+  const bump = useCallback(() => forceRender((n) => n + 1), []);
+
+  const set = useCallback(
+    <K extends keyof typeof DEBUG>(key: K, val: (typeof DEBUG)[K]) => {
+      (DEBUG as Record<string, unknown>)[key] = val;
+      bump();
+    },
+    [bump],
+  );
+
+  const toggleSection = useCallback((s: Section) => {
+    setOpenSections((prev) => ({ ...prev, [s]: !prev[s] }));
+  }, []);
+
+  const resetAll = useCallback(() => {
+    DEBUG.waveAmplitude = 1;
+    DEBUG.waveSpeed = 1;
+    DEBUG.swellIntensity = 1;
+    DEBUG.audioSensitivity = 1;
+    DEBUG.geomDriveScale = 1;
+    DEBUG.audioSmoothing = 1;
+    DEBUG.pointSizeScale = 1;
+    DEBUG.glowIntensity = 1;
+    DEBUG.lineOpacity = 1;
+    DEBUG.fogNear = 8;
+    DEBUG.fogFar = 66;
+    DEBUG.sparksEnabled = true;
+    DEBUG.floatsEnabled = true;
+    DEBUG.sparkRate = 1;
+    DEBUG.sparkGravity = 1;
+    DEBUG.baseColor = COLORS.base;
+    DEBUG.glowColor = COLORS.glow;
+    DEBUG.highlightColor = COLORS.highlight;
+    DEBUG.coreColor = COLORS.core;
+    DEBUG.deepColor = COLORS.deep;
+    bump();
+  }, [bump]);
+
+  const sectionHeader = (label: string, key: Section) => (
+    <div
+      onClick={() => toggleSection(key)}
+      style={{
+        cursor: "pointer",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: openSections[key] ? 4 : 0,
+        letterSpacing: "0.1em",
+        fontWeight: 700,
+        fontSize: 9,
+        color: "#8FD1CB",
+        textTransform: "uppercase" as const,
+      }}
+    >
+      {label}
+      <span style={{ opacity: 0.4, fontSize: 8 }}>{openSections[key] ? "\u2212" : "+"}</span>
+    </div>
+  );
+
+  if (!open) {
+    return (
+      <div style={PANEL_STYLE}>
+        <button
+          onClick={() => setOpen(true)}
+          style={{
+            background: "rgba(4,18,21,0.82)",
+            backdropFilter: "blur(12px)",
+            border: "1px solid rgba(143,209,203,0.24)",
+            borderRadius: 6,
+            color: "#8FD1CB",
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: "0.1em",
+            padding: "5px 10px",
+            cursor: "pointer",
+          }}
+        >
+          DEBUG
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...PANEL_STYLE, width: 260 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontWeight: 700, fontSize: 10, letterSpacing: "0.12em", color: "#8FD1CB" }}>
+          DEBUG PANEL
+        </span>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button
+            onClick={resetAll}
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 4,
+              color: "#8a9a98",
+              fontSize: 8,
+              padding: "2px 6px",
+              cursor: "pointer",
+              letterSpacing: "0.06em",
+            }}
+          >
+            RESET
+          </button>
+          <button
+            onClick={() => setOpen(false)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#8FD1CB",
+              fontSize: 12,
+              cursor: "pointer",
+              padding: "0 2px",
+            }}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      {/* Wave */}
+      <div style={SECTION_STYLE}>
+        {sectionHeader("Wave", "wave")}
+        {openSections.wave && (
+          <>
+            <Slider label="Amplitude" value={DEBUG.waveAmplitude} onChange={(v) => set("waveAmplitude", v)} max={3} />
+            <Slider label="Speed" value={DEBUG.waveSpeed} onChange={(v) => set("waveSpeed", v)} max={3} />
+            <Slider label="Swell" value={DEBUG.swellIntensity} onChange={(v) => set("swellIntensity", v)} max={3} />
+          </>
+        )}
+      </div>
+
+      {/* Audio */}
+      <div style={SECTION_STYLE}>
+        {sectionHeader("Audio Response", "audio")}
+        {openSections.audio && (
+          <>
+            <Slider label="Sensitivity" value={DEBUG.audioSensitivity} onChange={(v) => set("audioSensitivity", v)} max={3} />
+            <Slider label="Geom Drive" value={DEBUG.geomDriveScale} onChange={(v) => set("geomDriveScale", v)} max={3} />
+            <Slider label="Smoothing" value={DEBUG.audioSmoothing} onChange={(v) => set("audioSmoothing", v)} min={0.1} max={3} />
+          </>
+        )}
+      </div>
+
+      {/* Visual */}
+      <div style={SECTION_STYLE}>
+        {sectionHeader("Visual", "visual")}
+        {openSections.visual && (
+          <>
+            <Slider label="Point Size" value={DEBUG.pointSizeScale} onChange={(v) => set("pointSizeScale", v)} max={3} />
+            <Slider label="Glow" value={DEBUG.glowIntensity} onChange={(v) => set("glowIntensity", v)} max={3} />
+            <Slider label="Line Opacity" value={DEBUG.lineOpacity} onChange={(v) => set("lineOpacity", v)} max={3} />
+            <Slider label="Fog Near" value={DEBUG.fogNear} onChange={(v) => set("fogNear", v)} min={0} max={40} step={0.5} />
+            <Slider label="Fog Far" value={DEBUG.fogFar} onChange={(v) => set("fogFar", v)} min={10} max={120} step={1} />
+          </>
+        )}
+      </div>
+
+      {/* Particles */}
+      <div style={SECTION_STYLE}>
+        {sectionHeader("Particles", "particles")}
+        {openSections.particles && (
+          <>
+            <Toggle label="Sparks" value={DEBUG.sparksEnabled} onChange={(v) => set("sparksEnabled", v)} />
+            <Toggle label="Floats" value={DEBUG.floatsEnabled} onChange={(v) => set("floatsEnabled", v)} />
+            <Slider label="Spark Rate" value={DEBUG.sparkRate} onChange={(v) => set("sparkRate", v)} max={5} />
+            <Slider label="Spark Grav." value={DEBUG.sparkGravity} onChange={(v) => set("sparkGravity", v)} max={3} />
+          </>
+        )}
+      </div>
+
+      {/* Colors */}
+      <div style={SECTION_STYLE}>
+        {sectionHeader("Colors", "colors")}
+        {openSections.colors && (
+          <>
+            <ColorInput label="Base" value={DEBUG.baseColor} onChange={(v) => set("baseColor", v)} />
+            <ColorInput label="Glow" value={DEBUG.glowColor} onChange={(v) => set("glowColor", v)} />
+            <ColorInput label="Highlight" value={DEBUG.highlightColor} onChange={(v) => set("highlightColor", v)} />
+            <ColorInput label="Core" value={DEBUG.coreColor} onChange={(v) => set("coreColor", v)} />
+            <ColorInput label="Deep" value={DEBUG.deepColor} onChange={(v) => set("deepColor", v)} />
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1050,6 +1414,8 @@ export default function VoiceTest4Page() {
       >
         <Scene />
       </Canvas>
+
+      <DebugPanel />
 
       <div
         style={{
