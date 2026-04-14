@@ -1,4 +1,10 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@odyssey/auth/config";
+
+const { auth } = NextAuth({
+  ...authConfig,
+  pages: { signIn: "/login" },
+});
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

@@ -1,6 +1,5 @@
 import NextAuth from "next-auth";
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { drizzle } from "drizzle-orm/neon-http";
@@ -8,9 +7,9 @@ import { neon } from "@neondatabase/serverless";
 import { eq } from "drizzle-orm";
 import { usersTable, accountsTable, authSessionsTable, verificationTokensTable } from "@odyssey/db";
 import { hashPassword, verifyPassword } from "./password";
-import "./types";
+import { authConfig } from "./config";
 
-/* ── Adapter ────────────────────────────────────────────────── */
+/* ── Adapter ────────────────���─────────────────────────��─────── */
 
 function createAdapter() {
   const url = process.env.DATABASE_URL;
@@ -24,7 +23,7 @@ function createAdapter() {
   });
 }
 
-/* ── DB helpers ─────────────────────────────────────────────── */
+/* ── DB helpers ─────────────────────────────────��───────────── */
 
 function getDb() {
   const url = process.env.DATABASE_URL;
@@ -48,7 +47,7 @@ async function getUserRole(id: string): Promise<string> {
   return rows[0]?.role ?? "user";
 }
 
-/* ── Registration ───────────────────────────────────────────── */
+/* ── Registration ────────────────────────────��──────────────── */
 
 export async function registerUser(input: { name: string; email: string; password: string }) {
   const { name, email, password } = input;
@@ -72,14 +71,14 @@ export async function registerUser(input: { name: string; email: string; passwor
   return user;
 }
 
-/* ── Factory ────────────────────────────────────────────────── */
+/* ── Factory ───────────────��───────────────────────────��────── */
 
 export function createAuth(overrides?: Partial<NextAuthConfig>) {
   return NextAuth({
+    ...authConfig,
     adapter: createAdapter(),
-    session: { strategy: "jwt" },
     providers: [
-      Google,
+      ...authConfig.providers,
       Credentials({
         credentials: {
           email: { label: "Email", type: "email" },
@@ -110,8 +109,6 @@ export function createAuth(overrides?: Partial<NextAuthConfig>) {
       async jwt({ token, user }) {
         if (user) {
           token.id = user.id!;
-          // For credentials, role comes from authorize().
-          // For OAuth, the adapter may not include role — fetch from DB.
           token.role = (user as any).role ?? await getUserRole(user.id!);
         }
         return token;
@@ -124,12 +121,13 @@ export function createAuth(overrides?: Partial<NextAuthConfig>) {
       ...overrides?.callbacks,
     },
     pages: {
-      signIn: "/auth/signin",
+      ...authConfig.pages,
       ...overrides?.pages,
     },
     ...overrides,
   });
 }
 
+export { authConfig } from "./config";
 export { hashPassword } from "./password";
 export type { Session } from "next-auth";
