@@ -5,8 +5,17 @@ const nextConfig: NextConfig = {
     "@odyssey/types",
     "@odyssey/utils",
     "@odyssey/db",
+    "@odyssey/auth",
     "@odyssey/ui",
   ],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

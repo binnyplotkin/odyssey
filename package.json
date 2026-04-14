@@ -27,5 +27,8 @@
     "turbo": "^2.8.16",
     "typescript": "^5",
     "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "react-feather": "^2.0.10"
   }
 }

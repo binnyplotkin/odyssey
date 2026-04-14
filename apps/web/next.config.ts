@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
     "@odyssey/types",
     "@odyssey/utils",
     "@odyssey/db",
+    "@odyssey/auth",
     "@odyssey/engine",
     "@odyssey/ui",
   ],

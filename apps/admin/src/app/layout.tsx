@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { AdminShell } from "@/components/admin-shell";
-import { AuthGate } from "@/components/auth-gate";
+import { SessionProvider } from "@/components/session-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,9 +15,7 @@ export default function AdminLayout({
   return (
     <html lang="en">
       <body>
-        <AuthGate>
-          <AdminShell>{children}</AdminShell>
-        </AuthGate>
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );

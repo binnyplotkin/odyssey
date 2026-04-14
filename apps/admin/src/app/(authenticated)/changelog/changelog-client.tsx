@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useHeaderContent } from "@/components/header-context";
 
 /* ── Types ───────────────────────────────────────────────────── */
@@ -91,7 +91,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
 
   /* header */
   const { setContent } = useHeaderContent();
-  useState(() => {
+  useEffect(() => {
     setContent(
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 600, margin: 0 }}>Changelog</h1>
@@ -100,7 +100,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
         </span>
       </div>,
     );
-  });
+  }, [entries.length, setContent]);
 
   /* version lookup */
   const versionMap = useMemo(() => {

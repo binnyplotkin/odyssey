@@ -1,0 +1,135 @@
+import NextAuth from "next-auth";
+import type { NextAuthConfig } from "next-auth";
+import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
+import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { drizzle } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
+import { eq } from "drizzle-orm";
+import { usersTable, accountsTable, authSessionsTable, verificationTokensTable } from "@odyssey/db";
+import { hashPassword, verifyPassword } from "./password";
+import "./types";
+
+/* ── Adapter ────────────────────────────────────────────────── */
+
+function createAdapter() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is required for auth");
+  const db = drizzle({ client: neon(url) });
+  return DrizzleAdapter(db, {
+    usersTable,
+    accountsTable,
+    sessionsTable: authSessionsTable,
+    verificationTokensTable,
+  });
+}
+
+/* ── DB helpers ─────────────────────────────────────────────── */
+
+function getDb() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is required for auth");
+  return drizzle({ client: neon(url) });
+}
+
+async function getUserByEmail(email: string) {
+  const db = getDb();
+  const rows = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  return rows[0] ?? null;
+}
+
+async function getUserRole(id: string): Promise<string> {
+  const db = getDb();
+  const rows = await db
+    .select({ role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, id))
+    .limit(1);
+  return rows[0]?.role ?? "user";
+}
+
+/* ── Registration ───────────────────────────────────────────── */
+
+export async function registerUser(input: { name: string; email: string; password: string }) {
+  const { name, email, password } = input;
+
+  if (!email || !password || password.length < 8) {
+    throw new Error("Password must be at least 8 characters");
+  }
+
+  const existing = await getUserByEmail(email);
+  if (existing) {
+    throw new Error("An account with this email already exists");
+  }
+
+  const passwordHash = await hashPassword(password);
+  const db = getDb();
+  const [user] = await db
+    .insert(usersTable)
+    .values({ name, email, passwordHash, role: "user" })
+    .returning({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: usersTable.role });
+
+  return user;
+}
+
+/* ── Factory ────────────────────────────────────────────────── */
+
+export function createAuth(overrides?: Partial<NextAuthConfig>) {
+  return NextAuth({
+    adapter: createAdapter(),
+    session: { strategy: "jwt" },
+    providers: [
+      Google,
+      Credentials({
+        credentials: {
+          email: { label: "Email", type: "email" },
+          password: { label: "Password", type: "password" },
+        },
+        async authorize(credentials) {
+          const email = credentials?.email as string | undefined;
+          const password = credentials?.password as string | undefined;
+          if (!email || !password) return null;
+
+          const user = await getUserByEmail(email);
+          if (!user || !user.passwordHash) return null;
+
+          const valid = await verifyPassword(password, user.passwordHash);
+          if (!valid) return null;
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            image: user.image,
+            role: user.role,
+          };
+        },
+      }),
+    ],
+    callbacks: {
+      async jwt({ token, user }) {
+        if (user) {
+          token.id = user.id!;
+          // For credentials, role comes from authorize().
+          // For OAuth, the adapter may not include role — fetch from DB.
+          token.role = (user as any).role ?? await getUserRole(user.id!);
+        }
+        return token;
+      },
+      session({ session, token }) {
+        session.user.id = token.id;
+        session.user.role = token.role;
+        return session;
+      },
+      ...overrides?.callbacks,
+    },
+    pages: {
+      signIn: "/auth/signin",
+      ...overrides?.pages,
+    },
+    ...overrides,
+  });
+}
+
+export { hashPassword } from "./password";
+export type { Session } from "next-auth";

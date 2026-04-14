@@ -8,11 +8,13 @@
     "start": "next start"
   },
   "dependencies": {
+    "@odyssey/auth": "*",
     "@odyssey/db": "*",
     "@odyssey/engine": "*",
     "@odyssey/types": "*",
     "@odyssey/ui": "*",
     "@odyssey/utils": "*",
+    "next-auth": "^5.0.0-beta.30",
     "@paper-design/shaders-react": "^0.0.72",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
