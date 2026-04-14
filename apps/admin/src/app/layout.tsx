@@ -13,8 +13,11 @@ export default function AdminLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" data-theme="dark" style={{ colorScheme: "dark" }}>
+      <head>
+        <meta name="color-scheme" content="dark" />
+      </head>
+      <body style={{ background: "#0C0E14" }}>
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
