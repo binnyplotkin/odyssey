@@ -127,6 +127,7 @@ export function Sidebar({
   const icon = brandIcon ?? <DefaultBrandIcon />;
 
   const [collapsed, setCollapsed] = useState(false);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem(storageKey);
@@ -194,6 +195,8 @@ export function Sidebar({
           <button
             type="button"
             onClick={toggle}
+            onMouseEnter={() => setHoveredId("collapse")}
+            onMouseLeave={() => setHoveredId(null)}
             aria-label="Collapse sidebar"
             style={{
               display: "flex",
@@ -203,8 +206,8 @@ export function Sidebar({
               height: 28,
               borderRadius: 6,
               border: "none",
-              background: "var(--panel)",
-              color: "var(--muted)",
+              background: hoveredId === "collapse" ? "var(--accent-soft)" : "var(--panel)",
+              color: hoveredId === "collapse" ? "var(--foreground)" : "var(--muted)",
               cursor: "pointer",
               flexShrink: 0,
               transition: "background 150ms, color 150ms",
@@ -262,12 +265,18 @@ export function Sidebar({
                       fontSize: "0.8125rem",
                       fontWeight: active ? 500 : 400,
                       color: active ? "var(--accent-strong)" : "var(--foreground)",
-                      background: active ? "var(--accent-soft)" : "transparent",
+                      background: active
+                        ? "var(--accent-soft)"
+                        : hoveredId === `nav-${item.href}`
+                          ? "var(--panel)"
+                          : "transparent",
                       transition: "background 150ms, color 150ms, opacity 150ms",
                       cursor: "pointer",
                       textDecoration: "none",
                       whiteSpace: "nowrap",
                     }}
+                    onMouseEnter={() => setHoveredId(`nav-${item.href}`)}
+                    onMouseLeave={() => setHoveredId(null)}
                   >
                     {item.icon && (
                       <span
@@ -358,6 +367,8 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={onSignOut}
+                onMouseEnter={() => setHoveredId("signout")}
+                onMouseLeave={() => setHoveredId(null)}
                 aria-label="Sign out"
                 style={{
                   display: "flex",
@@ -367,8 +378,8 @@ export function Sidebar({
                   height: 28,
                   borderRadius: 6,
                   border: "none",
-                  background: "transparent",
-                  color: "var(--muted)",
+                  background: hoveredId === "signout" ? "var(--panel)" : "transparent",
+                  color: hoveredId === "signout" ? "var(--foreground)" : "var(--muted)",
                   cursor: "pointer",
                   flexShrink: 0,
                   transition: "background 150ms, color 150ms",
@@ -401,6 +412,8 @@ export function Sidebar({
             <button
               type="button"
               onClick={toggle}
+              onMouseEnter={() => setHoveredId("hamburger")}
+              onMouseLeave={() => setHoveredId(null)}
               aria-label="Open sidebar"
               style={{
                 display: "flex",
@@ -410,11 +423,12 @@ export function Sidebar({
                 height: 36,
                 borderRadius: 8,
                 border: "none",
-                background: "var(--panel)",
+                background: hoveredId === "hamburger" ? "var(--accent-soft)" : "var(--panel)",
                 color: "var(--foreground)",
                 cursor: "pointer",
                 marginRight: 12,
                 flexShrink: 0,
+                transition: "background 150ms",
               }}
             >
               <HamburgerIcon />
@@ -466,6 +480,8 @@ export function Sidebar({
                 key={action.label}
                 type="button"
                 onClick={action.onClick}
+                onMouseEnter={() => setHoveredId(`action-${action.label}`)}
+                onMouseLeave={() => setHoveredId(null)}
                 aria-label={action.label}
                 style={{
                   display: "flex",
@@ -475,8 +491,8 @@ export function Sidebar({
                   height: 32,
                   borderRadius: 8,
                   border: "none",
-                  background: "var(--panel)",
-                  color: "var(--muted)",
+                  background: hoveredId === `action-${action.label}` ? "var(--accent-soft)" : "var(--panel)",
+                  color: hoveredId === `action-${action.label}` ? "var(--foreground)" : "var(--muted)",
                   cursor: "pointer",
                   transition: "background 150ms, color 150ms",
                 }}
