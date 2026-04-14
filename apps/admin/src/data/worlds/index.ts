@@ -1,7 +1,8 @@
+import { abrahamsTentWorld } from "@/data/worlds/abrahams-tent";
 import { kingdomWorld } from "@/data/worlds/kingdom";
 import { visibleWorldSchema, WorldDefinition } from "@odyssey/types";
 
-const worlds = [kingdomWorld] satisfies WorldDefinition[];
+const worlds = [abrahamsTentWorld, kingdomWorld] satisfies WorldDefinition[];
 
 export function getWorldDefinitions() {
   return worlds;

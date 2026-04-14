@@ -25,7 +25,7 @@ import type { EntityType, EditorNode } from "./world-editor";
 /* ── Design Tokens (matching Paper designs) ────────────────── */
 
 const T = {
-  canvasBg: "#0A0A0A",
+  canvasBg: "#0C0E14",
   chrome: "#111318",
   nodeBg: "#161620",
   borderSubtle: "rgba(255,255,255,0.07)",

@@ -5,7 +5,7 @@ import { MeshGradient } from "@paper-design/shaders-react";
 
 // ── Color palette ───────────────────────────────────────────────────────
 
-const BASE_COLORS = ["#0a0a0a", "#0d2b2a", "#8fd1cb", "#1a3a38"];
+const BASE_COLORS = ["#0C0E14", "#0d2b2a", "#8fd1cb", "#1a3a38"];
 const WARM_COLORS = ["#0f1410", "#2a3020", "#7abfa0", "#2e4a30"];
 const COOL_COLORS = ["#0a0f1e", "#102848", "#8fd8ef", "#1a3060"];
 const CONFIDENT_COLORS = ["#0f1f1e", "#14524e", "#8fe8df", "#2a5c57"];
@@ -659,7 +659,7 @@ export default function VoiceTestPage() {
           style={{
             padding: "0.5rem 1.5rem", borderRadius: 9999, border: "none",
             background: audio.isRecording ? "var(--danger, #f87171)" : "var(--accent, #8fd1cb)",
-            color: audio.isRecording ? "white" : "#0a0a0a",
+            color: audio.isRecording ? "white" : "#0C0E14",
             fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
             transition: "opacity 0.15s",
           }}

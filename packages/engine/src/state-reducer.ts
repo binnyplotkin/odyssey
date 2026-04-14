@@ -51,35 +51,94 @@ export class HeuristicStateReducer implements StateReducer {
     nextState.npcRelationshipDeltas ??= [];
     nextState.environmentState ??= {};
 
+    // Shared scores used by relationship/group logic below
     const mercyScore = scoreText(
       input.text,
-      ["mercy", "pardon", "forgive", "release", "feed", "reduce taxes", "negotiate"],
-      ["execute", "hang", "punish", "tax harder", "burn", "crush"],
+      world.id === "abrahams-tent"
+        ? ["welcome", "share", "bread", "water", "rest", "sit", "eat", "drink", "guest", "offer", "thank", "grateful"]
+        : ["mercy", "pardon", "forgive", "release", "feed", "reduce taxes", "negotiate"],
+      world.id === "abrahams-tent"
+        ? ["refuse", "leave", "demand", "steal", "threaten", "curse"]
+        : ["execute", "hang", "punish", "tax harder", "burn", "crush"],
     );
 
     const forceScore = scoreText(
       input.text,
-      ["mobilize", "march", "punish", "seize", "command", "discipline"],
-      ["delay", "wait", "hesitate", "retreat"],
+      world.id === "abrahams-tent"
+        ? ["argue", "accuse", "confront", "angry", "fight", "insult"]
+        : ["mobilize", "march", "punish", "seize", "command", "discipline"],
+      world.id === "abrahams-tent"
+        ? ["peace", "calm", "forgive", "understand", "patience"]
+        : ["delay", "wait", "hesitate", "retreat"],
     );
 
-    setMetricValue(nextState, "morale", updateCharacterState(
-      getMetricValue(nextState, "morale"),
-      mercyScore * 4 - Math.max(forceScore, 0),
-    ));
-    setMetricValue(nextState, "stability", updateCharacterState(
-      getMetricValue(nextState, "stability"),
-      Math.max(forceScore, 0) * 2 + mercyScore,
-    ));
-    setMetricValue(nextState, "resources", updateCharacterState(
-      getMetricValue(nextState, "resources"),
-      scoreText(input.text, ["tax", "levy", "seize", "ration"], ["spend", "grant", "compensate"]) *
-        5,
-    ));
-    setMetricValue(nextState, "pressure", updateCharacterState(
-      getMetricValue(nextState, "pressure"),
-      -forceScore * 3 + scoreText(input.text, ["delay", "appease", "ignore"], ["mobilize"]) * 2,
-    ));
+    // World-specific metric scoring
+    if (world.id === "abrahams-tent") {
+      const trustScore = scoreText(
+        input.text,
+        ["listen", "tell", "ask", "story", "name", "truth", "honest", "open"],
+        ["lie", "hide", "deceive", "trick", "secret"],
+      );
+      const revelationScore = scoreText(
+        input.text,
+        ["god", "blessing", "covenant", "promise", "miracle", "pray", "faith", "believe", "angel", "divine"],
+        ["doubt", "deny", "mock", "dismiss"],
+      );
+
+      setMetricValue(nextState, "hospitality", updateCharacterState(
+        getMetricValue(nextState, "hospitality"),
+        mercyScore * 4,
+      ));
+      setMetricValue(nextState, "trust", updateCharacterState(
+        getMetricValue(nextState, "trust"),
+        trustScore * 3 + mercyScore,
+      ));
+      setMetricValue(nextState, "tension", updateCharacterState(
+        getMetricValue(nextState, "tension"),
+        forceScore * 4 - mercyScore,
+      ));
+      setMetricValue(nextState, "revelation", updateCharacterState(
+        getMetricValue(nextState, "revelation"),
+        revelationScore * 3,
+      ));
+
+      // Map to legacy metrics for compatibility
+      setMetricValue(nextState, "morale", updateCharacterState(
+        getMetricValue(nextState, "morale"),
+        mercyScore * 3 + trustScore,
+      ));
+      setMetricValue(nextState, "stability", updateCharacterState(
+        getMetricValue(nextState, "stability"),
+        trustScore * 2 - forceScore * 2,
+      ));
+      setMetricValue(nextState, "resources", updateCharacterState(
+        getMetricValue(nextState, "resources"),
+        mercyScore * 2,
+      ));
+      setMetricValue(nextState, "pressure", updateCharacterState(
+        getMetricValue(nextState, "pressure"),
+        forceScore * 3 - trustScore,
+      ));
+    } else {
+      // Default kingdom-style scoring
+      setMetricValue(nextState, "morale", updateCharacterState(
+        getMetricValue(nextState, "morale"),
+        mercyScore * 4 - Math.max(forceScore, 0),
+      ));
+      setMetricValue(nextState, "stability", updateCharacterState(
+        getMetricValue(nextState, "stability"),
+        Math.max(forceScore, 0) * 2 + mercyScore,
+      ));
+      setMetricValue(nextState, "resources", updateCharacterState(
+        getMetricValue(nextState, "resources"),
+        scoreText(input.text, ["tax", "levy", "seize", "ration"], ["spend", "grant", "compensate"]) *
+          5,
+      ));
+      setMetricValue(nextState, "pressure", updateCharacterState(
+        getMetricValue(nextState, "pressure"),
+        -forceScore * 3 + scoreText(input.text, ["delay", "appease", "ignore"], ["mobilize"]) * 2,
+      ));
+    }
 
     if (activeEvent) {
       nextState.activeEventId = activeEvent.id;

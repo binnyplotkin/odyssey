@@ -693,7 +693,7 @@ function Scene({
 
   return (
     <>
-      <color attach="background" args={["#0a0a0a"]} />
+      <color attach="background" args={["#0C0E14"]} />
       <OrbitControls
         autoRotate={autoOrbit}
         autoRotateSpeed={1.5}
@@ -799,7 +799,7 @@ export default function VoiceTest2Page() {
         position: "fixed",
         inset: 0,
         left: "var(--sidebar-width, 240px)",
-        background: "#0a0a0a",
+        background: "#0C0E14",
         display: "flex",
         flexDirection: "column",
       }}

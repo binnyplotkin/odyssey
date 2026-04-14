@@ -35,7 +35,7 @@
   /* ── Semantic tokens — Dark (default) ─────────────────────── */
 
   /* Surfaces */
-  --background: #000000;
+  --background: #0C0E14;
   --foreground: #f1f5f9;
   --panel: rgba(255, 255, 255, 0.05);
   --panel-strong: rgba(255, 255, 255, 0.12);
@@ -51,7 +51,7 @@
   --accent-soft: rgba(143, 209, 203, 0.12);
 
   /* Text */
-  --muted: rgba(255, 255, 255, 0.50);
+  --muted: rgba(255, 255, 255, 0.60);
 
   /* Status */
   --success: #8CE7D2;

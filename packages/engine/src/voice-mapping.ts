@@ -66,6 +66,36 @@ const ARCHETYPE_BLUEPRINTS: Record<string, VoiceBlueprint> = {
     envKey: "ELEVENLABS_VOICE_CHARACTER_DEFAULT",
     fallbackId: "TxGEqnHWrfWFTfGW9XjX",
   },
+  "host-patriarch": {
+    label: "Host Patriarch",
+    envKey: "ELEVENLABS_VOICE_HOST_PATRIARCH",
+    fallbackId: "21m00Tcm4TlvDq8ikWAM",
+  },
+  "perceptive-matriarch": {
+    label: "Perceptive Matriarch",
+    envKey: "ELEVENLABS_VOICE_PERCEPTIVE_MATRIARCH",
+    fallbackId: "EXAVITQu4vr4xnSDxMaL",
+  },
+  "innocent-child": {
+    label: "Innocent Child",
+    envKey: "ELEVENLABS_VOICE_INNOCENT_CHILD",
+    fallbackId: "jBpfuIE2acCO8z3wKNLl",
+  },
+  "faithful-servant": {
+    label: "Faithful Servant",
+    envKey: "ELEVENLABS_VOICE_FAITHFUL_SERVANT",
+    fallbackId: "pNInz6obpgDQGcFmaJgB",
+  },
+  "formal-angel": {
+    label: "Formal Angel",
+    envKey: "ELEVENLABS_VOICE_FORMAL_ANGEL",
+    fallbackId: "VR6AewLTigWG4xSOukaG",
+  },
+  "mysterious-priest": {
+    label: "Mysterious Priest",
+    envKey: "ELEVENLABS_VOICE_MYSTERIOUS_PRIEST",
+    fallbackId: "ErXwobaYiN019PkySvjV",
+  },
 };
 
 const VOICE_POOL: VoiceBlueprint[] = [
@@ -82,6 +112,12 @@ const ARCHETYPE_HINTS: Record<string, string[]> = {
   "moral-witness": ["warm", "soft", "wise", "reflective"],
   "rival-noble": ["polished", "aristocratic", "smooth", "sharp"],
   default: ["balanced", "clear", "confident"],
+  "host-patriarch": ["warm", "deep", "gentle", "fatherly", "calm"],
+  "perceptive-matriarch": ["dry", "sharp", "feminine", "mature", "knowing"],
+  "innocent-child": ["young", "bright", "high", "innocent", "playful"],
+  "faithful-servant": ["steady", "quiet", "male", "respectful", "solid"],
+  "formal-angel": ["ethereal", "deep", "resonant", "authoritative"],
+  "mysterious-priest": ["rich", "mysterious", "ceremonial", "deep"],
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {

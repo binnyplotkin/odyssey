@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /* ─── constants ─── */
 const ACCENT = "#0d9488";
 const ACCENT_BRIGHT = "#14b8a6";
-const BG = "#0a0a0a";
+const BG = "#0C0E14";
 const GRID_COLOR = "rgba(255,255,255,0.04)";
 const GRID_ACCENT = "rgba(255,255,255,0.08)";
 const WAVEFORM_HISTORY = 4; // seconds of scrolling history
