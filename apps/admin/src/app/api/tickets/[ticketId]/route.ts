@@ -45,6 +45,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       ...(body.phase === null && { phase: null }),
       ...(typeof body.featureId === "string" && { featureId: body.featureId }),
       ...(body.featureId === null && { featureId: null }),
+      ...(typeof body.sortOrder === "number" && { sortOrder: body.sortOrder }),
       ...(typeof body.startDate === "string" && { startDate: body.startDate }),
       ...(body.startDate === null && { startDate: null }),
       ...(typeof body.endDate === "string" && { endDate: body.endDate }),

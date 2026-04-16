@@ -21,6 +21,7 @@ import {
   FileText,
   Triangle,
   Edit3,
+  Book,
 } from "react-feather";
 
 const I = 18; // icon size
@@ -40,6 +41,7 @@ const icons = {
   changelog: <FileText size={I} />,
   tent: <Triangle size={I} />,
   tool: <Tool size={I} />,
+  docs: <Book size={I} />,
 };
 
 /* ── Brand icon ──────────────────────────────────────────────── */
@@ -56,6 +58,7 @@ const items: SidebarItem[] = [
   { href: "/", label: "Dashboard", icon: icons.dashboard },
   { href: "/roadmap", label: "Roadmap", section: "Project", icon: icons.roadmap },
   { href: "/board", label: "Board", section: "Project", icon: icons.board },
+  { href: "/docs", label: "Docs", section: "Project", icon: icons.docs },
   { href: "/changelog", label: "Changelog", section: "Project", icon: icons.changelog },
   { href: "/worlds", label: "Worlds", section: "Data", icon: icons.worlds },
   { href: "/sessions", label: "Sessions", section: "Data", icon: icons.sessions },

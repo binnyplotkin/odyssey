@@ -11,6 +11,7 @@ export type FeatureRecord = {
   description: string | null;
   color: string | null;
   status: string;
+  assignee: string | null;
   startDate: string | null;
   endDate: string | null;
   sortOrder: number;
@@ -24,6 +25,7 @@ export type CreateFeatureInput = {
   description?: string;
   color?: string;
   status: string;
+  assignee?: string;
   startDate?: string;
   endDate?: string;
   sortOrder?: number;
@@ -82,6 +84,7 @@ function memoryStore(): FeatureStore {
         description: input.description ?? null,
         color: input.color ?? null,
         status: input.status,
+        assignee: input.assignee ?? null,
         startDate: input.startDate ?? null,
         endDate: input.endDate ?? null,
         sortOrder: input.sortOrder ?? 0,
@@ -121,6 +124,7 @@ function neonStore(): FeatureStore {
       description: row.description,
       color: row.color,
       status: row.status,
+      assignee: row.assignee,
       startDate: row.startDate,
       endDate: row.endDate,
       sortOrder: row.sortOrder,
@@ -172,6 +176,7 @@ function neonStore(): FeatureStore {
             description: input.description ?? null,
             color: input.color ?? null,
             status: input.status,
+            assignee: input.assignee ?? null,
             startDate: input.startDate ?? null,
             endDate: input.endDate ?? null,
             sortOrder: input.sortOrder ?? 0,

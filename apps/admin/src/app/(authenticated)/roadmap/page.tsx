@@ -1,4 +1,5 @@
-import { getVersionStore, getFeatureStore, getTicketStore } from "@odyssey/db";
+import { eq } from "drizzle-orm";
+import { getVersionStore, getFeatureStore, getTicketStore, getDb, usersTable } from "@odyssey/db";
 import type { RoadmapVersion } from "@/lib/roadmap";
 import RoadmapClient from "./roadmap-client";
 
@@ -30,22 +31,40 @@ async function loadRoadmap(): Promise<RoadmapVersion[]> {
       .filter((f) => f.versionId === v.id)
       .map((f) => {
         const counts = ticketCounts.get(f.id) ?? { total: 0, done: 0 };
-        const featureTickets = (ticketsByFeature.get(f.id) ?? []).map((t) => ({
-          id: t.id,
-          title: t.title,
-          status: t.status,
-          domain: t.domain,
-          priority: t.priority,
-          startDate: t.startDate,
-          endDate: t.endDate,
-        }));
+        const featureTickets = (ticketsByFeature.get(f.id) ?? [])
+          .sort((a, b) => a.sortOrder - b.sortOrder || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+          .map((t) => ({
+            id: t.id,
+            title: t.title,
+            status: t.status,
+            domain: t.domain,
+            priority: t.priority,
+            assignee: t.assignee,
+            sortOrder: t.sortOrder,
+            startDate: t.startDate,
+            endDate: t.endDate,
+          }));
         return { ...f, ticketCount: counts.total, doneTicketCount: counts.done, tickets: featureTickets };
       });
     return { ...v, features };
   });
 }
 
+async function loadTeam(): Promise<{ id: string; name: string; email: string; image: string | null }[]> {
+  const db = getDb();
+  if (!db) return [];
+  try {
+    const rows = await db
+      .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, image: usersTable.image })
+      .from(usersTable)
+      .where(eq(usersTable.role, "admin"));
+    return rows.map((r) => ({ id: r.id, name: r.name ?? r.email, email: r.email, image: r.image }));
+  } catch {
+    return [];
+  }
+}
+
 export default async function RoadmapPage() {
-  const versions = await loadRoadmap();
-  return <RoadmapClient versions={versions} />;
+  const [versions, team] = await Promise.all([loadRoadmap(), loadTeam()]);
+  return <RoadmapClient versions={versions} team={team} />;
 }

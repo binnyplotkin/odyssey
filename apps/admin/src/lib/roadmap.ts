@@ -10,6 +10,8 @@ export type RoadmapTicket = {
   status: string;
   domain: string | null;
   priority: string | null;
+  assignee: string | null;
+  sortOrder: number;
   startDate: string | null;
   endDate: string | null;
 };
@@ -21,6 +23,7 @@ export type RoadmapFeature = {
   description: string | null;
   color: string | null;
   status: string;
+  assignee: string | null;
   startDate: string | null;
   endDate: string | null;
   sortOrder: number;

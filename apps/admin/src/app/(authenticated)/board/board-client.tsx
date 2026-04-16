@@ -108,26 +108,49 @@ function matchesFilters(ticket: Ticket, filters: Filters, featureNameToId?: Map<
   return true;
 }
 
+/* ── Team types ──────────────────────────────────────────────── */
+
+type TeamMember = { id: string; name: string; email: string; image: string | null };
+
+const AVATAR_COLORS = ["#8B7EB5", "#5B9E82", "#5B7FB5", "#C8875A", "#C45C5C", "#5A9E82"];
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
 /* ── Sub-components ───────────────────────────────────────────── */
 
-function AvatarBubble({ initial }: { initial: string }) {
+function AvatarBubble({ assigneeId, team, size = 18 }: { assigneeId: string; team: TeamMember[]; size?: number }) {
+  const idx = team.findIndex((m) => m.id === assigneeId);
+  const member = idx >= 0 ? team[idx] : null;
+  const bg = member ? AVATAR_COLORS[idx % AVATAR_COLORS.length] : "rgba(139, 126, 192, 0.2)";
+  const label = member?.name ?? assigneeId;
+
   return (
     <span
+      title={label}
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 18,
-        height: 18,
+        width: size,
+        height: size,
         borderRadius: "50%",
-        background: "rgba(139, 126, 192, 0.2)",
-        color: "#8B7EB5",
-        fontSize: 8,
+        background: bg,
+        color: "#fff",
+        fontSize: size * 0.44,
         fontWeight: 600,
         flexShrink: 0,
+        overflow: "hidden",
       }}
     >
-      {initial}
+      {member ? (
+        getInitials(member.name)
+      ) : (
+        assigneeId.slice(0, 2).toUpperCase()
+      )}
     </span>
   );
 }
@@ -179,6 +202,7 @@ function TicketCard({
   isDragging,
   isSelected,
   featureName,
+  team,
   onDragStart,
   onClick,
 }: {
@@ -187,6 +211,7 @@ function TicketCard({
   isDragging: boolean;
   isSelected: boolean;
   featureName?: string;
+  team: TeamMember[];
   onDragStart: (e: React.DragEvent, id: string) => void;
   onClick: () => void;
 }) {
@@ -269,7 +294,7 @@ function TicketCard({
           borderTop: "1px solid rgba(255, 255, 255, 0.04)",
         }}
       >
-        {ticket.assignee && <AvatarBubble initial={ticket.assignee} />}
+        {ticket.assignee && <AvatarBubble assigneeId={ticket.assignee} team={team} />}
         <div style={{ flex: 1 }} />
         {featureName && (
           <span
@@ -302,10 +327,12 @@ function FilterDropdown({
   options,
   active,
   onSelect,
+  labelMap,
 }: {
   options: string[];
   active: string | undefined;
   onSelect: (value: string) => void;
+  labelMap?: Map<string, string>;
 }) {
   return (
     <div
@@ -344,7 +371,7 @@ function FilterDropdown({
             textAlign: "left",
           }}
         >
-          {opt}
+          {labelMap?.get(opt) ?? opt}
         </button>
       ))}
     </div>
@@ -354,16 +381,18 @@ function FilterDropdown({
 function NewTicketModal({
   onClose,
   onSave,
+  team,
 }: {
   onClose: () => void;
   onSave: (ticket: Omit<Ticket, "id" | "createdAt">) => void;
+  team: TeamMember[];
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TicketStatus>("backlog");
   const [domain, setDomain] = useState<TicketDomain | "">("");
   const [priority, setPriority] = useState<TicketPriority | "">("");
-  const [assignee, setAssignee] = useState("B");
+  const [assignee, setAssignee] = useState(team[0]?.id ?? "");
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
@@ -517,13 +546,16 @@ function NewTicketModal({
           </div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
             <span style={labelStyle}>Assignee</span>
-            <input
-              style={inputStyle}
+            <select
+              style={selectStyle}
               value={assignee}
               onChange={(e) => setAssignee(e.target.value)}
-              placeholder="Initial (e.g. B)"
-              maxLength={3}
-            />
+            >
+              <option value="">Unassigned</option>
+              {team.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -580,11 +612,13 @@ function TicketDetailSidebar({
   onClose,
   onUpdateTicket,
   featureName,
+  team,
 }: {
   ticket: Ticket;
   onClose: () => void;
   onUpdateTicket: (updated: Ticket) => void;
   featureName?: string;
+  team: TeamMember[];
 }) {
   const [width, setWidth] = useState(() => {
     if (typeof window === "undefined") return SIDEBAR_DEFAULT;
@@ -799,9 +833,9 @@ function TicketDetailSidebar({
             <div style={rowStyle}>
               <span style={labelStyle}>Assignee</span>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <AvatarBubble initial={ticket.assignee} />
+                <AvatarBubble assigneeId={ticket.assignee} team={team} size={20} />
                 <span style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.7)" }}>
-                  {ticket.assignee === "B" ? "Binny" : ticket.assignee}
+                  {team.find((m) => m.id === ticket.assignee)?.name ?? ticket.assignee}
                 </span>
               </div>
             </div>
@@ -1012,7 +1046,7 @@ function TicketDetailSidebar({
 
 export type FeatureOption = { id: string; title: string };
 
-export default function BoardClient({ initialTickets, features = [] }: { initialTickets: Ticket[]; features?: FeatureOption[] }) {
+export default function BoardClient({ initialTickets, features = [], team = [] }: { initialTickets: Ticket[]; features?: FeatureOption[]; team?: TeamMember[] }) {
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
 
   // Feature lookup maps: id→title and title→id
@@ -1026,6 +1060,12 @@ export default function BoardClient({ initialTickets, features = [] }: { initial
     for (const f of features) m.set(f.title, f.id);
     return m;
   }, [features]);
+
+  const teamNameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of team) m.set(t.id, t.name);
+    return m;
+  }, [team]);
 
   // Drag state
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -1207,7 +1247,7 @@ export default function BoardClient({ initialTickets, features = [] }: { initial
                   {pill.label}
                   {isActive && (
                     <span style={{ marginLeft: 4, opacity: 0.6 }}>
-                      {filters[pill.key]}
+                      {pill.key === "assignee" ? (teamNameMap.get(filters[pill.key]!) ?? filters[pill.key]) : filters[pill.key]}
                     </span>
                   )}
                 </button>
@@ -1216,6 +1256,7 @@ export default function BoardClient({ initialTickets, features = [] }: { initial
                     options={uniqueValues(tickets, pill.key, featureIdToName)}
                     active={filters[pill.key]}
                     onSelect={(v) => toggleFilter(pill.key, v)}
+                    labelMap={pill.key === "assignee" ? teamNameMap : undefined}
                   />
                 )}
               </div>
@@ -1373,6 +1414,7 @@ export default function BoardClient({ initialTickets, features = [] }: { initial
                     isDragging={draggedId === ticket.id}
                     isSelected={selectedTicketId === ticket.id}
                     featureName={ticket.featureId ? featureIdToName.get(ticket.featureId) : undefined}
+                    team={team}
                     onDragStart={handleDragStart}
                     onClick={() => setSelectedTicketId(ticket.id)}
                   />
@@ -1390,6 +1432,7 @@ export default function BoardClient({ initialTickets, features = [] }: { initial
           onClose={() => setSelectedTicketId(null)}
           onUpdateTicket={handleUpdateTicket}
           featureName={selectedTicket.featureId ? featureIdToName.get(selectedTicket.featureId) : undefined}
+          team={team}
         />
       )}
 
@@ -1398,6 +1441,7 @@ export default function BoardClient({ initialTickets, features = [] }: { initial
         <NewTicketModal
           onClose={() => setShowModal(false)}
           onSave={handleNewTicket}
+          team={team}
         />
       )}
     </div>

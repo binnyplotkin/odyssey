@@ -1,0 +1,37 @@
+---
+gradientIndex: 0
+---
+
+# Odyssey — Path to MVP
+
+## What We're Building
+
+A voice-first AI simulation engine where players use their voice to enter immersive worlds and have real conversations with characters that feel alive. The MVP is a single demo: **Abraham's Tent** — a 5–10 minute voice conversation with a dramatized Genesis character, grounded in scripture, fully in character.
+
+The architecture is a **pipeline voice agent**: browser mic capture → speech-to-text → LLM orchestrator → text-to-speech → audio playback. Each feature below builds toward a working end-to-end demo.
+
+---
+
+## Feature 1: Live Voice Pipeline — Abraham Demo Slice
+
+<Feature featureId="9b4d4512-25c3-4bb0-be1f-56e1cb89092a" />
+
+The first vertical slice through the entire stack. The goal is to prove the core voice loop works: a user speaks into their mic, Abraham hears them, thinks, and responds — in voice, in character, in real time.
+
+This feature covers model hosting, the initial character prompt, WebSocket streaming, full pipeline wiring, and a presentable demo UI. Nothing after this can begin until we have a working voice conversation.
+
+<Milestone title="Live Voice Pipeline" ticketIds="a3657f36-db6f-4669-bcf4-c4e18296ed93,edbc72c2-88e5-4844-84bb-43bd34c6981d,2375c16e-d84d-494d-bb06-81b5e8d8aca5,ca908a50-0d69-4780-9b78-927c55508aff,e01c70cb-c2d5-411e-8764-f961adbd3732" />
+
+---
+
+## Feature 2: Character Knowledge Graph
+
+<Feature featureId="6aa191bd-06ad-43e1-b3f4-3b2aae95b879" />
+
+A persistent, LLM-maintained knowledge base per character — not naive RAG that re-derives context from scratch every turn, but a structured wiki of interlinked pages that compounds over time. Raw source material (Genesis 11–25, commentary, midrash) is ingested once and compiled into entity pages, event pages, concept pages, relationship maps, timeline awareness, and voice/identity definitions. The knowledge is pre-synthesized: cross-references already built, contradictions already flagged, character perspective already encoded.
+
+At conversation time, a **context curator** traverses the graph to pull exactly the right pages into the LLM prompt — not "top 5 similar chunks" but "what would Abraham actually draw on to respond to this?" This is what makes the character feel grounded rather than generic.
+
+The feature includes a **testing UI** where you chat with the character in text and see the knowledge graph working in real time — which pages are being pulled, which nodes are active, how the context budget is being spent. You can add sources, edit pages, and watch the graph update live.
+
+<Milestone title="Character Knowledge Graph" ticketIds="96b92f4e-3e77-4306-8364-f964f6d4e145,bf4bc97d-1191-409b-8aa0-c07e76713eda,1d956bda-b635-43ea-bc54-33a3404f42be,7a0ccf27-4e58-48fc-9a6b-d3910fd2d561,f256c63b-cf21-4bc9-89f8-681226265e31,2246b7d2-406f-4cc2-9d7f-7bc3dce83039" />

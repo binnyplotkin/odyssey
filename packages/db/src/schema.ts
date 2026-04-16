@@ -103,6 +103,7 @@ export const featuresTable = pgTable("features", {
   description: text("description"),
   color: text("color"),                       // optional override; inherit version color if null
   status: text("status").notNull(),           // planned | active | done
+  assignee: text("assignee"),                 // team member initials or name
   startDate: text("start_date"),              // ISO date
   endDate: text("end_date"),                  // ISO date
   sortOrder: integer("sort_order").notNull().default(0),
@@ -122,6 +123,7 @@ export const ticketsTable = pgTable("tickets", {
   assignee: text("assignee"),
   phase: text("phase"),
   featureId: text("feature_id").references(() => featuresTable.id, { onDelete: "set null" }),
+  sortOrder: integer("sort_order").notNull().default(0),
   startDate: text("start_date"),              // ISO date "2026-03-10"
   endDate: text("end_date"),                  // ISO date "2026-06-30"
   subtasks: jsonb("subtasks"),                // Subtask[]

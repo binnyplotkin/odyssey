@@ -12,6 +12,11 @@ export type GanttBarChange = {
   end: string;
 };
 
+export type GanttTicketReorder = {
+  featureId: string;
+  ticketIds: string[];
+};
+
 export type GanttViewProps = {
   versions: GanttVersion[];
   months: Array<{ label: string; start: string }>;
@@ -19,9 +24,12 @@ export type GanttViewProps = {
   timelineEnd: string;
   selectedFeatureId?: string | null;
   selectedVersionId?: string | null;
+  selectedTicketId?: string | null;
   onFeatureClick?: (featureId: string) => void;
   onVersionClick?: (versionId: string) => void;
+  onTicketClick?: (ticketId: string) => void;
   onBarChange?: (change: GanttBarChange) => void;
+  onTicketReorder?: (reorder: GanttTicketReorder) => void;
 };
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -35,6 +43,21 @@ function pct(date: string, start: string, end: string) {
   const range = toMs(end) - s;
   if (range === 0) return 0;
   return ((toMs(date) - s) / range) * 100;
+}
+
+const ONE_DAY_MS = 86_400_000;
+
+function snapPctToDay(pctVal: number, tlStart: string, tlEnd: string): number {
+  const s = toMs(tlStart);
+  const range = toMs(tlEnd) - s;
+  if (range === 0) return pctVal;
+  const ms = s + (pctVal / 100) * range;
+  const d = new Date(ms);
+  // Round to nearest local midnight
+  const h = d.getHours();
+  if (h >= 12) d.setDate(d.getDate() + 1);
+  d.setHours(0, 0, 0, 0);
+  return ((d.getTime() - s) / range) * 100;
 }
 
 function pctToDate(percent: number, tlStart: string, tlEnd: string): string {
@@ -69,7 +92,7 @@ const LEFT_W = 280;
 
 type VersionRow = { type: "version"; version: GanttVersion; doneCount: number };
 type FeatureRow = { type: "feature"; task: GanttTask; versionColor: string };
-type TicketRow = { type: "ticket"; ticket: GanttTicket; featureColor: string };
+type TicketRow = { type: "ticket"; ticket: GanttTicket; featureColor: string; featureId: string };
 type FlatRow = VersionRow | FeatureRow | TicketRow;
 
 /* ── Drag state ──────────────────────────────────────────────── */
@@ -95,9 +118,12 @@ export default function GanttView({
   timelineEnd,
   selectedFeatureId,
   selectedVersionId,
+  selectedTicketId,
   onFeatureClick,
   onVersionClick,
+  onTicketClick,
   onBarChange,
+  onTicketReorder,
 }: GanttViewProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [featureCollapsed, setFeatureCollapsed] = useState<Record<string, boolean>>({});
@@ -108,6 +134,17 @@ export default function GanttView({
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const leftPanelRef = useRef<HTMLDivElement>(null);
+
+  // ── Ticket reorder drag state ──
+  const [reorderDrag, setReorderDrag] = useState<{
+    ticketId: string;
+    featureId: string;
+    startY: number;
+    currentY: number;
+  } | null>(null);
+  const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
+  const reorderDragRef = useRef(reorderDrag);
+  reorderDragRef.current = reorderDrag;
 
   const toggleVersion = (id: string) =>
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -131,7 +168,7 @@ export default function GanttView({
           if (!featureCollapsed[t.id] && t.tickets && t.tickets.length > 0) {
             for (const tk of t.tickets) {
               if (hasValidDates(tk.start, tk.end)) {
-                result.push({ type: "ticket", ticket: tk, featureColor: t.borderColor });
+                result.push({ type: "ticket", ticket: tk, featureColor: t.borderColor, featureId: t.id });
               }
             }
           }
@@ -196,9 +233,23 @@ export default function GanttView({
 
     const onMove = (e: MouseEvent) => {
       const dx = e.clientX - dragState.startMouseX;
-      const deltaPct = (dx / dragState.containerWidth) * 100;
-      dragDeltaRef.current = deltaPct;
-      setDragDelta(deltaPct);
+      const rawDeltaPct = (dx / dragState.containerWidth) * 100;
+
+      // Snap to day boundaries
+      let snappedDelta: number;
+      if (dragState.mode === "move") {
+        const snappedLeft = snapPctToDay(dragState.origLeftPct + rawDeltaPct, timelineStart, timelineEnd);
+        snappedDelta = snappedLeft - dragState.origLeftPct;
+      } else if (dragState.mode === "resize-left") {
+        const snappedLeft = snapPctToDay(dragState.origLeftPct + rawDeltaPct, timelineStart, timelineEnd);
+        snappedDelta = snappedLeft - dragState.origLeftPct;
+      } else {
+        const snappedRight = snapPctToDay(dragState.origLeftPct + dragState.origWidthPct + rawDeltaPct, timelineStart, timelineEnd);
+        snappedDelta = snappedRight - (dragState.origLeftPct + dragState.origWidthPct);
+      }
+
+      dragDeltaRef.current = snappedDelta;
+      setDragDelta(snappedDelta);
       if (Math.abs(dx) > 3) didDragRef.current = true;
     };
 
@@ -249,6 +300,68 @@ export default function GanttView({
       window.removeEventListener("mouseup", onUp);
     };
   }, [dragState, timelineStart, timelineEnd, onBarChange]);
+
+  // ── Ticket reorder handlers ──────────────────────────────
+
+  const handleReorderMouseDown = useCallback(
+    (e: React.MouseEvent, ticketId: string, featureId: string) => {
+      if (!onTicketReorder) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setReorderDrag({ ticketId, featureId, startY: e.clientY, currentY: e.clientY });
+      document.body.style.cursor = "grabbing";
+      document.body.style.userSelect = "none";
+    },
+    [onTicketReorder],
+  );
+
+  useEffect(() => {
+    if (!reorderDrag) return;
+
+    // Get ticket rows for this feature from the flat rows array
+    const featureTicketRows = rows.filter(
+      (r): r is TicketRow => r.type === "ticket" && r.featureId === reorderDrag.featureId,
+    );
+
+    const onMove = (e: MouseEvent) => {
+      const rd = reorderDragRef.current;
+      if (!rd) return;
+      setReorderDrag((prev) => prev ? { ...prev, currentY: e.clientY } : prev);
+
+      // Calculate which slot we're over
+      const deltaRows = Math.round((e.clientY - rd.startY) / ROW_TICKET);
+      const currentIdx = featureTicketRows.findIndex((r) => r.ticket.id === rd.ticketId);
+      if (currentIdx === -1) return;
+      const targetIdx = Math.max(0, Math.min(featureTicketRows.length - 1, currentIdx + deltaRows));
+      setDropTargetIdx(targetIdx);
+    };
+
+    const onUp = () => {
+      const rd = reorderDragRef.current;
+      if (rd && dropTargetIdx !== null) {
+        const featureTicketIds = featureTicketRows.map((r) => r.ticket.id);
+        const currentIdx = featureTicketIds.indexOf(rd.ticketId);
+        if (currentIdx !== -1 && currentIdx !== dropTargetIdx) {
+          const reordered = [...featureTicketIds];
+          const [moved] = reordered.splice(currentIdx, 1);
+          reordered.splice(dropTargetIdx, 0, moved);
+          onTicketReorder?.({ featureId: rd.featureId, ticketIds: reordered });
+        }
+      }
+      setReorderDrag(null);
+      setDropTargetIdx(null);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reorderDrag?.ticketId, reorderDrag?.featureId, dropTargetIdx, rows, onTicketReorder]);
 
   function getBarPcts(
     rowType: DragRowType,
@@ -580,33 +693,68 @@ export default function GanttView({
 
             // Ticket row
             const tk = row.ticket;
+            const isTicketSelected = selectedTicketId === tk.id;
+            const isBeingReordered = reorderDrag?.ticketId === tk.id;
+            const featureTicketsForRow = rows.filter(
+              (r): r is TicketRow => r.type === "ticket" && r.featureId === row.featureId,
+            );
+            const ticketIdxInFeature = featureTicketsForRow.findIndex((r) => r.ticket.id === tk.id);
+            const showDropBefore = reorderDrag && reorderDrag.featureId === row.featureId && dropTargetIdx === ticketIdxInFeature && !isBeingReordered;
             return (
               <div
                 key={`l-${tk.id}`}
+                onClick={() => { if (!reorderDrag) onTicketClick?.(tk.id); }}
                 style={{
                   height: ROW_TICKET,
                   display: "flex",
                   alignItems: "center",
-                  paddingLeft: 62,
+                  paddingLeft: 50,
                   paddingRight: 16,
                   gap: 6,
                   borderBottom: "1px solid rgba(255, 255, 255, 0.02)",
                   flexShrink: 0,
+                  background: isBeingReordered
+                    ? "rgba(59, 130, 246, 0.12)"
+                    : isTicketSelected
+                      ? "rgba(59, 130, 246, 0.08)"
+                      : undefined,
+                  borderLeft: isTicketSelected ? "2px solid rgba(59, 130, 246, 0.5)" : "2px solid transparent",
+                  cursor: reorderDrag ? undefined : onTicketClick ? "pointer" : undefined,
+                  opacity: isBeingReordered ? 0.5 : 1,
+                  borderTop: showDropBefore ? "2px solid rgba(59, 130, 246, 0.6)" : undefined,
+                  position: "relative",
                 }}
               >
+                {/* Drag handle */}
+                {onTicketReorder && (
+                  <span
+                    onMouseDown={(e) => handleReorderMouseDown(e, tk.id, row.featureId)}
+                    style={{
+                      cursor: "grab",
+                      color: "rgba(255, 255, 255, 0.15)",
+                      fontSize: 9,
+                      flexShrink: 0,
+                      lineHeight: 1,
+                      touchAction: "none",
+                      padding: "2px 4px",
+                    }}
+                  >
+                    ⠿
+                  </span>
+                )}
                 <span
                   style={{
                     width: 4,
                     height: 4,
                     borderRadius: "50%",
-                    background: "rgba(255, 255, 255, 0.2)",
+                    background: isTicketSelected ? "rgba(59, 130, 246, 0.6)" : "rgba(255, 255, 255, 0.2)",
                     flexShrink: 0,
                   }}
                 />
                 <span
                   style={{
                     fontSize: 11,
-                    color: "rgba(255, 255, 255, 0.4)",
+                    color: isTicketSelected ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.4)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -859,17 +1007,21 @@ export default function GanttView({
 
             // Ticket row
             const tk = row.ticket;
+            const ticketSelected = selectedTicketId === tk.id;
             const baseLeft = pct(tk.start, timelineStart, timelineEnd);
             const baseWidth = pct(tk.end, timelineStart, timelineEnd) - baseLeft;
 
             return (
               <div
                 key={`t-${tk.id}`}
+                onClick={() => { if (!didDragRef.current) onTicketClick?.(tk.id); }}
                 style={{
                   height: ROW_TICKET,
                   position: "relative",
                   borderBottom: "1px solid rgba(255, 255, 255, 0.02)",
                   flexShrink: 0,
+                  background: ticketSelected ? "rgba(59, 130, 246, 0.04)" : undefined,
+                  cursor: !isDragging && onTicketClick ? "pointer" : undefined,
                 }}
               >
                 {renderBarWithHandles(
@@ -883,12 +1035,14 @@ export default function GanttView({
                     bottom: 7,
                     borderRadius: 4,
                     background: tk.color,
-                    border: `1px solid ${tk.borderColor}`,
+                    border: ticketSelected ? `2px solid ${tk.borderColor}` : `1px solid ${tk.borderColor}`,
+                    boxShadow: ticketSelected ? `0 0 12px ${tk.borderColor}` : "none",
                     display: "flex",
                     alignItems: "center",
                     paddingInline: 6,
                     minWidth: 1,
                     overflow: "hidden",
+                    cursor: onTicketClick ? "pointer" : undefined,
                   },
                   <span
                     style={{

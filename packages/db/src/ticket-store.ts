@@ -14,6 +14,7 @@ export type TicketRecord = {
   assignee: string | null;
   phase: string | null;
   featureId: string | null;
+  sortOrder: number;
   startDate: string | null;
   endDate: string | null;
   subtasks: unknown | null;
@@ -31,6 +32,7 @@ export type CreateTicketInput = {
   assignee?: string;
   phase?: string;
   featureId?: string;
+  sortOrder?: number;
   startDate?: string;
   endDate?: string;
   subtasks?: unknown;
@@ -92,6 +94,7 @@ function memoryStore(): TicketStore {
         assignee: input.assignee ?? null,
         phase: input.phase ?? null,
         featureId: input.featureId ?? null,
+        sortOrder: input.sortOrder ?? 0,
         startDate: input.startDate ?? null,
         endDate: input.endDate ?? null,
         subtasks: input.subtasks ?? null,
@@ -122,7 +125,7 @@ function memoryStore(): TicketStore {
     async listByFeature(featureId) {
       return Array.from(globalTickets.values())
         .filter((t) => t.featureId === featureId)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        .sort((a, b) => a.sortOrder - b.sortOrder || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     },
   };
 }
@@ -141,6 +144,7 @@ function neonStore(): TicketStore {
       assignee: row.assignee,
       phase: row.phase,
       featureId: row.featureId,
+      sortOrder: row.sortOrder,
       startDate: row.startDate,
       endDate: row.endDate,
       subtasks: row.subtasks,
@@ -193,6 +197,7 @@ function neonStore(): TicketStore {
             assignee: input.assignee ?? null,
             phase: input.phase ?? null,
             featureId: input.featureId ?? null,
+            sortOrder: input.sortOrder ?? 0,
             startDate: input.startDate ?? null,
             endDate: input.endDate ?? null,
             subtasks: input.subtasks ?? null,
@@ -246,7 +251,7 @@ function neonStore(): TicketStore {
       try {
         const rows = await db.select().from(ticketsTable).where(eq(ticketsTable.featureId, featureId));
         return rows.map(normalize).sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          (a, b) => a.sortOrder - b.sortOrder || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         );
       } catch (e: unknown) {
         if (isMissingTable(e)) return memoryStore().listByFeature(featureId);

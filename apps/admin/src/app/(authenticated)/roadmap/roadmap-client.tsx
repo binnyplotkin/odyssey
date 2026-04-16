@@ -4,8 +4,23 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { RoadmapVersion, RoadmapFeature } from "@/lib/roadmap";
 import { versionToGantt, computeTimelineRange } from "@/lib/roadmap";
 import GanttView from "@/components/gantt-view";
-import type { GanttBarChange } from "@/components/gantt-view";
+import type { GanttBarChange, GanttTicketReorder } from "@/components/gantt-view";
 import { useHeaderContent } from "@/components/header-context";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type RoadmapTab = "gantt" | "versions" | "features";
 
@@ -15,6 +30,8 @@ type FeatureTicket = {
   status: string;
   domain: string | null;
   priority: string | null;
+  assignee: string | null;
+  sortOrder: number;
 };
 
 /* ── Sidebar constants ───────────────────────────────────────── */
@@ -23,6 +40,116 @@ const SIDEBAR_MIN = 340;
 const SIDEBAR_MAX = 640;
 const SIDEBAR_DEFAULT = 420;
 const SIDEBAR_KEY = "odyssey-gantt-sidebar-width";
+
+/* ── Team members ───────────────────────────────────────────── */
+
+export type TeamMember = { id: string; name: string; email: string; image: string | null };
+
+const AVATAR_COLORS = ["#8B7EB5", "#5B9E82", "#5B7FB5", "#C8875A", "#C45C5C", "#5A9E82"];
+
+const FEATURE_COLORS = [
+  "#7C5CFC", "#5B7FB5", "#5B9E82", "#C8875A", "#C45C5C",
+  "#8B7EB5", "#3B82F6", "#8CE7D2", "#F59E0B", "#EF4444",
+  "#A855F7", "#EC4899", "#14B8A6", "#64748B", "#F97316",
+];
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function memberColor(index: number): string {
+  return AVATAR_COLORS[index % AVATAR_COLORS.length];
+}
+
+function avatarBadge(
+  assignee: string | null,
+  onSelect: (key: string | null) => void,
+  menuOpen: string | null,
+  setMenuOpen: (id: string | null) => void,
+  rowId: string,
+  team: TeamMember[],
+) {
+  const memberIdx = team.findIndex((m) => m.id === assignee);
+  const member = memberIdx >= 0 ? team[memberIdx] : null;
+  const isOpen = menuOpen === rowId;
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={(e) => { e.stopPropagation(); setMenuOpen(isOpen ? null : rowId); }}
+        style={{
+          width: 24, height: 24, borderRadius: "50%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: member ? memberColor(memberIdx) : "rgba(255, 255, 255, 0.08)",
+          border: member ? "none" : "1.5px dashed rgba(255, 255, 255, 0.2)",
+          color: member ? "#fff" : "rgba(255, 255, 255, 0.3)",
+          fontSize: 10, fontWeight: 600, cursor: "pointer",
+          fontFamily: "inherit", padding: 0, lineHeight: 1,
+          transition: "all 0.15s ease",
+          flexShrink: 0, overflow: "hidden",
+        }}
+        title={member ? member.name : "Unassigned"}
+      >
+        {member ? getInitials(member.name) : "+"}
+      </button>
+      {isOpen && (
+        <div
+          style={{
+            position: "absolute", top: "100%", right: 0, marginTop: 4,
+            background: "rgba(30, 30, 34, 0.98)", border: "1px solid rgba(255, 255, 255, 0.1)",
+            borderRadius: 8, padding: 4, zIndex: 50, minWidth: 160,
+            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {team.map((m, i) => (
+            <button
+              key={m.id}
+              onClick={() => { onSelect(m.id); setMenuOpen(null); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                width: "100%", padding: "6px 10px", border: "none",
+                background: assignee === m.id ? "rgba(255, 255, 255, 0.08)" : "transparent",
+                borderRadius: 5, cursor: "pointer", fontFamily: "inherit",
+                color: "rgba(255, 255, 255, 0.7)", fontSize: 12,
+              }}
+            >
+              <span
+                style={{
+                  width: 20, height: 20, borderRadius: "50%",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: memberColor(i), color: "#fff", fontSize: 9, fontWeight: 600,
+                  overflow: "hidden", flexShrink: 0,
+                }}
+              >
+                {getInitials(m.name)}
+              </span>
+              {m.name}
+            </button>
+          ))}
+          {assignee && (
+            <>
+              <div style={{ height: 1, background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+              <button
+                onClick={() => { onSelect(null); setMenuOpen(null); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", padding: "6px 10px", border: "none",
+                  background: "transparent", borderRadius: 5, cursor: "pointer",
+                  fontFamily: "inherit", color: "rgba(255, 255, 255, 0.4)", fontSize: 12,
+                }}
+              >
+                Unassign
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── Status helpers ──────────────────────────────────────────── */
 
@@ -88,9 +215,75 @@ const TABS: { id: RoadmapTab; label: string }[] = [
   { id: "features", label: "Features" },
 ];
 
+/* ── Sortable ticket row ─────────────────────────────────────── */
+
+function SortableTicketRow({
+  ticket,
+  team,
+  assigneeMenuOpen,
+  setAssigneeMenuOpen,
+  onAssigneeChange,
+}: {
+  ticket: FeatureTicket;
+  team: TeamMember[];
+  assigneeMenuOpen: string | null;
+  setAssigneeMenuOpen: (id: string | null) => void;
+  onAssigneeChange: (ticketId: string, assignee: string | null) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ticket.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "8px 10px",
+    borderRadius: 6,
+    background: isDragging ? "rgba(59, 130, 246, 0.08)" : "rgba(255, 255, 255, 0.03)",
+    border: isDragging ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid rgba(255, 255, 255, 0.05)",
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      {/* Drag handle */}
+      <span
+        {...attributes}
+        {...listeners}
+        style={{
+          cursor: "grab",
+          color: "rgba(255, 255, 255, 0.2)",
+          fontSize: 10,
+          flexShrink: 0,
+          lineHeight: 1,
+          touchAction: "none",
+        }}
+      >
+        ⠿
+      </span>
+      {statusDot(ticket.status === "done" ? "done" : ticket.status === "in-progress" || ticket.status === "review" ? "active" : "planned")}
+      <span style={{ flex: 1, fontSize: 12, color: "rgba(255, 255, 255, 0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {ticket.title}
+      </span>
+      {avatarBadge(
+        ticket.assignee,
+        (key) => onAssigneeChange(ticket.id, key),
+        assigneeMenuOpen,
+        setAssigneeMenuOpen,
+        `ticket-${ticket.id}`,
+        team,
+      )}
+      <span style={{ fontSize: 10, color: "rgba(255, 255, 255, 0.3)", textTransform: "capitalize" }}>
+        {ticket.status}
+      </span>
+    </div>
+  );
+}
+
 /* ── Component ───────────────────────────────────────────────── */
 
-export default function RoadmapClient({ versions: initialVersions }: { versions: RoadmapVersion[] }) {
+export default function RoadmapClient({ versions: initialVersions, team = [] }: { versions: RoadmapVersion[]; team?: TeamMember[] }) {
   const [versions, setVersions] = useState(initialVersions);
   const [tab, setTab] = useState<RoadmapTab>("gantt");
   const [expanded, setExpanded] = useState<string | null>(versions[0]?.id ?? null);
@@ -98,6 +291,13 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
   // Sidebar state
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<{
+    id: string; title: string; description: string | null; status: string;
+    domain: string | null; priority: string | null; assignee: string | null;
+    startDate: string | null; endDate: string | null;
+  } | null>(null);
+  const [ticketLoading, setTicketLoading] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window === "undefined") return SIDEBAR_DEFAULT;
     const saved = localStorage.getItem(SIDEBAR_KEY);
@@ -105,6 +305,16 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
   });
   const [featureTickets, setFeatureTickets] = useState<FeatureTicket[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [assigneeMenuOpen, setAssigneeMenuOpen] = useState<string | null>(null);
+  const [colorMenuOpen, setColorMenuOpen] = useState<string | null>(null);
+
+  // Close menus on outside click
+  useEffect(() => {
+    if (!assigneeMenuOpen && !colorMenuOpen) return;
+    const handler = () => { setAssigneeMenuOpen(null); setColorMenuOpen(null); };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [assigneeMenuOpen, colorMenuOpen]);
 
   // Find selected feature from versions data
   const selectedFeature: (RoadmapFeature & { versionTag: string; versionColor: string }) | null =
@@ -129,6 +339,19 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
       .finally(() => { if (!cancelled) setTicketsLoading(false); });
     return () => { cancelled = true; };
   }, [selectedFeatureId]);
+
+  // Fetch ticket when ticket is selected
+  useEffect(() => {
+    if (!selectedTicketId) { setSelectedTicket(null); return; }
+    let cancelled = false;
+    setTicketLoading(true);
+    fetch(`/api/tickets/${selectedTicketId}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setSelectedTicket(d.ticket ?? null); })
+      .catch(() => { if (!cancelled) setSelectedTicket(null); })
+      .finally(() => { if (!cancelled) setTicketLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedTicketId]);
 
   // Resize refs
   const isDragging = useRef(false);
@@ -195,6 +418,59 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
     });
   }, []);
 
+  // DnD sensors
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  // Reorder tickets handler
+  const handleTicketReorder = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = featureTickets.findIndex((t) => t.id === active.id);
+    const newIndex = featureTickets.findIndex((t) => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(featureTickets, oldIndex, newIndex);
+    setFeatureTickets(reordered);
+
+    // Update versions state so Gantt reflects new order immediately
+    if (selectedFeatureId) {
+      const reorderedIds = reordered.map((t) => t.id);
+      setVersions((prev) =>
+        prev.map((v) => ({
+          ...v,
+          features: v.features.map((f) => {
+            if (f.id !== selectedFeatureId || !f.tickets) return f;
+            const sorted = [...f.tickets].sort(
+              (a, b) => reorderedIds.indexOf(a.id) - reorderedIds.indexOf(b.id),
+            );
+            return { ...f, tickets: sorted };
+          }),
+        })),
+      );
+    }
+
+    // Persist new sortOrder
+    const order = reordered.map((t, i) => ({ id: t.id, sortOrder: i }));
+    await fetch("/api/tickets/reorder", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order }),
+    });
+  }, [featureTickets, selectedFeatureId]);
+
+  // Ticket sidebar update handler
+  const updateTicket = useCallback(async (ticketId: string, patch: Record<string, unknown>) => {
+    setFeatureTickets((prev) =>
+      prev.map((t) => (t.id === ticketId ? { ...t, ...patch } : t)),
+    );
+    await fetch(`/api/tickets/${ticketId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  }, []);
+
   // Version sidebar update handlers
   const updateVersion = useCallback(async (versionId: string, patch: Record<string, unknown>) => {
     setVersions((prev) => prev.map((v) => (v.id === versionId ? { ...v, ...patch } : v)));
@@ -253,6 +529,43 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
       body: JSON.stringify({ startDate: change.start, endDate: change.end }),
     });
   }, []);
+
+  // Gantt ticket reorder handler
+  const handleGanttTicketReorder = useCallback(async (reorder: GanttTicketReorder) => {
+    const { featureId, ticketIds } = reorder;
+
+    // Optimistic update — reorder tickets within the feature in versions state
+    setVersions((prev) =>
+      prev.map((v) => ({
+        ...v,
+        features: v.features.map((f) => {
+          if (f.id !== featureId || !f.tickets) return f;
+          const sorted = [...f.tickets].sort(
+            (a, b) => ticketIds.indexOf(a.id) - ticketIds.indexOf(b.id),
+          );
+          return { ...f, tickets: sorted };
+        }),
+      })),
+    );
+
+    // Also update sidebar featureTickets if same feature is open
+    if (selectedFeatureId === featureId) {
+      setFeatureTickets((prev) => {
+        const sorted = [...prev].sort(
+          (a, b) => ticketIds.indexOf(a.id) - ticketIds.indexOf(b.id),
+        );
+        return sorted;
+      });
+    }
+
+    // Persist
+    const order = ticketIds.map((id, i) => ({ id, sortOrder: i }));
+    await fetch("/api/tickets/reorder", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order }),
+    });
+  }, [selectedFeatureId]);
 
   // Derived data
   const ganttVersions = versions.map(versionToGantt);
@@ -365,15 +678,24 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
                 timelineEnd={timeline.timelineEnd}
                 selectedFeatureId={selectedFeatureId}
                 selectedVersionId={selectedVersionId}
+                selectedTicketId={selectedTicketId}
                 onFeatureClick={(id) => {
                   setSelectedFeatureId(selectedFeatureId === id ? null : id);
                   setSelectedVersionId(null);
+                  setSelectedTicketId(null);
                 }}
                 onVersionClick={(id) => {
                   setSelectedVersionId(selectedVersionId === id ? null : id);
                   setSelectedFeatureId(null);
+                  setSelectedTicketId(null);
+                }}
+                onTicketClick={(id) => {
+                  setSelectedTicketId(selectedTicketId === id ? null : id);
+                  setSelectedFeatureId(null);
+                  setSelectedVersionId(null);
                 }}
                 onBarChange={handleBarChange}
+                onTicketReorder={handleGanttTicketReorder}
               />
             ) : (
               <div style={{ padding: 40, color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No roadmap data yet.</div>
@@ -540,11 +862,12 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
                   <div style={{ padding: "10px 0 4px" }}>
                     <textarea
                       value={selectedVersion.description ?? ""}
-                      onChange={(e) => updateVersionLocal(selectedVersion.id, { description: e.target.value || null })}
+                      onChange={(e) => { updateVersionLocal(selectedVersion.id, { description: e.target.value || null }); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
                       onBlur={() => persistVersion(selectedVersion.id, { description: selectedVersion.description })}
                       placeholder="Add a description..."
+                      ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
                       style={{
-                        width: "100%", minHeight: 60, resize: "vertical",
+                        width: "100%", minHeight: 60, resize: "none", overflow: "hidden",
                         background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
                         borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "rgba(255, 255, 255, 0.6)",
                         lineHeight: 1.5, outline: "none", fontFamily: "inherit",
@@ -596,6 +919,166 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
                       })}
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Ticket detail sidebar ──────────────────── */}
+          {selectedTicketId && selectedTicket && (
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                width: sidebarWidth,
+                display: "flex",
+                flexDirection: "column",
+                background: "var(--background, #0C0E14)",
+                borderLeft: "1px solid rgba(255, 255, 255, 0.1)",
+                boxShadow: "-8px 0 32px rgba(0, 0, 0, 0.4)",
+                zIndex: 50,
+              }}
+            >
+              {/* Resize handle */}
+              <div
+                onMouseDown={onResizeStart}
+                style={{
+                  position: "absolute", left: -3, top: 0, bottom: 0, width: 6,
+                  cursor: "col-resize", zIndex: 10,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <div style={{ width: 2, height: 40, borderRadius: 2, background: "rgba(255, 255, 255, 0.15)" }} />
+              </div>
+
+              {/* Header */}
+              <div
+                style={{
+                  display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                  padding: "14px 20px", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", flexShrink: 0,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    {statusDot(selectedTicket.status === "done" ? "done" : selectedTicket.status === "in-progress" || selectedTicket.status === "review" ? "active" : "planned")}
+                    {statusBadge(selectedTicket.status === "done" ? "done" : selectedTicket.status === "in-progress" || selectedTicket.status === "review" ? "active" : "planned")}
+                    {selectedTicket.domain && (
+                      <span style={{ fontSize: 10, fontWeight: 500, color: "rgba(255, 255, 255, 0.35)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        {selectedTicket.domain}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    value={selectedTicket.title}
+                    onChange={(e) => setSelectedTicket((prev) => prev ? { ...prev, title: e.target.value } : prev)}
+                    onBlur={() => updateTicket(selectedTicketId, { title: selectedTicket.title })}
+                    style={{
+                      fontSize: 17, fontWeight: 600, color: "rgba(255, 255, 255, 0.88)",
+                      margin: 0, lineHeight: 1.3, width: "100%",
+                      background: "transparent", border: "none", outline: "none",
+                      padding: 0, fontFamily: "inherit",
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={() => setSelectedTicketId(null)}
+                  style={{
+                    width: 28, height: 28, borderRadius: 6,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "rgba(255, 255, 255, 0.05)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    color: "rgba(255, 255, 255, 0.4)",
+                    fontSize: 16, cursor: "pointer", flexShrink: 0, marginLeft: 12,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Content */}
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}>
+                  {/* Owner */}
+                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
+                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Owner</span>
+                    {avatarBadge(
+                      selectedTicket.assignee,
+                      (key) => {
+                        setSelectedTicket((prev) => prev ? { ...prev, assignee: key } : prev);
+                        updateTicket(selectedTicketId, { assignee: key });
+                      },
+                      assigneeMenuOpen,
+                      setAssigneeMenuOpen,
+                      `sidebar-ticket-${selectedTicketId}`,
+                      team,
+                    )}
+                  </div>
+
+                  {/* Status */}
+                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
+                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Status</span>
+                    <select
+                      value={selectedTicket.status}
+                      onChange={(e) => {
+                        const newStatus = e.target.value;
+                        setSelectedTicket((prev) => prev ? { ...prev, status: newStatus } : prev);
+                        updateTicket(selectedTicketId, { status: newStatus });
+                      }}
+                      style={{
+                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
+                        borderRadius: 5, padding: "4px 8px", fontSize: 12, color: "rgba(255, 255, 255, 0.6)",
+                        outline: "none", appearance: "none", cursor: "pointer", colorScheme: "dark",
+                      }}
+                    >
+                      <option value="backlog">Backlog</option>
+                      <option value="todo">To Do</option>
+                      <option value="in-progress">In Progress</option>
+                      <option value="review">Review</option>
+                      <option value="done">Done</option>
+                    </select>
+                  </div>
+
+                  {/* Priority */}
+                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
+                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Priority</span>
+                    <select
+                      value={selectedTicket.priority ?? ""}
+                      onChange={(e) => {
+                        const newPriority = e.target.value || null;
+                        setSelectedTicket((prev) => prev ? { ...prev, priority: newPriority } : prev);
+                        updateTicket(selectedTicketId, { priority: newPriority });
+                      }}
+                      style={{
+                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
+                        borderRadius: 5, padding: "4px 8px", fontSize: 12, color: "rgba(255, 255, 255, 0.6)",
+                        outline: "none", appearance: "none", cursor: "pointer", colorScheme: "dark",
+                      }}
+                    >
+                      <option value="">None</option>
+                      <option value="P1">P1</option>
+                      <option value="P2">P2</option>
+                      <option value="P3">P3</option>
+                    </select>
+                  </div>
+
+                  {/* Description */}
+                  <div style={{ padding: "10px 0 4px" }}>
+                    <textarea
+                      value={selectedTicket.description ?? ""}
+                      onChange={(e) => { setSelectedTicket((prev) => prev ? { ...prev, description: e.target.value || null } : prev); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+                      onBlur={() => updateTicket(selectedTicketId, { description: selectedTicket.description })}
+                      placeholder="Add a description..."
+                      ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
+                      style={{
+                        width: "100%", minHeight: 80, resize: "none", overflow: "hidden",
+                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
+                        borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "rgba(255, 255, 255, 0.6)",
+                        lineHeight: 1.5, outline: "none", fontFamily: "inherit",
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -733,6 +1216,59 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
                     </select>
                   </div>
 
+                  {/* Owner */}
+                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
+                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Owner</span>
+                    {avatarBadge(
+                      selectedFeature.assignee ?? null,
+                      (key) => updateFeature(selectedFeature.id, { assignee: key }),
+                      assigneeMenuOpen,
+                      setAssigneeMenuOpen,
+                      `feature-${selectedFeature.id}`,
+                      team,
+                    )}
+                  </div>
+
+                  {/* Color */}
+                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0", position: "relative" }}>
+                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Color</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setColorMenuOpen((prev) => prev === selectedFeature.id ? null : selectedFeature.id); }}
+                      style={{
+                        width: 22, height: 22, borderRadius: "50%",
+                        background: selectedFeature.color ?? selectedFeature.versionColor,
+                        border: "2px solid rgba(255, 255, 255, 0.15)",
+                        cursor: "pointer", padding: 0,
+                      }}
+                    />
+                    {colorMenuOpen === selectedFeature.id && (
+                      <div
+                        style={{
+                          position: "absolute", top: "100%", left: 110, marginTop: 4,
+                          background: "rgba(30, 30, 34, 0.98)", border: "1px solid rgba(255, 255, 255, 0.1)",
+                          borderRadius: 10, padding: 10, zIndex: 60,
+                          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
+                          display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {FEATURE_COLORS.map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => { updateFeature(selectedFeature.id, { color: c }); setColorMenuOpen(null); }}
+                            style={{
+                              width: 24, height: 24, borderRadius: "50%",
+                              background: c,
+                              border: (selectedFeature.color ?? selectedFeature.versionColor) === c ? "2.5px solid #fff" : "2.5px solid transparent",
+                              cursor: "pointer", padding: 0,
+                              transition: "border-color 0.15s ease, transform 0.1s ease",
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Tickets (read-only) */}
                   <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
                     <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Tickets</span>
@@ -758,11 +1294,12 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
                   <div style={{ padding: "10px 0 4px" }}>
                     <textarea
                       value={selectedFeature.description ?? ""}
-                      onChange={(e) => updateFeatureLocal(selectedFeature.id, { description: e.target.value || null })}
+                      onChange={(e) => { updateFeatureLocal(selectedFeature.id, { description: e.target.value || null }); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
                       onBlur={() => persistFeature(selectedFeature.id, { description: selectedFeature.description })}
                       placeholder="Add a description..."
+                      ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
                       style={{
-                        width: "100%", minHeight: 60, resize: "vertical",
+                        width: "100%", minHeight: 60, resize: "none", overflow: "hidden",
                         background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
                         borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "rgba(255, 255, 255, 0.6)",
                         lineHeight: 1.5, outline: "none", fontFamily: "inherit",
@@ -771,7 +1308,7 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
                   </div>
                 </div>
 
-                {/* Tickets list */}
+                {/* Tickets list — sortable */}
                 <div style={{ padding: "16px 20px" }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255, 255, 255, 0.6)", marginBottom: 12 }}>
                     Tickets
@@ -781,33 +1318,22 @@ export default function RoadmapClient({ versions: initialVersions }: { versions:
                   ) : featureTickets.length === 0 ? (
                     <div style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.3)" }}>No tickets linked</div>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      {featureTickets.map((t) => (
-                        <div
-                          key={t.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "8px 10px",
-                            borderRadius: 6,
-                            background: "rgba(255, 255, 255, 0.03)",
-                            border: "1px solid rgba(255, 255, 255, 0.05)",
-                          }}
-                        >
-                          {statusDot(t.status === "done" ? "done" : t.status === "in-progress" || t.status === "review" ? "active" : "planned")}
-                          <span style={{ flex: 1, fontSize: 12, color: "rgba(255, 255, 255, 0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {t.title}
-                          </span>
-                          <span style={{
-                            fontSize: 10, color: "rgba(255, 255, 255, 0.3)",
-                            textTransform: "capitalize",
-                          }}>
-                            {t.status}
-                          </span>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTicketReorder}>
+                      <SortableContext items={featureTickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {featureTickets.map((t) => (
+                            <SortableTicketRow
+                              key={t.id}
+                              ticket={t}
+                              team={team}
+                              assigneeMenuOpen={assigneeMenuOpen}
+                              setAssigneeMenuOpen={setAssigneeMenuOpen}
+                              onAssigneeChange={(ticketId, key) => updateTicket(ticketId, { assignee: key })}
+                            />
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </SortableContext>
+                    </DndContext>
                   )}
                 </div>
               </div>

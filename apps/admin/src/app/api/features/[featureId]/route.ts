@@ -38,6 +38,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       ...(typeof body.color === "string" && { color: body.color }),
       ...(body.color === null && { color: null }),
       ...(typeof body.status === "string" && { status: body.status }),
+      ...(typeof body.assignee === "string" && { assignee: body.assignee }),
+      ...(body.assignee === null && { assignee: null }),
       ...(typeof body.startDate === "string" && { startDate: body.startDate }),
       ...(body.startDate === null && { startDate: null }),
       ...(typeof body.endDate === "string" && { endDate: body.endDate }),

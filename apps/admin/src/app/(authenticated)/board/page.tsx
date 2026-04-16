@@ -1,13 +1,29 @@
-import { getTicketStore, getFeatureStore } from "@odyssey/db";
+import { eq } from "drizzle-orm";
+import { getTicketStore, getFeatureStore, getDb, usersTable } from "@odyssey/db";
 import type { Ticket } from "@/data/board";
 import BoardClient from "./board-client";
 
 export const dynamic = "force-dynamic";
 
+async function loadTeam(): Promise<{ id: string; name: string; email: string; image: string | null }[]> {
+  const db = getDb();
+  if (!db) return [];
+  try {
+    const rows = await db
+      .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, image: usersTable.image })
+      .from(usersTable)
+      .where(eq(usersTable.role, "admin"));
+    return rows.map((r) => ({ id: r.id, name: r.name ?? r.email, email: r.email, image: r.image }));
+  } catch {
+    return [];
+  }
+}
+
 export default async function BoardPage() {
-  const [records, featureRecords] = await Promise.all([
+  const [records, featureRecords, team] = await Promise.all([
     getTicketStore().list(),
     getFeatureStore().list(),
+    loadTeam(),
   ]);
 
   const tickets: Ticket[] = records.map((r) => ({
@@ -29,5 +45,5 @@ export default async function BoardPage() {
 
   const features = featureRecords.map((f) => ({ id: f.id, title: f.title }));
 
-  return <BoardClient initialTickets={tickets} features={features} />;
+  return <BoardClient initialTickets={tickets} features={features} team={team} />;
 }

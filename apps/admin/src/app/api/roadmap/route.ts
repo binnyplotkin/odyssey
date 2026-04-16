@@ -37,6 +37,8 @@ export async function GET() {
             status: t.status,
             domain: t.domain,
             priority: t.priority,
+            assignee: t.assignee,
+            sortOrder: t.sortOrder,
             startDate: t.startDate,
             endDate: t.endDate,
           }));
