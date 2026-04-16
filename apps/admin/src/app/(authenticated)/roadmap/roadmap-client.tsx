@@ -24,6 +24,109 @@ import { CSS } from "@dnd-kit/utilities";
 
 type RoadmapTab = "gantt" | "versions" | "features";
 
+/* ── Inline select (custom dropdown, themed) ────────────────── */
+
+function InlineSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  placeholder = "—",
+}: {
+  value: T | "";
+  onChange: (v: T) => void;
+  options: { value: T; label: string; dot?: string }[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          width: "100%", padding: "4px 8px",
+          background: "var(--input-bg)", border: "1px solid var(--card-border)",
+          borderRadius: 5, cursor: "pointer", fontFamily: "inherit",
+          fontSize: 12, color: selected ? "var(--text-tertiary)" : "var(--text-placeholder)",
+        }}
+      >
+        {selected?.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: selected.dot, flexShrink: 0 }} />}
+        {selected?.label ?? placeholder}
+        <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-quaternary)" }}>▾</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          minWidth: 140, background: "var(--dropdown-bg, var(--background))",
+          border: "1px solid var(--input-border, var(--border))",
+          borderRadius: 8, padding: "4px 0", zIndex: 100,
+          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+          maxHeight: 200, overflowY: "auto",
+        }}>
+          {options.map((opt) => {
+            const isActive = value === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", padding: "7px 12px",
+                  background: isActive ? "rgba(140, 231, 210, 0.08)" : "none",
+                  border: "none", cursor: "pointer", textAlign: "left",
+                  color: isActive ? "var(--accent-strong, var(--accent))" : "var(--text-secondary, var(--foreground))",
+                  fontSize: 11, fontFamily: "inherit",
+                }}
+              >
+                {opt.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: opt.dot, flexShrink: 0 }} />}
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Inline date input (themed) ─────────────────────────────── */
+
+function InlineDateInput({ value, onChange }: {
+  value: string | null | undefined;
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <input
+      type="date"
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+      style={{
+        width: "100%", padding: "4px 8px",
+        background: "var(--input-bg)", border: "1px solid var(--card-border)",
+        borderRadius: 5, fontSize: 12, color: value ? "var(--text-tertiary)" : "var(--text-placeholder)",
+        fontFamily: "var(--font-mono, ui-monospace, monospace)",
+        outline: "none", colorScheme: "inherit",
+      }}
+    />
+  );
+}
+
 type FeatureTicket = {
   id: string;
   title: string;
@@ -82,9 +185,9 @@ function avatarBadge(
         style={{
           width: 24, height: 24, borderRadius: "50%",
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: member ? memberColor(memberIdx) : "rgba(255, 255, 255, 0.08)",
-          border: member ? "none" : "1.5px dashed rgba(255, 255, 255, 0.2)",
-          color: member ? "#fff" : "rgba(255, 255, 255, 0.3)",
+          background: member ? memberColor(memberIdx) : "var(--card-hover)",
+          border: member ? "none" : "1.5px dashed var(--border)",
+          color: member ? "#fff" : "var(--text-quaternary)",
           fontSize: 10, fontWeight: 600, cursor: "pointer",
           fontFamily: "inherit", padding: 0, lineHeight: 1,
           transition: "all 0.15s ease",
@@ -98,7 +201,7 @@ function avatarBadge(
         <div
           style={{
             position: "absolute", top: "100%", right: 0, marginTop: 4,
-            background: "rgba(30, 30, 34, 0.98)", border: "1px solid rgba(255, 255, 255, 0.1)",
+            background: "var(--dropdown-bg, var(--background))", border: "1px solid var(--input-border, var(--border))",
             borderRadius: 8, padding: 4, zIndex: 50, minWidth: 160,
             boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
           }}
@@ -111,9 +214,9 @@ function avatarBadge(
               style={{
                 display: "flex", alignItems: "center", gap: 8,
                 width: "100%", padding: "6px 10px", border: "none",
-                background: assignee === m.id ? "rgba(255, 255, 255, 0.08)" : "transparent",
+                background: assignee === m.id ? "var(--card-hover)" : "transparent",
                 borderRadius: 5, cursor: "pointer", fontFamily: "inherit",
-                color: "rgba(255, 255, 255, 0.7)", fontSize: 12,
+                color: "var(--text-secondary)", fontSize: 12,
               }}
             >
               <span
@@ -131,14 +234,14 @@ function avatarBadge(
           ))}
           {assignee && (
             <>
-              <div style={{ height: 1, background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+              <div style={{ height: 1, background: "var(--card-border)", margin: "4px 0" }} />
               <button
                 onClick={() => { onSelect(null); setMenuOpen(null); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
                   width: "100%", padding: "6px 10px", border: "none",
                   background: "transparent", borderRadius: 5, cursor: "pointer",
-                  fontFamily: "inherit", color: "rgba(255, 255, 255, 0.4)", fontSize: 12,
+                  fontFamily: "inherit", color: "var(--text-quaternary)", fontSize: 12,
                 }}
               >
                 Unassign
@@ -181,7 +284,7 @@ function statusDot(status: string) {
     <span
       style={{
         width: 8, height: 8, borderRadius: "50%",
-        border: "1.5px solid var(--muted, rgba(255,255,255,0.3))", flexShrink: 0,
+        border: "1.5px solid var(--muted)", flexShrink: 0,
       }}
     />
   );
@@ -191,7 +294,7 @@ function statusBadge(status: string) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
     done: { label: "Complete", bg: "rgba(140, 231, 210, 0.15)", color: "var(--success, #8CE7D2)" },
     active: { label: "In Progress", bg: "rgba(143, 209, 203, 0.15)", color: "var(--accent, #8fd1cb)" },
-    planned: { label: "Upcoming", bg: "rgba(255, 255, 255, 0.06)", color: "var(--muted, rgba(255,255,255,0.5))" },
+    planned: { label: "Upcoming", bg: "var(--card-border)", color: "var(--muted)" },
   };
   const s = map[status] ?? map.planned;
   return (
@@ -241,8 +344,8 @@ function SortableTicketRow({
     gap: 8,
     padding: "8px 10px",
     borderRadius: 6,
-    background: isDragging ? "rgba(59, 130, 246, 0.08)" : "rgba(255, 255, 255, 0.03)",
-    border: isDragging ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid rgba(255, 255, 255, 0.05)",
+    background: isDragging ? "rgba(59, 130, 246, 0.08)" : "var(--card)",
+    border: isDragging ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid var(--card-border)",
   };
 
   return (
@@ -253,7 +356,7 @@ function SortableTicketRow({
         {...listeners}
         style={{
           cursor: "grab",
-          color: "rgba(255, 255, 255, 0.2)",
+          color: "var(--text-placeholder)",
           fontSize: 10,
           flexShrink: 0,
           lineHeight: 1,
@@ -263,8 +366,11 @@ function SortableTicketRow({
         ⠿
       </span>
       {statusDot(ticket.status === "done" ? "done" : ticket.status === "in-progress" || ticket.status === "review" ? "active" : "planned")}
-      <span style={{ flex: 1, fontSize: 12, color: "rgba(255, 255, 255, 0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span style={{ flex: 1, fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {ticket.title}
+      </span>
+      <span style={{ fontSize: 10, color: "var(--text-quaternary)", textTransform: "capitalize", flexShrink: 0 }}>
+        {ticket.status}
       </span>
       {avatarBadge(
         ticket.assignee,
@@ -274,9 +380,6 @@ function SortableTicketRow({
         `ticket-${ticket.id}`,
         team,
       )}
-      <span style={{ fontSize: 10, color: "rgba(255, 255, 255, 0.3)", textTransform: "capitalize" }}>
-        {ticket.status}
-      </span>
     </div>
   );
 }
@@ -585,7 +688,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
           style={{
             padding: "5px 14px", borderRadius: 8, border: "none",
             background: tab === t.id ? "rgba(140, 231, 210, 0.12)" : "transparent",
-            color: tab === t.id ? "#8CE7D2" : "rgba(255, 255, 255, 0.45)",
+            color: tab === t.id ? "var(--accent-strong)" : "var(--text-tertiary)",
             fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}
         >
@@ -615,7 +718,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
               style={{
                 padding: "5px 14px", borderRadius: 8, border: "none",
                 background: tab === t.id ? "rgba(140, 231, 210, 0.12)" : "transparent",
-                color: tab === t.id ? "#8CE7D2" : "rgba(255, 255, 255, 0.45)",
+                color: tab === t.id ? "var(--accent-strong)" : "var(--text-tertiary)",
                 fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
               }}
             >
@@ -624,41 +727,6 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
           ))}
         </div>
         <div style={{ flex: 1 }} />
-        {tab === "gantt" && (
-          <>
-            <button
-              style={{
-                padding: "5px 12px", borderRadius: 8,
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                background: "rgba(255, 255, 255, 0.05)",
-                color: "rgba(255, 255, 255, 0.45)",
-                fontSize: 11, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              Phase ▾
-            </button>
-            <button
-              style={{
-                padding: "5px 12px", borderRadius: 8,
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                background: "rgba(255, 255, 255, 0.05)",
-                color: "rgba(255, 255, 255, 0.45)",
-                fontSize: 11, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              Status ▾
-            </button>
-            <button
-              style={{
-                padding: "5px 14px", borderRadius: 8, border: "none",
-                background: "#8CE7D2", color: "#0C0E14",
-                fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              + Version
-            </button>
-          </>
-        )}
       </>
     );
     return () => setContent(null);
@@ -698,7 +766,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 onTicketReorder={handleGanttTicketReorder}
               />
             ) : (
-              <div style={{ padding: 40, color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No roadmap data yet.</div>
+              <div style={{ padding: 40, color: "var(--text-quaternary)", fontSize: 13 }}>No roadmap data yet.</div>
             )}
           </div>
 
@@ -714,7 +782,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 display: "flex",
                 flexDirection: "column",
                 background: "var(--background, #0C0E14)",
-                borderLeft: "1px solid rgba(255, 255, 255, 0.1)",
+                borderLeft: "1px solid var(--input-border)",
                 boxShadow: "-8px 0 32px rgba(0, 0, 0, 0.4)",
                 zIndex: 50,
               }}
@@ -735,7 +803,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   justifyContent: "center",
                 }}
               >
-                <div style={{ width: 2, height: 40, borderRadius: 2, background: "rgba(255, 255, 255, 0.15)" }} />
+                <div style={{ width: 2, height: 40, borderRadius: 2, background: "var(--border)" }} />
               </div>
 
               {/* Header */}
@@ -745,7 +813,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   alignItems: "flex-start",
                   justifyContent: "space-between",
                   padding: "14px 20px",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderBottom: "1px solid var(--divider)",
                   flexShrink: 0,
                 }}
               >
@@ -770,7 +838,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     onChange={(e) => updateVersionLocal(selectedVersion.id, { title: e.target.value })}
                     onBlur={() => persistVersion(selectedVersion.id, { title: selectedVersion.title })}
                     style={{
-                      fontSize: 17, fontWeight: 600, color: "rgba(255, 255, 255, 0.88)",
+                      fontSize: 17, fontWeight: 600, color: "var(--text-primary)",
                       margin: 0, lineHeight: 1.3, width: "100%",
                       background: "transparent", border: "none", outline: "none",
                       padding: 0, fontFamily: "inherit",
@@ -782,9 +850,9 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   style={{
                     width: 28, height: 28, borderRadius: 6,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "rgba(255, 255, 255, 0.05)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                    color: "rgba(255, 255, 255, 0.4)",
+                    background: "var(--input-bg)",
+                    border: "1px solid var(--card-border)",
+                    color: "var(--text-quaternary)",
                     fontSize: 16, cursor: "pointer", flexShrink: 0, marginLeft: 12,
                   }}
                 >
@@ -794,68 +862,70 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
 
               {/* Content */}
               <div style={{ flex: 1, overflowY: "auto" }}>
-                <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}>
-                  {/* Timeline */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Start</span>
-                    <input
-                      type="date"
-                      value={selectedVersion.startDate ?? ""}
-                      onChange={(e) => updateVersion(selectedVersion.id, { startDate: e.target.value || null })}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 5, padding: "4px 8px", fontSize: 12, color: "rgba(255, 255, 255, 0.6)",
-                        fontFamily: "var(--font-mono, ui-monospace, monospace)", outline: "none", colorScheme: "dark",
-                      }}
-                    />
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>End</span>
-                    <input
-                      type="date"
-                      value={selectedVersion.endDate ?? ""}
-                      onChange={(e) => updateVersion(selectedVersion.id, { endDate: e.target.value || null })}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 5, padding: "4px 8px", fontSize: 12, color: "rgba(255, 255, 255, 0.6)",
-                        fontFamily: "var(--font-mono, ui-monospace, monospace)", outline: "none", colorScheme: "dark",
-                      }}
-                    />
-                  </div>
-
-                  {/* Status */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Status</span>
-                    <select
-                      value={selectedVersion.status}
-                      onChange={(e) => updateVersion(selectedVersion.id, { status: e.target.value })}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 5, padding: "4px 8px", fontSize: 12, color: "rgba(255, 255, 255, 0.6)",
-                        outline: "none", appearance: "none", cursor: "pointer", colorScheme: "dark",
-                      }}
-                    >
-                      <option value="planned">Planned</option>
-                      <option value="active">Active</option>
-                      <option value="done">Done</option>
-                    </select>
-                  </div>
-
-                  {/* Color */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Color</span>
-                    <input
-                      type="color"
-                      value={selectedVersion.color}
-                      onChange={(e) => updateVersion(selectedVersion.id, { color: e.target.value })}
-                      style={{
-                        width: 28, height: 28, padding: 0, border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 5, cursor: "pointer", background: "transparent",
-                      }}
-                    />
-                    <span style={{ marginLeft: 8, fontSize: 11, color: "rgba(255, 255, 255, 0.4)", fontFamily: "var(--font-mono, ui-monospace, monospace)" }}>
-                      {selectedVersion.color}
-                    </span>
+                <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--divider)" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
+                    {/* Start */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Start</div>
+                      <InlineDateInput value={selectedVersion.startDate} onChange={(v) => updateVersion(selectedVersion.id, { startDate: v })} />
+                    </div>
+                    {/* End */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>End</div>
+                      <InlineDateInput value={selectedVersion.endDate} onChange={(v) => updateVersion(selectedVersion.id, { endDate: v })} />
+                    </div>
+                    {/* Status */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Status</div>
+                      <InlineSelect
+                        value={selectedVersion.status}
+                        onChange={(v) => updateVersion(selectedVersion.id, { status: v })}
+                        options={[
+                          { value: "planned", label: "Planned", dot: "var(--text-quaternary)" },
+                          { value: "active", label: "Active", dot: "#60a5fa" },
+                          { value: "done", label: "Done", dot: "#34d399" },
+                        ]}
+                      />
+                    </div>
+                    {/* Color */}
+                    <div style={{ padding: "4px 0", position: "relative" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Color</div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setColorMenuOpen((prev) => prev === selectedVersion.id ? null : selectedVersion.id); }}
+                        style={{
+                          width: 22, height: 22, borderRadius: "50%",
+                          background: selectedVersion.color,
+                          border: "2px solid var(--border)",
+                          cursor: "pointer", padding: 0,
+                        }}
+                      />
+                      {colorMenuOpen === selectedVersion.id && (
+                        <div
+                          style={{
+                            position: "absolute", top: "100%", left: 0, marginTop: 4,
+                            background: "var(--dropdown-bg, var(--background))", border: "1px solid var(--input-border, var(--border))",
+                            borderRadius: 10, padding: 10, zIndex: 60,
+                            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
+                            display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6,
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {FEATURE_COLORS.map((c) => (
+                            <button
+                              key={c}
+                              onClick={() => { updateVersion(selectedVersion.id, { color: c }); setColorMenuOpen(null); }}
+                              style={{
+                                width: 24, height: 24, borderRadius: "50%",
+                                background: c,
+                                border: selectedVersion.color === c ? "2.5px solid #fff" : "2.5px solid transparent",
+                                cursor: "pointer", padding: 0,
+                                transition: "border-color 0.15s ease, transform 0.1s ease",
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Description */}
@@ -868,8 +938,8 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                       ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
                       style={{
                         width: "100%", minHeight: 60, resize: "none", overflow: "hidden",
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "rgba(255, 255, 255, 0.6)",
+                        background: "var(--input-bg)", border: "1px solid var(--card-border)",
+                        borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "var(--text-tertiary)",
                         lineHeight: 1.5, outline: "none", fontFamily: "inherit",
                       }}
                     />
@@ -878,11 +948,11 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
 
                 {/* Features list */}
                 <div style={{ padding: "16px 20px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255, 255, 255, 0.6)", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12 }}>
                     Features ({selectedVersion.features.length})
                   </div>
                   {selectedVersion.features.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.3)" }}>No features yet</div>
+                    <div style={{ fontSize: 12, color: "var(--text-quaternary)" }}>No features yet</div>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       {selectedVersion.features.map((f) => {
@@ -900,17 +970,17 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                               gap: 8,
                               padding: "8px 10px",
                               borderRadius: 6,
-                              background: "rgba(255, 255, 255, 0.03)",
-                              border: "1px solid rgba(255, 255, 255, 0.05)",
+                              background: "var(--card)",
+                              border: "1px solid var(--card-border)",
                               cursor: "pointer",
                             }}
                           >
                             {statusDot(f.status)}
-                            <span style={{ flex: 1, fontSize: 12, color: "rgba(255, 255, 255, 0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <span style={{ flex: 1, fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {f.title}
                             </span>
                             {f.ticketCount > 0 && (
-                              <span style={{ fontSize: 10, color: "rgba(255, 255, 255, 0.3)" }}>
+                              <span style={{ fontSize: 10, color: "var(--text-quaternary)" }}>
                                 {progress}%
                               </span>
                             )}
@@ -936,7 +1006,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 display: "flex",
                 flexDirection: "column",
                 background: "var(--background, #0C0E14)",
-                borderLeft: "1px solid rgba(255, 255, 255, 0.1)",
+                borderLeft: "1px solid var(--input-border)",
                 boxShadow: "-8px 0 32px rgba(0, 0, 0, 0.4)",
                 zIndex: 50,
               }}
@@ -950,14 +1020,14 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
               >
-                <div style={{ width: 2, height: 40, borderRadius: 2, background: "rgba(255, 255, 255, 0.15)" }} />
+                <div style={{ width: 2, height: 40, borderRadius: 2, background: "var(--border)" }} />
               </div>
 
               {/* Header */}
               <div
                 style={{
                   display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-                  padding: "14px 20px", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", flexShrink: 0,
+                  padding: "14px 20px", borderBottom: "1px solid var(--divider)", flexShrink: 0,
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -965,7 +1035,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     {statusDot(selectedTicket.status === "done" ? "done" : selectedTicket.status === "in-progress" || selectedTicket.status === "review" ? "active" : "planned")}
                     {statusBadge(selectedTicket.status === "done" ? "done" : selectedTicket.status === "in-progress" || selectedTicket.status === "review" ? "active" : "planned")}
                     {selectedTicket.domain && (
-                      <span style={{ fontSize: 10, fontWeight: 500, color: "rgba(255, 255, 255, 0.35)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-quaternary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                         {selectedTicket.domain}
                       </span>
                     )}
@@ -975,7 +1045,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     onChange={(e) => setSelectedTicket((prev) => prev ? { ...prev, title: e.target.value } : prev)}
                     onBlur={() => updateTicket(selectedTicketId, { title: selectedTicket.title })}
                     style={{
-                      fontSize: 17, fontWeight: 600, color: "rgba(255, 255, 255, 0.88)",
+                      fontSize: 17, fontWeight: 600, color: "var(--text-primary)",
                       margin: 0, lineHeight: 1.3, width: "100%",
                       background: "transparent", border: "none", outline: "none",
                       padding: 0, fontFamily: "inherit",
@@ -987,9 +1057,9 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   style={{
                     width: 28, height: 28, borderRadius: 6,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "rgba(255, 255, 255, 0.05)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                    color: "rgba(255, 255, 255, 0.4)",
+                    background: "var(--input-bg)",
+                    border: "1px solid var(--card-border)",
+                    color: "var(--text-quaternary)",
                     fontSize: 16, cursor: "pointer", flexShrink: 0, marginLeft: 12,
                   }}
                 >
@@ -999,68 +1069,81 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
 
               {/* Content */}
               <div style={{ flex: 1, overflowY: "auto" }}>
-                <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}>
-                  {/* Owner */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Owner</span>
-                    {avatarBadge(
-                      selectedTicket.assignee,
-                      (key) => {
-                        setSelectedTicket((prev) => prev ? { ...prev, assignee: key } : prev);
-                        updateTicket(selectedTicketId, { assignee: key });
-                      },
-                      assigneeMenuOpen,
-                      setAssigneeMenuOpen,
-                      `sidebar-ticket-${selectedTicketId}`,
-                      team,
-                    )}
-                  </div>
-
-                  {/* Status */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Status</span>
-                    <select
-                      value={selectedTicket.status}
-                      onChange={(e) => {
-                        const newStatus = e.target.value;
-                        setSelectedTicket((prev) => prev ? { ...prev, status: newStatus } : prev);
-                        updateTicket(selectedTicketId, { status: newStatus });
-                      }}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 5, padding: "4px 8px", fontSize: 12, color: "rgba(255, 255, 255, 0.6)",
-                        outline: "none", appearance: "none", cursor: "pointer", colorScheme: "dark",
-                      }}
-                    >
-                      <option value="backlog">Backlog</option>
-                      <option value="todo">To Do</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="review">Review</option>
-                      <option value="done">Done</option>
-                    </select>
-                  </div>
-
-                  {/* Priority */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Priority</span>
-                    <select
-                      value={selectedTicket.priority ?? ""}
-                      onChange={(e) => {
-                        const newPriority = e.target.value || null;
-                        setSelectedTicket((prev) => prev ? { ...prev, priority: newPriority } : prev);
-                        updateTicket(selectedTicketId, { priority: newPriority });
-                      }}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 5, padding: "4px 8px", fontSize: 12, color: "rgba(255, 255, 255, 0.6)",
-                        outline: "none", appearance: "none", cursor: "pointer", colorScheme: "dark",
-                      }}
-                    >
-                      <option value="">None</option>
-                      <option value="P1">P1</option>
-                      <option value="P2">P2</option>
-                      <option value="P3">P3</option>
-                    </select>
+                <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--divider)" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
+                    {/* Start */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Start</div>
+                      <InlineDateInput
+                        value={selectedTicket.startDate}
+                        onChange={(v) => {
+                          setSelectedTicket((prev) => prev ? { ...prev, startDate: v } : prev);
+                          updateTicket(selectedTicketId, { startDate: v });
+                        }}
+                      />
+                    </div>
+                    {/* End */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>End</div>
+                      <InlineDateInput
+                        value={selectedTicket.endDate}
+                        onChange={(v) => {
+                          setSelectedTicket((prev) => prev ? { ...prev, endDate: v } : prev);
+                          updateTicket(selectedTicketId, { endDate: v });
+                        }}
+                      />
+                    </div>
+                    {/* Owner */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Owner</div>
+                      {avatarBadge(
+                        selectedTicket.assignee,
+                        (key) => {
+                          setSelectedTicket((prev) => prev ? { ...prev, assignee: key } : prev);
+                          updateTicket(selectedTicketId, { assignee: key });
+                        },
+                        assigneeMenuOpen,
+                        setAssigneeMenuOpen,
+                        `sidebar-ticket-${selectedTicketId}`,
+                        team,
+                      )}
+                    </div>
+                    {/* Status */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Status</div>
+                      <InlineSelect
+                        value={selectedTicket.status}
+                        onChange={(v) => {
+                          setSelectedTicket((prev) => prev ? { ...prev, status: v } : prev);
+                          updateTicket(selectedTicketId, { status: v });
+                        }}
+                        options={[
+                          { value: "backlog", label: "Backlog", dot: "#64748B" },
+                          { value: "todo", label: "To Do", dot: "#3B82F6" },
+                          { value: "in-progress", label: "In Progress", dot: "#3B82F6" },
+                          { value: "review", label: "Review", dot: "#F59E0B" },
+                          { value: "done", label: "Done", dot: "#22C55E" },
+                        ]}
+                      />
+                    </div>
+                    {/* Priority */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Priority</div>
+                      <InlineSelect
+                        value={selectedTicket.priority ?? ""}
+                        onChange={(v) => {
+                          const newPriority = v || null;
+                          setSelectedTicket((prev) => prev ? { ...prev, priority: newPriority } : prev);
+                          updateTicket(selectedTicketId, { priority: newPriority });
+                        }}
+                        options={[
+                          { value: "P1", label: "P1", dot: "#EF4444" },
+                          { value: "P2", label: "P2", dot: "#F59E0B" },
+                          { value: "P3", label: "P3", dot: "#64748B" },
+                        ]}
+                        placeholder="None"
+                      />
+                    </div>
                   </div>
 
                   {/* Description */}
@@ -1073,8 +1156,8 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                       ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
                       style={{
                         width: "100%", minHeight: 80, resize: "none", overflow: "hidden",
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "rgba(255, 255, 255, 0.6)",
+                        background: "var(--input-bg)", border: "1px solid var(--card-border)",
+                        borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "var(--text-tertiary)",
                         lineHeight: 1.5, outline: "none", fontFamily: "inherit",
                       }}
                     />
@@ -1096,7 +1179,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 display: "flex",
                 flexDirection: "column",
                 background: "var(--background, #0C0E14)",
-                borderLeft: "1px solid rgba(255, 255, 255, 0.1)",
+                borderLeft: "1px solid var(--input-border)",
                 boxShadow: "-8px 0 32px rgba(0, 0, 0, 0.4)",
                 zIndex: 50,
               }}
@@ -1117,7 +1200,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   justifyContent: "center",
                 }}
               >
-                <div style={{ width: 2, height: 40, borderRadius: 2, background: "rgba(255, 255, 255, 0.15)" }} />
+                <div style={{ width: 2, height: 40, borderRadius: 2, background: "var(--border)" }} />
               </div>
 
               {/* Header */}
@@ -1127,14 +1210,14 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   alignItems: "flex-start",
                   justifyContent: "space-between",
                   padding: "14px 20px",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderBottom: "1px solid var(--divider)",
                   flexShrink: 0,
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <span style={{ width: 8, height: 8, borderRadius: "50%", background: selectedFeature.color ?? selectedFeature.versionColor, flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, fontWeight: 500, color: "rgba(255, 255, 255, 0.4)" }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-quaternary)" }}>
                       {selectedFeature.versionTag}
                     </span>
                     {statusBadge(selectedFeature.status)}
@@ -1144,7 +1227,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     onChange={(e) => updateFeatureLocal(selectedFeature.id, { title: e.target.value })}
                     onBlur={() => persistFeature(selectedFeature.id, { title: selectedFeature.title })}
                     style={{
-                      fontSize: 17, fontWeight: 600, color: "rgba(255, 255, 255, 0.88)",
+                      fontSize: 17, fontWeight: 600, color: "var(--text-primary)",
                       margin: 0, lineHeight: 1.3, width: "100%",
                       background: "transparent", border: "none", outline: "none",
                       padding: 0, fontFamily: "inherit",
@@ -1156,9 +1239,9 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   style={{
                     width: 28, height: 28, borderRadius: 6,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "rgba(255, 255, 255, 0.05)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                    color: "rgba(255, 255, 255, 0.4)",
+                    background: "var(--input-bg)",
+                    border: "1px solid var(--card-border)",
+                    color: "var(--text-quaternary)",
                     fontSize: 16, cursor: "pointer", flexShrink: 0, marginLeft: 12,
                   }}
                 >
@@ -1169,115 +1252,92 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
               {/* Content */}
               <div style={{ flex: 1, overflowY: "auto" }}>
                 {/* Metadata — editable */}
-                <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}>
-                  {/* Timeline */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Start</span>
-                    <input
-                      type="date"
-                      value={selectedFeature.startDate ?? ""}
-                      onChange={(e) => updateFeature(selectedFeature.id, { startDate: e.target.value || null })}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 5, padding: "4px 8px", fontSize: 12, color: "rgba(255, 255, 255, 0.6)",
-                        fontFamily: "var(--font-mono, ui-monospace, monospace)", outline: "none", colorScheme: "dark",
-                      }}
-                    />
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>End</span>
-                    <input
-                      type="date"
-                      value={selectedFeature.endDate ?? ""}
-                      onChange={(e) => updateFeature(selectedFeature.id, { endDate: e.target.value || null })}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 5, padding: "4px 8px", fontSize: 12, color: "rgba(255, 255, 255, 0.6)",
-                        fontFamily: "var(--font-mono, ui-monospace, monospace)", outline: "none", colorScheme: "dark",
-                      }}
-                    />
-                  </div>
-
-                  {/* Status */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Status</span>
-                    <select
-                      value={selectedFeature.status}
-                      onChange={(e) => updateFeature(selectedFeature.id, { status: e.target.value })}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 5, padding: "4px 8px", fontSize: 12, color: "rgba(255, 255, 255, 0.6)",
-                        outline: "none", appearance: "none", cursor: "pointer", colorScheme: "dark",
-                      }}
-                    >
-                      <option value="planned">Planned</option>
-                      <option value="active">Active</option>
-                      <option value="done">Done</option>
-                    </select>
-                  </div>
-
-                  {/* Owner */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Owner</span>
-                    {avatarBadge(
-                      selectedFeature.assignee ?? null,
-                      (key) => updateFeature(selectedFeature.id, { assignee: key }),
-                      assigneeMenuOpen,
-                      setAssigneeMenuOpen,
-                      `feature-${selectedFeature.id}`,
-                      team,
-                    )}
-                  </div>
-
-                  {/* Color */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0", position: "relative" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Color</span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setColorMenuOpen((prev) => prev === selectedFeature.id ? null : selectedFeature.id); }}
-                      style={{
-                        width: 22, height: 22, borderRadius: "50%",
-                        background: selectedFeature.color ?? selectedFeature.versionColor,
-                        border: "2px solid rgba(255, 255, 255, 0.15)",
-                        cursor: "pointer", padding: 0,
-                      }}
-                    />
-                    {colorMenuOpen === selectedFeature.id && (
-                      <div
+                <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--divider)" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
+                    {/* Start */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Start</div>
+                      <InlineDateInput value={selectedFeature.startDate} onChange={(v) => updateFeature(selectedFeature.id, { startDate: v })} />
+                    </div>
+                    {/* End */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>End</div>
+                      <InlineDateInput value={selectedFeature.endDate} onChange={(v) => updateFeature(selectedFeature.id, { endDate: v })} />
+                    </div>
+                    {/* Status */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Status</div>
+                      <InlineSelect
+                        value={selectedFeature.status}
+                        onChange={(v) => updateFeature(selectedFeature.id, { status: v })}
+                        options={[
+                          { value: "planned", label: "Planned", dot: "var(--text-quaternary)" },
+                          { value: "active", label: "Active", dot: "#60a5fa" },
+                          { value: "done", label: "Done", dot: "#34d399" },
+                        ]}
+                      />
+                    </div>
+                    {/* Owner */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Owner</div>
+                      {avatarBadge(
+                        selectedFeature.assignee ?? null,
+                        (key) => updateFeature(selectedFeature.id, { assignee: key }),
+                        assigneeMenuOpen,
+                        setAssigneeMenuOpen,
+                        `feature-${selectedFeature.id}`,
+                        team,
+                      )}
+                    </div>
+                    {/* Color */}
+                    <div style={{ padding: "4px 0", position: "relative" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Color</div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setColorMenuOpen((prev) => prev === selectedFeature.id ? null : selectedFeature.id); }}
                         style={{
-                          position: "absolute", top: "100%", left: 110, marginTop: 4,
-                          background: "rgba(30, 30, 34, 0.98)", border: "1px solid rgba(255, 255, 255, 0.1)",
-                          borderRadius: 10, padding: 10, zIndex: 60,
-                          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
-                          display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6,
+                          width: 22, height: 22, borderRadius: "50%",
+                          background: selectedFeature.color ?? selectedFeature.versionColor,
+                          border: "2px solid var(--border)",
+                          cursor: "pointer", padding: 0,
                         }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {FEATURE_COLORS.map((c) => (
-                          <button
-                            key={c}
-                            onClick={() => { updateFeature(selectedFeature.id, { color: c }); setColorMenuOpen(null); }}
-                            style={{
-                              width: 24, height: 24, borderRadius: "50%",
-                              background: c,
-                              border: (selectedFeature.color ?? selectedFeature.versionColor) === c ? "2.5px solid #fff" : "2.5px solid transparent",
-                              cursor: "pointer", padding: 0,
-                              transition: "border-color 0.15s ease, transform 0.1s ease",
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Tickets (read-only) */}
-                  <div style={{ display: "flex", alignItems: "center", padding: "7px 0" }}>
-                    <span style={{ width: 110, flexShrink: 0, fontSize: 12, color: "rgba(255, 255, 255, 0.35)" }}>Tickets</span>
-                    <span style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.6)" }}>
-                      {selectedFeature.doneTicketCount}/{selectedFeature.ticketCount} done
-                    </span>
+                      />
+                      {colorMenuOpen === selectedFeature.id && (
+                        <div
+                          style={{
+                            position: "absolute", top: "100%", left: 0, marginTop: 4,
+                            background: "var(--dropdown-bg, var(--background))", border: "1px solid var(--input-border, var(--border))",
+                            borderRadius: 10, padding: 10, zIndex: 60,
+                            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
+                            display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6,
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {FEATURE_COLORS.map((c) => (
+                            <button
+                              key={c}
+                              onClick={() => { updateFeature(selectedFeature.id, { color: c }); setColorMenuOpen(null); }}
+                              style={{
+                                width: 24, height: 24, borderRadius: "50%",
+                                background: c,
+                                border: (selectedFeature.color ?? selectedFeature.versionColor) === c ? "2.5px solid #fff" : "2.5px solid transparent",
+                                cursor: "pointer", padding: 0,
+                                transition: "border-color 0.15s ease, transform 0.1s ease",
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Tickets (read-only) */}
+                    <div style={{ padding: "4px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Tickets</div>
+                      <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                        {selectedFeature.doneTicketCount}/{selectedFeature.ticketCount} done
+                      </span>
+                    </div>
                   </div>
                   {selectedFeature.ticketCount > 0 && (
-                    <div style={{ marginTop: 4, height: 3, borderRadius: 2, background: "rgba(255, 255, 255, 0.06)", overflow: "hidden" }}>
+                    <div style={{ marginTop: 4, height: 3, borderRadius: 2, background: "var(--card-border)", overflow: "hidden" }}>
                       <div
                         style={{
                           width: `${(selectedFeature.doneTicketCount / selectedFeature.ticketCount) * 100}%`,
@@ -1300,8 +1360,8 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                       ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
                       style={{
                         width: "100%", minHeight: 60, resize: "none", overflow: "hidden",
-                        background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "rgba(255, 255, 255, 0.6)",
+                        background: "var(--input-bg)", border: "1px solid var(--card-border)",
+                        borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "var(--text-tertiary)",
                         lineHeight: 1.5, outline: "none", fontFamily: "inherit",
                       }}
                     />
@@ -1310,13 +1370,13 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
 
                 {/* Tickets list — sortable */}
                 <div style={{ padding: "16px 20px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255, 255, 255, 0.6)", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12 }}>
                     Tickets
                   </div>
                   {ticketsLoading ? (
-                    <div style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.3)" }}>Loading...</div>
+                    <div style={{ fontSize: 12, color: "var(--text-quaternary)" }}>Loading...</div>
                   ) : featureTickets.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.3)" }}>No tickets linked</div>
+                    <div style={{ fontSize: 12, color: "var(--text-quaternary)" }}>No tickets linked</div>
                   ) : (
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTicketReorder}>
                       <SortableContext items={featureTickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
@@ -1456,7 +1516,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
-                      <div style={{ width: 64, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                      <div style={{ width: 64, height: 4, borderRadius: 2, background: "var(--card-border)", overflow: "hidden" }}>
                         <div style={{ width: `${progress}%`, height: "100%", background: v.color, borderRadius: 2, transition: "width 0.3s ease" }} />
                       </div>
                       <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--muted)", width: 32, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
@@ -1536,7 +1596,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                           </span>
                         )}
                         {f.ticketCount > 0 && (
-                          <span style={{ fontSize: "0.7rem", color: "var(--muted)", background: "rgba(255,255,255,0.05)", padding: "2px 8px", borderRadius: 4 }}>
+                          <span style={{ fontSize: "0.7rem", color: "var(--muted)", background: "var(--input-bg)", padding: "2px 8px", borderRadius: 4 }}>
                             {f.doneTicketCount}/{f.ticketCount}
                           </span>
                         )}

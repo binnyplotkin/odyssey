@@ -468,7 +468,7 @@ export default function GanttView({
           flexShrink: 0,
           display: "flex",
           flexDirection: "column",
-          borderRight: "1px solid rgba(255, 255, 255, 0.06)",
+          borderRight: "1px solid var(--divider)",
           overflow: "hidden",
         }}
       >
@@ -479,7 +479,7 @@ export default function GanttView({
             display: "flex",
             alignItems: "center",
             paddingInline: 16,
-            borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+            borderBottom: "1px solid var(--divider)",
             flexShrink: 0,
           }}
         >
@@ -489,7 +489,7 @@ export default function GanttView({
               fontWeight: 600,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              color: "rgba(255, 255, 255, 0.35)",
+              color: "var(--text-quaternary)",
             }}
           >
             Roadmap
@@ -497,7 +497,7 @@ export default function GanttView({
         </div>
 
         {/* Left rows */}
-        <div ref={leftPanelRef} onScroll={handleLeftScroll} style={{ flex: 1, overflowY: "auto" }}>
+        <div ref={leftPanelRef} onScroll={handleLeftScroll} style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>
           {rows.map((row) => {
             if (row.type === "version") {
               const v = row.version;
@@ -513,8 +513,8 @@ export default function GanttView({
                     alignItems: "center",
                     paddingInline: 16,
                     gap: 10,
-                    background: isVersionSelected ? "rgba(59, 130, 246, 0.08)" : "rgba(255, 255, 255, 0.025)",
-                    borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
+                    background: isVersionSelected ? "rgba(59, 130, 246, 0.08)" : "var(--card)",
+                    borderBottom: "1px solid var(--divider)",
                     borderLeft: isVersionSelected ? "2px solid rgba(59, 130, 246, 0.5)" : "2px solid transparent",
                     flexShrink: 0,
                     cursor: onVersionClick ? "pointer" : undefined,
@@ -526,7 +526,7 @@ export default function GanttView({
                       background: "none",
                       border: "none",
                       cursor: "pointer",
-                      color: "rgba(255, 255, 255, 0.4)",
+                      color: "var(--text-quaternary)",
                       fontSize: 9,
                       padding: 2,
                       width: 16,
@@ -538,7 +538,7 @@ export default function GanttView({
                       borderRadius: 3,
                       transition: "background 0.15s ease",
                     }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--card-hover)"; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "none"; }}
                   >
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s ease" }}>
@@ -558,7 +558,7 @@ export default function GanttView({
                     style={{
                       fontSize: 14,
                       fontWeight: 700,
-                      color: "rgba(255, 255, 255, 0.85)",
+                      color: "var(--text-primary)",
                       fontFamily: "var(--font-mono, ui-monospace, monospace)",
                     }}
                   >
@@ -567,7 +567,7 @@ export default function GanttView({
                   <span
                     style={{
                       fontSize: 11,
-                      color: "rgba(255, 255, 255, 0.4)",
+                      color: "var(--text-quaternary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -581,8 +581,8 @@ export default function GanttView({
                       style={{
                         fontSize: 9,
                         fontWeight: 600,
-                        color: "rgba(255, 255, 255, 0.3)",
-                        background: "rgba(255, 255, 255, 0.06)",
+                        color: "var(--text-quaternary)",
+                        background: "var(--card-border)",
                         padding: "1px 6px",
                         borderRadius: 8,
                         flexShrink: 0,
@@ -610,7 +610,7 @@ export default function GanttView({
                     paddingLeft: 30,
                     paddingRight: 16,
                     gap: 8,
-                    borderBottom: "1px solid rgba(255, 255, 255, 0.03)",
+                    borderBottom: "1px solid var(--divider)",
                     flexShrink: 0,
                     cursor: onFeatureClick ? "pointer" : undefined,
                     background: isSelected ? "rgba(59, 130, 246, 0.08)" : undefined,
@@ -628,7 +628,7 @@ export default function GanttView({
                         background: "none",
                         border: "none",
                         cursor: "pointer",
-                        color: "rgba(255, 255, 255, 0.3)",
+                        color: "var(--text-quaternary)",
                         fontSize: 8,
                         padding: 2,
                         width: 14,
@@ -640,7 +640,7 @@ export default function GanttView({
                         borderRadius: 3,
                         transition: "background 0.15s ease",
                       }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--card-hover)"; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "none"; }}
                     >
                       <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor" style={{ transform: isFeatureCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s ease" }}>
@@ -663,7 +663,7 @@ export default function GanttView({
                   <span
                     style={{
                       fontSize: 12,
-                      color: isSelected ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 255, 255, 0.6)",
+                      color: isSelected ? "var(--text-primary)" : "var(--text-tertiary)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -677,8 +677,8 @@ export default function GanttView({
                       style={{
                         fontSize: 9,
                         fontWeight: 600,
-                        color: "rgba(255, 255, 255, 0.25)",
-                        background: "rgba(255, 255, 255, 0.05)",
+                        color: "var(--text-placeholder)",
+                        background: "var(--input-bg)",
                         padding: "1px 5px",
                         borderRadius: 6,
                         flexShrink: 0,
@@ -711,7 +711,7 @@ export default function GanttView({
                   paddingLeft: 50,
                   paddingRight: 16,
                   gap: 6,
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.02)",
+                  borderBottom: "1px solid var(--divider)",
                   flexShrink: 0,
                   background: isBeingReordered
                     ? "rgba(59, 130, 246, 0.12)"
@@ -731,7 +731,7 @@ export default function GanttView({
                     onMouseDown={(e) => handleReorderMouseDown(e, tk.id, row.featureId)}
                     style={{
                       cursor: "grab",
-                      color: "rgba(255, 255, 255, 0.15)",
+                      color: "var(--text-placeholder)",
                       fontSize: 9,
                       flexShrink: 0,
                       lineHeight: 1,
@@ -747,14 +747,14 @@ export default function GanttView({
                     width: 4,
                     height: 4,
                     borderRadius: "50%",
-                    background: isTicketSelected ? "rgba(59, 130, 246, 0.6)" : "rgba(255, 255, 255, 0.2)",
+                    background: isTicketSelected ? "rgba(59, 130, 246, 0.6)" : "var(--border)",
                     flexShrink: 0,
                   }}
                 />
                 <span
                   style={{
                     fontSize: 11,
-                    color: isTicketSelected ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.4)",
+                    color: isTicketSelected ? "var(--text-secondary)" : "var(--text-quaternary)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -783,7 +783,7 @@ export default function GanttView({
           style={{
             height: 44,
             display: "flex",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+            borderBottom: "1px solid var(--divider)",
             flexShrink: 0,
             position: "relative",
           }}
@@ -798,12 +798,12 @@ export default function GanttView({
                   display: "flex",
                   alignItems: "center",
                   paddingLeft: 12,
-                  borderLeft: i > 0 ? "1px solid rgba(255, 255, 255, 0.04)" : "none",
+                  borderLeft: i > 0 ? "1px solid var(--divider)" : "none",
                   fontSize: 11,
                   fontWeight: isCurrent ? 600 : 400,
                   color: isCurrent
-                    ? "rgba(255, 255, 255, 0.85)"
-                    : "rgba(255, 255, 255, 0.3)",
+                    ? "var(--text-primary)"
+                    : "var(--text-quaternary)",
                 }}
               >
                 {m.label}
@@ -833,7 +833,7 @@ export default function GanttView({
                   top: 0,
                   bottom: 0,
                   width: 1,
-                  background: "rgba(255, 255, 255, 0.04)",
+                  background: "var(--input-bg)",
                   pointerEvents: "none",
                 }}
               />
@@ -849,7 +849,7 @@ export default function GanttView({
                 top: 0,
                 bottom: 0,
                 width: 2,
-                background: "rgba(255, 255, 255, 0.15)",
+                background: "var(--border)",
                 zIndex: 10,
                 pointerEvents: "none",
               }}
@@ -868,8 +868,8 @@ export default function GanttView({
                     onClick={() => { if (!didDragRef.current) onVersionClick?.(v.id); }}
                     style={{
                       height: ROW_VERSION, flexShrink: 0,
-                      borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
-                      background: isVersionSelected ? "rgba(59, 130, 246, 0.04)" : "rgba(255, 255, 255, 0.015)",
+                      borderBottom: "1px solid var(--divider)",
+                      background: isVersionSelected ? "rgba(59, 130, 246, 0.04)" : "var(--card)",
                       cursor: onVersionClick ? "pointer" : undefined,
                     }}
                   />
@@ -887,8 +887,8 @@ export default function GanttView({
                   style={{
                     height: ROW_VERSION,
                     position: "relative",
-                    borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
-                    background: isVersionSelected ? "rgba(59, 130, 246, 0.04)" : "rgba(255, 255, 255, 0.015)",
+                    borderBottom: "1px solid var(--divider)",
+                    background: isVersionSelected ? "rgba(59, 130, 246, 0.04)" : "var(--card)",
                     flexShrink: 0,
                     cursor: !isDragging && onVersionClick ? "pointer" : undefined,
                   }}
@@ -941,7 +941,7 @@ export default function GanttView({
                     style={{
                       height: ROW_TASK,
                       flexShrink: 0,
-                      borderBottom: "1px solid rgba(255, 255, 255, 0.03)",
+                      borderBottom: "1px solid var(--divider)",
                       background: barSelected ? "rgba(59, 130, 246, 0.04)" : undefined,
                       cursor: onFeatureClick ? "pointer" : undefined,
                     }}
@@ -961,7 +961,7 @@ export default function GanttView({
                   style={{
                     height: ROW_TASK,
                     position: "relative",
-                    borderBottom: "1px solid rgba(255, 255, 255, 0.03)",
+                    borderBottom: "1px solid var(--divider)",
                     background: barSelected ? "rgba(59, 130, 246, 0.04)" : undefined,
                     flexShrink: 0,
                     cursor: !isDragging && onFeatureClick ? "pointer" : undefined,
@@ -991,7 +991,7 @@ export default function GanttView({
                         fontSize: 10,
                         fontWeight: 500,
                         fontFamily: "var(--font-mono, ui-monospace, monospace)",
-                        color: "rgba(255, 255, 255, 0.6)",
+                        color: "var(--text-tertiary)",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -1018,7 +1018,7 @@ export default function GanttView({
                 style={{
                   height: ROW_TICKET,
                   position: "relative",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.02)",
+                  borderBottom: "1px solid var(--divider)",
                   flexShrink: 0,
                   background: ticketSelected ? "rgba(59, 130, 246, 0.04)" : undefined,
                   cursor: !isDragging && onTicketClick ? "pointer" : undefined,
@@ -1049,7 +1049,7 @@ export default function GanttView({
                       fontSize: 9,
                       fontWeight: 500,
                       fontFamily: "var(--font-mono, ui-monospace, monospace)",
-                      color: "rgba(255, 255, 255, 0.5)",
+                      color: "var(--text-tertiary)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",

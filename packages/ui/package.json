@@ -6,7 +6,7 @@
   "exports": {
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
     "./styles/base.css": "./src/styles/base.css",
-    "./styles/themes/forest.css": "./src/styles/themes/forest.css",
+    "./styles/themes/ocean.css": "./src/styles/themes/ocean.css",
     "./styles/themes/neutral.css": "./src/styles/themes/neutral.css"
   }
 }

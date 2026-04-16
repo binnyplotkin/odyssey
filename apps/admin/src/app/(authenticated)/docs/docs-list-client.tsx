@@ -19,7 +19,7 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
 
   useEffect(() => {
     setContent(
-      <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground, #fff)", margin: 0, whiteSpace: "nowrap" }}>
+      <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground, #fff)", marginTop: 0, marginRight: 0, marginBottom: 0, marginLeft: 0, whiteSpace: "nowrap" }}>
         Docs
       </h1>
     );
@@ -82,7 +82,10 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
                     fontSize: "1.75rem",
                     fontWeight: 600,
                     color: "var(--foreground)",
-                    margin: 0,
+                    marginTop: 0,
+                    marginRight: 0,
+                    marginBottom: 0,
+                    marginLeft: 0,
                     lineHeight: 1.2,
                     letterSpacing: "-0.02em",
                   }}
@@ -95,7 +98,10 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
                     style={{
                       fontSize: "0.9375rem",
                       color: "var(--muted)",
-                      margin: 0,
+                      marginTop: 0,
+                      marginRight: 0,
+                      marginBottom: 0,
+                      marginLeft: 0,
                       lineHeight: 1.6,
                       display: "-webkit-box",
                       WebkitLineClamp: 4,
@@ -115,7 +121,7 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
                   fontWeight: 500,
                 }}
               >
-                read article →
+                read doc →
               </span>
             </div>
           );

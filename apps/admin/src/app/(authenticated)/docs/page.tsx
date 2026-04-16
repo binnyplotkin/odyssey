@@ -23,7 +23,7 @@ async function getDocs(): Promise<DocEntry[]> {
           const firstLine = lines.find((l) => l.startsWith("# "));
           const title = (frontmatter.title as string) || (firstLine ? firstLine.replace(/^#\s+/, "") : id);
           const bodyLines = lines.filter((l) => l && !l.startsWith("#") && !l.startsWith("---") && !l.startsWith("|") && !l.startsWith("<") && !l.startsWith("import"));
-          const preview = bodyLines.slice(0, 3).join(" ").slice(0, 160);
+          const preview = bodyLines.slice(0, 6).join(" ").slice(0, 400);
           const stat = await fs.stat(path.join(docsDir, f));
           return { id, title, preview, updatedAt: stat.mtime.toISOString(), gradientIndex: 0 };
         })

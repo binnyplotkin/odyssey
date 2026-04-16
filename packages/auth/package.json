@@ -11,6 +11,10 @@
     "./config": {
       "types": "./src/config.ts",
       "default": "./src/config.ts"
+    },
+    "./password": {
+      "types": "./src/password.ts",
+      "default": "./src/password.ts"
     }
   },
   "dependencies": {

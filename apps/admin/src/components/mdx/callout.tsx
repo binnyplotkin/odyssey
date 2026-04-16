@@ -12,9 +12,9 @@ const typeStyles: Record<string, { bg: string; border: string; accent: string; l
     label: "Heads up",
   },
   "important": {
-    bg: "rgba(248,113,113,0.06)",
-    border: "rgba(248,113,113,0.15)",
-    accent: "#f87171",
+    bg: "rgba(143,209,203,0.06)",
+    border: "rgba(143,209,203,0.15)",
+    accent: "var(--accent)",
     label: "Important",
   },
   "tip": {

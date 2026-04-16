@@ -22,17 +22,20 @@ export const metadata: Metadata = {
   },
 };
 
+const themeScript = `(function(){try{var t=localStorage.getItem("odyssey-theme")||"dark";var r=t==="system"?window.matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light":t;document.documentElement.setAttribute("data-theme",r);document.documentElement.style.colorScheme=r;document.body.style.background=r==="dark"?"#0C0E14":"#F5F5F5"}catch(e){}})()`;
+
 export default function AdminLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="dark" style={{ colorScheme: "dark" }}>
+    <html lang="en" data-theme="dark" style={{ colorScheme: "dark" }} suppressHydrationWarning>
       <head>
-        <meta name="color-scheme" content="dark" />
+        <meta name="color-scheme" content="dark light" />
       </head>
-      <body style={{ background: "#0C0E14" }}>
+      <body style={{ background: "#0C0E14" }} suppressHydrationWarning>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>

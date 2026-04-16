@@ -12,6 +12,7 @@ import type {
   TicketDomain,
   TicketPriority,
 } from "@/data/board";
+import { useHeaderContent } from "@/components/header-context";
 
 /* ── API helpers ─────────────────────────────────────────────── */
 
@@ -226,10 +227,10 @@ function TicketCard({
         borderRadius: 10,
         padding: 12,
         gap: 8,
-        background: isSelected ? "rgba(59, 130, 246, 0.08)" : "rgba(255, 255, 255, 0.03)",
+        background: isSelected ? "rgba(59, 130, 246, 0.08)" : "var(--card)",
         border: isSelected
           ? "1.5px solid rgba(59, 130, 246, 0.4)"
-          : "1px solid rgba(255, 255, 255, 0.06)",
+          : "1px solid var(--card-border)",
         boxShadow: isSelected ? "0 0 12px rgba(59, 130, 246, 0.12)" : "none",
         cursor: "grab",
         opacity: isDragging ? 0.35 : isDone ? 0.6 : 1,
@@ -243,7 +244,7 @@ function TicketCard({
             flex: 1,
             fontSize: 12,
             fontWeight: 500,
-            color: "var(--foreground, #fff)",
+            color: "var(--foreground)",
             lineHeight: "17px",
             overflow: "hidden",
             display: "-webkit-box",
@@ -272,7 +273,7 @@ function TicketCard({
         <span
           style={{
             fontSize: 10,
-            color: "var(--muted, rgba(255,255,255,0.35))",
+            color: "var(--muted)",
             lineHeight: "14px",
             overflow: "hidden",
             display: "-webkit-box",
@@ -291,7 +292,7 @@ function TicketCard({
           alignItems: "center",
           gap: 6,
           paddingTop: 4,
-          borderTop: "1px solid rgba(255, 255, 255, 0.04)",
+          borderTop: "1px solid var(--divider)",
         }}
       >
         {ticket.assignee && <AvatarBubble assigneeId={ticket.assignee} team={team} />}
@@ -341,8 +342,8 @@ function FilterDropdown({
         top: "calc(100% + 6px)",
         left: 0,
         minWidth: 140,
-        background: "var(--panel, #0f1117)",
-        border: "1px solid rgba(255, 255, 255, 0.1)",
+        background: "var(--dropdown-bg)",
+        border: "1px solid var(--input-border)",
         borderRadius: 8,
         padding: "4px 0",
         zIndex: 100,
@@ -365,7 +366,7 @@ function FilterDropdown({
             color:
               active === opt
                 ? "#8CE7D2"
-                : "var(--foreground, rgba(255,255,255,0.7))",
+                : "var(--text-secondary)",
             fontSize: 11,
             fontFamily: "var(--font-mono, ui-monospace, monospace)",
             textAlign: "left",
@@ -374,6 +375,306 @@ function FilterDropdown({
           {labelMap?.get(opt) ?? opt}
         </button>
       ))}
+    </div>
+  );
+}
+
+/* ── Inline select (for sidebar properties) ──────────────────── */
+
+function InlineSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  placeholder = "—",
+  renderSelected,
+  renderOption,
+}: {
+  value: T | "";
+  onChange: (v: T | "") => void;
+  options: { value: T; label: string; dot?: string; tag?: { color: string; bg: string } }[];
+  placeholder?: string;
+  renderSelected?: (opt: { value: T; label: string; dot?: string; tag?: { color: string; bg: string } } | undefined) => React.ReactNode;
+  renderOption?: (opt: { value: T; label: string }, selected: boolean) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const selected = options.find((o) => o.value === value);
+
+  const defaultRenderSelected = () => {
+    if (!selected) return <span style={{ fontSize: 12, color: "var(--text-placeholder)" }}>{placeholder}</span>;
+    if (selected.tag) return (
+      <span style={{
+        borderRadius: 3, padding: "1px 5px", background: selected.tag.bg,
+        fontSize: 10, color: selected.tag.color, lineHeight: "14px",
+      }}>
+        {selected.label}
+      </span>
+    );
+    return (
+      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {selected.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: selected.dot, flexShrink: 0 }} />}
+        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{selected.label}</span>
+      </span>
+    );
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: 0,
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          fontFamily: "inherit",
+        }}
+      >
+        {renderSelected ? renderSelected(selected) : defaultRenderSelected()}
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute",
+          top: "calc(100% + 4px)",
+          left: 0,
+          minWidth: 160,
+          background: "var(--dropdown-bg)",
+          border: "1px solid var(--input-border)",
+          borderRadius: 8,
+          padding: "4px 0",
+          zIndex: 100,
+          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+          maxHeight: 200,
+          overflowY: "auto",
+        }}>
+          <button
+            type="button"
+            onClick={() => { onChange("" as T | ""); setOpen(false); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              width: "100%", padding: "7px 12px",
+              background: value === "" ? "rgba(140, 231, 210, 0.08)" : "none",
+              border: "none", cursor: "pointer", textAlign: "left",
+              color: value === "" ? "var(--accent-strong)" : "var(--text-quaternary)",
+              fontSize: 11, fontFamily: "inherit",
+            }}
+          >
+            {placeholder}
+          </button>
+          {options.map((opt) => {
+            const isActive = value === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", padding: "7px 12px",
+                  background: isActive ? "rgba(140, 231, 210, 0.08)" : "none",
+                  border: "none", cursor: "pointer", textAlign: "left",
+                  color: isActive ? "var(--accent-strong)" : "var(--text-secondary)",
+                  fontSize: 11, fontFamily: "inherit",
+                }}
+              >
+                {renderOption ? renderOption(opt, isActive) : (
+                  <>
+                    {opt.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: opt.dot, flexShrink: 0 }} />}
+                    {opt.tag && (
+                      <span style={{
+                        borderRadius: 3, padding: "1px 5px", background: opt.tag.bg,
+                        fontSize: 10, color: opt.tag.color, lineHeight: "14px",
+                      }}>
+                        {opt.label}
+                      </span>
+                    )}
+                    {!opt.tag && opt.label}
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Inline date picker ──────────────────────────────────────── */
+
+function InlineDateInput({ value, onChange }: {
+  value: string | undefined;
+  onChange: (v: string | undefined) => void;
+}) {
+  return (
+    <input
+      type="date"
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || undefined)}
+      style={{
+        padding: 0, margin: 0, background: "none", border: "none", outline: "none",
+        fontFamily: "inherit", fontSize: 12, width: "100%", cursor: "pointer",
+        color: value ? "var(--text-tertiary)" : "var(--text-placeholder)",
+        colorScheme: "inherit",
+      }}
+    />
+  );
+}
+
+/* ── Custom select for modal ─────────────────────────────────── */
+
+function ModalSelect<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder = "None",
+  renderOption,
+}: {
+  label: string;
+  value: T | "";
+  onChange: (v: T | "") => void;
+  options: { value: T; label: string; dot?: string; tag?: { color: string; bg: string } }[];
+  placeholder?: string;
+  renderOption?: (opt: { value: T; label: string }, selected: boolean) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <span style={{
+        fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+        textTransform: "uppercase", color: "var(--text-quaternary)", marginBottom: 4,
+      }}>
+        {label}
+      </span>
+      <div ref={ref} style={{ position: "relative" }}>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          style={{
+            width: "100%",
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: "1px solid var(--input-border)",
+            background: "var(--input-bg)",
+            color: value ? "var(--foreground)" : "var(--text-quaternary)",
+            fontSize: 12,
+            fontFamily: "inherit",
+            cursor: "pointer",
+            textAlign: "left",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          {selected?.dot && (
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: selected.dot, flexShrink: 0 }} />
+          )}
+          {selected?.tag && (
+            <span style={{
+              borderRadius: 3, padding: "1px 5px", background: selected.tag.bg,
+              fontSize: 10, color: selected.tag.color, lineHeight: "14px",
+            }}>
+              {selected.label}
+            </span>
+          )}
+          {!selected?.tag && (selected?.label ?? placeholder)}
+          <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-placeholder)" }}>▾</span>
+        </button>
+
+        {open && (
+          <div style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            background: "var(--dropdown-bg)",
+            border: "1px solid var(--input-border)",
+            borderRadius: 8,
+            padding: "4px 0",
+            zIndex: 10,
+            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+            maxHeight: 200,
+            overflowY: "auto",
+          }}>
+            {/* None / clear option */}
+            <button
+              type="button"
+              onClick={() => { onChange("" as T | ""); setOpen(false); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                width: "100%", padding: "7px 12px", background: value === "" ? "rgba(140, 231, 210, 0.08)" : "none",
+                border: "none", cursor: "pointer", textAlign: "left",
+                color: value === "" ? "var(--accent-strong)" : "var(--text-quaternary)",
+                fontSize: 11, fontFamily: "inherit",
+              }}
+            >
+              {placeholder}
+            </button>
+            {options.map((opt) => {
+              const isActive = value === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => { onChange(opt.value); setOpen(false); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    width: "100%", padding: "7px 12px",
+                    background: isActive ? "rgba(140, 231, 210, 0.08)" : "none",
+                    border: "none", cursor: "pointer", textAlign: "left",
+                    color: isActive ? "var(--accent-strong)" : "var(--text-secondary)",
+                    fontSize: 11, fontFamily: "inherit",
+                  }}
+                >
+                  {renderOption ? renderOption(opt, isActive) : (
+                    <>
+                      {opt.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: opt.dot, flexShrink: 0 }} />}
+                      {opt.tag && (
+                        <span style={{
+                          borderRadius: 3, padding: "1px 5px", background: opt.tag.bg,
+                          fontSize: 10, color: opt.tag.color, lineHeight: "14px",
+                        }}>
+                          {opt.label}
+                        </span>
+                      )}
+                      {!opt.tag && opt.label}
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -392,15 +693,15 @@ function NewTicketModal({
   const [status, setStatus] = useState<TicketStatus>("backlog");
   const [domain, setDomain] = useState<TicketDomain | "">("");
   const [priority, setPriority] = useState<TicketPriority | "">("");
-  const [assignee, setAssignee] = useState(team[0]?.id ?? "");
+  const [assignee, setAssignee] = useState("");
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "8px 10px",
     borderRadius: 6,
-    border: "1px solid rgba(255, 255, 255, 0.1)",
-    background: "rgba(255, 255, 255, 0.04)",
-    color: "var(--foreground, #fff)",
+    border: "1px solid var(--input-border)",
+    background: "var(--input-bg)",
+    color: "var(--foreground)",
     fontSize: 12,
     fontFamily: "inherit",
     outline: "none",
@@ -411,14 +712,8 @@ function NewTicketModal({
     fontWeight: 600,
     letterSpacing: "0.08em",
     textTransform: "uppercase",
-    color: "var(--muted, rgba(255,255,255,0.4))",
+    color: "var(--text-quaternary)",
     marginBottom: 4,
-  };
-
-  const selectStyle: React.CSSProperties = {
-    ...inputStyle,
-    appearance: "none",
-    cursor: "pointer",
   };
 
   const handleSubmit = () => {
@@ -429,10 +724,20 @@ function NewTicketModal({
       status,
       domain: domain || undefined,
       priority: priority || undefined,
-      assignee: assignee.trim() || undefined,
-      phase: "audio-engine",
+      assignee: assignee || undefined,
     });
   };
+
+  const statusOptions = COLUMNS.map((c) => ({ value: c.id, label: c.label, dot: c.dotColor }));
+  const domainOptions = (Object.keys(DOMAIN_COLORS) as TicketDomain[]).map((d) => ({
+    value: d, label: d, tag: DOMAIN_COLORS[d],
+  }));
+  const priorityOptions: { value: TicketPriority; label: string; dot: string }[] = [
+    { value: "P1", label: "P1 — Critical", dot: PRIORITY_DOT.P1 },
+    { value: "P2", label: "P2 — Medium", dot: PRIORITY_DOT.P2 },
+    { value: "P3", label: "P3 — Low", dot: PRIORITY_DOT.P3 },
+  ];
+  const assigneeOptions = team.map((m, i) => ({ value: m.id, label: m.name, dot: AVATAR_COLORS[i % AVATAR_COLORS.length] }));
 
   return (
     <div
@@ -452,9 +757,9 @@ function NewTicketModal({
     >
       <div
         style={{
-          width: 420,
-          background: "var(--panel, #0f1117)",
-          border: "1px solid rgba(255, 255, 255, 0.1)",
+          width: 460,
+          background: "var(--dropdown-bg)",
+          border: "1px solid var(--input-border)",
           borderRadius: 14,
           padding: 24,
           display: "flex",
@@ -466,7 +771,7 @@ function NewTicketModal({
           style={{
             fontSize: 16,
             fontWeight: 600,
-            color: "var(--foreground, #fff)",
+            color: "var(--foreground)",
             margin: 0,
           }}
         >
@@ -498,65 +803,51 @@ function NewTicketModal({
 
         {/* Row: Status + Domain */}
         <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <span style={labelStyle}>Status</span>
-            <select
-              style={selectStyle}
-              value={status}
-              onChange={(e) => setStatus(e.target.value as TicketStatus)}
-            >
-              {COLUMNS.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <span style={labelStyle}>Domain</span>
-            <select
-              style={selectStyle}
-              value={domain}
-              onChange={(e) => setDomain(e.target.value as TicketDomain | "")}
-            >
-              <option value="">None</option>
-              {(Object.keys(DOMAIN_COLORS) as TicketDomain[]).map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
+          <ModalSelect
+            label="Status"
+            value={status}
+            onChange={(v) => setStatus((v || "backlog") as TicketStatus)}
+            options={statusOptions}
+            placeholder="Backlog"
+          />
+          <ModalSelect
+            label="Domain"
+            value={domain}
+            onChange={(v) => setDomain(v as TicketDomain | "")}
+            options={domainOptions}
+            placeholder="None"
+          />
         </div>
 
         {/* Row: Priority + Assignee */}
         <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <span style={labelStyle}>Priority</span>
-            <select
-              style={selectStyle}
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as TicketPriority | "")}
-            >
-              <option value="">None</option>
-              <option value="P1">P1</option>
-              <option value="P2">P2</option>
-              <option value="P3">P3</option>
-            </select>
-          </div>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <span style={labelStyle}>Assignee</span>
-            <select
-              style={selectStyle}
-              value={assignee}
-              onChange={(e) => setAssignee(e.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {team.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
-          </div>
+          <ModalSelect
+            label="Priority"
+            value={priority}
+            onChange={(v) => setPriority(v as TicketPriority | "")}
+            options={priorityOptions}
+            placeholder="None"
+          />
+          <ModalSelect
+            label="Assignee"
+            value={assignee}
+            onChange={(v) => setAssignee(v)}
+            options={assigneeOptions}
+            placeholder="Unassigned"
+            renderOption={(opt, selected) => (
+              <>
+                <span style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 18, height: 18, borderRadius: "50%",
+                  background: assigneeOptions.find((a) => a.value === opt.value)?.dot ?? "#8B7EB5",
+                  color: "#fff", fontSize: 8, fontWeight: 600, flexShrink: 0,
+                }}>
+                  {getInitials(opt.label)}
+                </span>
+                <span>{opt.label}</span>
+              </>
+            )}
+          />
         </div>
 
         {/* Actions */}
@@ -568,12 +859,13 @@ function NewTicketModal({
             style={{
               padding: "7px 16px",
               borderRadius: 8,
-              border: "1px solid rgba(255, 255, 255, 0.1)",
+              border: "1px solid var(--input-border)",
               background: "none",
-              color: "var(--muted, rgba(255,255,255,0.5))",
+              color: "var(--text-tertiary)",
               fontSize: 12,
               fontWeight: 500,
               cursor: "pointer",
+              fontFamily: "inherit",
             }}
           >
             Cancel
@@ -589,6 +881,7 @@ function NewTicketModal({
               fontSize: 12,
               fontWeight: 600,
               cursor: "pointer",
+              fontFamily: "inherit",
               opacity: title.trim() ? 1 : 0.4,
             }}
           >
@@ -612,12 +905,14 @@ function TicketDetailSidebar({
   onClose,
   onUpdateTicket,
   featureName,
+  features = [],
   team,
 }: {
   ticket: Ticket;
   onClose: () => void;
   onUpdateTicket: (updated: Ticket) => void;
   featureName?: string;
+  features?: FeatureOption[];
   team: TeamMember[];
 }) {
   const [width, setWidth] = useState(() => {
@@ -682,16 +977,18 @@ function TicketDetailSidebar({
   const progress = totalCount > 0 ? (doneCount / totalCount) * 100 : 0;
 
   const labelStyle: React.CSSProperties = {
-    width: 110,
-    flexShrink: 0,
-    fontSize: 12,
-    color: "rgba(255, 255, 255, 0.35)",
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    color: "var(--text-quaternary)",
+    marginBottom: 8,
   };
 
   const rowStyle: React.CSSProperties = {
     display: "flex",
-    alignItems: "center",
-    padding: "7px 0",
+    flexDirection: "column",
+    padding: "8px 0",
   };
 
   return (
@@ -704,8 +1001,8 @@ function TicketDetailSidebar({
         width,
         display: "flex",
         flexDirection: "column",
-        background: "var(--background, #0C0E14)",
-        borderLeft: "1px solid rgba(255, 255, 255, 0.1)",
+        background: "var(--background)",
+        borderLeft: "1px solid var(--input-border)",
         boxShadow: "-8px 0 32px rgba(0, 0, 0, 0.4)",
         zIndex: 50,
         overflow: "hidden",
@@ -732,7 +1029,7 @@ function TicketDetailSidebar({
             width: 2,
             height: 40,
             borderRadius: 2,
-            background: "rgba(255, 255, 255, 0.15)",
+            background: "var(--border)",
             transition: "background 0.15s ease",
           }}
         />
@@ -745,7 +1042,7 @@ function TicketDetailSidebar({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "14px 20px",
-          borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+          borderBottom: "1px solid var(--divider)",
           flexShrink: 0,
         }}
       >
@@ -771,9 +1068,9 @@ function TicketDetailSidebar({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            color: "rgba(255, 255, 255, 0.4)",
+            background: "var(--input-bg)",
+            border: "1px solid var(--card-border)",
+            color: "var(--text-quaternary)",
             fontSize: 16,
             cursor: "pointer",
             fontFamily: "inherit",
@@ -794,94 +1091,192 @@ function TicketDetailSidebar({
       >
         {/* Title + Description */}
         <div style={{ padding: "20px 20px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-          <h2
+          <input
+            value={ticket.title}
+            onChange={(e) => onUpdateTicket({ ...ticket, title: e.target.value })}
             style={{
               margin: 0,
+              padding: 0,
               fontSize: 17,
               fontWeight: 600,
-              color: "rgba(255, 255, 255, 0.88)",
+              color: "var(--text-primary)",
               lineHeight: 1.35,
+              background: "none",
+              border: "none",
+              outline: "none",
+              fontFamily: "inherit",
+              width: "100%",
             }}
-          >
-            {ticket.title}
-          </h2>
-          {ticket.description && (
-            <p
-              style={{
-                margin: 0,
-                fontSize: 13,
-                color: "rgba(255, 255, 255, 0.5)",
-                lineHeight: 1.55,
-              }}
-            >
-              {ticket.description}
-            </p>
-          )}
+          />
+          <textarea
+            value={ticket.description ?? ""}
+            onChange={(e) => onUpdateTicket({ ...ticket, description: e.target.value || undefined })}
+            placeholder="Add a description..."
+            rows={ticket.description ? undefined : 1}
+            style={{
+              margin: 0,
+              padding: 0,
+              fontSize: 13,
+              color: "var(--text-tertiary)",
+              lineHeight: 1.55,
+              background: "none",
+              border: "none",
+              outline: "none",
+              fontFamily: "inherit",
+              width: "100%",
+              resize: "none",
+              overflow: "hidden",
+              fieldSizing: "content" as unknown as undefined,
+            }}
+          />
         </div>
 
-        {/* Metadata */}
+        {/* Metadata — 2-column grid */}
         <div
           style={{
             padding: "12px 20px",
-            borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
-            display: "flex",
-            flexDirection: "column",
+            borderTop: "1px solid var(--divider)",
+            borderBottom: "1px solid var(--divider)",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "4px 12px",
           }}
         >
-          {ticket.assignee && (
-            <div style={rowStyle}>
-              <span style={labelStyle}>Assignee</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <AvatarBubble assigneeId={ticket.assignee} team={team} size={20} />
-                <span style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.7)" }}>
-                  {team.find((m) => m.id === ticket.assignee)?.name ?? ticket.assignee}
-                </span>
-              </div>
-            </div>
-          )}
-          {ticket.priority && (
-            <div style={rowStyle}>
-              <span style={labelStyle}>Priority</span>
-              <PriorityTag priority={ticket.priority} />
-            </div>
-          )}
-          {ticket.domain && (
-            <div style={rowStyle}>
-              <span style={labelStyle}>Domain</span>
-              <DomainTag domain={ticket.domain} />
-            </div>
-          )}
-          {featureName && (
-            <div style={rowStyle}>
-              <span style={labelStyle}>Feature</span>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontFamily: "var(--font-mono, ui-monospace, monospace)",
-                  fontWeight: 500,
-                  color: "rgba(59, 130, 246, 0.7)",
-                  background: "rgba(59, 130, 246, 0.08)",
-                  borderRadius: 4,
-                  padding: "2px 8px",
-                }}
-              >
-                {featureName}
-              </span>
-            </div>
-          )}
-          {ticket.phase && (
-            <div style={rowStyle}>
-              <span style={labelStyle}>Phase</span>
-              <span style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.55)" }}>
-                {ticket.phase}
-              </span>
-            </div>
-          )}
+          {/* Status */}
+          <div style={rowStyle}>
+            <span style={labelStyle}>Status</span>
+            <InlineSelect
+              value={ticket.status}
+              onChange={(v) => onUpdateTicket({ ...ticket, status: (v || "backlog") as TicketStatus })}
+              options={COLUMNS.map((c) => ({ value: c.id, label: c.label, dot: c.dotColor }))}
+              placeholder="Backlog"
+            />
+          </div>
+
+          {/* Assignee */}
+          <div style={rowStyle}>
+            <span style={labelStyle}>Assignee</span>
+            <InlineSelect
+              value={ticket.assignee ?? ""}
+              onChange={(v) => onUpdateTicket({ ...ticket, assignee: v || undefined })}
+              options={team.map((m, i) => ({ value: m.id, label: m.name, dot: AVATAR_COLORS[i % AVATAR_COLORS.length] }))}
+              placeholder="Unassigned"
+              renderSelected={(opt) => {
+                if (!opt) return <span style={{ fontSize: 12, color: "var(--text-placeholder)" }}>Unassigned</span>;
+                return (
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <AvatarBubble assigneeId={opt.value} team={team} size={20} />
+                    <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{opt.label}</span>
+                  </span>
+                );
+              }}
+              renderOption={(opt, selected) => (
+                <>
+                  <span style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 18, height: 18, borderRadius: "50%",
+                    background: team.findIndex((m) => m.id === opt.value) >= 0
+                      ? AVATAR_COLORS[team.findIndex((m) => m.id === opt.value) % AVATAR_COLORS.length]
+                      : "#8B7EB5",
+                    color: "#fff", fontSize: 8, fontWeight: 600, flexShrink: 0,
+                  }}>
+                    {getInitials(opt.label)}
+                  </span>
+                  <span>{opt.label}</span>
+                </>
+              )}
+            />
+          </div>
+
+          {/* Priority */}
+          <div style={rowStyle}>
+            <span style={labelStyle}>Priority</span>
+            <InlineSelect
+              value={ticket.priority ?? ""}
+              onChange={(v) => onUpdateTicket({ ...ticket, priority: (v || undefined) as TicketPriority | undefined })}
+              options={[
+                { value: "P1" as TicketPriority, label: "P1 — Critical", dot: PRIORITY_DOT.P1 },
+                { value: "P2" as TicketPriority, label: "P2 — Medium", dot: PRIORITY_DOT.P2 },
+                { value: "P3" as TicketPriority, label: "P3 — Low", dot: PRIORITY_DOT.P3 },
+              ]}
+              placeholder="None"
+            />
+          </div>
+
+          {/* Domain */}
+          <div style={rowStyle}>
+            <span style={labelStyle}>Domain</span>
+            <InlineSelect
+              value={ticket.domain ?? ""}
+              onChange={(v) => onUpdateTicket({ ...ticket, domain: (v || undefined) as TicketDomain | undefined })}
+              options={(Object.keys(DOMAIN_COLORS) as TicketDomain[]).map((d) => ({
+                value: d, label: d, tag: DOMAIN_COLORS[d],
+              }))}
+              placeholder="None"
+            />
+          </div>
+
+          {/* Feature */}
+          <div style={rowStyle}>
+            <span style={labelStyle}>Feature</span>
+            <InlineSelect
+              value={ticket.featureId ?? ""}
+              onChange={(v) => onUpdateTicket({ ...ticket, featureId: v || undefined })}
+              options={features.map((f) => ({ value: f.id, label: f.title }))}
+              placeholder="None"
+              renderSelected={(opt) => {
+                if (!opt) return <span style={{ fontSize: 12, color: "var(--text-placeholder)" }}>None</span>;
+                return (
+                  <span style={{
+                    fontSize: 11, fontFamily: "var(--font-mono, ui-monospace, monospace)",
+                    fontWeight: 500, color: "rgba(59, 130, 246, 0.7)",
+                    background: "rgba(59, 130, 246, 0.08)", borderRadius: 4, padding: "2px 8px",
+                  }}>
+                    {opt.label}
+                  </span>
+                );
+              }}
+            />
+          </div>
+
+          {/* Phase */}
+          <div style={rowStyle}>
+            <span style={labelStyle}>Phase</span>
+            <input
+              value={ticket.phase ?? ""}
+              onChange={(e) => onUpdateTicket({ ...ticket, phase: e.target.value || undefined })}
+              placeholder="—"
+              style={{
+                padding: 0, margin: 0, background: "none", border: "none", outline: "none",
+                fontFamily: "inherit", fontSize: 12, width: "100%",
+                color: ticket.phase ? "var(--text-tertiary)" : "var(--text-placeholder)",
+              }}
+            />
+          </div>
+
+          {/* Start Date */}
+          <div style={rowStyle}>
+            <span style={labelStyle}>Start Date</span>
+            <InlineDateInput
+              value={ticket.startDate}
+              onChange={(v) => onUpdateTicket({ ...ticket, startDate: v })}
+            />
+          </div>
+
+          {/* End Date */}
+          <div style={rowStyle}>
+            <span style={labelStyle}>End Date</span>
+            <InlineDateInput
+              value={ticket.endDate}
+              onChange={(v) => onUpdateTicket({ ...ticket, endDate: v })}
+            />
+          </div>
+
+          {/* Created */}
           <div style={rowStyle}>
             <span style={labelStyle}>Created</span>
-            <span style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.45)" }}>
-              {ticket.createdAt}
+            <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+              {ticket.createdAt.slice(0, 10)}
             </span>
           </div>
         </div>
@@ -890,16 +1285,16 @@ function TicketDetailSidebar({
         {ticket.subtasks && ticket.subtasks.length > 0 && (
           <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255, 255, 255, 0.6)" }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)" }}>
                 Subtasks
               </span>
-              <span style={{ fontSize: 11, color: "rgba(255, 255, 255, 0.25)" }}>
+              <span style={{ fontSize: 11, color: "var(--text-placeholder)" }}>
                 {doneCount} / {totalCount}
               </span>
             </div>
 
             {/* Progress bar */}
-            <div style={{ width: "100%", height: 3, borderRadius: 2, background: "rgba(255, 255, 255, 0.06)" }}>
+            <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--card-border)" }}>
               <div
                 style={{
                   width: `${progress}%`,
@@ -937,8 +1332,8 @@ function TicketDetailSidebar({
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: 10,
-                    background: st.done ? "rgba(59, 130, 246, 0.15)" : "rgba(255, 255, 255, 0.04)",
-                    border: st.done ? "none" : "1px solid rgba(255, 255, 255, 0.12)",
+                    background: st.done ? "rgba(59, 130, 246, 0.15)" : "var(--input-bg)",
+                    border: st.done ? "none" : "1px solid var(--input-border)",
                     color: "rgba(59, 130, 246, 0.7)",
                   }}
                 >
@@ -947,7 +1342,7 @@ function TicketDetailSidebar({
                 <span
                   style={{
                     fontSize: 12,
-                    color: st.done ? "rgba(255, 255, 255, 0.35)" : "rgba(255, 255, 255, 0.6)",
+                    color: st.done ? "var(--text-quaternary)" : "var(--text-tertiary)",
                     textDecoration: st.done ? "line-through" : "none",
                   }}
                 >
@@ -963,14 +1358,14 @@ function TicketDetailSidebar({
           <div
             style={{
               padding: "16px 20px",
-              borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+              borderTop: "1px solid var(--divider)",
               display: "flex",
               flexDirection: "column",
               gap: 12,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255, 255, 255, 0.6)" }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)" }}>
                 Activity
               </span>
             </div>
@@ -997,17 +1392,17 @@ function TicketDetailSidebar({
                 </span>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: "rgba(255, 255, 255, 0.6)" }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>
                       {item.author === "B" ? "Binny" : item.author === "S" ? "System" : item.author}
                     </span>
-                    <span style={{ fontSize: 11, color: "rgba(255, 255, 255, 0.2)" }}>
+                    <span style={{ fontSize: 11, color: "var(--text-placeholder)" }}>
                       {item.timestamp}
                     </span>
                   </div>
                   <span
                     style={{
                       fontSize: 12,
-                      color: item.type === "system" ? "rgba(255, 255, 255, 0.35)" : "rgba(255, 255, 255, 0.45)",
+                      color: item.type === "system" ? "var(--text-quaternary)" : "var(--text-tertiary)",
                       lineHeight: 1.5,
                       fontStyle: item.type === "system" ? "italic" : "normal",
                     }}
@@ -1019,24 +1414,6 @@ function TicketDetailSidebar({
             ))}
           </div>
         )}
-      </div>
-
-      {/* Comment input pinned to bottom */}
-      <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255, 255, 255, 0.06)", flexShrink: 0 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            padding: "10px 12px",
-            borderRadius: 8,
-            background: "rgba(255, 255, 255, 0.03)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-          }}
-        >
-          <span style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.2)" }}>
-            Add a comment…
-          </span>
-        </div>
       </div>
     </div>
   );
@@ -1093,6 +1470,116 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [openFilter]);
+
+  // ── Push header content into global header ──
+  const { setContent } = useHeaderContent();
+  const toggleFilterRef = useRef((key: FilterKey, value: string) => {});
+  const setOpenFilterRef = useRef(setOpenFilter);
+  const setShowModalRef = useRef(setShowModal);
+  const handleRefreshRef = useRef(() => {});
+
+  useEffect(() => {
+    setContent(
+      <>
+        <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground)", margin: 0, marginRight: 12, whiteSpace: "nowrap" }}>
+          Board
+        </h1>
+
+        {/* Filter pills */}
+        <div ref={filterRef} style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
+          {FILTER_PILLS.map((pill) => {
+            const isActive = !!filters[pill.key];
+            const isOpen = openFilter === pill.key;
+            return (
+              <div key={pill.key} style={{ position: "relative" }}>
+                <button
+                  onClick={() =>
+                    setOpenFilterRef.current(isOpen ? null : pill.key)
+                  }
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: 8,
+                    border: `1px solid ${isActive ? "rgba(140, 231, 210, 0.3)" : "var(--card-border)"}`,
+                    background: isActive
+                      ? "rgba(140, 231, 210, 0.08)"
+                      : "var(--input-bg)",
+                    color: isActive
+                      ? "#8CE7D2"
+                      : "var(--muted)",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {pill.label}
+                  {isActive && (
+                    <span style={{ marginLeft: 4, opacity: 0.6 }}>
+                      {pill.key === "assignee" ? (teamNameMap.get(filters[pill.key]!) ?? filters[pill.key]) : filters[pill.key]}
+                    </span>
+                  )}
+                </button>
+                {isOpen && (
+                  <FilterDropdown
+                    options={uniqueValues(tickets, pill.key, featureIdToName)}
+                    active={filters[pill.key]}
+                    onSelect={(v) => toggleFilterRef.current(pill.key, v)}
+                    labelMap={pill.key === "assignee" ? teamNameMap : undefined}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Refresh */}
+          <button
+            onClick={() => handleRefreshRef.current()}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              border: "1px solid var(--card-border)",
+              background: "var(--input-bg)",
+              color: "var(--muted)",
+              cursor: "pointer",
+              fontSize: 14,
+            }}
+            title="Reset board"
+          >
+            ↻
+          </button>
+
+          {/* + New Ticket */}
+          <button
+            onClick={() => setShowModalRef.current(true)}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 8,
+              border: "none",
+              background: "#8CE7D2",
+              color: "#000",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              whiteSpace: "nowrap",
+            }}
+          >
+            + New Ticket
+          </button>
+        </div>
+      </>
+    );
+    return () => setContent(null);
+  }, [filters, openFilter, tickets, featureIdToName, teamNameMap, setContent]);
 
   // ── Drag handlers ──
 
@@ -1165,6 +1652,12 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
     [],
   );
 
+  // Keep header refs current
+  toggleFilterRef.current = toggleFilter;
+  setOpenFilterRef.current = setOpenFilter;
+  setShowModalRef.current = setShowModal;
+  handleRefreshRef.current = handleRefresh;
+
   // ── Update ticket (for subtask toggling etc.) ──
 
   const handleUpdateTicket = useCallback((updated: Ticket) => {
@@ -1193,120 +1686,6 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
         overflow: "hidden",
       }}
     >
-      {/* ── Header bar ─────────────────────────────────────────── */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "14px 20px",
-          borderBottom: "1px solid var(--border, rgba(255,255,255,0.06))",
-          flexShrink: 0,
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: "var(--foreground, #fff)",
-            margin: 0,
-            marginRight: 8,
-          }}
-        >
-          Board
-        </h1>
-
-        {/* Filter pills */}
-        <div ref={filterRef} style={{ display: "flex", gap: 6 }}>
-          {FILTER_PILLS.map((pill) => {
-            const isActive = !!filters[pill.key];
-            const isOpen = openFilter === pill.key;
-            return (
-              <div key={pill.key} style={{ position: "relative" }}>
-                <button
-                  onClick={() =>
-                    setOpenFilter(isOpen ? null : pill.key)
-                  }
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 8,
-                    border: `1px solid ${isActive ? "rgba(140, 231, 210, 0.3)" : "rgba(255, 255, 255, 0.08)"}`,
-                    background: isActive
-                      ? "rgba(140, 231, 210, 0.08)"
-                      : "rgba(255, 255, 255, 0.05)",
-                    color: isActive
-                      ? "#8CE7D2"
-                      : "var(--muted, rgba(255,255,255,0.45))",
-                    fontSize: 11,
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {pill.label}
-                  {isActive && (
-                    <span style={{ marginLeft: 4, opacity: 0.6 }}>
-                      {pill.key === "assignee" ? (teamNameMap.get(filters[pill.key]!) ?? filters[pill.key]) : filters[pill.key]}
-                    </span>
-                  )}
-                </button>
-                {isOpen && (
-                  <FilterDropdown
-                    options={uniqueValues(tickets, pill.key, featureIdToName)}
-                    active={filters[pill.key]}
-                    onSelect={(v) => toggleFilter(pill.key, v)}
-                    labelMap={pill.key === "assignee" ? teamNameMap : undefined}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        <div style={{ flex: 1 }} />
-
-        {/* Refresh */}
-        <button
-          onClick={handleRefresh}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 30,
-            height: 30,
-            borderRadius: 8,
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            background: "rgba(255, 255, 255, 0.05)",
-            color: "var(--muted, rgba(255,255,255,0.45))",
-            cursor: "pointer",
-            fontSize: 14,
-          }}
-          title="Reset board"
-        >
-          ↻
-        </button>
-
-        {/* + New Ticket */}
-        <button
-          onClick={() => setShowModal(true)}
-          style={{
-            padding: "6px 14px",
-            borderRadius: 8,
-            border: "none",
-            background: "#8CE7D2",
-            color: "#000",
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: "pointer",
-            fontFamily: "inherit",
-            whiteSpace: "nowrap",
-          }}
-        >
-          + New Ticket
-        </button>
-      </div>
-
       {/* ── Columns ────────────────────────────────────────────── */}
       <div
         style={{
@@ -1338,8 +1717,8 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                 display: "flex",
                 flexDirection: "column",
                 borderRadius: 14,
-                background: "rgba(255, 255, 255, 0.02)",
-                border: `1px solid ${isDragTarget ? "rgba(140, 231, 210, 0.2)" : "rgba(255, 255, 255, 0.06)"}`,
+                background: "var(--card)",
+                border: `1px solid ${isDragTarget ? "rgba(140, 231, 210, 0.2)" : "var(--card-border)"}`,
                 transition: "border-color 0.15s ease",
                 overflow: "hidden",
               }}
@@ -1351,8 +1730,8 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                   alignItems: "center",
                   gap: 8,
                   padding: "12px 14px",
-                  background: "rgba(255, 255, 255, 0.03)",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+                  background: "var(--card)",
+                  borderBottom: "1px solid var(--divider)",
                 }}
               >
                 <span
@@ -1368,7 +1747,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "var(--foreground, #fff)",
+                    color: "var(--foreground)",
                     flex: 1,
                   }}
                 >
@@ -1386,7 +1765,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                     fontSize: 10,
                     fontFamily: "var(--font-mono, ui-monospace, monospace)",
                     fontWeight: 600,
-                    color: "rgba(255, 255, 255, 0.35)",
+                    color: "var(--text-quaternary)",
                     padding: "0 6px",
                   }}
                 >
@@ -1432,6 +1811,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
           onClose={() => setSelectedTicketId(null)}
           onUpdateTicket={handleUpdateTicket}
           featureName={selectedTicket.featureId ? featureIdToName.get(selectedTicket.featureId) : undefined}
+          features={features}
           team={team}
         />
       )}

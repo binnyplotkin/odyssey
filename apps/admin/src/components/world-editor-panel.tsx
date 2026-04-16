@@ -760,7 +760,7 @@ function GroupPanel({
         <>
           <div style={labelStyle}>Group Relationships</div>
           {(group.groupRelationships ?? []).map((rel, i) => (
-            <div key={i} style={{ display: "flex", flexDirection: "column", gap: "0.25rem", marginBottom: "0.5rem", padding: "0.5rem", background: "rgba(255,255,255,0.03)", borderRadius: "0.25rem" }}>
+            <div key={i} style={{ display: "flex", flexDirection: "column", gap: "0.25rem", marginBottom: "0.5rem", padding: "0.5rem", background: "var(--card)", borderRadius: "0.25rem" }}>
               <select
                 value={rel.targetGroupId}
                 onChange={(e) => onUpdate((g) => {
@@ -869,7 +869,7 @@ function RolePanel({
                     const current = r.authority ?? [];
                     return { ...r, authority: active ? current.filter((x) => x !== a) : [...current, a] };
                   })}
-                  style={{ border: "none", padding: "0.3rem 0.6rem", borderRadius: "0.25rem", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" as const, background: active ? "rgba(226,165,90,0.15)" : "rgba(255,255,255,0.05)", color: active ? "#F0F0F0" : "var(--muted)", fontWeight: active ? 600 : 400 }}
+                  style={{ border: "none", padding: "0.3rem 0.6rem", borderRadius: "0.25rem", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" as const, background: active ? "rgba(226,165,90,0.15)" : "var(--divider)", color: active ? "#F0F0F0" : "var(--muted)", fontWeight: active ? 600 : 400 }}
                 >
                   {a}
                 </button>
@@ -901,7 +901,7 @@ function RolePanel({
                     const current = r.visibleMetrics ?? [];
                     return { ...r, visibleMetrics: active ? current.filter((x) => x !== m.id) : [...current, m.id] };
                   })}
-                  style={{ border: "none", padding: "0.3rem 0.6rem", borderRadius: "0.25rem", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" as const, background: active ? "rgba(226,165,90,0.15)" : "rgba(255,255,255,0.05)", color: active ? "#F0F0F0" : "var(--muted)", fontWeight: active ? 600 : 400 }}
+                  style={{ border: "none", padding: "0.3rem 0.6rem", borderRadius: "0.25rem", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" as const, background: active ? "rgba(226,165,90,0.15)" : "var(--divider)", color: active ? "#F0F0F0" : "var(--muted)", fontWeight: active ? 600 : 400 }}
                 >
                   {m.label}
                 </button>

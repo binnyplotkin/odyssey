@@ -1,6 +1,7 @@
 "use client";
 
-import { type ComponentType, type ReactNode, useMemo, useState, useCallback, useEffect } from "react";
+import { type ComponentType, type ReactNode, useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 /* ── Types ──────────────────────────────────────────────────── */
 
@@ -47,6 +48,12 @@ export type SidebarProps = {
   storageKey?: string;
   /** Callback fired when the user clicks "Sign out" in the sidebar footer. */
   onSignOut?: () => void;
+  /** Callback fired when the user selects a theme. */
+  onThemeChange?: (theme: "dark" | "light" | "system") => void;
+  /** Current theme value. */
+  theme?: "dark" | "light" | "system";
+  /** Callback fired when the user clicks "Settings" in the user menu. */
+  onSettings?: () => void;
   /** Dynamic content injected into the header bar (between brand/hamburger and actions). */
   headerContent?: ReactNode;
   /** Page content — rendered beside the sidebar. */
@@ -119,6 +126,9 @@ export function Sidebar({
   userRole,
   storageKey = "odyssey-sidebar-collapsed",
   onSignOut,
+  onThemeChange,
+  theme = "dark",
+  onSettings,
   headerContent,
   children,
 }: SidebarProps) {
@@ -128,6 +138,13 @@ export function Sidebar({
 
   const [collapsed, setCollapsed] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [themeSubmenuOpen, setThemeSubmenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const themeButtonRef = useRef<HTMLDivElement>(null);
+  const themeSubmenuRef = useRef<HTMLDivElement>(null);
+  const themeCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [themeSubmenuPos, setThemeSubmenuPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem(storageKey);
@@ -141,6 +158,20 @@ export function Sidebar({
       return next;
     });
   }, [storageKey]);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (userMenuRef.current && !userMenuRef.current.contains(target)
+        && (!themeSubmenuRef.current || !themeSubmenuRef.current.contains(target))) {
+        setUserMenuOpen(false);
+        setThemeSubmenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [userMenuOpen]);
 
   const userInitial = userName ? userName.charAt(0).toUpperCase() : null;
 
@@ -178,18 +209,6 @@ export function Sidebar({
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {icon}
-            <span
-              style={{
-                fontWeight: 600,
-                fontSize: "1rem",
-                letterSpacing: "-0.02em",
-                color: "var(--foreground)",
-                opacity: 0.85,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {brand}
-            </span>
           </div>
 
           <button
@@ -303,94 +322,229 @@ export function Sidebar({
           ))}
         </div>
 
-        {/* User area */}
+        {/* User menu */}
         {userName && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "16px 20px",
-              minWidth: 240,
-              borderTop: "1px solid var(--border)",
-              flexShrink: 0,
-            }}
-          >
-            <div
+          <div ref={userMenuRef} style={{ position: "relative", minWidth: 240, flexShrink: 0 }}>
+            {/* Popup menu */}
+            {userMenuOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "100%",
+                  left: 8,
+                  right: 8,
+                  marginBottom: 4,
+                  background: "var(--background, #0f1117)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 10,
+                  padding: "4px 0",
+                  boxShadow: "0 -8px 24px rgba(0, 0, 0, 0.4)",
+                  zIndex: 200,
+                }}
+              >
+                {/* Settings */}
+                {onSettings && (
+                  <button
+                    type="button"
+                    onClick={() => { onSettings(); setUserMenuOpen(false); }}
+                    onMouseEnter={() => setHoveredId("menu-settings")}
+                    onMouseLeave={() => setHoveredId(null)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, width: "100%",
+                      padding: "8px 14px", background: hoveredId === "menu-settings" ? "var(--panel)" : "none",
+                      border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                      fontSize: "0.8125rem", color: "var(--foreground)",
+                      transition: "background 150ms",
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    Settings
+                  </button>
+                )}
+
+                {/* Theme submenu (hover-triggered, portal) */}
+                {onThemeChange && (
+                  <div
+                    ref={themeButtonRef}
+                    onMouseEnter={() => {
+                      if (themeCloseTimer.current) { clearTimeout(themeCloseTimer.current); themeCloseTimer.current = null; }
+                      setHoveredId("menu-theme");
+                      if (themeButtonRef.current) {
+                        const rect = themeButtonRef.current.getBoundingClientRect();
+                        setThemeSubmenuPos({ top: rect.top, left: rect.right + 4 });
+                      }
+                      setThemeSubmenuOpen(true);
+                    }}
+                    onMouseLeave={() => {
+                      themeCloseTimer.current = setTimeout(() => {
+                        setThemeSubmenuOpen(false);
+                        setHoveredId(null);
+                      }, 100);
+                    }}
+                  >
+                    <button
+                      type="button"
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10, width: "100%",
+                        padding: "8px 14px", background: hoveredId === "menu-theme" || themeSubmenuOpen ? "var(--panel)" : "none",
+                        border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                        fontSize: "0.8125rem", color: "var(--foreground)",
+                        transition: "background 150ms",
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="9" cy="9" r="4" />
+                        <path d="M9 1v2M9 15v2M1 9h2M15 9h2M3.3 3.3l1.4 1.4M13.3 13.3l1.4 1.4M3.3 14.7l1.4-1.4M13.3 4.7l1.4-1.4" />
+                      </svg>
+                      <span style={{ flex: 1 }}>Theme</span>
+                      <span style={{ fontSize: 10, color: "var(--muted)" }}>›</span>
+                    </button>
+
+                    {themeSubmenuOpen && themeSubmenuPos && createPortal(
+                      <div
+                        ref={themeSubmenuRef}
+                        onMouseEnter={() => {
+                          if (themeCloseTimer.current) { clearTimeout(themeCloseTimer.current); themeCloseTimer.current = null; }
+                        }}
+                        onMouseLeave={() => {
+                          themeCloseTimer.current = setTimeout(() => {
+                            setThemeSubmenuOpen(false);
+                            setHoveredId(null);
+                          }, 100);
+                        }}
+                        style={{
+                          position: "fixed",
+                          top: themeSubmenuPos.top,
+                          left: themeSubmenuPos.left,
+                          background: "var(--background, #0f1117)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 10,
+                          padding: "4px 0",
+                          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.4)",
+                          minWidth: 120,
+                          zIndex: 9999,
+                        }}
+                      >
+                        {(["dark", "light", "system"] as const).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => {
+                              onThemeChange(t);
+                              setThemeSubmenuOpen(false);
+                              setUserMenuOpen(false);
+                            }}
+                            onMouseEnter={() => setHoveredId(`theme-${t}`)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8, width: "100%",
+                              padding: "7px 14px",
+                              background: theme === t
+                                ? "var(--accent-soft)"
+                                : hoveredId === `theme-${t}` ? "var(--panel)" : "none",
+                              border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                              fontSize: "0.8125rem",
+                              color: theme === t ? "var(--accent-strong, #8CE7D2)" : "var(--foreground)",
+                              transition: "background 150ms",
+                            }}
+                          >
+                            <span style={{ textTransform: "capitalize" }}>{t}</span>
+                          </button>
+                        ))}
+                      </div>,
+                      document.body,
+                    )}
+                  </div>
+                )}
+
+                {/* Divider */}
+                {onSignOut && (onThemeChange || onSettings) && (
+                  <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
+                )}
+
+                {/* Sign out */}
+                {onSignOut && (
+                  <button
+                    type="button"
+                    onClick={() => { onSignOut(); setUserMenuOpen(false); }}
+                    onMouseEnter={() => setHoveredId("menu-signout")}
+                    onMouseLeave={() => setHoveredId(null)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, width: "100%",
+                      padding: "8px 14px", background: hoveredId === "menu-signout" ? "var(--panel)" : "none",
+                      border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                      fontSize: "0.8125rem", color: "rgba(248, 113, 113, 0.9)",
+                      transition: "background 150ms",
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2h8a2 2 0 012 2v10a2 2 0 01-2 2H6" />
+                      <path d="M10 9H2M2 9l3-3M2 9l3 3" />
+                    </svg>
+                    Sign out
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* User button trigger */}
+            <button
+              type="button"
+              onClick={() => { setUserMenuOpen(!userMenuOpen); setThemeSubmenuOpen(false); }}
+              onMouseEnter={() => setHoveredId("user-trigger")}
+              onMouseLeave={() => setHoveredId(null)}
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                background: "var(--accent-soft)",
-                flexShrink: 0,
+                gap: 10,
+                width: "100%",
+                padding: "12px 20px",
+                borderTop: "1px solid var(--border)",
+                background: userMenuOpen
+                  ? "var(--panel)"
+                  : hoveredId === "user-trigger"
+                    ? "var(--panel)"
+                    : "transparent",
+                border: "none",
+                borderTopStyle: "solid",
+                borderTopWidth: 1,
+                borderTopColor: "var(--border)",
+                cursor: "pointer",
+                textAlign: "left",
+                fontFamily: "inherit",
+                transition: "background 150ms",
               }}
             >
-              <span
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.8125rem",
-                  color: "var(--accent-strong)",
-                }}
-              >
-                {userInitial}
-              </span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1, minWidth: 0 }}>
-              <span
-                style={{
-                  fontWeight: 500,
-                  fontSize: "0.8125rem",
-                  color: "var(--foreground)",
-                  opacity: 0.85,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {userName}
-              </span>
-              {userRole && (
-                <span
-                  style={{
-                    fontWeight: 400,
-                    fontSize: "0.6875rem",
-                    color: "var(--muted)",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {userRole}
-                </span>
-              )}
-            </div>
-            {onSignOut && (
-              <button
-                type="button"
-                onClick={onSignOut}
-                onMouseEnter={() => setHoveredId("signout")}
-                onMouseLeave={() => setHoveredId(null)}
-                aria-label="Sign out"
+              <div
                 style={{
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 28,
-                  height: 28,
-                  borderRadius: 6,
-                  border: "none",
-                  background: hoveredId === "signout" ? "var(--panel)" : "transparent",
-                  color: hoveredId === "signout" ? "var(--foreground)" : "var(--muted)",
-                  cursor: "pointer",
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: "var(--accent-soft)",
                   flexShrink: 0,
-                  transition: "background 150ms, color 150ms",
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M6 2h8a2 2 0 012 2v10a2 2 0 01-2 2H6" />
-                  <path d="M10 9H2M2 9l3-3M2 9l3 3" />
-                </svg>
-              </button>
-            )}
+                <span style={{ fontWeight: 600, fontSize: "0.8125rem", color: "var(--accent-strong)" }}>
+                  {userInitial}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1, minWidth: 0 }}>
+                <span style={{ fontWeight: 500, fontSize: "0.8125rem", color: "var(--foreground)", opacity: 0.85, whiteSpace: "nowrap" }}>
+                  {userName}
+                </span>
+                {userRole && (
+                  <span style={{ fontWeight: 400, fontSize: "0.6875rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+                    {userRole}
+                  </span>
+                )}
+              </div>
+            </button>
           </div>
         )}
       </nav>
@@ -404,59 +558,42 @@ export function Sidebar({
             height: 56,
             padding: "0 24px",
             borderBottom: "1px solid var(--border)",
+            background: "var(--background)",
             flexShrink: 0,
+            overflow: "visible",
+            position: "relative",
+            zIndex: 10,
           }}
         >
-          {/* Hamburger — only when collapsed */}
-          {collapsed && (
-            <button
-              type="button"
-              onClick={toggle}
-              onMouseEnter={() => setHoveredId("hamburger")}
-              onMouseLeave={() => setHoveredId(null)}
-              aria-label="Open sidebar"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                border: "none",
-                background: hoveredId === "hamburger" ? "var(--accent-soft)" : "var(--panel)",
-                color: "var(--foreground)",
-                cursor: "pointer",
-                marginRight: 12,
-                flexShrink: 0,
-                transition: "background 150ms",
-              }}
-            >
-              <HamburgerIcon />
-            </button>
-          )}
-
-          {/* Brand — only when collapsed */}
+          {/* Brand icon as menu toggle — only when collapsed */}
           {collapsed && (
             <>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button
+                type="button"
+                onClick={toggle}
+                onMouseEnter={() => setHoveredId("hamburger")}
+                onMouseLeave={() => setHoveredId(null)}
+                aria-label="Open sidebar"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: hoveredId === "hamburger" ? "var(--accent-soft)" : "transparent",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  transition: "background 150ms",
+                }}
+              >
                 {icon}
-                <span
-                  style={{
-                    fontWeight: 600,
-                    fontSize: "1rem",
-                    letterSpacing: "-0.02em",
-                    color: "var(--foreground)",
-                    opacity: 0.85,
-                  }}
-                >
-                  {brand}
-                </span>
-              </div>
+              </button>
               <div
                 style={{
                   width: 1,
                   alignSelf: "stretch",
-                  margin: "12px 16px",
+                  margin: "12px 8px",
                   background: "var(--border)",
                   flexShrink: 0,
                 }}

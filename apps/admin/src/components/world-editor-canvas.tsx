@@ -25,15 +25,15 @@ import type { EntityType, EditorNode } from "./world-editor";
 /* ── Design Tokens (matching Paper designs) ────────────────── */
 
 const T = {
-  canvasBg: "#0C0E14",
-  chrome: "#111318",
-  nodeBg: "#161620",
-  borderSubtle: "rgba(255,255,255,0.07)",
-  borderInput: "rgba(255,255,255,0.1)",
-  textPrimary: "rgba(255,255,255,0.93)",
-  textSecondary: "rgba(255,255,255,0.7)",
-  textTertiary: "rgba(255,255,255,0.5)",
-  textQuaternary: "rgba(255,255,255,0.45)",
+  canvasBg: "var(--background, #0C0E14)",
+  chrome: "var(--panel, #111318)",
+  nodeBg: "var(--card, #161620)",
+  borderSubtle: "var(--divider)",
+  borderInput: "var(--input-border)",
+  textPrimary: "var(--text-primary)",
+  textSecondary: "var(--text-secondary)",
+  textTertiary: "var(--text-tertiary)",
+  textQuaternary: "var(--text-quaternary)",
   fontHeading: "'Space Grotesk', sans-serif",
   fontBody: "'Inter', sans-serif",
   fontMono: "'JetBrains Mono', monospace",
@@ -262,7 +262,7 @@ function validateWorld(world: WorldDefinition): ValidationError[] {
 function MiniBar({ value, max = 100, color }: { value: number; max?: number; color: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
-      <div style={{ flex: 1, height: 3, borderRadius: 2, background: "rgba(255,255,255,0.06)" }}>
+      <div style={{ flex: 1, height: 3, borderRadius: 2, background: "var(--card-hover)" }}>
         <div style={{ width: `${(value / max) * 100}%`, height: "100%", borderRadius: 2, background: color }} />
       </div>
       <span style={{ fontSize: 10, color: T.textSecondary, fontFamily: T.fontMono, minWidth: 18, textAlign: "right" }}>
@@ -277,7 +277,7 @@ function Badge({ text, color }: { text: string; color?: string }) {
     <span style={{
       display: "inline-block", padding: "1px 6px", borderRadius: 3,
       fontSize: 8, fontWeight: 600, fontFamily: T.fontMono,
-      background: color ? `${color}22` : "rgba(255,255,255,0.06)",
+      background: color ? `${color}22` : "var(--card-hover)",
       color: color ?? T.textSecondary, letterSpacing: "0.04em",
     }}>
       {text}
@@ -954,7 +954,7 @@ export function WorldEditorCanvas({ worlds }: Props) {
                               cursor: canCreate ? "pointer" : "default",
                               opacity: canCreate ? 1 : 0.5, textAlign: "left",
                             }}
-                            onMouseEnter={(e) => { if (canCreate) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
+                            onMouseEnter={(e) => { if (canCreate) e.currentTarget.style.background = "var(--card)"; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                           >
                             <div style={{
@@ -1018,7 +1018,7 @@ export function WorldEditorCanvas({ worlds }: Props) {
                   >
                     <defs>
                       <marker id="canvas-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.15)" />
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-quaternary)" />
                       </marker>
                     </defs>
                     {edges.map((edge) => {
@@ -1031,7 +1031,7 @@ export function WorldEditorCanvas({ worlds }: Props) {
                         <path
                           key={edge.id}
                           d={`M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${end.y}, ${end.x} ${end.y}`}
-                          stroke="rgba(255,255,255,0.08)" strokeWidth={1.5} fill="none"
+                          stroke="var(--card-border)" strokeWidth={1.5} fill="none"
                           markerEnd="url(#canvas-arrow)"
                         />
                       );
@@ -1184,7 +1184,7 @@ export function WorldEditorCanvas({ worlds }: Props) {
                           fontFamily: T.fontBody, fontSize: 13, color: menuItem.color ?? T.textPrimary,
                           cursor: "pointer", textAlign: "left",
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--divider)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                       >
                         <span>{menuItem.label}</span>

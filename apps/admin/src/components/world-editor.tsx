@@ -100,7 +100,7 @@ function clamp(v: number, min: number, max: number) {
 function MiniBar({ value, max = 100, color }: { value: number; max?: number; color: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", width: "100%" }}>
-      <div style={{ flex: 1, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)" }}>
+      <div style={{ flex: 1, height: 4, borderRadius: 2, background: "var(--card-hover)" }}>
         <div style={{ width: `${(value / max) * 100}%`, height: "100%", borderRadius: 2, background: color }} />
       </div>
       <span style={{ fontSize: "0.6rem", color: "var(--muted)", fontFamily: "var(--font-mono)", minWidth: 18, textAlign: "right" }}>
@@ -118,7 +118,7 @@ function Badge({ text, color, textColor }: { text: string; color?: string; textC
       borderRadius: "0.25rem",
       fontSize: "0.6rem",
       fontWeight: 500,
-      background: color ? `${color}20` : "rgba(255,255,255,0.06)",
+      background: color ? `${color}20` : "var(--card-hover)",
       color: textColor ?? color ?? "var(--muted)",
       lineHeight: 1.4,
     }}>

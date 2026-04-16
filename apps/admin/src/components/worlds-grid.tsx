@@ -241,7 +241,7 @@ export function WorldsGrid({ worlds }: Props) {
               style={{
                 padding: "0.375rem 0.875rem", borderRadius: 9999,
                 border: filter === f.key ? "none" : `1px solid ${T.border}`,
-                background: filter === f.key ? "rgba(255,255,255,0.08)" : "transparent",
+                background: filter === f.key ? "var(--card-hover)" : "transparent",
                 fontSize: "0.75rem", fontWeight: filter === f.key ? 500 : 400,
                 color: filter === f.key ? T.fg : T.muted,
                 cursor: "pointer",
@@ -284,7 +284,7 @@ export function WorldsGrid({ worlds }: Props) {
             onClick={() => setViewMode("grid")}
             style={{
               padding: "0.375rem 0.5rem", border: "none", cursor: "pointer",
-              background: viewMode === "grid" ? "rgba(255,255,255,0.08)" : "transparent",
+              background: viewMode === "grid" ? "var(--card-hover)" : "transparent",
             }}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -299,7 +299,7 @@ export function WorldsGrid({ worlds }: Props) {
             onClick={() => setViewMode("list")}
             style={{
               padding: "0.375rem 0.5rem", border: "none", cursor: "pointer",
-              background: viewMode === "list" ? "rgba(255,255,255,0.08)" : "transparent",
+              background: viewMode === "list" ? "var(--card-hover)" : "transparent",
             }}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

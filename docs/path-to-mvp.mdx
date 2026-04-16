@@ -4,11 +4,86 @@ gradientIndex: 0
 
 # Odyssey — Path to MVP
 
-## What We're Building
+## What we're building
 
-A voice-first AI simulation engine where players use their voice to enter immersive worlds and have real conversations with characters that feel alive. The MVP is a single demo: **Abraham's Tent** — a 5–10 minute voice conversation with a dramatized Genesis character, grounded in scripture, fully in character.
+Odyssey is a voice-first AI simulation engine. You enter a world with your voice, and the world speaks back — characters that listen and respond in real time, events that unfold based on what you say, and a narrator — a persistent AI voice that orchestrates the world around you.
 
-The architecture is a **pipeline voice agent**: browser mic capture → speech-to-text → LLM orchestrator → text-to-speech → audio playback. Each feature below builds toward a working end-to-end demo.
+The core IP is the **narrator** — a third-person AI presence with its own voice and identity that can build and run any world. The characters are the content. The narrator is the platform. It sets scenes, orchestrates who speaks and when, responds to player commands, and makes a voice-only world navigable without a screen.
+
+The world builder is the authoring layer — a visual canvas where you define characters, groups, events, roles, and rules as structured nodes. Those nodes feed into the simulation engine. Worlds can be built manually or generated from a text prompt. One tool, infinite worlds.
+
+## Who it's for
+
+The MVP is an internal proof of concept. The audience for the *demo* is anyone we put in front of it — potential investors, advisors, early believers. The audience for *this doc* is us: the team aligning on what we're building, in what order, and what done looks like.
+
+The longer-term product targets educators, storytellers, and experience designers who want to create immersive voice-driven simulations — but none of that matters until the MVP lands.
+
+## The MVP: Abraham's Tent
+
+One world. One proof of concept. Everything rides on this.
+
+Ancient Canaan, roughly 1800 BCE. The oaks of Mamre. Heat of day. A tent open on all four sides. The narrator sets the scene — atmosphere, stakes, context — then Abraham speaks. You respond. From that moment, everything is shaped by what you say.
+
+Abraham draws from Genesis, from the weight of covenant and family, from a lifetime of arguing with God and winning. Behind the curtain, Sarah listens. Isaac may run in. If the conversation goes deep enough, the angels arrive — and their disguise might slip.
+
+The world tracks what matters: openness, hospitality, mystery, tension. Your words shift who appears, what events unfold, and how the scene ends. There are no fixed outcomes. The tent receives all kinds.
+
+<Callout type="important">The bar is not "indistinguishable from the real Abraham" — that's incoherent. The bar is: this is the best educational dramatization of a biblical character I've ever interacted with. Voice in, voice out, grounded in scripture, fully in character.</Callout>
+
+## Success criteria
+
+The MVP ships when all five of these are true:
+
+1. **The pipeline works** — a real-time voice loop from mic to speaker, low-latency enough to feel like conversation (response begins within 2 seconds of player finishing speech)
+2. **The character holds** — Abraham stays in character for a full 10-minute session, draws from real source material, handles hard questions without breaking
+3. **The knowledge graph compounds** — a structured, LLM-maintained knowledge base feeds the character depth that's visibly better than a raw system prompt
+4. **The world responds** — what you say changes who appears, what they say, and how the scene unfolds. The narrator orchestrates at least one dynamic character entrance per session
+5. **The experience lands** — 10 external testers run a 5–10 minute session. 7 of 10 say it felt like something real, not a gimmick
+
+## Timeline + team
+
+**Target: July 8, 2026** — 12 weeks from kickoff.
+
+| Who | Role |
+|---|---|
+| Josh | Voice pipeline — STT/TTS hosting, WebSocket streaming, multi-voice routing, player app foundation, latency optimization |
+| Binny | Engine architecture — narrator orchestrator, knowledge graph infrastructure, world builder backend, pipeline integration |
+| Sam | World + experience — Abraham's Tent world authoring, character knowledge graphs, voice/sound design for all characters and narrator, UX/product direction, canvas editor UI, player app |
+
+The timeline is compressed by running features in parallel across the team rather than in sequence:
+
+- **F1 + F2 run simultaneously** (Apr 16 – May 20) — Josh builds the voice pipeline while Binny and Sam build the knowledge graph. Zero dependency between them.
+- **F3 + F4 overlap** (May 7 – Jun 19) — Binny's narrator engine work and Sam's canvas UI work are independent workstreams. Binny does the node schema early to unblock Sam, then focuses on the narrator.
+- **F5 starts early** (May 23) — Josh begins the player app foundation and voice activity detection while F3/F4 are still in flight. Full integration starts mid-June when the pieces converge.
+
+This is achievable because:
+
+- Each feature is a vertical slice that produces a working artifact, not a horizontal layer that only pays off at the end
+- Three people working in parallel across features, not sequentially through them
+- The world builder schema and narrator architecture are already designed (see Paper)
+- We're building on existing infrastructure (Next.js monorepo, Neon DB, admin platform)
+- Abraham's Tent is one world — scope is bounded by design
+
+## Risks
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| **Latency too high** — full pipeline (STT → LLM → TTS) exceeds 3s and breaks conversational feel | Kills the core experience | Streaming TTS, parallel processing, prompt caching. Feature 1 validates this early. |
+| **Multi-character orchestration too complex** — narrator + multiple characters in one session creates prompt bloat or inconsistency | World feels shallow or characters bleed into each other | Start with Abraham-only, add characters incrementally. Feature 3 builds orchestration in isolation before Feature 5 integrates. |
+| **Knowledge graph doesn't noticeably improve character quality** — the cost of building it doesn't justify the output vs. a well-crafted system prompt | Feature 2 was wasted effort | Feature 2 includes a testing UI with A/B comparison. Kill the graph early if it doesn't demonstrably outperform a static prompt. |
+| **TTS voice quality breaks immersion** — narrator and characters sound robotic or same-voiced | Undermines "voice-first" premise | Evaluate TTS providers early in Feature 1. Distinct voice profiles are a Feature 3 deliverable. |
+
+After the MVP lands, the expansion path is clear: more worlds authored in the world builder, user-generated worlds via the AI generation flow, and a consumer-facing app. The architecture is designed to scale — one narrator, infinite worlds.
+
+---
+
+## v0.1 — Abraham's Tent MVP
+
+An immersive audio world set at the oaks of Mamre — a living simulation where you step into Abraham's tent and the world responds to what you say. Abraham is the anchor, but the tent is alive: Sarah listens behind the curtain, Isaac may appear, and if the conversation runs deep enough, the angels arrive. Multiple characters, dynamic events, infinite possibilities — all driven by voice.
+
+Proves the full pipeline (mic capture → STT → LLM orchestrator → TTS → playback), the knowledge graph system that gives characters genuine depth, and the world simulation layer that makes the scene feel alive rather than scripted.
+
+5 features. 36 tickets. April – July 2026.
 
 ---
 
@@ -35,3 +110,76 @@ At conversation time, a **context curator** traverses the graph to pull exactly 
 The feature includes a **testing UI** where you chat with the character in text and see the knowledge graph working in real time — which pages are being pulled, which nodes are active, how the context budget is being spent. You can add sources, edit pages, and watch the graph update live.
 
 <Milestone title="Character Knowledge Graph" ticketIds="96b92f4e-3e77-4306-8364-f964f6d4e145,bf4bc97d-1191-409b-8aa0-c07e76713eda,1d956bda-b635-43ea-bc54-33a3404f42be,7a0ccf27-4e58-48fc-9a6b-d3910fd2d561,f256c63b-cf21-4bc9-89f8-681226265e31,2246b7d2-406f-4cc2-9d7f-7bc3dce83039" />
+
+---
+
+## Feature 3: World Narrator / Orchestrator
+
+<Feature featureId="070fd4af-9dc6-4e70-83ff-c175e1f94ca5" />
+
+The AI narrator that sits between the player and the world — a third-person presence with its own distinct voice and identity, separate from any character. This is the platform's core IP.
+
+The narrator is what makes a voice-only world navigable. Before you enter a scene, it builds the world in your mind: atmosphere, context, stakes. During the scene, it orchestrates — deciding who speaks, who enters, what shifts. The player can talk to it directly: ask questions ("Who else is here?"), give commands ("I want to speak to Sarah"), or direct the experience ("Take me to evening"). It responds, then steps back and lets the characters take over.
+
+The characters are the content — they belong to a specific world. The narrator is the product — the persistent AI that can build and run any world. Abraham's Tent is the first world it runs.
+
+The narrator maintains a live world state model: who's present, where the scene is, what narrative dimensions are active (tension, hospitality, mystery), and what events are available. It reads player intent, routes speech to the right handler (narrator command vs. in-world dialogue), and generates dynamic narration when the world changes — not canned lines, but contextual descriptions grounded in the current scene state.
+
+<Milestone title="World Narrator / Orchestrator" ticketIds="9db88e86-09d7-4411-a61a-54d788d991ad,45ff6e5f-4ba7-4d01-b680-be5440e3fdae,0d2c9270-4252-4a9e-8231-f97f4bd95fc3,a6937085-3e49-4557-9da2-21bde241ade1,d6e04c34-5b9d-4be4-8a9e-851f5d712444,37a869a3-1390-4123-b709-54f3357f5916,76c39afc-f80f-4311-9a8b-d765ca4560d2,1249698d-253b-415a-a7ac-e94293508b0e,65a353f2-4264-47df-bdae-a6d03d3ff766" />
+
+---
+
+## Feature 4: World Builder — Canvas Editor
+
+<Feature featureId="7fec1926-1682-49b8-a5db-77413e801175" />
+
+A visual canvas editor for authoring the structured data that powers every simulation. This is where worlds are built — not in code or config files, but on an infinite canvas where you place, connect, and configure the core entities that define a world.
+
+Six node types, each color-coded on the canvas with a rich sidebar panel when selected:
+
+- **World Core** — the root: setting, premise, narrator config (perspective, tense, style), dynamic metrics, progression phases, outcomes, scoring rubrics. One per world, required.
+- **Character** — NPCs with identity, emotional baseline (anger, fear, hope, loyalty, volatility), speaking style, voice config, behavior triggers, secrets, backstory, NPC relationships, and dialogue examples.
+- **Group** — factions with influence, cohesion, volatility, disposition, disposition triggers, goals, and inter-group relationships.
+- **Role** — the player's identity: authority domains, constraints, group alignments, inner circle, vulnerabilities, objectives, and win/loss conditions.
+- **Event** — scenarios with stakes, actors, involved groups, constraints (turn range, cooldown, phase), metric hints, and narration tone.
+- **Initial State** — starting metric values, character-player relationships, progression phase, time context, and tracking defaults.
+
+Worlds can be authored manually node-by-node or generated from a text prompt via AI — describe your world, and the system produces a complete set of nodes (~8) with consistent relationships and metrics. The world builder exports structured JSON that the simulation engine (narrator + characters) consumes at runtime.
+
+<Milestone title="World Builder — Canvas Editor" ticketIds="2e672aa8-f032-42fd-8e99-0c4faff22d77,6da08207-4d61-45ad-b734-88929e25ac01,b0db2b55-6eaa-415d-8635-f4d7b97a4833,1082a238-fe5b-429c-95ef-5a86c9770ba7,e4a4dd3e-99f4-4753-8ade-155a4bef7296,53e65f37-c9ab-442f-a55e-e6a9e8ba3099" />
+
+---
+
+## Feature 5: The Experience — Integration + Player App
+
+<Feature featureId="e6f030de-8c1c-4722-956a-3c0ae7aaacb1" />
+
+Everything comes together. Features 1–4 each build their piece in isolation: the voice pipeline, the knowledge graph, the narrator, the world builder. Feature 5 wires them into one seamless product and proves the MVP goal that matters most — *the experience lands*.
+
+A single session flow: the player opens the app, selects Abraham's Tent, and the narrator takes over. It sets the scene — the oaks of Mamre, the heat of day, the tent open on all four sides. Then Abraham speaks. From there, the world is live: the knowledge graph feeds the characters depth, the narrator orchestrates who appears and when, events fire based on what the player says, and the whole thing runs over the real-time voice pipeline.
+
+This feature includes the **player-facing app** — minimal but intentional. Not a dev tool. Visual feedback for listening, thinking, speaking states. Push-to-talk or voice activity detection. Designed to disappear so the voice experience is the product.
+
+It also includes **latency optimization** across the full pipeline (mic to first audio byte), **session lifecycle** (entry, active scene, graceful exit), and **extensive playtesting** of Abraham's Tent as a complete experience — tuning prompts, narrator pacing, character consistency, and edge cases until a 5–10 minute session consistently lands.
+
+<Milestone title="The Experience" ticketIds="1d184205-d67a-4e87-8fa1-a56963ee0866,c8dd3b0e-d683-4ed5-869d-c79fc17bb98a,4c6a77a4-78cb-44dc-a232-bc0e454cfd81,089a0280-aa2d-47e2-bc73-72747e7abeb8,ae185388-30d1-438f-a888-9cdf15c54cb5,17d595c2-4e7f-48ee-a309-1e0da3d1d03b,8c4dfc63-a0a4-4eb7-94d2-d316c6e9c4c8,efcbe649-a622-42e4-bd3d-9a1ebd2e59df" />
+
+---
+
+## Per-person workstreams
+
+<Workstream name="Josh" data="Apr 16 – May 6 (3 wk) | Feature 1: Voice pipeline — STT/TTS hosting, Abraham system prompt, WebSocket streaming, pipeline wiring, demo UI
+May 7 – May 23 (2.5 wk) | Feature 3: Multi-voice TTS routing — extend pipeline for distinct narrator + character voices
+May 23 – Jun 17 (3.5 wk) | Feature 5: Player app foundation + routing, voice activity detection + push-to-talk
+Jun 17 – Jul 8 (3 wk) | Feature 5: Latency optimization + integration support" />
+
+<Workstream name="Binny" data="Apr 16 – May 9 (3.5 wk) | Feature 2: Wiki schema, ingestion pipeline, context curator
+May 9 – Jun 6 (4 wk) | Feature 3: World state, scene intro, command router, orchestration, event narration
+Jun 6 – Jun 20 (2 wk) | Feature 4: Node schema, AI world generation, validation/export
+Jun 20 – Jul 8 (2.5 wk) | Feature 5: Pipeline integration, session lifecycle, playtesting" />
+
+<Workstream name="Sam" data="Apr 16 – May 16 (4 wk) | Feature 2: Abraham corpus, KG admin UI, test chat, secondary character graphs
+May 7 – May 30 (3.5 wk) | Feature 3: Narrator voice design, voice profiles, world definition (overlaps F2 tail)
+May 28 – Jun 19 (3 wk) | Feature 4: Canvas UI, sidebar panels, CRUD, Abraham's Tent authoring (overlaps F3 tail)
+Jun 19 – Jul 1 (2 wk) | Feature 5: Player app UI, UX design" />
+

@@ -95,7 +95,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
     setContent(
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 600, margin: 0 }}>Changelog</h1>
-        <span style={{ fontSize: "0.8rem", color: "var(--muted, rgba(255,255,255,0.5))" }}>
+        <span style={{ fontSize: "0.8rem", color: "var(--text-tertiary)" }}>
           {entries.length} entries
         </span>
       </div>,
@@ -156,13 +156,13 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                 border: "1px solid",
                 borderColor: active
                   ? (style?.color ?? "var(--accent, #8fd1cb)")
-                  : "rgba(255,255,255,0.1)",
+                  : "var(--card-border)",
                 background: active
                   ? (style?.bg ?? "rgba(143, 209, 203, 0.15)")
                   : "transparent",
                 color: active
                   ? (style?.color ?? "var(--accent, #8fd1cb)")
-                  : "var(--muted, rgba(255,255,255,0.5))",
+                  : "var(--text-tertiary)",
                 cursor: "pointer",
                 textTransform: "capitalize",
                 transition: "all 0.15s",
@@ -183,9 +183,9 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
               padding: "0.35rem 0.6rem",
               borderRadius: 8,
               fontSize: "0.75rem",
-              background: "rgba(255,255,255,0.06)",
-              color: "var(--fg, #fff)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              background: "var(--input-bg)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--input-border)",
               cursor: "pointer",
             }}
           >
@@ -205,7 +205,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
           style={{
             textAlign: "center",
             padding: "4rem 2rem",
-            color: "var(--muted, rgba(255,255,255,0.4))",
+            color: "var(--text-quaternary)",
             fontSize: "0.9rem",
           }}
         >
@@ -220,12 +220,12 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
             style={{
               fontSize: "0.75rem",
               fontWeight: 600,
-              color: "var(--muted, rgba(255,255,255,0.5))",
+              color: "var(--text-tertiary)",
               textTransform: "uppercase",
               letterSpacing: "0.08em",
               marginBottom: "0.75rem",
               paddingBottom: "0.5rem",
-              borderBottom: "1px solid rgba(255,255,255,0.06)",
+              borderBottom: "1px solid var(--divider)",
             }}
           >
             {group.date}
@@ -244,9 +244,9 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                   style={{
                     padding: "0.75rem 1rem",
                     borderRadius: 10,
-                    background: expanded ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
+                    background: expanded ? "var(--card-hover)" : "var(--card)",
                     border: "1px solid",
-                    borderColor: expanded ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.05)",
+                    borderColor: expanded ? "var(--card-border)" : "var(--divider)",
                     cursor: "pointer",
                     transition: "all 0.15s",
                   }}
@@ -260,7 +260,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                     <span
                       style={{
                         fontSize: "0.7rem",
-                        color: "var(--muted, rgba(255,255,255,0.4))",
+                        color: "var(--text-quaternary)",
                         flexShrink: 0,
                       }}
                     >
@@ -274,7 +274,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                       style={{
                         marginTop: "0.4rem",
                         fontSize: "0.8rem",
-                        color: "var(--muted, rgba(255,255,255,0.6))",
+                        color: "var(--text-secondary)",
                         lineHeight: 1.5,
                       }}
                     >
@@ -288,7 +288,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                       style={{
                         marginTop: "0.75rem",
                         paddingTop: "0.75rem",
-                        borderTop: "1px solid rgba(255,255,255,0.06)",
+                        borderTop: "1px solid var(--divider)",
                         display: "grid",
                         gridTemplateColumns: "auto 1fr",
                         gap: "0.3rem 1rem",
@@ -297,7 +297,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                     >
                       {entry.commitSha && (
                         <>
-                          <span style={{ color: "var(--muted, rgba(255,255,255,0.4))" }}>Commit</span>
+                          <span style={{ color: "var(--text-quaternary)" }}>Commit</span>
                           <span style={{ fontFamily: "monospace", fontSize: "0.7rem" }}>
                             {entry.commitSha.slice(0, 7)}
                           </span>
@@ -305,31 +305,31 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                       )}
                       {entry.prNumber && (
                         <>
-                          <span style={{ color: "var(--muted, rgba(255,255,255,0.4))" }}>PR</span>
+                          <span style={{ color: "var(--text-quaternary)" }}>PR</span>
                           <span>#{entry.prNumber}{entry.prTitle ? ` — ${entry.prTitle}` : ""}</span>
                         </>
                       )}
                       {entry.branch && (
                         <>
-                          <span style={{ color: "var(--muted, rgba(255,255,255,0.4))" }}>Branch</span>
+                          <span style={{ color: "var(--text-quaternary)" }}>Branch</span>
                           <span style={{ fontFamily: "monospace", fontSize: "0.7rem" }}>{entry.branch}</span>
                         </>
                       )}
                       {entry.author && (
                         <>
-                          <span style={{ color: "var(--muted, rgba(255,255,255,0.4))" }}>Author</span>
+                          <span style={{ color: "var(--text-quaternary)" }}>Author</span>
                           <span>{entry.author}</span>
                         </>
                       )}
                       {version && (
                         <>
-                          <span style={{ color: "var(--muted, rgba(255,255,255,0.4))" }}>Version</span>
+                          <span style={{ color: "var(--text-quaternary)" }}>Version</span>
                           <span>{version.version} — {version.title}</span>
                         </>
                       )}
                       {entry.diffSummary && (
                         <>
-                          <span style={{ color: "var(--muted, rgba(255,255,255,0.4))" }}>Changes</span>
+                          <span style={{ color: "var(--text-quaternary)" }}>Changes</span>
                           <span>{entry.diffSummary}</span>
                         </>
                       )}

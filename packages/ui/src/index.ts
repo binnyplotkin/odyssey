@@ -3,7 +3,7 @@
  *
  * CSS imports (use in app globals.css):
  *   @import "@odyssey/ui/styles/base.css";
- *   @import "@odyssey/ui/styles/themes/forest.css";  -- or neutral.css
+ *   @import "@odyssey/ui/styles/themes/ocean.css";  -- or neutral.css
  *
  * Palette constants (for JS/TS when you need raw hex values):
  */

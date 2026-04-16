@@ -42,10 +42,25 @@
 
   /* Semantic text colors */
   --color-muted: var(--muted);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-text-quaternary: var(--text-quaternary);
+  --color-text-placeholder: var(--text-placeholder);
 
   /* Semantic status colors */
   --color-success: var(--success);
   --color-danger: var(--danger);
+
+  /* Component tokens */
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-card-border: var(--card-border);
+  --color-input-bg: var(--input-bg);
+  --color-input-border: var(--input-border);
+  --color-dropdown-bg: var(--dropdown-bg);
+  --color-dropdown-border: var(--dropdown-border);
+  --color-divider: var(--divider);
 
   /* Palette — raw scale for one-off use */
   --color-forest-950: var(--forest-950);
@@ -89,6 +104,27 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────── */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 3px;
 }
 
 /* ── Shared component classes ───────────────────────────────── */
