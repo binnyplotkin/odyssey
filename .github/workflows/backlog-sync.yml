@@ -1,0 +1,78 @@
+name: Sync Backlog
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Gather commit info
+        id: info
+        run: |
+          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "author=${{ github.event.head_commit.author.username || github.actor }}" >> "$GITHUB_OUTPUT"
+          echo "branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+          MSG=$(git log -1 --pretty=%B)
+          {
+            echo "msg<<EOFMSG"
+            echo "$MSG"
+            echo "EOFMSG"
+          } >> "$GITHUB_OUTPUT"
+
+          DIFF=$(git diff --stat HEAD~1 HEAD | tail -1)
+          echo "diff_summary=$DIFF" >> "$GITHUB_OUTPUT"
+
+          FILES=$(git diff --name-only HEAD~1 HEAD | head -200)
+          {
+            echo "changed_files<<EOFFILES"
+            echo "$FILES"
+            echo "EOFFILES"
+          } >> "$GITHUB_OUTPUT"
+
+          PR_NUM=""
+          PR_TITLE=""
+          if [[ "$MSG" =~ \#([0-9]+) ]]; then
+            PR_NUM="${BASH_REMATCH[1]}"
+          fi
+          if [ -n "$PR_NUM" ]; then
+            PR_TITLE=$(gh pr view "$PR_NUM" --json title --jq .title 2>/dev/null || echo "")
+          fi
+          echo "pr_number=$PR_NUM" >> "$GITHUB_OUTPUT"
+          echo "pr_title=$PR_TITLE" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Sync backlog
+        run: npx tsx scripts/sync-backlog.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Repo variable — set to "true" in GitHub repo settings when you
+          # trust the agent to mutate ticket.status (high-confidence only).
+          # Until then, the script runs in proposal mode and only appends
+          # activity entries — safe to leave on.
+          APPLY_BACKLOG_UPDATES: ${{ vars.APPLY_BACKLOG_UPDATES }}
+          COMMIT_SHA: ${{ steps.info.outputs.sha }}
+          COMMIT_MSG: ${{ steps.info.outputs.msg }}
+          PR_NUMBER: ${{ steps.info.outputs.pr_number }}
+          PR_TITLE: ${{ steps.info.outputs.pr_title }}
+          BRANCH: ${{ steps.info.outputs.branch }}
+          AUTHOR: ${{ steps.info.outputs.author }}
+          DIFF_SUMMARY: ${{ steps.info.outputs.diff_summary }}
+          CHANGED_FILES: ${{ steps.info.outputs.changed_files }}
