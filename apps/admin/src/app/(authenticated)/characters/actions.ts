@@ -119,6 +119,24 @@ export async function rebuildCharacterEdges(
   return { ok: true, data: result };
 }
 
+/* ── Sources ───────────────────────────────────────────────────── */
+
+export async function deleteSource(
+  characterId: string,
+  sourceId: string,
+): Promise<ActionResult> {
+  const wiki = getWikiStore();
+  const source = await wiki.getSource(sourceId);
+  if (!source || source.characterId !== characterId) {
+    return { ok: false, error: "Source not found." };
+  }
+  const removed = await wiki.removeSource(sourceId);
+  if (!removed) return { ok: false, error: "Delete failed." };
+  const character = await getCharacterStore().getById(characterId);
+  if (character) revalidatePath(`/characters/${character.slug}/sources`);
+  return { ok: true };
+}
+
 /* ── Delete ────────────────────────────────────────────────────── */
 
 export async function deleteCharacter(id: string): Promise<ActionResult> {

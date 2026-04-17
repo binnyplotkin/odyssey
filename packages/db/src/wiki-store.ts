@@ -356,6 +356,8 @@ export interface WikiStore {
   addSourceRefs(refs: CreateSourceRefInput[]): Promise<void>;
   clearSourceRefsForPage(pageId: string): Promise<void>;
   listSourceRefsForPage(pageId: string): Promise<WikiSourceRefRecord[]>;
+  /** Every source ref for every page in this character — one JOIN, so cheap. */
+  listSourceRefsForCharacter(characterId: string): Promise<WikiSourceRefRecord[]>;
 
   // Ingestion log
   startIngestion(input: StartIngestionInput): Promise<WikiIngestionLogRecord>;
@@ -746,6 +748,35 @@ function neonStore(): WikiStore {
         .where(eq(wikiSourceRefsTable.pageId, pageId))
         .orderBy(desc(wikiSourceRefsTable.createdAt));
       return rows.map(normalizeSourceRef);
+    },
+
+    async listSourceRefsForCharacter(characterId) {
+      const db = requireDb();
+      // JOIN wiki_source_refs → wiki_pages, filter by characterId. Single
+      // round-trip instead of N calls to listSourceRefsForPage.
+      const rows = await db
+        .select({
+          id: wikiSourceRefsTable.id,
+          pageId: wikiSourceRefsTable.pageId,
+          sourceId: wikiSourceRefsTable.sourceId,
+          passage: wikiSourceRefsTable.passage,
+          quote: wikiSourceRefsTable.quote,
+          relevanceNote: wikiSourceRefsTable.relevanceNote,
+          createdAt: wikiSourceRefsTable.createdAt,
+        })
+        .from(wikiSourceRefsTable)
+        .innerJoin(wikiPagesTable, eq(wikiSourceRefsTable.pageId, wikiPagesTable.id))
+        .where(eq(wikiPagesTable.characterId, characterId))
+        .orderBy(desc(wikiSourceRefsTable.createdAt));
+      return rows.map((r) => ({
+        id: r.id,
+        pageId: r.pageId,
+        sourceId: r.sourceId,
+        passage: r.passage,
+        quote: r.quote,
+        relevanceNote: r.relevanceNote,
+        createdAt: requireIso(r.createdAt),
+      }));
     },
 
     /* ── Ingestion log ───────────────────────────────────── */
