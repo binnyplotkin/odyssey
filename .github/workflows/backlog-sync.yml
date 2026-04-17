@@ -3,6 +3,16 @@ name: Sync Backlog
 on:
   push:
     branches: [main]
+  # Manual replay — useful for testing the sync against a commit that
+  # landed before this workflow existed, or for re-running after a
+  # prompt change. Triggered from the Actions tab → "Sync Backlog" →
+  # "Run workflow" → paste a SHA.
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Commit SHA to replay (defaults to current HEAD on main)"
+        required: false
+        type: string
 
 jobs:
   sync:
@@ -11,6 +21,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Replay target if provided, else the pushed commit (default behavior)
+          ref: ${{ inputs.commit_sha || github.sha }}
           fetch-depth: 2
 
       - name: Setup Node
@@ -24,7 +36,9 @@ jobs:
       - name: Gather commit info
         id: info
         run: |
-          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          # Use the checked-out HEAD so replays against an older SHA work.
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "author=${{ github.event.head_commit.author.username || github.actor }}" >> "$GITHUB_OUTPUT"
           echo "branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
