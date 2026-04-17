@@ -1,0 +1,82 @@
+name: Sync Backlog (PR)
+
+# Mirror of backlog-sync.yml but triggered by PR-lifecycle events so the
+# agent can propose "review" transitions when a PR opens — long before
+# the merge commit lands on main.
+#
+# Event actions handled:
+#   opened             → first-time open of a non-draft PR
+#   reopened           → PR reopened
+#   ready_for_review   → PR promoted out of draft
+#   synchronize        → new commits pushed to an open PR (activity only)
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # Draft PRs shouldn't trigger — they're work-in-progress, not review-ready.
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need full history so base...head diff resolves for any branch depth.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Gather PR info
+        id: info
+        env:
+          # Pass PR-authored text via env — never interpolate directly into
+          # shell commands (title/body are attacker-controlled strings).
+          PR_TITLE_RAW: ${{ github.event.pull_request.title }}
+          PR_BODY_RAW: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Compose "message" from PR title + body so the script's existing
+          # COMMIT_MSG plumbing works without changes.
+          {
+            echo "msg<<EOFMSG"
+            printf '%s\n\n%s\n' "$PR_TITLE_RAW" "$PR_BODY_RAW"
+            echo "EOFMSG"
+          } >> "$GITHUB_OUTPUT"
+
+          DIFF=$(git diff --stat "$BASE_SHA" "$HEAD_SHA" | tail -1)
+          echo "diff_summary=$DIFF" >> "$GITHUB_OUTPUT"
+
+          FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | head -200)
+          {
+            echo "changed_files<<EOFFILES"
+            echo "$FILES"
+            echo "EOFFILES"
+          } >> "$GITHUB_OUTPUT"
+
+          # pr-opened | pr-reopened | pr-ready_for_review | pr-synchronize
+          echo "event_kind=pr-${{ github.event.action }}" >> "$GITHUB_OUTPUT"
+
+      - name: Sync backlog
+        run: npx tsx scripts/sync-backlog.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          APPLY_BACKLOG_UPDATES: ${{ vars.APPLY_BACKLOG_UPDATES }}
+          EVENT_KIND: ${{ steps.info.outputs.event_kind }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          COMMIT_MSG: ${{ steps.info.outputs.msg }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          DIFF_SUMMARY: ${{ steps.info.outputs.diff_summary }}
+          CHANGED_FILES: ${{ steps.info.outputs.changed_files }}

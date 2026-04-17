@@ -66,6 +66,12 @@ const diffSummary = process.env.DIFF_SUMMARY ?? null;
 const changedFiles = (process.env.CHANGED_FILES ?? "").split("\n").filter(Boolean);
 const applyUpdates = process.env.APPLY_BACKLOG_UPDATES === "true";
 
+// Event kinds: push-main (default) | pr-opened | pr-ready_for_review |
+// pr-synchronize | pr-reopened. The PR events restrict which status
+// transitions make sense.
+const eventKind = process.env.EVENT_KIND ?? "push-main";
+const isPrEvent = eventKind.startsWith("pr-");
+
 /* ── Meta-commit detection ─────────────────────────────────────── */
 // If every changed file is infra/meta (CI, scripts, top-level config,
 // docs), skip the LLM entirely — these commits don't advance product
@@ -133,9 +139,25 @@ async function proposeUpdates(
 ): Promise<Proposal[]> {
   const openai = new OpenAI();
 
+  const eventFraming = (() => {
+    switch (eventKind) {
+      case "pr-opened":
+      case "pr-reopened":
+        return `A pull request was just opened. Propose "review" for tickets whose work this PR contains. Do NOT propose "done" — the PR hasn't merged yet.`;
+      case "pr-ready_for_review":
+        return `A pull request was marked ready for review (out of draft). Propose "review" for tickets whose work this PR contains. Do NOT propose "done".`;
+      case "pr-synchronize":
+        return `New commits were pushed to an open PR. Generally propose newStatus: null (activity-only) unless the new commits clearly pivot the scope.`;
+      default:
+        return `A push just landed on main. If the work clearly closes a ticket (e.g. "closes #", full feature landed), propose "done"; otherwise "in-progress" or null.`;
+    }
+  })();
+
   const prompt = `You are a backlog-sync agent for Odyssey (a voice-first AI simulation engine).
 
-A push just landed on main. Decide which open tickets are impacted and what their new status should be.
+${eventFraming}
+
+Decide which open tickets are impacted and what their new status should be.
 
 Commit message:
 ${commitMsg}
@@ -201,6 +223,11 @@ Rules:
           x.evidenceFiles.every((f) => typeof f === "string")
         );
       })
+      // On PR events the PR hasn't merged yet, so "done" is always premature.
+      // Downgrade to "review" rather than drop so we still surface the match.
+      .map((p) =>
+        isPrEvent && p.newStatus === "done" ? { ...p, newStatus: "review" as const } : p,
+      )
       .slice(0, 20);
   } catch (err) {
     console.warn("Failed to parse LLM response; no proposals applied.", err);
@@ -340,7 +367,9 @@ async function rollupFeatures(featureIds: Set<string>) {
 /* ── Main ──────────────────────────────────────────────────────── */
 
 async function main() {
-  console.log(`sync-backlog: ${commitSha.slice(0, 7)} — apply=${applyUpdates}`);
+  console.log(
+    `sync-backlog: ${commitSha.slice(0, 7)} — event=${eventKind} apply=${applyUpdates}`,
+  );
 
   if (metaOnly) {
     console.log(

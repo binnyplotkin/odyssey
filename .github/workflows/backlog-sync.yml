@@ -84,6 +84,7 @@ jobs:
           # Until then, the script runs in proposal mode and only appends
           # activity entries — safe to leave on.
           APPLY_BACKLOG_UPDATES: ${{ vars.APPLY_BACKLOG_UPDATES }}
+          EVENT_KIND: push-main
           COMMIT_SHA: ${{ steps.info.outputs.sha }}
           COMMIT_MSG: ${{ steps.info.outputs.msg }}
           PR_NUMBER: ${{ steps.info.outputs.pr_number }}
