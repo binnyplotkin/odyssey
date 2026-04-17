@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EraConfig, WikiEdgeRecord, WikiPageRecord } from "@odyssey/db";
+import { ChatGraph } from "@/components/chat-graph";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -318,8 +319,14 @@ export function CharacterChat({ character, pages, edges }: Props) {
           />
         </div>
 
-        {/* Right: latest trace panel */}
-        <TracePanel latestTurn={turns[turns.length - 1] ?? null} pageBySlug={pageBySlug} edges={edges} />
+        {/* Right: graph + trace panel */}
+        <TracePanel
+          turns={turns}
+          character={character}
+          pages={pages}
+          edges={edges}
+          pageBySlug={pageBySlug}
+        />
       </div>
     </div>
   );
@@ -798,21 +805,83 @@ const ghostBtn: React.CSSProperties = {
 /* ── Trace panel (right column) ────────────────────────────────── */
 
 function TracePanel({
-  latestTurn, pageBySlug, edges,
+  turns, character, pages, edges, pageBySlug,
 }: {
-  latestTurn: Turn | null;
-  pageBySlug: Map<string, WikiPageRecord>;
+  turns: Turn[];
+  character: CharacterProp;
+  pages: WikiPageRecord[];
   edges: WikiEdgeRecord[];
+  pageBySlug: Map<string, WikiPageRecord>;
 }) {
   const [tab, setTab] = useState<"trace" | "prompt">("trace");
-  const c = latestTurn?.curator;
-  void edges;
+  /**
+   * selectedTurnIdx tracks which turn the trace panel is focused on.
+   * - `null` means "Live" — always track the latest turn, even as new ones arrive.
+   * - An integer index locks to a specific turn (by its position in `turns`).
+   */
+  const [selectedTurnIdx, setSelectedTurnIdx] = useState<number | null>(null);
+
+  // When a new turn starts and we're in "Live" mode, nothing special to do —
+  // the derived focusedTurn below already points to the latest. If the user
+  // was locked to a past turn, keep them there.
+  const focusedTurn =
+    selectedTurnIdx !== null && turns[selectedTurnIdx]
+      ? turns[selectedTurnIdx]
+      : turns[turns.length - 1] ?? null;
+
+  const c = focusedTurn?.curator ?? null;
+
+  // Current era for the graph header (majority event-page era).
+  const currentEra = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of pages) {
+      if (p.timeIndex?.era) counts.set(p.timeIndex.era, (counts.get(p.timeIndex.era) ?? 0) + 1);
+    }
+    let best: string | null = null; let bestN = 0;
+    for (const [k, n] of counts) if (n > bestN) { best = k; bestN = n; }
+    return best;
+  }, [pages]);
+
+  const graphCurator = useMemo(() => {
+    if (!c) return null;
+    return {
+      trace: {
+        seeds: c.trace.seeds,
+        timelineFiltered: c.trace.timelineFiltered,
+        scoreDropped: c.trace.scoreDropped,
+        budgetDropped: c.trace.budgetDropped,
+        edges: c.trace.edges,
+      },
+      pages: c.pages.map((p) => ({ slug: p.slug, rendering: p.rendering })),
+    };
+  }, [c]);
+
+  void character;
 
   return (
     <div style={{ width: 640, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--background)" }}>
+      {/* Turn scrubber */}
+      <TurnScrubber
+        turns={turns}
+        selectedIdx={selectedTurnIdx}
+        onSelect={setSelectedTurnIdx}
+      />
+
+      {/* Graph */}
+      <div style={{ borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+        <ChatGraph
+          pages={pages}
+          edges={edges}
+          eras={character.eras}
+          currentEra={currentEra}
+          curator={graphCurator}
+        />
+      </div>
+
+      {/* Tab header */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "12px 20px", borderBottom: `1px solid ${T.border}`,
+        padding: "10px 20px", borderBottom: `1px solid ${T.border}`, flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
@@ -829,10 +898,14 @@ function TracePanel({
           <TabPill active={tab === "prompt"} onClick={() => setTab("prompt")} label="Prompt" />
         </div>
       </div>
+
+      {/* Tab content */}
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "18px 20px" }}>
         {!c ? (
           <div style={{ color: T.muted, fontFamily: T.fontBody, fontSize: 13 }}>
-            Send a message to see the curator's work.
+            {turns.length === 0
+              ? "Send a message to see the curator's work."
+              : "This turn hasn't been curated yet."}
           </div>
         ) : tab === "prompt" ? (
           <pre style={{
@@ -848,6 +921,106 @@ function TracePanel({
         )}
       </div>
     </div>
+  );
+}
+
+function TurnScrubber({
+  turns, selectedIdx, onSelect,
+}: {
+  turns: Turn[];
+  selectedIdx: number | null;
+  onSelect: (idx: number | null) => void;
+}) {
+  if (turns.length === 0) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "10px 20px", borderBottom: `1px solid ${T.border}`,
+        background: "rgba(255,255,255,0.02)", flexShrink: 0,
+      }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Turn
+        </span>
+        <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
+          no turns yet
+        </span>
+      </div>
+    );
+  }
+
+  const liveActive = selectedIdx === null;
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 6,
+      padding: "8px 14px", borderBottom: `1px solid ${T.border}`,
+      background: "rgba(255,255,255,0.02)", flexShrink: 0,
+      overflowX: "auto",
+    }}>
+      <span style={{
+        fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted,
+        letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0, paddingRight: 4,
+      }}>
+        Turn
+      </span>
+      {/* Live pill — tracks latest */}
+      <ScrubberPill
+        active={liveActive}
+        onClick={() => onSelect(null)}
+        label="Live"
+        dot={liveActive}
+      />
+      {turns.map((_, i) => {
+        const isLatest = i === turns.length - 1;
+        const active = selectedIdx === i;
+        return (
+          <ScrubberPill
+            key={turns[i].id}
+            active={active}
+            onClick={() => onSelect(i)}
+            label={`T${i + 1}`}
+            status={turns[i].status}
+            isLatest={isLatest}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function ScrubberPill({
+  active, onClick, label, dot, status, isLatest,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  dot?: boolean;
+  status?: Turn["status"];
+  isLatest?: boolean;
+}) {
+  let dotColor: string | null = null;
+  if (dot) dotColor = "#8CE7D2";
+  else if (isLatest && status === "streaming") dotColor = "#4ADE80";
+  else if (status === "error") dotColor = "#E89090";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 5,
+        padding: "3px 10px", borderRadius: 999,
+        border: active ? "none" : `1px solid ${T.border}`,
+        background: active ? "rgba(140,231,210,0.12)" : "transparent",
+        color: active ? "#8CE7D2" : T.muted,
+        fontFamily: T.fontMono, fontSize: 10, fontWeight: active ? 600 : 500,
+        letterSpacing: "0.04em", textTransform: "uppercase",
+        cursor: "pointer", flexShrink: 0,
+      }}
+    >
+      {dotColor && <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor, boxShadow: active ? `0 0 6px ${dotColor}` : undefined }} />}
+      {label}
+    </button>
   );
 }
 
