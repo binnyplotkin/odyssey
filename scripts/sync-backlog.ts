@@ -66,6 +66,32 @@ const diffSummary = process.env.DIFF_SUMMARY ?? null;
 const changedFiles = (process.env.CHANGED_FILES ?? "").split("\n").filter(Boolean);
 const applyUpdates = process.env.APPLY_BACKLOG_UPDATES === "true";
 
+/* ── Meta-commit detection ─────────────────────────────────────── */
+// If every changed file is infra/meta (CI, scripts, top-level config,
+// docs), skip the LLM entirely — these commits don't advance product
+// tickets, and the agent will hallucinate connections if asked.
+
+const META_PREFIXES = [".github/", "scripts/", "docs/"];
+const META_FILENAMES = new Set([
+  "README.md",
+  "CLAUDE.md",
+  "package.json",
+  "package-lock.json",
+  "tsconfig.json",
+  ".gitignore",
+  ".eslintrc.json",
+  ".prettierrc",
+]);
+
+function isMetaPath(path: string): boolean {
+  if (META_FILENAMES.has(path)) return true;
+  if (META_PREFIXES.some((p) => path.startsWith(p))) return true;
+  if (path.endsWith(".md") && !path.includes("/")) return true;
+  return false;
+}
+
+const metaOnly = changedFiles.length > 0 && changedFiles.every(isMetaPath);
+
 if (!commitSha || !commitMsg) {
   console.error("COMMIT_SHA and COMMIT_MSG are required.");
   process.exit(1);
@@ -99,6 +125,7 @@ type Proposal = {
   newStatus: "backlog" | "todo" | "in-progress" | "review" | "done" | null;
   activityText: string;
   confidence: "high" | "medium" | "low";
+  evidenceFiles: string[];
 };
 
 async function proposeUpdates(
@@ -134,17 +161,20 @@ Return EXACTLY this JSON (no markdown fences, no extra text):
       "ticketId": "<id>",
       "newStatus": "backlog" | "todo" | "in-progress" | "review" | "done" | null,
       "activityText": "<one-sentence human-readable note about what this push did for this ticket>",
-      "confidence": "high" | "medium" | "low"
+      "confidence": "high" | "medium" | "low",
+      "evidenceFiles": ["<path>", "..."]
     }
   ]
 }
 
 Rules:
-- "high" = file paths + commit message unambiguously match a ticket's scope.
-- "medium" = plausible match but the commit touches multiple areas.
+- evidenceFiles MUST be non-empty and MUST be drawn verbatim from the "Changed files" list above. If you cannot cite a real changed file that backs the match, do not include the proposal.
+- "high" = at least one evidenceFile's path clearly relates to vocabulary in the ticket title/description/domain (e.g. ticket about "voice waveform" + evidence file "apps/web/src/components/voice-waveform.tsx"). Weak or metaphorical matches are NOT high.
+- "medium" = plausible match but the commit touches multiple areas or the file/ticket relationship is indirect.
 - "low" = tangential; you're reporting it but wouldn't bet on it.
 - newStatus: "in-progress" if this push is partial progress; "review"/"done" only if the commit clearly closes the work (e.g. "closes #", "complete", full feature landed); null if you only want to log activity without changing status.
-- Prefer fewer, higher-quality updates over many speculative ones. Empty "updates" is a valid answer.`;
+- Prefer fewer, higher-quality updates over many speculative ones. Empty "updates" is a valid and preferred answer when the push is infra, CI, tooling, or otherwise doesn't advance a product ticket.
+- Do NOT fabricate connections. If the commit message mentions one thing but no changed file touches the ticket's area, skip the ticket.`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -165,7 +195,10 @@ Rules:
           typeof x.ticketId === "string" &&
           typeof x.activityText === "string" &&
           validConfidence.has(x.confidence as string) &&
-          (x.newStatus === null || validStatus.has(x.newStatus as string))
+          (x.newStatus === null || validStatus.has(x.newStatus as string)) &&
+          Array.isArray(x.evidenceFiles) &&
+          x.evidenceFiles.length > 0 &&
+          x.evidenceFiles.every((f) => typeof f === "string")
         );
       })
       .slice(0, 20);
@@ -173,6 +206,59 @@ Rules:
     console.warn("Failed to parse LLM response; no proposals applied.", err);
     return [];
   }
+}
+
+/* ── Grounding: validate evidence + calibrate confidence ───────── */
+// Two checks:
+//   1. Reject proposals whose evidenceFiles aren't actually in the push
+//      (catches fabricated paths).
+//   2. Downgrade "high" to "medium" when no evidence-file path tokens
+//      overlap with the ticket's title/description/domain (catches the
+//      "WebSocket streaming hallucination" failure mode).
+
+const changedFileSet = new Set(changedFiles);
+
+function pathTokens(path: string): string[] {
+  return path
+    .toLowerCase()
+    .split(/[/._\-\s]+/)
+    .filter((t) => t.length >= 4);
+}
+
+function ticketTokens(ticket: {
+  title: string;
+  description: string | null;
+  domain: string | null;
+}): Set<string> {
+  const blob = [ticket.title, ticket.description ?? "", ticket.domain ?? ""]
+    .join(" ")
+    .toLowerCase();
+  return new Set(blob.split(/[^a-z0-9]+/).filter((t) => t.length >= 4));
+}
+
+function calibrate(
+  proposal: Proposal,
+  ticket: { title: string; description: string | null; domain: string | null },
+): { proposal: Proposal; reject?: string } {
+  const realEvidence = proposal.evidenceFiles.filter((f) => changedFileSet.has(f));
+  if (realEvidence.length === 0) {
+    return { proposal, reject: "no cited file was actually in the push" };
+  }
+
+  const ticketBag = ticketTokens(ticket);
+  const hasOverlap = realEvidence.some((f) =>
+    pathTokens(f).some((tok) => ticketBag.has(tok)),
+  );
+  const calibratedConfidence: Proposal["confidence"] =
+    proposal.confidence === "high" && !hasOverlap ? "medium" : proposal.confidence;
+
+  return {
+    proposal: {
+      ...proposal,
+      evidenceFiles: realEvidence,
+      confidence: calibratedConfidence,
+    },
+  };
 }
 
 /* ── 3. Apply proposals (activity always; status only if allowed) ─ */
@@ -204,7 +290,10 @@ async function applyProposal(
     proposal.newStatus && proposal.newStatus !== ticket.status
       ? ` · proposed status → ${proposal.newStatus}`
       : "";
-  const note = `${prefix} ${shaRef}: ${proposal.activityText}${proposedStatusNote}`;
+  const evidenceNote = proposal.evidenceFiles.length
+    ? ` · evidence: ${proposal.evidenceFiles.slice(0, 3).join(", ")}`
+    : "";
+  const note = `${prefix} ${shaRef}: ${proposal.activityText}${proposedStatusNote}${evidenceNote}`;
 
   const existing = Array.isArray(ticket.activity) ? (ticket.activity as ActivityItem[]) : [];
   const nextActivity = [...existing, makeActivityItem(note)];
@@ -253,27 +342,46 @@ async function rollupFeatures(featureIds: Set<string>) {
 async function main() {
   console.log(`sync-backlog: ${commitSha.slice(0, 7)} — apply=${applyUpdates}`);
 
+  if (metaOnly) {
+    console.log(
+      `Meta-only push (${changedFiles.length} file(s) under .github/ · scripts/ · docs/ · top-level config). Skipping LLM.`,
+    );
+    return;
+  }
+
   const openTickets = await fetchOpenTickets();
   if (openTickets.length === 0) {
     console.log("No open tickets; nothing to sync.");
     return;
   }
 
-  const proposals = await proposeUpdates(openTickets);
-  console.log(`Received ${proposals.length} proposal(s).`);
+  const rawProposals = await proposeUpdates(openTickets);
+  console.log(`Received ${rawProposals.length} raw proposal(s).`);
 
   const byId = new Map(openTickets.map((t) => [t.id, t]));
   const touchedFeatures = new Set<string>();
 
-  for (const p of proposals) {
-    const ticket = byId.get(p.ticketId);
+  for (const raw of rawProposals) {
+    const ticket = byId.get(raw.ticketId);
     if (!ticket) {
-      console.warn(`Proposal references unknown ticket ${p.ticketId}; skipping.`);
+      console.warn(`Proposal references unknown ticket ${raw.ticketId}; skipping.`);
       continue;
     }
-    const { touchedFeatureId, statusChanged } = await applyProposal(ticket, p);
+
+    const { proposal, reject } = calibrate(raw, ticket);
+    if (reject) {
+      console.warn(`  ${raw.ticketId} rejected — ${reject}`);
+      continue;
+    }
+    if (raw.confidence !== proposal.confidence) {
+      console.log(
+        `  ${proposal.ticketId} confidence ${raw.confidence} → ${proposal.confidence} (no path/ticket overlap)`,
+      );
+    }
+
+    const { touchedFeatureId, statusChanged } = await applyProposal(ticket, proposal);
     console.log(
-      `  ${p.ticketId} [${p.confidence}] ${statusChanged ? "APPLIED" : "proposed"} — ${p.activityText}`,
+      `  ${proposal.ticketId} [${proposal.confidence}] ${statusChanged ? "APPLIED" : "proposed"} — ${proposal.activityText}`,
     );
     if (statusChanged && touchedFeatureId) touchedFeatures.add(touchedFeatureId);
   }
