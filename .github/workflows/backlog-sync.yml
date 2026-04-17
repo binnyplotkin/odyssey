@@ -21,9 +21,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Replay target if provided, else the pushed commit (default behavior)
+          # Replay target if provided, else the pushed commit (default behavior).
+          # Replays need full history; push-triggered runs only need HEAD~1.
           ref: ${{ inputs.commit_sha || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ inputs.commit_sha && '0' || '2' }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
