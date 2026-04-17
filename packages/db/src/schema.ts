@@ -346,6 +346,10 @@ export const wikiIngestionLogTable = pgTable("wiki_ingestion_log", {
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   status: text("status").notNull().default("running"),   // running | succeeded | failed
+  /** The LLM model that ran this ingestion — e.g. "claude-sonnet-4-5". */
+  model: text("model"),
+  /** Short SHA of the character.ingestionPrompt at run time — for reproducibility. */
+  promptHash: text("prompt_hash"),
   pagesCreated: integer("pages_created").notNull().default(0),
   pagesUpdated: integer("pages_updated").notNull().default(0),
   edgesAdded: integer("edges_added").notNull().default(0),

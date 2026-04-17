@@ -281,6 +281,10 @@ export type WikiIngestionLogRecord = {
   startedAt: string;
   finishedAt: string | null;
   status: IngestionStatus;
+  /** The LLM model used — e.g. "claude-sonnet-4-5". Null for legacy rows. */
+  model: string | null;
+  /** Short SHA of the character.ingestionPrompt at run time. */
+  promptHash: string | null;
   pagesCreated: number;
   pagesUpdated: number;
   edgesAdded: number;
@@ -293,6 +297,8 @@ export type WikiIngestionLogRecord = {
 export type StartIngestionInput = {
   characterId: string;
   sourceId?: string | null;
+  model?: string | null;
+  promptHash?: string | null;
   notes?: string | null;
 };
 

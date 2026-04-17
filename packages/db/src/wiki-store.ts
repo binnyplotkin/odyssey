@@ -162,6 +162,8 @@ function normalizeIngestion(
     startedAt: requireIso(row.startedAt),
     finishedAt: toIso(row.finishedAt),
     status: row.status as IngestionStatus,
+    model: row.model,
+    promptHash: row.promptHash,
     pagesCreated: row.pagesCreated,
     pagesUpdated: row.pagesUpdated,
     edgesAdded: row.edgesAdded,
@@ -757,6 +759,8 @@ function neonStore(): WikiStore {
           sourceId: input.sourceId ?? null,
           startedAt: new Date(),
           status: "running",
+          model: input.model ?? null,
+          promptHash: input.promptHash ?? null,
           notes: input.notes ?? null,
         })
         .returning();
