@@ -2,8 +2,8 @@ import { registerUser } from "@odyssey/auth";
 
 const users = [
   { name: "Binny Plotkin", email: "binnyplotkin@gmail.com", password: "adventure" },
-  { name: "Sam Kaminer", email: "Sam.Kaminer@gmail.com", password: "adventure" },
-  { name: "Jonathan Sassoon", email: "Jsassoon23@gmail.com", password: "adventure" },
+  { name: "Sam Kaminer", email: "sam.kaminer@gmail.com", password: "adventure" },
+  { name: "Jonathan Sassoon", email: "jsassoon23@gmail.com", password: "adventure" },
 ];
 
 async function main() {

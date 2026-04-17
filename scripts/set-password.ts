@@ -12,12 +12,13 @@ import { usersTable } from "@odyssey/db";
 import { hashPassword } from "@odyssey/auth";
 
 async function main() {
-  const email = process.argv[2];
+  const rawEmail = process.argv[2];
   const password = process.argv[3];
-  if (!email || !password) {
+  if (!rawEmail || !password) {
     console.error("Usage: npx tsx scripts/set-password.ts <email> <password>");
     process.exit(1);
   }
+  const email = rawEmail.trim().toLowerCase();
 
   const url = process.env.DATABASE_URL;
   if (!url) {

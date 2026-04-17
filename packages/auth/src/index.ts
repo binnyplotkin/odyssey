@@ -31,9 +31,13 @@ function getDb() {
   return drizzle({ client: neon(url) });
 }
 
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
 async function getUserByEmail(email: string) {
   const db = getDb();
-  const rows = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  const rows = await db.select().from(usersTable).where(eq(usersTable.email, normalizeEmail(email))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -50,7 +54,8 @@ async function getUserRole(id: string): Promise<string> {
 /* ── Registration ────────────────────────────��──────────────── */
 
 export async function registerUser(input: { name: string; email: string; password: string }) {
-  const { name, email, password } = input;
+  const { name, password } = input;
+  const email = normalizeEmail(input.email);
 
   if (!email || !password || password.length < 8) {
     throw new Error("Password must be at least 8 characters");

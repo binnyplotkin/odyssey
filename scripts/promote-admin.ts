@@ -11,11 +11,12 @@ import { eq } from "drizzle-orm";
 import { usersTable } from "@odyssey/db";
 
 async function main() {
-  const email = process.argv[2];
-  if (!email) {
+  const rawEmail = process.argv[2];
+  if (!rawEmail) {
     console.error("Usage: npx tsx scripts/promote-admin.ts <email>");
     process.exit(1);
   }
+  const email = rawEmail.trim().toLowerCase();
 
   const url = process.env.DATABASE_URL;
   if (!url) {
