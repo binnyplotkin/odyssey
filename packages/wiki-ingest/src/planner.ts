@@ -57,10 +57,22 @@ export async function plan(args: {
     messages: [{ role: "user", content: userMsg }],
     tools: [PLAN_TOOL],
     toolChoice: { type: "tool", name: "plan_operations" },
-    maxTokens: 4096,
+    // Plans with 20+ ops + rationales + passages can stretch past 4k tokens.
+    maxTokens: 8192,
   });
 
   const raw = extractToolUse<RawPlan>(result, "plan_operations");
+
+  // Defensive: the tool schema requires `ops`, but if the model hits
+  // max_tokens or produces malformed output the SDK can surface a
+  // partial input. Fail loudly with the actual shape we got.
+  if (!raw || !Array.isArray(raw.ops)) {
+    throw new Error(
+      `planner: tool_use missing ops array; stop=${result.stopReason}; ` +
+        `keys=[${Object.keys((raw as object) ?? {}).join(", ")}]; ` +
+        `raw=${JSON.stringify(raw).slice(0, 400)}`,
+    );
+  }
 
   // Resolve slugs → existing page IDs for "update" ops so the writer can
   // fetch the prior body.

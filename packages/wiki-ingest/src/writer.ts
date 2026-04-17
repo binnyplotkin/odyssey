@@ -73,15 +73,37 @@ export async function write(args: {
   });
 
   const raw = extractToolUse<RawWrite>(result, "write_page");
+  if (!raw || typeof raw.body !== "string" || typeof raw.title !== "string") {
+    throw new Error(
+      `writer: tool_use missing required fields (title/body); stop=${result.stopReason}; ` +
+        `keys=[${Object.keys((raw as object) ?? {}).join(", ")}]; ` +
+        `raw=${JSON.stringify(raw).slice(0, 400)}`,
+    );
+  }
 
   // Resolve contradiction otherSlug → pageId (drop entries that don't resolve).
-  const contradictions: Contradiction[] = (raw.contradictions ?? [])
+  // Defensive: LLM occasionally returns objects instead of arrays for these
+  // fields despite the tool schema specifying `type: "array"`.
+  const rawContradictions = asArray<{ otherSlug: string; note: string }>(raw.contradictions);
+  const contradictions: Contradiction[] = rawContradictions
     .map((c) => {
+      if (!c || typeof c.otherSlug !== "string") return null;
       const id = args.slugToId.get(c.otherSlug);
       if (!id) return null;
-      return { otherPageId: id, note: c.note };
+      return { otherPageId: id, note: typeof c.note === "string" ? c.note : "" };
     })
     .filter((c): c is Contradiction => c !== null);
+
+  const rawSourceRefs = asArray<{ passage?: string; quote?: string; relevanceNote?: string }>(
+    raw.sourceRefs,
+  );
+  const sourceRefs = rawSourceRefs
+    .filter((r): r is NonNullable<typeof r> => !!r && typeof r === "object")
+    .map((r) => ({
+      passage: typeof r.passage === "string" ? r.passage : undefined,
+      quote: typeof r.quote === "string" ? r.quote : undefined,
+      relevanceNote: typeof r.relevanceNote === "string" ? r.relevanceNote : undefined,
+    }));
 
   return {
     slug: args.op.slug,
@@ -89,15 +111,23 @@ export async function write(args: {
     title: raw.title,
     summary: raw.summary,
     body: raw.body,
-    frontmatter: raw.frontmatter as Frontmatter,
-    perspective: raw.perspective as Perspective,
+    frontmatter: (raw.frontmatter ?? {}) as Frontmatter,
+    perspective: (raw.perspective ?? {}) as Perspective,
     confidence: clamp01(raw.confidence),
     timeIndex: raw.timeIndex ?? null,
     knowsFuture: raw.knowsFuture ?? false,
     contradictions,
-    sourceRefs: raw.sourceRefs ?? [],
+    sourceRefs,
     tokens: result.tokens,
   };
+}
+
+/** Coerce a maybe-array into an array. If the LLM returned an object, wrap it
+ *  in an array. If it returned null/undefined, return empty. */
+function asArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && typeof value === "object") return [value as T];
+  return [];
 }
 
 function clamp01(n: number): number {
