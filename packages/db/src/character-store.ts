@@ -28,6 +28,7 @@ function normalize(row: typeof charactersTable.$inferSelect): CharacterRecord {
     summary: row.summary,
     image: row.image,
     eras: (row.eras as EraConfig[] | null) ?? [],
+    ingestionPrompt: row.ingestionPrompt,
     createdAt: row.createdAt instanceof Date ? toIso(row.createdAt) : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? toIso(row.updatedAt) : String(row.updatedAt),
   };
@@ -92,6 +93,7 @@ function neonStore(): CharacterStore {
           summary: input.summary ?? null,
           image: input.image ?? null,
           eras: input.eras ?? [],
+          ingestionPrompt: input.ingestionPrompt ?? null,
           createdAt: now,
           updatedAt: now,
         })
@@ -160,6 +162,7 @@ function neonStore(): CharacterStore {
           summary: charactersTable.summary,
           image: charactersTable.image,
           eras: charactersTable.eras,
+          ingestionPrompt: charactersTable.ingestionPrompt,
           createdAt: charactersTable.createdAt,
           updatedAt: charactersTable.updatedAt,
         })

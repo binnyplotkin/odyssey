@@ -203,6 +203,10 @@ export const charactersTable = pgTable(
     // comparison by mapping era → integer order.
     // Shape: [{ key: "pre-covenant", title: "Pre-Covenant", order: 0 }, …]
     eras: jsonb("eras").notNull().default([]),
+    // The single domain knob. Injected at the top of every ingestion run's
+    // system prompt so the generic engine interprets raw sources through this
+    // character's specific tradition (scripture vs canon novel vs worldbook).
+    ingestionPrompt: text("ingestion_prompt"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

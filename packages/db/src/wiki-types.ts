@@ -24,6 +24,13 @@ export type CharacterRecord = {
   summary: string | null;
   image: string | null;
   eras: EraConfig[];
+  /**
+   * Domain-awareness knob. Injected into every ingestion run's system prompt
+   * so the generic engine interprets raw sources through this character's
+   * tradition. Null means "no domain steering" — fine for generic fictional
+   * characters; required for domain-grounded ones (scripture, historical).
+   */
+  ingestionPrompt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -34,6 +41,7 @@ export type CreateCharacterInput = {
   summary?: string;
   image?: string;
   eras?: EraConfig[];
+  ingestionPrompt?: string;
 };
 
 export type UpdateCharacterInput = Partial<
