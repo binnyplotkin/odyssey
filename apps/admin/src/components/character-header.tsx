@@ -113,13 +113,29 @@ export function CharacterHeader({ character }: Props) {
           href={`/characters/${character.slug}/ingestion`}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "6px 12px", borderRadius: 8,
+            border: "1px solid var(--border)", background: "transparent",
+            color: "var(--foreground)",
+            fontFamily: T.fontBody, fontSize: 11, fontWeight: 500,
+            textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0,
+          }}
+        >
+          + Ingest
+        </Link>
+        <Link
+          href={`/characters/${character.slug}/chat`}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
             padding: "6px 14px", borderRadius: 8, border: "none",
-            background: "#8CE7D2", color: "#000",
+            background: "#8CE7D2", color: "#0C0E14",
             fontFamily: T.fontBody, fontSize: 11, fontWeight: 600,
             textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0,
           }}
         >
-          + Ingest Source
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          Test Chat
         </Link>
       </>,
     );
