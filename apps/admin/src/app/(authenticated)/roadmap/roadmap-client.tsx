@@ -707,7 +707,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
     const onTab = (id: RoadmapTab) => setTabRef.current(id);
     setContent(
       <>
-        <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground, #fff)", margin: 0, marginRight: 12, whiteSpace: "nowrap" }}>
+        <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground, #fff)", marginTop: 0, marginRight: 12, marginBottom: 0, marginLeft: 0, whiteSpace: "nowrap" }}>
           Roadmap
         </h1>
         <div style={{ display: "flex", gap: 4 }}>

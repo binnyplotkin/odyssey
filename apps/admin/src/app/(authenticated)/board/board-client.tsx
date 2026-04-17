@@ -1481,7 +1481,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
   useEffect(() => {
     setContent(
       <>
-        <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground)", margin: 0, marginRight: 12, whiteSpace: "nowrap" }}>
+        <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground)", marginTop: 0, marginRight: 12, marginBottom: 0, marginLeft: 0, whiteSpace: "nowrap" }}>
           Board
         </h1>
 
