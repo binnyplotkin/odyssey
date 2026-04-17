@@ -12,6 +12,7 @@ import type {
   WikiSourceRecord,
   WikiSourceRefRecord,
 } from "@odyssey/db";
+import { WikiGraph } from "@/components/wiki-graph";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -186,10 +187,92 @@ export function CharacterWiki(props: Props) {
     return <EmptyWiki characterSlug={characterSlug} />;
   }
 
+  /* ── Graph visibility (persisted to localStorage) ────────────── */
+
+  const [graphVisible, setGraphVisible] = useState(true);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("wiki-graph-visible");
+      if (saved === "0") setGraphVisible(false);
+    } catch { /* ignore */ }
+  }, []);
+  const toggleGraph = useCallback(() => {
+    setGraphVisible((v) => {
+      const next = !v;
+      try { localStorage.setItem("wiki-graph-visible", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const currentEraKey = useMemo(() => {
+    // "Current era" heuristic: the era with the most recent timestamped pages.
+    // Cheap stand-in for a per-session moment cursor we'll add later.
+    const counts = new Map<string, number>();
+    for (const p of pages) {
+      if (p.timeIndex?.era) {
+        counts.set(p.timeIndex.era, (counts.get(p.timeIndex.era) ?? 0) + 1);
+      }
+    }
+    let best: string | null = null;
+    let bestN = 0;
+    for (const [k, n] of counts) if (n > bestN) { best = k; bestN = n; }
+    return best;
+  }, [pages]);
+
   /* ── Layout ──────────────────────────────────────────────────── */
 
   return (
-    <div style={{ display: "flex", flexDirection: "row", gap: 20, minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, minHeight: 0 }}>
+      {/* Graph band */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {graphVisible ? (
+          <WikiGraph
+            pages={pages}
+            edges={edges}
+            eras={eras}
+            currentEra={currentEraKey}
+            selectedSlug={selectedSlug}
+            onSelect={selectPage}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={toggleGraph}
+            style={{
+              display: "inline-flex", alignSelf: "flex-start", alignItems: "center", gap: 6,
+              padding: "6px 12px", borderRadius: 8,
+              border: `1px solid ${T.border}`, background: "transparent",
+              color: T.muted, fontFamily: T.fontBody, fontSize: 11, cursor: "pointer",
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="6" cy="6" r="2" /><circle cx="18" cy="6" r="2" />
+              <circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" />
+              <line x1="6" y1="8" x2="6" y2="16" /><line x1="8" y1="6" x2="16" y2="6" />
+              <line x1="8" y1="18" x2="16" y2="18" /><line x1="18" y1="8" x2="18" y2="16" />
+              <line x1="8" y1="8" x2="16" y2="16" />
+            </svg>
+            Show graph
+          </button>
+        )}
+        {graphVisible && (
+          <button
+            type="button"
+            onClick={toggleGraph}
+            style={{
+              alignSelf: "flex-end",
+              padding: "3px 10px", borderRadius: 6,
+              border: `1px solid ${T.border}`, background: "transparent",
+              color: T.muted, fontFamily: T.fontBody, fontSize: 10, cursor: "pointer",
+            }}
+          >
+            Hide graph
+          </button>
+        )}
+      </div>
+
+      {/* Browser + detail row */}
+      <div style={{ display: "flex", flexDirection: "row", gap: 20, minHeight: 0 }}>
       <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
         <BrowserCard
           pages={filteredPages}
@@ -221,6 +304,7 @@ export function CharacterWiki(props: Props) {
         ) : (
           <SelectPrompt />
         )}
+      </div>
       </div>
     </div>
   );
