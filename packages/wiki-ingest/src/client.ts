@@ -10,7 +10,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam, Tool } from "@anthropic-ai/sdk/resources/messages";
-import type { ModelId } from "./models.js";
+import type { ModelId } from "./models";
 
 let _client: Anthropic | null = null;
 

@@ -13,15 +13,15 @@ import type {
   TimeIndex,
   WikiPageRecord,
 } from "@odyssey/db";
-import { call, extractToolUse } from "./client.js";
-import type { ModelId } from "./models.js";
+import { call, extractToolUse } from "./client";
+import type { ModelId } from "./models";
 import {
   renderWikiIndexCompact,
   writerSystemPrompt,
   writerUserMessage,
-} from "./prompts.js";
-import { WRITE_TOOL } from "./tools.js";
-import type { PlanOp, WrittenPage } from "./types.js";
+} from "./prompts";
+import { WRITE_TOOL } from "./tools";
+import type { PlanOp, WrittenPage } from "./types";
 
 /** What the write_page tool emits — raw, pre-resolved slugs on contradictions. */
 type RawWrite = {

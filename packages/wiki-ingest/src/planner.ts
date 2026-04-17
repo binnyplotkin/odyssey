@@ -7,15 +7,15 @@
  */
 
 import type { WikiPageRecord } from "@odyssey/db";
-import { call, extractToolUse } from "./client.js";
-import type { ModelId } from "./models.js";
+import { call, extractToolUse } from "./client";
+import type { ModelId } from "./models";
 import {
   plannerSystemPrompt,
   plannerUserMessage,
   renderWikiIndex,
-} from "./prompts.js";
-import { PLAN_TOOL } from "./tools.js";
-import type { OpPlan, PlanOp } from "./types.js";
+} from "./prompts";
+import { PLAN_TOOL } from "./tools";
+import type { OpPlan, PlanOp } from "./types";
 
 /** What the plan_operations tool schema emits — raw, pre-resolved. */
 type RawPlan = {

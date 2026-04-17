@@ -12,7 +12,7 @@
  */
 
 import type { WikiPageRecord } from "@odyssey/db";
-import type { PlanOp } from "./types.js";
+import type { PlanOp } from "./types";
 
 /* ── Layer 1: engine instructions ──────────────────────────────── */
 

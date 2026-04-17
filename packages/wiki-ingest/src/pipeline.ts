@@ -18,16 +18,16 @@ import {
   getWikiStore,
   type WikiPageRecord,
 } from "@odyssey/db";
-import { DEFAULT_MODEL, resolveModel, type ModelId } from "./models.js";
-import { plan } from "./planner.js";
-import { write } from "./writer.js";
+import { DEFAULT_MODEL, resolveModel, type ModelId } from "./models";
+import { plan } from "./planner";
+import { write } from "./writer";
 import type {
   IngestionEvent,
   IngestionInput,
   IngestionResult,
   PlanOp,
   WrittenPage,
-} from "./types.js";
+} from "./types";
 
 export async function* runIngestion(
   input: IngestionInput,

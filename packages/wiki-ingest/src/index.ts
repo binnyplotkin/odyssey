@@ -6,15 +6,15 @@
  * or adapt to SSE / WebSocket for the admin UI.
  */
 
-export { runIngestion } from "./pipeline.js";
+export { runIngestion } from "./pipeline";
 export {
   MODELS,
   DEFAULT_MODEL,
   resolveModel,
   isKnownModel,
   estimateCost,
-} from "./models.js";
-export type { ModelId, ModelMeta } from "./models.js";
+} from "./models";
+export type { ModelId, ModelMeta } from "./models";
 export type {
   IngestionInput,
   IngestionEvent,
@@ -23,4 +23,4 @@ export type {
   PlanOpAction,
   OpPlan,
   WrittenPage,
-} from "./types.js";
+} from "./types";
