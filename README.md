@@ -43,11 +43,19 @@ Create `.env.local` with:
 ```bash
 DATABASE_URL=postgresql://user:password@your-neon-endpoint/odyssey?sslmode=require
 OPENAI_API_KEY=sk-...
+TTS_PROVIDER=openai
+TTS_ENABLE_FALLBACK=false
+# Optional fallback if you explicitly enable it
+TTS_FALLBACK_PROVIDER=elevenlabs
+ELEVENLABS_API_KEY=
+ELEVENLABS_VOICE_ID=
 ```
 
 If `DATABASE_URL` is missing, the app falls back to in-memory persistence.
 
 If `OPENAI_API_KEY` is missing, the app still runs with deterministic fallback narration/dialogue generation and disables real OpenAI STT/TTS behavior.
+
+For a strict pay-per-usage setup, keep `TTS_PROVIDER=openai` and `TTS_ENABLE_FALLBACK=false`.
 
 ## Development
 
@@ -82,5 +90,6 @@ npm run build
 ## Notes
 
 - The current voice button uses browser speech recognition when available and keeps text as a first-class fallback.
-- OpenAI is the Phase 1 audio provider. ElevenLabs is intentionally deferred until the simulation loop is stable and the product needs more cinematic voice rendering.
+- OpenAI is the default audio provider for pay-per-usage deployment.
+- ElevenLabs is optional and can be used as a fallback only when `TTS_ENABLE_FALLBACK=true`.
 - The app is structured to deploy on Vercel, but Neon and OpenAI credentials must be configured in the Vercel project environment before production use.

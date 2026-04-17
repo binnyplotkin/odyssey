@@ -122,13 +122,32 @@ export class ElevenLabsTextToSpeechAdapter implements TextToSpeechAdapter {
 }
 
 export function resolveTtsProvider(provider?: string): TtsProvider {
-  const normalized = (provider ?? process.env.TTS_PROVIDER ?? "elevenlabs").toLowerCase();
+  const normalized = (provider ?? process.env.TTS_PROVIDER ?? "openai").toLowerCase();
 
   if (normalized === "elevenlabs" || normalized === "eleven") {
     return "elevenlabs";
   }
 
   return "openai";
+}
+
+export function resolveTtsAttemptOrder(requestedProvider?: string): TtsProvider[] {
+  const primary = resolveTtsProvider(requestedProvider);
+  const fallbackEnabled = process.env.TTS_ENABLE_FALLBACK === "true";
+
+  if (!fallbackEnabled) {
+    return [primary];
+  }
+
+  const configuredFallback = (process.env.TTS_FALLBACK_PROVIDER || "").trim();
+  const defaultFallback = primary === "openai" ? "elevenlabs" : "openai";
+  const fallback = resolveTtsProvider(configuredFallback || defaultFallback);
+
+  if (fallback === primary) {
+    return [primary];
+  }
+
+  return [primary, fallback];
 }
 
 export function createTextToSpeechAdapter(provider?: string): {
@@ -142,4 +161,37 @@ export function createTextToSpeechAdapter(provider?: string): {
   }
 
   return { provider: resolved, adapter: new OpenAITextToSpeechAdapter() };
+}
+
+export function getAudioRuntimeConfig(requestedProvider?: string) {
+  const attemptOrder = resolveTtsAttemptOrder(requestedProvider);
+  const elevenLabsModelConfig = getElevenLabsPricingGuardInfo();
+  const hasOpenAIKey = Boolean(process.env.OPENAI_API_KEY);
+  const hasElevenLabsKey = Boolean(process.env.ELEVENLABS_API_KEY);
+  const hasElevenLabsVoice = Boolean(process.env.ELEVENLABS_VOICE_ID);
+
+  return {
+    stt: {
+      provider: "openai" as const,
+      configured: hasOpenAIKey,
+    },
+    tts: {
+      primaryProvider: attemptOrder[0],
+      attemptOrder,
+      fallbackEnabled: attemptOrder.length > 1,
+      fallbackProvider: attemptOrder[1] ?? null,
+      providers: {
+        openai: {
+          configured: hasOpenAIKey,
+        },
+        elevenlabs: {
+          configured: hasElevenLabsKey && hasElevenLabsVoice,
+          hasApiKey: hasElevenLabsKey,
+          hasVoiceId: hasElevenLabsVoice,
+          model: elevenLabsModelConfig.effectiveModelId,
+          pricingGuard: elevenLabsModelConfig,
+        },
+      },
+    },
+  };
 }

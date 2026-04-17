@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createTextToSpeechAdapter } from "@odyssey/engine";
+import { createTextToSpeechAdapter, resolveTtsAttemptOrder } from "@odyssey/engine";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,9 +13,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "text is required." }, { status: 400 });
     }
 
-    const requestedProvider = body.provider ?? "elevenlabs";
-    const fallbackProvider = requestedProvider === "openai" ? "elevenlabs" : "openai";
-    const attempts = [requestedProvider, fallbackProvider] as const;
+    const requestedProvider = body.provider;
+    const attempts = resolveTtsAttemptOrder(requestedProvider);
+    const primaryProvider = attempts[0];
     const attemptErrors: string[] = [];
 
     for (const providerName of attempts) {
@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           ...audio,
           provider,
-          requestedProvider,
-          fallbackUsed: provider !== requestedProvider,
+          requestedProvider: requestedProvider ?? null,
+          fallbackUsed: provider !== primaryProvider,
         });
       } catch (attemptError) {
         attemptErrors.push(

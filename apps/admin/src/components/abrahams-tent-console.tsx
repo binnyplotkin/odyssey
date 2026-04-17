@@ -39,6 +39,27 @@ type TurnResult = {
   event: { id: string; title: string; category: string; summary: string } | null;
 };
 
+type AudioConfigSnapshot = {
+  stt: {
+    provider: "openai";
+    configured: boolean;
+  };
+  tts: {
+    primaryProvider: "openai" | "elevenlabs";
+    attemptOrder: Array<"openai" | "elevenlabs">;
+    fallbackEnabled: boolean;
+    providers: {
+      openai: { configured: boolean };
+      elevenlabs: {
+        configured: boolean;
+        hasApiKey: boolean;
+        hasVoiceId: boolean;
+        model: string;
+      };
+    };
+  };
+};
+
 /* ── Waveform Canvas ──────────────────────────────────────────── */
 
 function WaveformCanvas({ analyserRef }: { analyserRef: React.RefObject<AnalyserNode | null> }) {
@@ -156,6 +177,7 @@ export function AbrahamsTentConsole({ sessionId }: { sessionId: string }) {
   const [playing, setPlaying] = useState(false);
   const [ended, setEnded] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [audioConfig, setAudioConfig] = useState<AudioConfigSnapshot | null>(null);
 
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -337,6 +359,30 @@ export function AbrahamsTentConsole({ sessionId }: { sessionId: string }) {
     })();
   }, [sessionId, initialized, handleTurnResult, submitTurn]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/audio/config", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { config?: AudioConfigSnapshot };
+        if (!cancelled && payload.config) {
+          setAudioConfig(payload.config);
+        }
+      } catch {
+        // Config badge is optional.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Idle timer
   useEffect(() => {
     idleTimerRef.current = setInterval(() => {
@@ -457,7 +503,25 @@ export function AbrahamsTentConsole({ sessionId }: { sessionId: string }) {
           </div>
 
           {/* Metrics (small) */}
-          <div style={{ display: "flex", gap: "1rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
+            {audioConfig ? (
+              <div
+                style={{
+                  fontSize: "0.62rem",
+                  color: C.sand,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: "999px",
+                  padding: "0.2rem 0.55rem",
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                  background: `${C.panel}CC`,
+                }}
+              >
+                Audio: STT {audioConfig.stt.provider} · TTS {audioConfig.tts.primaryProvider}
+                {audioConfig.tts.fallbackEnabled ? " + fallback" : ""}
+              </div>
+            ) : null}
+            <div style={{ display: "flex", gap: "1rem" }}>
             {Object.entries(metrics).map(([key, val]) => (
               <div key={key} style={{ textAlign: "right" }}>
                 <div style={{ fontSize: "0.6rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
@@ -468,6 +532,7 @@ export function AbrahamsTentConsole({ sessionId }: { sessionId: string }) {
                 </div>
               </div>
             ))}
+            </div>
           </div>
         </div>
 

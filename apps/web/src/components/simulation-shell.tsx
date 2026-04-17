@@ -152,7 +152,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
   const [isListening, setIsListening] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceOutputEnabled, setVoiceOutputEnabled] = useState(true);
-  const [voiceProvider, setVoiceProvider] = useState<TtsProvider>("elevenlabs");
+  const [voiceProvider, setVoiceProvider] = useState<TtsProvider>("openai");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<BlobPart[]>([]);
@@ -781,8 +781,8 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
               onChange={(event) => setVoiceProvider(event.target.value as TtsProvider)}
               className="rounded-full border border-[var(--border)] bg-white/75 px-4 py-2 text-sm text-stone-800"
             >
-              <option value="elevenlabs">ElevenLabs voice</option>
               <option value="openai">OpenAI voice</option>
+              <option value="elevenlabs">ElevenLabs voice</option>
             </select>
             {isSpeaking ? (
               <span className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">

@@ -50,6 +50,8 @@ export {
   ElevenLabsTextToSpeechAdapter,
   createTextToSpeechAdapter,
   resolveTtsProvider,
+  resolveTtsAttemptOrder,
+  getAudioRuntimeConfig,
   getElevenLabsPricingGuardInfo,
 } from "./audio";
 export type { TtsProvider } from "./audio";
