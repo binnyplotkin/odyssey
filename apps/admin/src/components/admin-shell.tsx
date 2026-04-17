@@ -24,6 +24,7 @@ import {
   Edit3,
   Book,
   Users,
+  User,
 } from "react-feather";
 
 const I = 18; // icon size
@@ -33,6 +34,7 @@ const icons = {
   worlds: <Globe size={I} />,
   sessions: <Film size={I} />,
   users: <Users size={I} />,
+  characters: <User size={I} />,
   engine: <Settings size={I} />,
   editor: <Layout size={I} />,
   worldEditor: <GitBranch size={I} />,
@@ -63,9 +65,10 @@ const items: SidebarItem[] = [
   { href: "/board", label: "Board", section: "Project", icon: icons.board },
   { href: "/docs", label: "Docs", section: "Project", icon: icons.docs },
   { href: "/changelog", label: "Changelog", section: "Project", icon: icons.changelog },
-  { href: "/users", label: "Users", section: "Data", icon: icons.users },
-  { href: "/worlds", label: "Worlds", section: "Data", icon: icons.worlds },
-  { href: "/sessions", label: "Sessions", section: "Data", icon: icons.sessions },
+  { href: "/characters", label: "Characters", section: "Studio", icon: icons.characters },
+  { href: "/users", label: "Users", section: "Database", icon: icons.users },
+  { href: "/worlds", label: "Worlds", section: "Database", icon: icons.worlds },
+  { href: "/sessions", label: "Sessions", section: "Database", icon: icons.sessions },
   { href: "/engine", label: "Engine", section: "Tools", icon: icons.engine },
   { href: "/editor", label: "Editor", section: "Tools", icon: icons.editor },
   { href: "/world-editor", label: "World Editor", section: "Tools", icon: icons.worldEditor },
