@@ -132,6 +132,7 @@ type Proposal = {
   activityText: string;
   confidence: "high" | "medium" | "low";
   evidenceFiles: string[];
+  evidenceTicketQuote: string;
 };
 
 async function proposeUpdates(
@@ -170,11 +171,11 @@ Open tickets (id — [status] title — description):
 ${openTickets
   .map(
     (t) =>
-      `${t.id} — [${t.status}] ${t.title}${t.description ? ` — ${t.description.slice(0, 140)}` : ""}`,
+      `${t.id} — [${t.status}] ${t.title}${t.description ? ` — ${t.description.slice(0, 500)}` : ""}`,
   )
   .join("\n")}
 
-For each ticket you believe this push touches, return an update. Skip tickets that are clearly unrelated.
+For each ticket you believe this push directly advances, return an update. Skip tickets that are not directly advanced by this commit's code.
 
 Return EXACTLY this JSON (no markdown fences, no extra text):
 {
@@ -184,23 +185,27 @@ Return EXACTLY this JSON (no markdown fences, no extra text):
       "newStatus": "backlog" | "todo" | "in-progress" | "review" | "done" | null,
       "activityText": "<one-sentence human-readable note about what this push did for this ticket>",
       "confidence": "high" | "medium" | "low",
-      "evidenceFiles": ["<path>", "..."]
+      "evidenceFiles": ["<path>", "..."],
+      "evidenceTicketQuote": "<verbatim phrase from THIS ticket's description that names the scope this commit delivered>"
     }
   ]
 }
 
-Rules:
-- evidenceFiles MUST be non-empty and MUST be drawn verbatim from the "Changed files" list above. If you cannot cite a real changed file that backs the match, do not include the proposal.
-- "high" = at least one evidenceFile's path clearly relates to vocabulary in the ticket title/description/domain (e.g. ticket about "voice waveform" + evidence file "apps/web/src/components/voice-waveform.tsx"). Weak or metaphorical matches are NOT high.
-- "medium" = plausible match but the commit touches multiple areas or the file/ticket relationship is indirect.
-- "low" = tangential; you're reporting it but wouldn't bet on it.
-- newStatus: "in-progress" if this push is partial progress; "review"/"done" only if the commit clearly closes the work (e.g. "closes #", "complete", full feature landed); null if you only want to log activity without changing status.
-- Prefer fewer, higher-quality updates over many speculative ones. Empty "updates" is a valid and preferred answer when the push is infra, CI, tooling, or otherwise doesn't advance a product ticket.
-- Do NOT fabricate connections. If the commit message mentions one thing but no changed file touches the ticket's area, skip the ticket.`;
+Rules — read carefully:
+- evidenceFiles MUST be non-empty and MUST be drawn verbatim from the "Changed files" list above.
+- evidenceTicketQuote MUST be a verbatim substring (≥ 6 words, ≥ 30 chars) copied from THIS ticket's description above. It must name the specific scope that this commit's code actually delivers — NOT just a word that happens to appear in both.
+- Do NOT match on vocabulary overlap alone. Example of what NOT to do: matching an admin UI polish commit to a ticket about "browser mic → Kyutai STT → Claude LLM → Kyutai TTS" just because both mention "Claude" or "voice". The commit's code must literally advance the quoted scope.
+- Example of what NOT to do: matching a commit that polishes the /characters list admin page to a ticket whose description is "Create all nodes: World Core, Characters (Abraham, Sarah, Isaac, three angels with emotional baselines)" — those are different scopes ("admin list UI" vs "authoring narrative character nodes in a world canvas") even though both contain the word "characters".
+- "high" = the commit's code changes literally deliver what the quote describes. Anything less is medium at best.
+- "medium" = plausibly advances the quoted scope but the relationship is partial or indirect.
+- "low" = tangential.
+- If a ticket is in status "backlog", matching it means you're promoting it. Only do so when the commit is unmistakably the start of that specific work.
+- newStatus: "in-progress" when work starts or continues; "review" when complete and up for review; "done" only if the commit unambiguously closes it (merged work / "closes #"); null for activity-only.
+- Prefer fewer, higher-quality updates. Return at most 3. Empty "updates" is the correct answer for infra/CI/tooling pushes or when no ticket is directly advanced.`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    max_tokens: 1024,
+    max_tokens: 1600,
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -220,7 +225,9 @@ Rules:
           (x.newStatus === null || validStatus.has(x.newStatus as string)) &&
           Array.isArray(x.evidenceFiles) &&
           x.evidenceFiles.length > 0 &&
-          x.evidenceFiles.every((f) => typeof f === "string")
+          x.evidenceFiles.every((f) => typeof f === "string") &&
+          typeof x.evidenceTicketQuote === "string" &&
+          x.evidenceTicketQuote.trim().length >= 30
         );
       })
       // On PR events the PR hasn't merged yet, so "done" is always premature.
@@ -228,7 +235,8 @@ Rules:
       .map((p) =>
         isPrEvent && p.newStatus === "done" ? { ...p, newStatus: "review" as const } : p,
       )
-      .slice(0, 20);
+      // Hard cap — a single commit rarely legitimately advances more than this.
+      .slice(0, 3);
   } catch (err) {
     console.warn("Failed to parse LLM response; no proposals applied.", err);
     return [];
@@ -263,6 +271,10 @@ function ticketTokens(ticket: {
   return new Set(blob.split(/[^a-z0-9]+/).filter((t) => t.length >= 4));
 }
 
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 function calibrate(
   proposal: Proposal,
   ticket: { title: string; description: string | null; domain: string | null },
@@ -270,6 +282,15 @@ function calibrate(
   const realEvidence = proposal.evidenceFiles.filter((f) => changedFileSet.has(f));
   if (realEvidence.length === 0) {
     return { proposal, reject: "no cited file was actually in the push" };
+  }
+
+  // The quote must be a verbatim substring of the ticket description (case-
+  // and whitespace-insensitive). Catches fabricated quotes and prevents
+  // matching on title-only keywords.
+  const fullText = normalize(`${ticket.title} ${ticket.description ?? ""}`);
+  const quote = normalize(proposal.evidenceTicketQuote);
+  if (!quote || !fullText.includes(quote)) {
+    return { proposal, reject: `quote not found in ticket text: "${proposal.evidenceTicketQuote.slice(0, 60)}…"` };
   }
 
   const ticketBag = ticketTokens(ticket);
@@ -318,9 +339,10 @@ async function applyProposal(
       ? ` · proposed status → ${proposal.newStatus}`
       : "";
   const evidenceNote = proposal.evidenceFiles.length
-    ? ` · evidence: ${proposal.evidenceFiles.slice(0, 3).join(", ")}`
+    ? ` · files: ${proposal.evidenceFiles.slice(0, 3).join(", ")}`
     : "";
-  const note = `${prefix} ${shaRef}: ${proposal.activityText}${proposedStatusNote}${evidenceNote}`;
+  const quoteNote = ` · scope: "${proposal.evidenceTicketQuote.slice(0, 120)}"`;
+  const note = `${prefix} ${shaRef}: ${proposal.activityText}${proposedStatusNote}${quoteNote}${evidenceNote}`;
 
   const existing = Array.isArray(ticket.activity) ? (ticket.activity as ActivityItem[]) : [];
   const nextActivity = [...existing, makeActivityItem(note)];
