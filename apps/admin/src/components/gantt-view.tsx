@@ -38,6 +38,14 @@ function toMs(iso: string) {
   return new Date(iso).getTime();
 }
 
+const TICKET_STATUS_DOT: Record<string, string> = {
+  backlog: "#64748B",
+  todo: "#3B82F6",
+  "in-progress": "#3B82F6",
+  review: "#F59E0B",
+  done: "#22C55E",
+};
+
 function pct(date: string, start: string, end: string) {
   const s = toMs(start);
   const range = toMs(end) - s;
@@ -655,8 +663,7 @@ export default function GanttView({
                       width: 6,
                       height: 6,
                       borderRadius: "50%",
-                      background: row.versionColor,
-                      opacity: 0.5,
+                      background: t.borderColor,
                       flexShrink: 0,
                     }}
                   />
@@ -744,10 +751,14 @@ export default function GanttView({
                 )}
                 <span
                   style={{
-                    width: 4,
-                    height: 4,
+                    width: 6,
+                    height: 6,
                     borderRadius: "50%",
-                    background: isTicketSelected ? "rgba(59, 130, 246, 0.6)" : "var(--border)",
+                    background: tk.status && TICKET_STATUS_DOT[tk.status]
+                      ? TICKET_STATUS_DOT[tk.status]
+                      : "var(--border)",
+                    opacity: isTicketSelected ? 1 : 0.85,
+                    boxShadow: isTicketSelected ? "0 0 0 2px rgba(59, 130, 246, 0.35)" : undefined,
                     flexShrink: 0,
                   }}
                 />

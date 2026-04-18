@@ -65,6 +65,7 @@ export function ticketToGanttTicket(t: RoadmapTicket, featureColor: string): Gan
     end: t.endDate ?? "",
     color: hexToRgba(featureColor, 0.2),
     borderColor: hexToRgba(featureColor, 0.35),
+    status: t.status,
   };
 }
 

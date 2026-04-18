@@ -7,6 +7,7 @@ export type GanttTicket = {
   end: string;
   color: string;
   borderColor: string;
+  status?: string;
 };
 
 export type GanttTask = {
