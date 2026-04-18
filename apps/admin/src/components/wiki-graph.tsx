@@ -98,6 +98,7 @@ export function WikiGraph({
     () => new Map(nodes.map((n) => [n.page.id, n] as const)),
     [nodes],
   );
+  const isTypeMode = eras.length === 0;
 
   /* ── Selection-aware highlight ────────────────────────────────── */
 
@@ -249,22 +250,26 @@ export function WikiGraph({
               </g>
             ))}
 
-            {/* Timeless band separator + label */}
-            <line
-              x1={SIDE_PAD} y1={H - TIMELESS_H}
-              x2={W - SIDE_PAD} y2={H - TIMELESS_H}
-              stroke="rgba(255,255,255,0.06)"
-              strokeDasharray="2 4"
-            />
-            <text
-              x={SIDE_PAD} y={H - TIMELESS_H + 18}
-              style={{
-                fontFamily: T.fontMono, fontSize: 9, fontWeight: 500,
-                fill: "rgba(255,255,255,0.3)", letterSpacing: "0.1em",
-              }}
-            >
-              TIMELESS
-            </text>
+            {/* Timeless band separator + label (only in era-column mode) */}
+            {!isTypeMode && (
+              <>
+                <line
+                  x1={SIDE_PAD} y1={H - TIMELESS_H}
+                  x2={W - SIDE_PAD} y2={H - TIMELESS_H}
+                  stroke="rgba(255,255,255,0.06)"
+                  strokeDasharray="2 4"
+                />
+                <text
+                  x={SIDE_PAD} y={H - TIMELESS_H + 18}
+                  style={{
+                    fontFamily: T.fontMono, fontSize: 9, fontWeight: 500,
+                    fill: "rgba(255,255,255,0.3)", letterSpacing: "0.1em",
+                  }}
+                >
+                  TIMELESS
+                </text>
+              </>
+            )}
 
             {/* Edges layer */}
             <g>
@@ -467,16 +472,16 @@ function computeLayout(
   edges: WikiEdgeRecord[],
   eras: EraConfig[],
 ): Layout {
-  const sortedEras = [...eras].sort((a, b) => a.order - b.order);
+  // Timeless fallback: one column per present page type. Used for
+  // characters whose story doesn't have a temporal dimension.
+  if (eras.length === 0) {
+    return computeTypeLayout(pages);
+  }
 
-  // Fall back to a single "eras: unspecified" column if the character has
-  // no eras configured — keeps the graph usable.
-  const columnKeys: string[] =
-    sortedEras.length > 0 ? sortedEras.map((e) => e.key) : ["(eras unconfigured)"];
+  const sortedEras = [...eras].sort((a, b) => a.order - b.order);
+  const columnKeys: string[] = sortedEras.map((e) => e.key);
   const columnTitles: Record<string, string> = Object.fromEntries(
-    sortedEras.length > 0
-      ? sortedEras.map((e) => [e.key, e.title])
-      : [["(eras unconfigured)", "(no eras configured)"]],
+    sortedEras.map((e) => [e.key, e.title]),
   );
 
   const colCount = columnKeys.length;
@@ -612,6 +617,75 @@ function computeLayout(
         r: nodeRadius(page),
         eraKey: "timeless",
         col: -1,
+      });
+    });
+  }
+
+  return { nodes, eraColumns, columnXs };
+}
+
+/**
+ * Fallback layout: no eras configured. One column per present page type.
+ */
+function computeTypeLayout(pages: WikiPageRecord[]): Layout {
+  const TYPE_ORDER: WikiPageType[] = [
+    "entity", "event", "relationship", "concept", "voice_identity", "timeline",
+  ];
+  const TYPE_LABEL: Record<WikiPageType, string> = {
+    entity:         "Entities",
+    event:          "Events",
+    relationship:   "Relationships",
+    concept:        "Concepts",
+    voice_identity: "Voice",
+    timeline:       "Timeline",
+  };
+
+  const byType = new Map<WikiPageType, WikiPageRecord[]>();
+  for (const p of pages) {
+    if (!byType.has(p.type)) byType.set(p.type, []);
+    byType.get(p.type)!.push(p);
+  }
+  const activeTypes = TYPE_ORDER.filter((t) => (byType.get(t)?.length ?? 0) > 0);
+
+  if (activeTypes.length === 0) {
+    return { nodes: [], eraColumns: [], columnXs: [] };
+  }
+
+  const usableW = W - SIDE_PAD * 2;
+  const colWidth = usableW / activeTypes.length;
+  const eraColumns: EraColumn[] = activeTypes.map((t, i) => ({
+    key: t,
+    title: TYPE_LABEL[t],
+    index: i,
+    left: SIDE_PAD + i * colWidth,
+    right: SIDE_PAD + (i + 1) * colWidth,
+    center: SIDE_PAD + i * colWidth + colWidth / 2,
+  }));
+  const columnXs = eraColumns.map((c) => c.center);
+
+  // Use most of the canvas height — no timeless band needed here.
+  const laneTop = HEADER_H + 12;
+  const laneBottom = H - 20;
+
+  const nodes: Node[] = [];
+  for (const col of eraColumns) {
+    const list = (byType.get(col.key as WikiPageType) ?? [])
+      .slice()
+      .sort((a, b) => a.title.localeCompare(b.title));
+    if (list.length === 0) continue;
+    const usableH = laneBottom - laneTop;
+    const gap = list.length > 1 ? usableH / (list.length - 1) : 0;
+    const innerW = col.right - col.left - LANE_PAD_X * 2;
+    list.forEach((page, i) => {
+      const y = list.length === 1 ? (laneTop + laneBottom) / 2 : laneTop + gap * i;
+      const h = stringHash(page.slug);
+      const jitter = ((h % 1000) / 1000 - 0.5) * 0.75;
+      const x = col.center + jitter * innerW;
+      nodes.push({
+        page, x, y,
+        r: nodeRadius(page),
+        eraKey: "timeless",
+        col: col.index,
       });
     });
   }

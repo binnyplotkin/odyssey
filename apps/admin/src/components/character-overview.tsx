@@ -5,8 +5,10 @@ import type { EraConfig } from "@odyssey/db";
 import {
   deleteCharacter,
   rebuildCharacterEdges,
+  updateCharacterEras,
   updateCharacterIngestionPrompt,
 } from "@/app/(authenticated)/characters/actions";
+import { EraEditor } from "@/components/era-editor";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -99,7 +101,7 @@ export function CharacterOverview({ character, stats, eventCountByEra, voiceIden
         <IngestionPromptCard character={character} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 20, width: 420, flexShrink: 0 }}>
-        <ErasCard eras={character.eras} eventCountByEra={eventCountByEra} />
+        <ErasCard characterId={character.id} eras={character.eras} eventCountByEra={eventCountByEra} />
         <VoiceIdentityCard voice={voiceIdentity} characterSlug={character.slug} />
         <DangerZoneCard characterId={character.id} characterTitle={character.title} />
       </div>
@@ -314,51 +316,114 @@ function IngestionPromptCard({ character }: { character: Props["character"] }) {
 /* ── Eras ──────────────────────────────────────────────────────── */
 
 function ErasCard({
-  eras, eventCountByEra,
-}: { eras: EraConfig[]; eventCountByEra: Record<string, number> }) {
-  const sorted = [...eras].sort((a, b) => a.order - b.order);
+  characterId, eras, eventCountByEra,
+}: {
+  characterId: string;
+  eras: EraConfig[];
+  eventCountByEra: Record<string, number>;
+}) {
+  const initialSorted = [...eras].sort((a, b) => a.order - b.order);
+  const [draft, setDraft] = useState<EraConfig[]>(initialSorted);
+  const [savedSnapshot, setSavedSnapshot] = useState<EraConfig[]>(initialSorted);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  // Normalize comparison: dirty when draft differs from savedSnapshot.
+  const dirty = !shallowEqEras(draft, savedSnapshot);
+
+  const timeless = draft.length === 0;
+
+  function save() {
+    setError(null);
+    start(async () => {
+      const res = await updateCharacterEras(characterId, draft);
+      if (!res.ok) {
+        setError(res.error);
+      } else {
+        setSavedSnapshot(draft);
+      }
+    });
+  }
+
+  function discard() {
+    setDraft(savedSnapshot);
+    setError(null);
+  }
+
   return (
     <div style={cardShell}>
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "12px 18px", borderBottom: `1px solid ${T.border}`,
       }}>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Eras · {sorted.length}
-        </span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 18px 16px 18px" }}>
-        {sorted.length === 0 && (
-          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
-            No eras configured. Add them to enable timeline-aware queries.
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Eras · {draft.length}
+          </span>
+          {timeless && savedSnapshot.length === 0 && (
+            <span style={{
+              padding: "1px 7px", borderRadius: 4,
+              background: "rgba(168,140,255,0.1)",
+              fontFamily: T.fontMono, fontSize: 9, fontWeight: 600, color: "#A88CFF",
+              letterSpacing: "0.06em", textTransform: "uppercase",
+            }}>
+              Timeless
+            </span>
+          )}
+        </div>
+        {dirty && (
+          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: "#FACC15" }}>
+            unsaved
           </span>
         )}
-        {sorted.map((e) => (
-          <div
-            key={e.key}
-            style={{
-              display: "flex", alignItems: "center", gap: 12,
-              padding: "10px 12px", borderRadius: 10,
-              border: `1px solid ${T.border}`,
-            }}
-          >
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,0.3)", flexShrink: 0 }} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1 }}>
-              <span style={{ fontFamily: T.fontHeading, fontSize: 13, fontWeight: 500, color: T.fg }}>
-                {e.title}
-              </span>
-              <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
-                {e.key} · order {e.order}
-              </span>
-            </div>
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
-              {eventCountByEra[e.key] ?? 0} events
-            </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 18px 16px 18px" }}>
+        {savedSnapshot.length === 0 && draft.length === 0 && (
+          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "18px" }}>
+            This character is <strong style={{ color: "#A88CFF" }}>timeless</strong> — no era configured. The curator won&apos;t time-gate their knowledge.{" "}
+            Add eras below if you want to explore the character at different points in their life.
+          </span>
+        )}
+
+        <EraEditor eras={draft} onChange={setDraft} eventCountByEra={eventCountByEra} dense />
+
+        {error && (
+          <div style={{
+            padding: "8px 12px", borderRadius: 8,
+            background: "rgba(232,144,144,0.08)", border: "1px solid rgba(232,144,144,0.25)",
+            color: "#E89090", fontFamily: T.fontBody, fontSize: 12,
+          }}>
+            {error}
           </div>
-        ))}
+        )}
+
+        {dirty && (
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+            <button type="button" onClick={discard} disabled={pending} style={btnGhost}>
+              Discard
+            </button>
+            <button
+              type="button" onClick={save} disabled={pending}
+              style={{ ...btnPrimary, opacity: pending ? 0.5 : 1, cursor: pending ? "not-allowed" : "pointer" }}
+            >
+              {pending ? "Saving…" : "Save eras"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+function shallowEqEras(a: EraConfig[], b: EraConfig[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].key !== b[i].key || a[i].title !== b[i].title || a[i].order !== b[i].order) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /* ── Voice identity preview ────────────────────────────────────── */

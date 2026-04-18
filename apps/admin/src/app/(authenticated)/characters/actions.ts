@@ -24,6 +24,7 @@ export async function createCharacter(input: {
   slug?: string;
   summary?: string;
   ingestionPrompt?: string;
+  eras?: EraConfig[];
 }): Promise<ActionResult<{ slug: string }>> {
   const title = input.title.trim();
   if (!title) return { ok: false, error: "Title is required." };
@@ -43,16 +44,35 @@ export async function createCharacter(input: {
     return { ok: false, error: `Slug "${slug}" is already taken.` };
   }
 
+  // Normalize eras: trim, dedupe keys, reindex order 0..N-1.
+  const normalizedEras = normalizeEras(input.eras ?? []);
+
   await store.create({
     slug,
     title,
     summary: input.summary?.trim() || undefined,
     ingestionPrompt: input.ingestionPrompt?.trim() || undefined,
-    eras: [],
+    eras: normalizedEras,
   });
 
   revalidatePath("/characters");
   redirect(`/characters/${slug}`);
+}
+
+function normalizeEras(eras: EraConfig[]): EraConfig[] {
+  const seen = new Set<string>();
+  const cleaned: EraConfig[] = [];
+  for (const e of eras) {
+    const key = e.key?.trim();
+    const title = e.title?.trim();
+    if (!key || !title) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cleaned.push({ key, title, order: e.order ?? 0 });
+  }
+  return cleaned
+    .sort((a, b) => a.order - b.order)
+    .map((e, i) => ({ ...e, order: i }));
 }
 
 /* ── Update ────────────────────────────────────────────────────── */

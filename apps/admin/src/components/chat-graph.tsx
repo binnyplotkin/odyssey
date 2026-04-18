@@ -84,6 +84,7 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
     [pages, edges, eras],
   );
   const { nodes, columns } = layout;
+  const isTypeMode = eras.length === 0;
   const nodeById = useMemo(
     () => new Map(nodes.map((n) => [n.page.id, n] as const)),
     [nodes],
@@ -150,11 +151,15 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
             </g>
           ))}
 
-          {/* Timeless band separator */}
-          <line x1={SIDE_PAD} y1={H - TIMELESS_H} x2={W - SIDE_PAD} y2={H - TIMELESS_H} stroke="rgba(255,255,255,0.06)" strokeDasharray="2 4" />
-          <text x={SIDE_PAD} y={H - TIMELESS_H + 14} style={{ fontFamily: T.fontMono, fontSize: 8, fontWeight: 500, fill: "rgba(255,255,255,0.3)", letterSpacing: "0.1em" }}>
-            TIMELESS
-          </text>
+          {/* Timeless band separator — only when we have an era layout */}
+          {!isTypeMode && (
+            <>
+              <line x1={SIDE_PAD} y1={H - TIMELESS_H} x2={W - SIDE_PAD} y2={H - TIMELESS_H} stroke="rgba(255,255,255,0.06)" strokeDasharray="2 4" />
+              <text x={SIDE_PAD} y={H - TIMELESS_H + 14} style={{ fontFamily: T.fontMono, fontSize: 8, fontWeight: 500, fill: "rgba(255,255,255,0.3)", letterSpacing: "0.1em" }}>
+                TIMELESS
+              </text>
+            </>
+          )}
 
           {/* Inactive edges — faint, no state */}
           <g>
@@ -318,10 +323,17 @@ function computeLayout(
   edges: WikiEdgeRecord[],
   eras: EraConfig[],
 ): Layout {
+  // Timeless fallback: when the character has no eras, group columns by
+  // page type instead (entities / events / concepts / relationships).
+  // Keeps the graph readable for characters whose story isn't time-bound.
+  if (eras.length === 0) {
+    return computeTypeLayout(pages);
+  }
+
   const sortedEras = [...eras].sort((a, b) => a.order - b.order);
-  const keys: string[] = sortedEras.length > 0 ? sortedEras.map((e) => e.key) : ["(no-era)"];
+  const keys: string[] = sortedEras.map((e) => e.key);
   const titles: Record<string, string> = Object.fromEntries(
-    sortedEras.length > 0 ? sortedEras.map((e) => [e.key, e.title]) : [["(no-era)", "(no eras)"]],
+    sortedEras.map((e) => [e.key, e.title]),
   );
   const usableW = W - SIDE_PAD * 2;
   const colW = usableW / keys.length;
@@ -405,6 +417,72 @@ function computeLayout(
     timeless.forEach((page, i) => {
       const x = timeless.length === 1 ? W / 2 : SIDE_PAD + 10 + gap * i;
       nodes.push({ page, x, y: TIMELESS_Y, r: nodeRadius(page) });
+    });
+  }
+
+  return { nodes, columns };
+}
+
+/**
+ * Fallback layout for timeless characters (no eras configured). One column
+ * per present page type. Columns in canonical order so the result is stable.
+ */
+function computeTypeLayout(pages: WikiPageRecord[]): Layout {
+  const TYPE_ORDER: WikiPageType[] = [
+    "entity", "event", "relationship", "concept", "voice_identity", "timeline",
+  ];
+  const TYPE_LABEL: Record<WikiPageType, string> = {
+    entity:         "Entities",
+    event:          "Events",
+    relationship:   "Relationships",
+    concept:        "Concepts",
+    voice_identity: "Voice",
+    timeline:       "Timeline",
+  };
+
+  // Bucket and keep only types that have at least one page.
+  const byType = new Map<WikiPageType, WikiPageRecord[]>();
+  for (const p of pages) {
+    if (!byType.has(p.type)) byType.set(p.type, []);
+    byType.get(p.type)!.push(p);
+  }
+  const activeTypes = TYPE_ORDER.filter((t) => (byType.get(t)?.length ?? 0) > 0);
+
+  if (activeTypes.length === 0) {
+    return { nodes: [], columns: [] };
+  }
+
+  const usableW = W - SIDE_PAD * 2;
+  const colW = usableW / activeTypes.length;
+  const columns: EraColumn[] = activeTypes.map((t, i) => ({
+    key: t,
+    title: TYPE_LABEL[t],
+    index: i,
+    left: SIDE_PAD + i * colW,
+    right: SIDE_PAD + (i + 1) * colW,
+    center: SIDE_PAD + i * colW + colW / 2,
+  }));
+
+  // Use the full canvas height for type layout — no timeless band needed
+  // when type columns ARE the whole story.
+  const laneTop = HEADER_H + 10;
+  const laneBottom = H - 12;
+
+  const nodes: Node[] = [];
+  for (const col of columns) {
+    const list = (byType.get(col.key as WikiPageType) ?? [])
+      .slice()
+      .sort((a, b) => a.title.localeCompare(b.title));
+    if (list.length === 0) continue;
+    const usableH = laneBottom - laneTop;
+    const gap = list.length > 1 ? usableH / (list.length - 1) : 0;
+    const innerW = col.right - col.left - SIDE_PAD;
+    list.forEach((page, i) => {
+      const y = list.length === 1 ? (laneTop + laneBottom) / 2 : laneTop + gap * i;
+      const h = hashString(page.slug);
+      const jitter = ((h % 1000) / 1000 - 0.5) * 0.55;
+      const x = col.center + jitter * innerW;
+      nodes.push({ page, x, y, r: nodeRadius(page) });
     });
   }
 

@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
+import type { EraConfig } from "@odyssey/db";
 import { useHeaderContent } from "@/components/header-context";
 import { createCharacter } from "@/app/(authenticated)/characters/actions";
+import { EraEditor } from "@/components/era-editor";
 
 const T = {
   fg: "var(--foreground)",
@@ -33,6 +35,7 @@ export function NewCharacterForm() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [summary, setSummary] = useState("");
   const [ingestionPrompt, setIngestionPrompt] = useState("");
+  const [eras, setEras] = useState<EraConfig[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -73,7 +76,7 @@ export function NewCharacterForm() {
     e.preventDefault();
     setError(null);
     start(async () => {
-      const res = await createCharacter({ title, slug, summary, ingestionPrompt });
+      const res = await createCharacter({ title, slug, summary, ingestionPrompt, eras });
       if (!res.ok) setError(res.error);
       // On success the server action redirects; no further state needed.
     });
@@ -130,6 +133,26 @@ export function NewCharacterForm() {
               style={inputStyle}
             />
           </Field>
+        </div>
+      </div>
+
+      <div style={{
+        background: T.panel, border: `1px solid ${T.border}`,
+        borderRadius: 14, overflow: "clip",
+      }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{
+            fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted,
+            letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4,
+          }}>
+            Eras · optional
+          </div>
+          <div style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: 1.55 }}>
+            Named periods in the character's life, used for timeline-aware page filtering. Leave empty for timeless characters.
+          </div>
+        </div>
+        <div style={{ padding: "14px 20px 18px 20px" }}>
+          <EraEditor eras={eras} onChange={setEras} />
         </div>
       </div>
 
