@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useHeaderContent } from "@/components/header-context";
 import type { CharacterSummary } from "@/app/(authenticated)/characters/page";
 
@@ -95,12 +96,50 @@ function StatusPill({ status }: { status: "live" | "draft" }) {
   );
 }
 
+/* ── Sort ──────────────────────────────────────────────────────── */
+
+type SortKey = "recent" | "title" | "pages" | "status";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "recent", label: "Recently ingested" },
+  { key: "title",  label: "Title A–Z" },
+  { key: "pages",  label: "Most pages" },
+  { key: "status", label: "Status (live first)" },
+];
+
+function applySort(list: CharacterSummary[], sort: SortKey): CharacterSummary[] {
+  const base = [...list];
+  switch (sort) {
+    case "title":
+      return base.sort((a, b) => a.title.localeCompare(b.title));
+    case "pages":
+      return base.sort((a, b) => b.pageCount - a.pageCount);
+    case "status":
+      return base.sort((a, b) => {
+        if (a.status === b.status) {
+          const at = a.lastIngestAt ? new Date(a.lastIngestAt).getTime() : 0;
+          const bt = b.lastIngestAt ? new Date(b.lastIngestAt).getTime() : 0;
+          return bt - at;
+        }
+        return a.status === "live" ? -1 : 1;
+      });
+    case "recent":
+    default:
+      return base.sort((a, b) => {
+        const at = a.lastIngestAt ? new Date(a.lastIngestAt).getTime() : 0;
+        const bt = b.lastIngestAt ? new Date(b.lastIngestAt).getTime() : 0;
+        return bt - at;
+      });
+  }
+}
+
 /* ── Component ─────────────────────────────────────────────────── */
 
 type Props = { characters: CharacterSummary[] };
 
 export function CharactersGrid({ characters }: Props) {
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortKey>("recent");
 
   const counts = useMemo(() => {
     const c = { all: characters.length, live: 0, draft: 0 };
@@ -109,14 +148,18 @@ export function CharactersGrid({ characters }: Props) {
   }, [characters]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return characters;
-    const q = search.trim().toLowerCase();
-    return characters.filter((c) =>
-      c.title.toLowerCase().includes(q) ||
-      c.slug.toLowerCase().includes(q) ||
-      (c.summary ?? "").toLowerCase().includes(q),
-    );
-  }, [characters, search]);
+    const base = !search.trim()
+      ? characters
+      : (() => {
+          const q = search.trim().toLowerCase();
+          return characters.filter((c) =>
+            c.title.toLowerCase().includes(q) ||
+            c.slug.toLowerCase().includes(q) ||
+            (c.summary ?? "").toLowerCase().includes(q),
+          );
+        })();
+    return applySort(base, sort);
+  }, [characters, search, sort]);
 
   /* ── Header injection ───────────────────────────────────────── */
 
@@ -132,18 +175,21 @@ export function CharactersGrid({ characters }: Props) {
           Characters
         </h1>
         <div style={{ flex: 1 }} />
-        <Link
-          href="/characters/new"
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "6px 14px", borderRadius: 8, border: "none",
-            background: "#8CE7D2", color: "#000",
-            fontSize: 11, fontWeight: 600, cursor: "pointer",
-            fontFamily: "inherit", whiteSpace: "nowrap", textDecoration: "none",
-          }}
-        >
-          + New Character
-        </Link>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <RefreshButton />
+          <Link
+            href="/characters/new"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "6px 14px", borderRadius: 8, border: "none",
+              background: "#8CE7D2", color: "#000",
+              fontSize: 11, fontWeight: 600, cursor: "pointer",
+              fontFamily: "inherit", whiteSpace: "nowrap", textDecoration: "none",
+            }}
+          >
+            + New Character
+          </Link>
+        </div>
       </>,
     );
     return () => setContent(null);
@@ -221,6 +267,8 @@ export function CharactersGrid({ characters }: Props) {
             {filtered.length} {filtered.length === 1 ? "character" : "characters"} · {counts.live} live
           </span>
         </div>
+
+        <SortMenu sort={sort} onChange={setSort} />
       </div>
 
       {/* Grid */}
@@ -257,40 +305,48 @@ function CharacterCard({ character }: { character: CharacterSummary }) {
         e.currentTarget.style.boxShadow = "none";
       }}
     >
-      {/* Gradient header */}
+      {/* Gradient header — status pill only; slug now lives under the title. */}
       <div style={{
         position: "relative", height: 128,
         background: gradientFor(character.slug),
-        padding: "14px 18px", display: "flex", flexDirection: "column", justifyContent: "flex-end",
       }}>
         <div style={{ position: "absolute", top: 14, right: 14 }}>
           <StatusPill status={character.status} />
         </div>
-        <span style={{
-          fontFamily: T.fontMono, fontSize: 10, color: "rgba(255,255,255,0.55)", letterSpacing: "0.06em",
-        }}>
-          {character.slug}
-        </span>
       </div>
 
       {/* Body */}
-      <div style={{ padding: "14px 18px 18px 18px", display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginTop: -44 }}>
+      <div style={{
+        padding: "16px 18px 18px 18px",
+        display: "flex", flexDirection: "column", gap: 18,
+      }}>
+        {/* Header-row: pulled up into the gradient, provides positioning
+            context for the avatar. Matches the Paper design UE2-0 structure:
+            relative wrapper + marginTop:-44 + absolute avatar at top:17, left:0. */}
+        <div style={{ position: "relative", marginTop: -44, minHeight: 56 }}>
           {character.image ? (
             <img
               src={character.image}
               alt={character.title}
               referrerPolicy="no-referrer"
               style={{
-                width: 56, height: 56, flexShrink: 0,
+                position: "absolute", top: 17, left: 0,
+                width: 56, height: 56, boxSizing: "border-box",
                 borderRadius: "50%", objectFit: "cover",
-                border: "3px solid var(--panel)",
+                // Solid ring in the card's page bg → clean cutout against the
+                // gradient in either theme. box-shadow is used instead of
+                // border so the ring sits outside the image and never clips
+                // the circular shape on sub-pixel renders.
+                boxShadow: "0 0 0 3px var(--background)",
               }}
             />
           ) : (
             <div style={{
-              width: 56, height: 56, flexShrink: 0, borderRadius: "50%",
-              background: av.bg, border: "3px solid var(--panel)",
+              position: "absolute", top: 17, left: 0,
+              width: 56, height: 56, boxSizing: "border-box",
+              borderRadius: "50%",
+              background: av.bg,
+              boxShadow: "0 0 0 3px var(--background)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               <span style={{
@@ -301,23 +357,50 @@ function CharacterCard({ character }: { character: CharacterSummary }) {
               </span>
             </div>
           )}
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0, paddingTop: 30 }}>
+
+          {/* Title + slug — padded left to clear the avatar (with extra
+              breathing room), padded top so the stack sits near the avatar's
+              lower half. */}
+          <div style={{
+            paddingLeft: 78, // 56px avatar + 22px gap (up from 14)
+            paddingTop: 34,
+            minWidth: 0,
+            display: "flex", flexDirection: "column", gap: 3,
+          }}>
             <span style={{
+              display: "block",
               fontFamily: T.fontHeading, fontSize: 18, fontWeight: 600, color: T.fg, lineHeight: "22px",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {character.title}
             </span>
-            {character.summary && (
-              <span style={{
-                fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "15px",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {character.summary}
-              </span>
-            )}
+            <span style={{
+              display: "block",
+              fontFamily: T.fontMono, fontSize: 10, letterSpacing: "0.06em",
+              color: T.muted, lineHeight: "14px",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {character.slug}
+            </span>
           </div>
         </div>
+
+        {/* Description — always reserves 2 lines of height (so card bodies
+            stay a consistent height across the grid), clamps + ellipses when
+            longer. Uses var(--foreground) with reduced opacity so it reads in
+            both dark and light themes. */}
+        <p style={{
+          margin: 0,
+          minHeight: 38, // 2 lines × 19px line-height
+          fontFamily: T.fontBody, fontSize: 13, lineHeight: "19px",
+          color: "var(--foreground)", opacity: 0.72,
+          display: "-webkit-box",
+          WebkitBoxOrient: "vertical",
+          WebkitLineClamp: 2,
+          overflow: "hidden",
+        }}>
+          {character.summary ?? ""}
+        </p>
 
         {/* Stats row */}
         <div style={{
@@ -344,14 +427,22 @@ function CharacterCard({ character }: { character: CharacterSummary }) {
 
         {/* Footer */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10" />
             <path d="M2 12h20M12 2c3 3.5 4.5 7.5 4.5 10S15 18.5 12 22M12 2c-3 3.5-4.5 7.5-4.5 10S9 18.5 12 22" />
           </svg>
-          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>Used in</span>
-          <span style={{ fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, color: T.accentStrong }}>
-            — worlds
-          </span>
+          {character.worldCount === 0 ? (
+            <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+              Not used in any world
+            </span>
+          ) : (
+            <>
+              <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>Used in</span>
+              <span style={{ fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, color: T.accentStrong }}>
+                {character.worldCount} {character.worldCount === 1 ? "world" : "worlds"}
+              </span>
+            </>
+          )}
         </div>
       </div>
     </Link>
@@ -370,6 +461,169 @@ function Stat({ label, value }: { label: string; value: number | string }) {
       }}>
         {label}
       </span>
+    </div>
+  );
+}
+
+/* ── Refresh button ────────────────────────────────────────────── */
+
+function RefreshButton() {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <>
+      <style>{`@keyframes chars-refresh-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <button
+        type="button"
+        onClick={() => startTransition(() => router.refresh())}
+        disabled={pending}
+        aria-label={pending ? "Refreshing" : "Refresh"}
+        title="Refresh"
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 28, height: 26, padding: 0,
+          borderRadius: 8,
+          border: `1px solid ${T.border}`,
+          background: "rgba(255,255,255,0.05)",
+          color: T.muted,
+          cursor: pending ? "progress" : "pointer",
+          opacity: pending ? 0.75 : 1,
+          transition: "color 120ms, border-color 120ms",
+        }}
+        onMouseEnter={(e) => {
+          if (pending) return;
+          e.currentTarget.style.color = T.fg;
+          e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = T.muted;
+          e.currentTarget.style.borderColor = T.border;
+        }}
+      >
+        <svg
+          width="12" height="12" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{
+            animation: pending ? "chars-refresh-spin 800ms linear infinite" : undefined,
+            transformOrigin: "center",
+          }}
+        >
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+          <path d="M3 21v-5h5" />
+        </svg>
+      </button>
+    </>
+  );
+}
+
+/* ── Sort menu ─────────────────────────────────────────────────── */
+
+function SortMenu({
+  sort,
+  onChange,
+}: {
+  sort: SortKey;
+  onChange: (next: SortKey) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  const current = SORT_OPTIONS.find((o) => o.key === sort) ?? SORT_OPTIONS[0];
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "7px 12px", borderRadius: 999,
+          border: `1px solid ${T.border}`, background: "transparent",
+          color: T.fg, cursor: "pointer",
+          fontFamily: T.fontBody, fontSize: 12, lineHeight: "14px",
+        }}
+      >
+        <span style={{ color: T.muted }}>Sort</span>
+        <span style={{ color: T.fg, fontWeight: 500 }}>{current.label}</span>
+        <svg
+          width="10" height="10" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{ flexShrink: 0, color: T.muted, transform: open ? "rotate(180deg)" : "none", transition: "transform 120ms" }}
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          style={{
+            position: "absolute", top: "calc(100% + 6px)", right: 0,
+            minWidth: 200, padding: 4, borderRadius: 10,
+            background: T.panel, border: `1px solid ${T.border}`,
+            boxShadow: "0 8px 28px rgba(0,0,0,0.35)",
+            zIndex: 10,
+            display: "flex", flexDirection: "column", gap: 2,
+          }}
+        >
+          {SORT_OPTIONS.map((opt) => {
+            const active = opt.key === sort;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => { onChange(opt.key); setOpen(false); }}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  width: "100%", textAlign: "left",
+                  padding: "8px 10px", borderRadius: 6,
+                  border: "none",
+                  background: active ? "rgba(140,231,210,0.08)" : "transparent",
+                  color: active ? T.accentStrong : T.fg,
+                  fontFamily: T.fontBody, fontSize: 12, fontWeight: active ? 500 : 400,
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => {
+                  if (!active) e.currentTarget.style.background = "var(--card-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) e.currentTarget.style.background = "transparent";
+                }}
+              >
+                <span>{opt.label}</span>
+                {active && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <path d="M5 12l5 5L20 7" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "./client";
 import { charactersTable, worldCharactersTable } from "./schema";
 import type {
@@ -48,6 +48,7 @@ export interface CharacterStore {
   linkToWorld(characterId: string, worldId: string, roleInWorld?: string): Promise<void>;
   unlinkFromWorld(characterId: string, worldId: string): Promise<void>;
   listForWorld(worldId: string): Promise<CharacterRecord[]>;
+  countWorldsFor(characterId: string): Promise<number>;
 }
 
 /* ── Implementation ─────────────────────────────────────────────── */
@@ -172,6 +173,15 @@ function neonStore(): CharacterStore {
       return rows
         .map(normalize)
         .sort((a, b) => a.title.localeCompare(b.title));
+    },
+
+    async countWorldsFor(characterId) {
+      const db = requireDb();
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(worldCharactersTable)
+        .where(eq(worldCharactersTable.characterId, characterId));
+      return row?.n ?? 0;
     },
   };
 }

@@ -12,22 +12,25 @@ export type CharacterSummary = {
   eraCount: number;
   pageCount: number;
   sourceCount: number;
+  worldCount: number;
   lastIngestAt: string | null;
   ingestionStatus: "succeeded" | "failed" | "running" | null;
   status: "live" | "draft";
 };
 
 export default async function CharactersPage() {
-  const characters = await getCharacterStore().list();
+  const store = getCharacterStore();
+  const characters = await store.list();
   const wiki = getWikiStore();
 
   // Aggregate per-character counts + last ingest in parallel.
   const summaries: CharacterSummary[] = await Promise.all(
     characters.map(async (c): Promise<CharacterSummary> => {
-      const [pages, sources, runs] = await Promise.all([
+      const [pages, sources, runs, worldCount] = await Promise.all([
         wiki.listPages(c.id),
         wiki.listSources(c.id),
         wiki.listIngestionRuns(c.id, 1),
+        store.countWorldsFor(c.id),
       ]);
       const lastRun = runs[0] ?? null;
       // "Live" heuristic: has at least one ingestion and a non-trivial page count.
@@ -42,6 +45,7 @@ export default async function CharactersPage() {
         eraCount: c.eras.length,
         pageCount: pages.length,
         sourceCount: sources.length,
+        worldCount,
         lastIngestAt: lastRun?.finishedAt ?? lastRun?.startedAt ?? null,
         ingestionStatus: lastRun?.status ?? null,
         status,
