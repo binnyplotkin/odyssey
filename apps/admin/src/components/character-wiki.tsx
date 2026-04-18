@@ -13,6 +13,7 @@ import type {
   WikiSourceRefRecord,
 } from "@odyssey/db";
 import { WikiGraph } from "@/components/wiki-graph";
+import { WikiPageEditor } from "@/components/wiki-page-editor";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -47,6 +48,7 @@ const TYPE_ORDER: WikiPageType[] = [
 /* ── Props ─────────────────────────────────────────────────────── */
 
 type Props = {
+  characterId: string;
   characterSlug: string;
   eras: EraConfig[];
   pages: WikiPageRecord[];
@@ -59,7 +61,7 @@ type Props = {
 type TypeFilter = "all" | WikiPageType;
 
 export function CharacterWiki(props: Props) {
-  const { pages, edges, sources, eras, characterSlug } = props;
+  const { pages, edges, sources, eras, characterSlug, characterId } = props;
   const router = useRouter();
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(
@@ -67,6 +69,7 @@ export function CharacterWiki(props: Props) {
   );
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState(false);
 
   /* ── Source refs for the currently-selected page ─────────────── */
 
@@ -170,6 +173,7 @@ export function CharacterWiki(props: Props) {
   const selectPage = useCallback(
     (slug: string) => {
       setSelectedSlug(slug);
+      setEditing(false); // switching pages always drops back into read mode
       // Use history.replaceState to avoid re-fetching the server page; the
       // selection is purely a client concern once data is loaded.
       if (typeof window !== "undefined") {
@@ -291,16 +295,32 @@ export function CharacterWiki(props: Props) {
 
       <div style={{ width: 600, flexShrink: 0 }}>
         {selectedPage ? (
-          <DetailCard
-            page={selectedPage}
-            edges={edges}
-            pageById={pageById}
-            pageBySlug={pageBySlug}
-            sourceById={sourceById}
-            sourceRefs={refsBySlug[selectedPage.slug] ?? []}
-            onNavigate={selectPage}
-            router={router}
-          />
+          editing ? (
+            <div style={{ ...cardShell }}>
+              <WikiPageEditor
+                characterId={characterId}
+                page={selectedPage}
+                eras={eras}
+                onSaved={() => {
+                  setEditing(false);
+                  router.refresh();
+                }}
+                onCancel={() => setEditing(false)}
+              />
+            </div>
+          ) : (
+            <DetailCard
+              page={selectedPage}
+              edges={edges}
+              pageById={pageById}
+              pageBySlug={pageBySlug}
+              sourceById={sourceById}
+              sourceRefs={refsBySlug[selectedPage.slug] ?? []}
+              onNavigate={selectPage}
+              onEdit={() => setEditing(true)}
+              router={router}
+            />
+          )
         ) : (
           <SelectPrompt />
         )}
@@ -501,7 +521,7 @@ function PageRow({
 /* ── Detail card ───────────────────────────────────────────────── */
 
 function DetailCard({
-  page, edges, pageById, pageBySlug, sourceById, sourceRefs, onNavigate, router,
+  page, edges, pageById, pageBySlug, sourceById, sourceRefs, onNavigate, onEdit, router,
 }: {
   page: WikiPageRecord;
   edges: WikiEdgeRecord[];
@@ -510,6 +530,7 @@ function DetailCard({
   sourceById: Map<string, WikiSourceRecord>;
   sourceRefs: WikiSourceRefRecord[];
   onNavigate: (slug: string) => void;
+  onEdit: () => void;
   router: ReturnType<typeof useRouter>;
 }) {
   const outbound = edges.filter((e) => e.fromPageId === page.id);
@@ -520,7 +541,7 @@ function DetailCard({
 
   return (
     <div style={{ ...cardShell, maxHeight: "82vh", overflow: "auto" }}>
-      <TopBar page={page} typeColor={typeColor} />
+      <TopBar page={page} typeColor={typeColor} onEdit={onEdit} />
       <TitleBlock page={page} />
       <Section title="Summary">
         <p style={bodyStyle}>{page.summary ?? <em style={{ color: T.muted }}>no summary</em>}</p>
@@ -550,7 +571,9 @@ function DetailCard({
   );
 }
 
-function TopBar({ page, typeColor }: { page: WikiPageRecord; typeColor: { dot: string; label: string } }) {
+function TopBar({
+  page, typeColor, onEdit,
+}: { page: WikiPageRecord; typeColor: { dot: string; label: string }; onEdit: () => void }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -571,9 +594,26 @@ function TopBar({ page, typeColor }: { page: WikiPageRecord; typeColor: { dot: s
           {page.slug}
         </span>
       </div>
-      <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
-        v{page.version}
-      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+          v{page.version}
+        </span>
+        <button
+          type="button" onClick={onEdit}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            padding: "4px 10px", borderRadius: 6,
+            border: `1px solid ${T.border}`, background: "transparent",
+            color: T.fg, fontFamily: T.fontBody, fontSize: 11, cursor: "pointer",
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          Edit
+        </button>
+      </div>
     </div>
   );
 }

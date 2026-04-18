@@ -38,6 +38,7 @@ export default async function WikiTab({
 
   return (
     <CharacterWiki
+      characterId={character.id}
       characterSlug={character.slug}
       eras={character.eras}
       pages={pages}

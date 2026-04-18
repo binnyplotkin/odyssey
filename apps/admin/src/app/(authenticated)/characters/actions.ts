@@ -7,8 +7,13 @@ import {
   getWikiStore,
   isValidSlug,
   slugifyTitle,
+  type Contradiction,
   type EraConfig,
+  type Frontmatter,
+  type Perspective,
+  type TimeIndex,
   type UpdateCharacterInput,
+  type WikiPageType,
 } from "@odyssey/db";
 
 /* ── Shared result shapes ──────────────────────────────────────── */
@@ -137,6 +142,71 @@ export async function rebuildCharacterEdges(
   const existing = await getCharacterStore().getById(id);
   if (existing) revalidatePath(`/characters/${existing.slug}`);
   return { ok: true, data: result };
+}
+
+/* ── Wiki pages ───────────────────────────────────────────────── */
+
+export type UpdateWikiPageInput = {
+  title: string;
+  summary: string | null;
+  body: string;
+  /** Page type — reads only, cannot change (changing invalidates frontmatter). */
+  type: WikiPageType;
+  /** Immutable slug the caller supplies so the server can double-check identity. */
+  slug: string;
+  frontmatter: Frontmatter;
+  perspective: Perspective;
+  confidence: number;
+  timeIndex: TimeIndex | null;
+  knowsFuture: boolean;
+  contradictions: Contradiction[];
+};
+
+export async function updateWikiPage(
+  characterId: string,
+  pageId: string,
+  input: UpdateWikiPageInput,
+): Promise<ActionResult<{ slug: string }>> {
+  const wiki = getWikiStore();
+  const existing = await wiki.getPage(pageId);
+  if (!existing || existing.characterId !== characterId) {
+    return { ok: false, error: "Page not found for this character." };
+  }
+  if (existing.slug !== input.slug) {
+    return { ok: false, error: "Slug mismatch — reload and try again." };
+  }
+  if (existing.type !== input.type) {
+    return { ok: false, error: "Page type can't change once the page exists." };
+  }
+
+  const title = input.title.trim();
+  if (!title) return { ok: false, error: "Title cannot be empty." };
+
+  const confidence = Math.max(0, Math.min(1, input.confidence));
+
+  // savePage handles material-change detection, version snapshotting, edge
+  // reconciliation, and the authorKind / note fields. Pass authorKind:"human"
+  // so the version history distinguishes user edits from LLM writes.
+  await wiki.savePage({
+    characterId,
+    type: existing.type,
+    slug: existing.slug,
+    title,
+    summary: input.summary?.trim() ?? null,
+    body: input.body,
+    frontmatter: input.frontmatter,
+    perspective: input.perspective,
+    confidence,
+    timeIndex: input.timeIndex,
+    knowsFuture: input.knowsFuture,
+    contradictions: input.contradictions,
+    authorKind: "human",
+    note: "manual edit from admin UI",
+  });
+
+  const character = await getCharacterStore().getById(characterId);
+  if (character) revalidatePath(`/characters/${character.slug}/wiki`);
+  return { ok: true, data: { slug: existing.slug } };
 }
 
 /* ── Sources ───────────────────────────────────────────────────── */
