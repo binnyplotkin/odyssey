@@ -9,8 +9,12 @@ const { auth } = NextAuth({
 export default auth((req) => {
   const { pathname } = req.nextUrl;
 
-  // Allow auth API routes and login page through
-  if (pathname.startsWith("/api/auth") || pathname === "/login") {
+  // Allow health, auth routes, and login page through
+  if (
+    pathname === "/api/healthz" ||
+    pathname.startsWith("/api/auth") ||
+    pathname === "/login"
+  ) {
     return;
   }
 
