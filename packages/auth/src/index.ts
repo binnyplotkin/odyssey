@@ -12,7 +12,7 @@ import { authConfig } from "./config";
 /* ── Adapter ────────────────���─────────────────────────��─────── */
 
 function createAdapter() {
-  const url = process.env.DATABASE_URL;
+  const url = resolveDatabaseUrl();
   if (!url) return undefined;
   const db = drizzle({ client: neon(url) });
   return DrizzleAdapter(db, {
@@ -26,9 +26,29 @@ function createAdapter() {
 /* ── DB helpers ─────────────────────────────────��───────────── */
 
 function getDb() {
-  const url = process.env.DATABASE_URL;
+  const url = resolveDatabaseUrl();
   if (!url) throw new Error("DATABASE_URL is required for auth");
   return drizzle({ client: neon(url) });
+}
+
+function resolveDatabaseUrl() {
+  const raw = process.env.DATABASE_URL;
+
+  if (!raw) {
+    return null;
+  }
+
+  const url = raw.trim();
+  if (!url) {
+    return null;
+  }
+
+  try {
+    new URL(url);
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeEmail(email: string) {
