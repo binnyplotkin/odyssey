@@ -67,6 +67,53 @@ function categoryBadge(category: string) {
   );
 }
 
+/* ── Author avatar ───────────────────────────────────────────── */
+
+function AuthorAvatar({ login, size = 18 }: { login: string; size?: number }) {
+  const [errored, setErrored] = useState(false);
+  const initial = login.slice(0, 1).toUpperCase();
+  if (errored) {
+    return (
+      <span
+        title={login}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          background: "rgba(139, 126, 181, 0.20)",
+          color: "#8B7EB5",
+          fontSize: Math.round(size * 0.5),
+          fontWeight: 600,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        {initial}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={`https://github.com/${encodeURIComponent(login)}.png?size=${size * 2}`}
+      alt={login}
+      title={login}
+      width={size}
+      height={size}
+      onError={() => setErrored(true)}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        display: "inline-block",
+        flexShrink: 0,
+        objectFit: "cover",
+      }}
+    />
+  );
+}
+
 /* ── Date formatting ─────────────────────────────────────────── */
 
 function formatDate(iso: string) {
@@ -257,6 +304,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                     <span style={{ fontSize: "0.85rem", fontWeight: 500, flex: 1 }}>
                       {entry.title}
                     </span>
+                    {entry.author && <AuthorAvatar login={entry.author} size={18} />}
                     <span
                       style={{
                         fontSize: "0.7rem",
