@@ -283,33 +283,60 @@ export default function VoiceTest4Page() {
       throw new Error(detail);
     }
 
-    addCheck({
-      name: "POST /api/audio/speak",
-      ok: true,
-      detail: "200 audio payload received and played.",
-      at: nowLabel(),
-    });
-
     const blob = decodeBase64ToBlob(payload.audioBase64, payload.mimeType);
     const src = URL.createObjectURL(blob);
     const audio = new Audio(src);
+    audio.autoplay = true;
+    audio.setAttribute("playsinline", "true");
+    audio.preload = "auto";
     audioElementRef.current = audio;
 
-    await new Promise<void>((resolve, reject) => {
-      audio.onended = () => {
-        URL.revokeObjectURL(src);
-        resolve();
-      };
-      audio.onerror = () => {
-        URL.revokeObjectURL(src);
-        reject(new Error("Audio playback failed."));
-      };
+    try {
+      await new Promise<void>((resolve, reject) => {
+        audio.onended = () => {
+          URL.revokeObjectURL(src);
+          resolve();
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(src);
+          reject(new Error("Audio playback failed."));
+        };
 
-      void audio.play().catch((playError) => {
-        URL.revokeObjectURL(src);
-        reject(playError instanceof Error ? playError : new Error("Audio playback blocked."));
+        void audio.play().catch((playError) => {
+          URL.revokeObjectURL(src);
+          reject(playError instanceof Error ? playError : new Error("Audio playback blocked."));
+        });
       });
-    });
+
+      addCheck({
+        name: "POST /api/audio/speak",
+        ok: true,
+        detail: "200 audio payload received and played.",
+        at: nowLabel(),
+      });
+    } catch (playbackError) {
+      const detail =
+        playbackError instanceof Error
+          ? playbackError.message
+          : "Audio playback blocked by browser policy.";
+      const blockedByPolicy =
+        detail.includes("not allowed by the user agent") ||
+        detail.toLowerCase().includes("notallowederror");
+
+      addCheck({
+        name: "POST /api/audio/speak",
+        ok: false,
+        detail: blockedByPolicy
+          ? "Audio returned but browser blocked autoplay. Tap page and keep tab active."
+          : detail,
+        at: nowLabel(),
+      });
+
+      // Do not fail the turn loop for playback-policy issues.
+      if (!blockedByPolicy) {
+        throw playbackError;
+      }
+    }
   }
 
   async function finalizeTurn() {
