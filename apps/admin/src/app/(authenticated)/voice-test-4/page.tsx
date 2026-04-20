@@ -115,6 +115,7 @@ export default function VoiceTest4Page() {
   const turnStartedAtRef = useRef(0);
   const stopRequestedRef = useRef(false);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const playbackSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   function addCheck(entry: ProbeResult) {
     setChecks((current) => [entry, ...current].slice(0, 18));
@@ -134,6 +135,16 @@ export default function VoiceTest4Page() {
       audioElementRef.current.pause();
       audioElementRef.current.src = "";
       audioElementRef.current = null;
+    }
+
+    if (playbackSourceRef.current) {
+      try {
+        playbackSourceRef.current.stop();
+      } catch {
+        // Ignore stop races.
+      }
+      playbackSourceRef.current.disconnect();
+      playbackSourceRef.current = null;
     }
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -284,28 +295,44 @@ export default function VoiceTest4Page() {
     }
 
     const blob = decodeBase64ToBlob(payload.audioBase64, payload.mimeType);
-    const src = URL.createObjectURL(blob);
-    const audio = new Audio(src);
-    audio.autoplay = true;
-    audio.setAttribute("playsinline", "true");
-    audio.preload = "auto";
-    audioElementRef.current = audio;
+    const context = audioContextRef.current;
+    if (!context) {
+      throw new Error("Audio context unavailable for playback.");
+    }
 
     try {
+      if (context.state !== "running") {
+        await context.resume();
+      }
+
+      const arrayBuffer = await blob.arrayBuffer();
+      const decoded = await context.decodeAudioData(arrayBuffer.slice(0));
+
+      if (playbackSourceRef.current) {
+        try {
+          playbackSourceRef.current.stop();
+        } catch {
+          // Ignore if already stopped.
+        }
+        playbackSourceRef.current.disconnect();
+      }
+
+      const source = context.createBufferSource();
+      source.buffer = decoded;
+      source.connect(context.destination);
+      playbackSourceRef.current = source;
+
       await new Promise<void>((resolve, reject) => {
-        audio.onended = () => {
-          URL.revokeObjectURL(src);
+        source.onended = () => {
+          source.disconnect();
+          playbackSourceRef.current = null;
           resolve();
         };
-        audio.onerror = () => {
-          URL.revokeObjectURL(src);
-          reject(new Error("Audio playback failed."));
-        };
-
-        void audio.play().catch((playError) => {
-          URL.revokeObjectURL(src);
-          reject(playError instanceof Error ? playError : new Error("Audio playback blocked."));
-        });
+        try {
+          source.start(0);
+        } catch (startError) {
+          reject(startError instanceof Error ? startError : new Error("Audio playback failed."));
+        }
       });
 
       addCheck({
@@ -321,7 +348,8 @@ export default function VoiceTest4Page() {
           : "Audio playback blocked by browser policy.";
       const blockedByPolicy =
         detail.includes("not allowed by the user agent") ||
-        detail.toLowerCase().includes("notallowederror");
+        detail.toLowerCase().includes("notallowederror") ||
+        detail.toLowerCase().includes("context is not allowed to start");
 
       addCheck({
         name: "POST /api/audio/speak",
