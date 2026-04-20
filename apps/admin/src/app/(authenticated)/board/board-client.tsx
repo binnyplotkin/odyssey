@@ -7,6 +7,7 @@ import {
   PRIORITY_DOT,
 } from "@/data/board";
 import type {
+  ActivityItem,
   Ticket,
   TicketStatus,
   TicketDomain,
@@ -81,6 +82,60 @@ const FILTER_PILLS: { key: FilterKey; label: string }[] = [
 ];
 
 /* ── Helpers ──────────────────────────────────────────────────── */
+
+const REPO_URL = "https://github.com/binnyplotkin/odyssey";
+
+function authorLabel(author: string): string {
+  if (author === "B") return "Binny";
+  if (author === "S") return "System";
+  if (author === "ai-sync") return "Sync Bot";
+  return author;
+}
+
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return iso;
+  const diff = Math.max(0, Date.now() - then);
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const mos = Math.floor(days / 30);
+  return `${mos}mo ago`;
+}
+
+/**
+ * Render activity text with any 7–40 char hex SHAs linked to GitHub.
+ * Matches whole-word hex runs so we don't linkify partial hashes inside
+ * UUIDs or filenames.
+ */
+function renderActivityText(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  const re = /\b([0-9a-f]{7,40})\b/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    const sha = match[1];
+    parts.push(
+      <a
+        key={`${match.index}-${sha}`}
+        href={`${REPO_URL}/commit/${sha}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: "inherit", textDecoration: "underline", textDecorationStyle: "dotted" }}
+      >
+        {sha.slice(0, 7)}
+      </a>,
+    );
+    last = match.index + sha.length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts.length ? parts : text;
+}
 
 function uniqueValues(tickets: Ticket[], key: FilterKey, featureMap?: Map<string, string>): string[] {
   const set = new Set<string>();
@@ -899,6 +954,7 @@ const SIDEBAR_MIN = 360;
 const SIDEBAR_MAX = 700;
 const SIDEBAR_DEFAULT = 480;
 const SIDEBAR_WIDTH_KEY = "odyssey-board-sidebar-width";
+const ACTIVITY_INITIAL_VISIBLE = 5;
 
 function TicketDetailSidebar({
   ticket,
@@ -970,6 +1026,39 @@ function TicketDetailSidebar({
     },
     [ticket, onUpdateTicket],
   );
+
+  // Activity state — reset when a different ticket is selected.
+  const [commentDraft, setCommentDraft] = useState("");
+  const [visibleActivityCount, setVisibleActivityCount] = useState(ACTIVITY_INITIAL_VISIBLE);
+  useEffect(() => {
+    setCommentDraft("");
+    setVisibleActivityCount(ACTIVITY_INITIAL_VISIBLE);
+  }, [ticket.id]);
+
+  const handleSubmitComment = useCallback(() => {
+    const text = commentDraft.trim();
+    if (!text) return;
+    const entry: ActivityItem = {
+      id: crypto.randomUUID(),
+      author: "B",
+      authorColor: "#5B9E82",
+      timestamp: new Date().toISOString(),
+      text,
+      type: "comment",
+    };
+    onUpdateTicket({ ...ticket, activity: [...(ticket.activity ?? []), entry] });
+    setCommentDraft("");
+  }, [commentDraft, ticket, onUpdateTicket]);
+
+  // Newest-first, sliced to the visible window.
+  const sortedActivity = useMemo(() => {
+    const items = ticket.activity ?? [];
+    return [...items].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
+  }, [ticket.activity]);
+  const visibleActivity = sortedActivity.slice(0, visibleActivityCount);
+  const hiddenCount = Math.max(0, sortedActivity.length - visibleActivityCount);
 
   const col = COLUMNS.find((c) => c.id === ticket.status);
   const doneCount = ticket.subtasks?.filter((s) => s.done).length ?? 0;
@@ -1354,66 +1443,148 @@ function TicketDetailSidebar({
         )}
 
         {/* Activity */}
-        {ticket.activity && ticket.activity.length > 0 && (
-          <div
-            style={{
-              padding: "16px 20px",
-              borderTop: "1px solid var(--divider)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)" }}>
-                Activity
+        <div
+          style={{
+            padding: "16px 20px",
+            borderTop: "1px solid var(--divider)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)" }}>
+              Activity
+            </span>
+            {sortedActivity.length > 0 && (
+              <span style={{ fontSize: 11, color: "var(--text-placeholder)" }}>
+                {sortedActivity.length}
               </span>
-            </div>
+            )}
+          </div>
 
-            {ticket.activity.map((item) => (
-              <div key={item.id} style={{ display: "flex", gap: 8 }}>
-                <span
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: "50%",
-                    background: item.authorColor + "33",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 9,
-                    fontWeight: 600,
-                    color: item.authorColor,
-                    flexShrink: 0,
-                    marginTop: 1,
-                  }}
-                >
-                  {item.author}
-                </span>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>
-                      {item.author === "B" ? "Binny" : item.author === "S" ? "System" : item.author}
-                    </span>
-                    <span style={{ fontSize: 11, color: "var(--text-placeholder)" }}>
-                      {item.timestamp}
-                    </span>
-                  </div>
+          {/* Comment composer */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <textarea
+              value={commentDraft}
+              onChange={(e) => setCommentDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  handleSubmitComment();
+                }
+              }}
+              placeholder="Add a comment…"
+              rows={2}
+              style={{
+                padding: "8px 10px",
+                borderRadius: 6,
+                border: "1px solid var(--input-border)",
+                background: "var(--input-background, transparent)",
+                color: "var(--text-primary)",
+                fontSize: 12,
+                lineHeight: 1.5,
+                fontFamily: "inherit",
+                resize: "vertical",
+                outline: "none",
+              }}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: "var(--text-placeholder)" }}>
+                ⌘ + Enter to post
+              </span>
+              <button
+                type="button"
+                onClick={handleSubmitComment}
+                disabled={!commentDraft.trim()}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  border: "1px solid var(--input-border)",
+                  background: commentDraft.trim() ? "var(--text-tertiary)" : "transparent",
+                  color: commentDraft.trim() ? "var(--background)" : "var(--text-placeholder)",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  cursor: commentDraft.trim() ? "pointer" : "default",
+                }}
+              >
+                Comment
+              </button>
+            </div>
+          </div>
+
+          {visibleActivity.map((item) => (
+            <div key={item.id} style={{ display: "flex", gap: 8 }}>
+              <span
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  background: item.authorColor + "33",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 9,
+                  fontWeight: 600,
+                  color: item.authorColor,
+                  flexShrink: 0,
+                  marginTop: 1,
+                }}
+              >
+                {item.author.slice(0, 1).toUpperCase()}
+              </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>
+                    {authorLabel(item.author)}
+                  </span>
                   <span
-                    style={{
-                      fontSize: 12,
-                      color: item.type === "system" ? "var(--text-quaternary)" : "var(--text-tertiary)",
-                      lineHeight: 1.5,
-                      fontStyle: item.type === "system" ? "italic" : "normal",
-                    }}
+                    style={{ fontSize: 11, color: "var(--text-placeholder)" }}
+                    title={item.timestamp}
                   >
-                    {item.text}
+                    {timeAgo(item.timestamp)}
                   </span>
                 </div>
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: item.type === "system" ? "var(--text-quaternary)" : "var(--text-tertiary)",
+                    lineHeight: 1.5,
+                    fontStyle: item.type === "system" ? "italic" : "normal",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {renderActivityText(item.text)}
+                </span>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setVisibleActivityCount((n) => n + 10)}
+              style={{
+                alignSelf: "flex-start",
+                padding: "4px 0",
+                border: "none",
+                background: "transparent",
+                color: "var(--text-placeholder)",
+                fontSize: 11,
+                fontWeight: 500,
+                cursor: "pointer",
+              }}
+            >
+              Show {hiddenCount} more
+            </button>
+          )}
+
+          {sortedActivity.length === 0 && (
+            <span style={{ fontSize: 11, color: "var(--text-placeholder)", fontStyle: "italic" }}>
+              No activity yet.
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
