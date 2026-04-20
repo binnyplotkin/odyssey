@@ -46,10 +46,25 @@ export class OpenAISpeechToTextAdapter implements SpeechToTextAdapter {
       throw new Error("OPENAI_API_KEY is required for speech transcription.");
     }
 
+    const cleanedMimeType = mimeType.split(";")[0]?.trim().toLowerCase() || "audio/webm";
+    const extensionByMimeType: Record<string, string> = {
+      "audio/webm": "webm",
+      "audio/wav": "wav",
+      "audio/x-wav": "wav",
+      "audio/mpeg": "mp3",
+      "audio/mp3": "mp3",
+      "audio/mp4": "mp4",
+      "audio/m4a": "m4a",
+      "audio/aac": "aac",
+      "audio/ogg": "ogg",
+      "audio/flac": "flac",
+    };
+    const extension = extensionByMimeType[cleanedMimeType] ?? "webm";
+
     const transcription = await client.audio.transcriptions.create({
-      file: await fetch(`data:${mimeType};base64,${audioBase64}`).then(async (response) => {
+      file: await fetch(`data:${cleanedMimeType};base64,${audioBase64}`).then(async (response) => {
         const blob = await response.blob();
-        return new File([blob], "turn.webm", { type: mimeType });
+        return new File([blob], `turn.${extension}`, { type: cleanedMimeType });
       }),
       model: "gpt-4o-mini-transcribe",
     });
