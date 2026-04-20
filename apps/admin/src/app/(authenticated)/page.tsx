@@ -11,6 +11,91 @@ import DashboardClient from "./dashboard-client";
 
 export const dynamic = "force-dynamic";
 
+const ACTIVITY_WINDOW_DAYS = 30;
+
+function dayKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function buildActivityData(
+  tickets: Array<{ activity: unknown }>,
+  changelog: Array<{ createdAt: string }>,
+  docs: Array<{ updatedAt: string }>,
+) {
+  const now = new Date();
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const windowStart = new Date(todayEnd);
+  windowStart.setDate(windowStart.getDate() - (ACTIVITY_WINDOW_DAYS - 1));
+  windowStart.setHours(0, 0, 0, 0);
+
+  const counts = new Map<string, number>();
+  const bump = (iso: string) => {
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t) || t < windowStart.getTime() || t > todayEnd.getTime()) return;
+    const key = dayKey(new Date(t));
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  };
+
+  for (const entry of changelog) bump(entry.createdAt);
+  for (const doc of docs) bump(doc.updatedAt);
+  for (const ticket of tickets) {
+    const items = Array.isArray(ticket.activity) ? ticket.activity : [];
+    for (const item of items) {
+      const ts = (item as { timestamp?: unknown }).timestamp;
+      if (typeof ts === "string") bump(ts);
+    }
+  }
+
+  // Pad grid to Sunday-start through Saturday-end for calendar layout
+  const gridStart = new Date(windowStart);
+  gridStart.setDate(gridStart.getDate() - gridStart.getDay());
+  const gridEnd = new Date(todayEnd);
+  gridEnd.setDate(gridEnd.getDate() + (6 - gridEnd.getDay()));
+
+  type DayCell = { date: string; count: number; inWindow: boolean; isToday: boolean; isFuture: boolean };
+  const days: DayCell[] = [];
+  const todayKey = dayKey(now);
+  for (let d = new Date(gridStart); d <= gridEnd; d.setDate(d.getDate() + 1)) {
+    const key = dayKey(d);
+    const inWindow = d >= windowStart && d <= todayEnd;
+    const isFuture = d.getTime() > todayEnd.getTime();
+    days.push({
+      date: key,
+      count: inWindow ? counts.get(key) ?? 0 : 0,
+      inWindow,
+      isToday: key === todayKey,
+      isFuture,
+    });
+  }
+
+  const windowDays = days.filter((d) => d.inWindow);
+  const totalEvents = windowDays.reduce((sum, d) => sum + d.count, 0);
+  const avgPerDay = windowDays.length > 0 ? totalEvents / windowDays.length : 0;
+
+  let peakDay: DayCell | null = null;
+  for (const d of windowDays) {
+    if (!peakDay || d.count > peakDay.count) peakDay = d;
+  }
+
+  let streak = 0;
+  for (let i = windowDays.length - 1; i >= 0; i--) {
+    if (windowDays[i].count > 0) streak++;
+    else break;
+  }
+
+  const todayCount = counts.get(todayKey) ?? 0;
+
+  return {
+    days,
+    totalEvents,
+    avgPerDay: Math.round(avgPerDay * 10) / 10,
+    peakDay: peakDay && peakDay.count > 0 ? { date: peakDay.date, count: peakDay.count } : null,
+    streak,
+    todayCount,
+    windowDays: ACTIVITY_WINDOW_DAYS,
+  };
+}
+
 async function loadDocs() {
   const docsDir = path.resolve(process.cwd(), "../../docs");
   try {
@@ -86,6 +171,8 @@ export default async function DashboardPage() {
     if (t.priority) ticketsByPriority[t.priority] = (ticketsByPriority[t.priority] ?? 0) + 1;
   }
 
+  const activityData = buildActivityData(tickets, changelog, docs);
+
   return (
     <DashboardClient
       versions={versionSummaries}
@@ -97,6 +184,7 @@ export default async function DashboardPage() {
       ticketsByPriority={ticketsByPriority}
       recentChangelog={changelog.slice(0, 8)}
       docs={docs}
+      activity={activityData}
     />
   );
 }

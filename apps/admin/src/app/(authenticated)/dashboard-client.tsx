@@ -42,6 +42,24 @@ type DocEntry = {
   updatedAt: string;
 };
 
+type ActivityDay = {
+  date: string;
+  count: number;
+  inWindow: boolean;
+  isToday: boolean;
+  isFuture: boolean;
+};
+
+type ActivityData = {
+  days: ActivityDay[];
+  totalEvents: number;
+  avgPerDay: number;
+  peakDay: { date: string; count: number } | null;
+  streak: number;
+  todayCount: number;
+  windowDays: number;
+};
+
 type Props = {
   versions: VersionSummary[];
   totalFeatures: number;
@@ -52,6 +70,7 @@ type Props = {
   ticketsByPriority: Record<string, number>;
   recentChangelog: ChangelogEntry[];
   docs: DocEntry[];
+  activity: ActivityData;
 };
 
 /* ── Constants ──────────────────────────────────────────────── */
@@ -88,6 +107,173 @@ const CATEGORY_STYLES: Record<string, { label: string; bg: string; color: string
   infra:       { label: "Infra",       bg: "rgba(156, 163, 175, 0.15)", color: "#9CA3AF" },
   breaking:    { label: "Breaking",    bg: "rgba(251, 191, 36, 0.15)",  color: "#FBBF24" },
 };
+
+/* ── Activity heatmap ────────────────────────────────────────── */
+
+const HEATMAP_LEVELS = [
+  "#1E2230",
+  "#2A3E42",
+  "#3A6B62",
+  "#5DB0A1",
+  "#8CE7D2",
+] as const;
+
+function intensityLevel(count: number, peak: number): 0 | 1 | 2 | 3 | 4 {
+  if (count <= 0) return 0;
+  if (peak <= 0) return 0;
+  const ratio = count / peak;
+  if (ratio > 0.75) return 4;
+  if (ratio > 0.5) return 3;
+  if (ratio > 0.25) return 2;
+  return 1;
+}
+
+function formatShortDate(iso: string) {
+  const [, m, d] = iso.split("-").map((s) => parseInt(s, 10));
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[m - 1]} ${d}`;
+}
+
+function ActivitySection({ data }: { data: ActivityData }) {
+  const weeks: ActivityDay[][] = [];
+  for (let i = 0; i < data.days.length; i += 7) {
+    weeks.push(data.days.slice(i, i + 7));
+  }
+  const peak = data.peakDay?.count ?? 0;
+
+  return (
+    <div
+      style={{
+        background: "var(--card)",
+        border: "1px solid var(--card-border)",
+        borderRadius: 12,
+        padding: "14px 18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        flexShrink: 0,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--foreground)" }}>Activity</span>
+          <span style={{ fontSize: 11, color: "var(--text-quaternary)" }}>
+            {data.totalEvents} {data.totalEvents === 1 ? "event" : "events"} · last {data.windowDays} days
+          </span>
+        </div>
+        {data.todayCount > 0 && (
+          <span style={{ fontSize: 11, color: "#8CE7D2", fontWeight: 500 }}>
+            +{data.todayCount} today
+          </span>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["S", "M", "T", "W", "T", "F", "S"] as const).map((d, i) => (
+              <span
+                key={i}
+                style={{
+                  width: 24,
+                  textAlign: "center",
+                  fontSize: 9,
+                  fontWeight: 500,
+                  color: "var(--text-quaternary)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {d}
+              </span>
+            ))}
+          </div>
+          {weeks.map((week, wi) => (
+            <div key={wi} style={{ display: "flex", gap: 4 }}>
+              {week.map((day) => {
+                const level = intensityLevel(day.count, peak);
+                const bg =
+                  !day.inWindow || day.isFuture
+                    ? "#15171F"
+                    : HEATMAP_LEVELS[level];
+                const [, , dd] = day.date.split("-");
+                const dayNum = parseInt(dd, 10);
+                const numColor =
+                  !day.inWindow || day.isFuture
+                    ? "rgba(107,114,128,0.4)"
+                    : level >= 3
+                      ? "rgba(12,14,20,0.75)"
+                      : level >= 1
+                        ? "rgba(232,234,240,0.6)"
+                        : "rgba(232,234,240,0.4)";
+                return (
+                  <div
+                    key={day.date}
+                    title={`${formatShortDate(day.date)} · ${day.count} ${day.count === 1 ? "event" : "events"}`}
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 3,
+                      background: bg,
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "flex-end",
+                      padding: "2px 3px 0 0",
+                      boxSizing: "border-box",
+                      border: day.isToday ? "1px solid rgba(140,231,210,0.7)" : "none",
+                    }}
+                  >
+                    <span style={{ fontSize: 8, color: numColor, fontWeight: level >= 3 ? 600 : 500 }}>
+                      {dayNum}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+            paddingLeft: 18,
+            borderLeft: "1px solid var(--card-border)",
+            paddingTop: 14,
+            flex: 1,
+            minWidth: 100,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-quaternary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Avg / day
+            </span>
+            <span style={{ fontSize: 18, fontWeight: 600, color: "var(--foreground)" }}>
+              {data.avgPerDay.toFixed(1)}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-quaternary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Peak day
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--foreground)" }}>
+              {data.peakDay ? `${formatShortDate(data.peakDay.date)} · ${data.peakDay.count}` : "—"}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-quaternary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Streak
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: data.streak > 0 ? "#8CE7D2" : "var(--text-tertiary)" }}>
+              {data.streak} {data.streak === 1 ? "day" : "days"}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 
@@ -129,6 +315,7 @@ export default function DashboardClient({
   ticketsByPriority,
   recentChangelog,
   docs,
+  activity,
 }: Props) {
   const { setContent } = useHeaderContent();
 
@@ -144,34 +331,44 @@ export default function DashboardClient({
 
   return (
     <div style={{ padding: "24px 28px", width: "100%", boxSizing: "border-box", overflow: "hidden" }}>
-      {/* ── Stat cards ──────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24 }}>
-        {[
-          { label: "Versions", value: versions.length, detail: `${versions.filter((v) => v.status === "active").length} active` },
-          { label: "Features", value: totalFeatures },
-          { label: "Tickets", value: totalTickets, detail: `${openTickets} open` },
-          { label: "Progress", value: `${overallProgress}%`, detail: `${totalDoneTickets}/${totalTickets} done` },
-        ].map((s) => (
-          <div
-            key={s.label}
-            style={{
-              background: "var(--card)",
-              border: "1px solid var(--card-border)",
-              borderRadius: 12,
-              padding: "16px 20px",
-              minWidth: 150,
-              flex: 1,
-            }}
-          >
-            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-quaternary)", marginBottom: 4 }}>
-              {s.label}
+      {/* ── Top row: stat grid (left) + activity heatmap (right) ── */}
+      <div style={{ display: "flex", gap: 16, marginBottom: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 320, display: "flex", flexDirection: "column", gap: 10 }}>
+          {[
+            [
+              { label: "Versions", value: versions.length, detail: `${versions.filter((v) => v.status === "active").length} active` },
+              { label: "Features", value: totalFeatures, detail: undefined as string | undefined },
+            ],
+            [
+              { label: "Tickets", value: totalTickets, detail: `${openTickets} open` },
+              { label: "Progress", value: `${overallProgress}%`, detail: `${totalDoneTickets}/${totalTickets} done` },
+            ],
+          ].map((row, ri) => (
+            <div key={ri} style={{ display: "flex", gap: 10 }}>
+              {row.map((s) => (
+                <div
+                  key={s.label}
+                  style={{
+                    background: "var(--card)",
+                    border: "1px solid var(--card-border)",
+                    borderRadius: 12,
+                    padding: "16px 20px",
+                    flex: 1,
+                  }}
+                >
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-quaternary)", marginBottom: 4 }}>
+                    {s.label}
+                  </div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: "var(--foreground)" }}>{s.value}</div>
+                  {s.detail && (
+                    <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginTop: 2 }}>{s.detail}</div>
+                  )}
+                </div>
+              ))}
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: "var(--foreground)" }}>{s.value}</div>
-            {s.detail && (
-              <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginTop: 2 }}>{s.detail}</div>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
+        <ActivitySection data={activity} />
       </div>
 
       {/* ── Version progress ────────────────────────────────── */}
