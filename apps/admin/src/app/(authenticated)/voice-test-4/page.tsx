@@ -108,6 +108,7 @@ export default function VoiceTest4Page() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const vadTimerRef = useRef<number | null>(null);
+  const sessionActiveRef = useRef(false);
   const processingRef = useRef(false);
   const speechDetectedRef = useRef(false);
   const lastSpeechAtRef = useRef(0);
@@ -157,6 +158,7 @@ export default function VoiceTest4Page() {
     analyserRef.current = null;
     chunksRef.current = [];
     processingRef.current = false;
+    sessionActiveRef.current = false;
     speechDetectedRef.current = false;
     setMicLevel(0);
   }
@@ -343,7 +345,7 @@ export default function VoiceTest4Page() {
       chunksRef.current = [];
       speechDetectedRef.current = false;
 
-      if (stopRequestedRef.current || !sessionActive) {
+      if (stopRequestedRef.current || !sessionActiveRef.current) {
         setPhase("idle");
         return;
       }
@@ -389,7 +391,7 @@ export default function VoiceTest4Page() {
       chunksRef.current = [];
       speechDetectedRef.current = false;
 
-      if (stopRequestedRef.current || !sessionActive) {
+      if (stopRequestedRef.current || !sessionActiveRef.current) {
         setPhase("idle");
         return;
       }
@@ -401,7 +403,7 @@ export default function VoiceTest4Page() {
 
   function startTurnRecording() {
     const stream = streamRef.current;
-    if (!stream || processingRef.current) {
+    if (!stream || processingRef.current || !sessionActiveRef.current) {
       return;
     }
 
@@ -419,7 +421,25 @@ export default function VoiceTest4Page() {
       }
     };
 
-    recorder.start(250);
+    try {
+      recorder.start(250);
+    } catch (recorderStartError) {
+      const detail =
+        recorderStartError instanceof Error
+          ? recorderStartError.message
+          : "Recorder failed to start.";
+      setError(detail);
+      addCheck({
+        name: "Recorder",
+        ok: false,
+        detail,
+        at: nowLabel(),
+      });
+      setSessionActive(false);
+      sessionActiveRef.current = false;
+      setPhase("idle");
+      return;
+    }
     mediaRecorderRef.current = recorder;
 
     clearVadTimer();
@@ -473,12 +493,14 @@ export default function VoiceTest4Page() {
       source.connect(analyser);
 
       setSessionActive(true);
+      sessionActiveRef.current = true;
       setPhase("listening");
       startTurnRecording();
     } catch (startError) {
       const detail = startError instanceof Error ? startError.message : "Failed to start live session.";
       setError(detail);
       setSessionActive(false);
+      sessionActiveRef.current = false;
       setPhase("idle");
       cleanupMedia();
     }
@@ -487,6 +509,7 @@ export default function VoiceTest4Page() {
   function stopLiveSession() {
     stopRequestedRef.current = true;
     setSessionActive(false);
+    sessionActiveRef.current = false;
     setPhase("idle");
     cleanupMedia();
   }
