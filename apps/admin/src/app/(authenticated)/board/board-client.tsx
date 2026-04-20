@@ -137,6 +137,21 @@ function renderActivityText(text: string): React.ReactNode {
   return parts.length ? parts : text;
 }
 
+function SparkleIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M12 2l1.8 6.4L20 10l-6.2 1.6L12 18l-1.8-6.4L4 10l6.2-1.6L12 2z" />
+      <path d="M19 14l.9 2.3L22 17l-2.1.7L19 20l-.9-2.3L16 17l2.1-.7L19 14z" opacity="0.7" />
+    </svg>
+  );
+}
+
 function uniqueValues(tickets: Ticket[], key: FilterKey, featureMap?: Map<string, string>): string[] {
   const set = new Set<string>();
   for (const t of tickets) {
@@ -1531,7 +1546,11 @@ function TicketDetailSidebar({
                   marginTop: 1,
                 }}
               >
-                {item.author.slice(0, 1).toUpperCase()}
+                {item.author === "ai-sync" ? (
+                  <SparkleIcon size={11} />
+                ) : (
+                  item.author.slice(0, 1).toUpperCase()
+                )}
               </span>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
