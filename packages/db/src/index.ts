@@ -13,7 +13,8 @@ export {
   platformVersionsTable,
   changelogEntriesTable,
   charactersTable,
-  worldCharactersTable,
+  worldNodesTable,
+  worldEdgesTable,
   wikiPagesTable,
   wikiPageVersionsTable,
   wikiEdgesTable,
@@ -41,6 +42,28 @@ export type { CharacterStore } from "./character-store";
 
 export { getWikiStore } from "./wiki-store";
 export type { WikiStore } from "./wiki-store";
+
+export {
+  getWorldGraphStore,
+  NODE_KINDS,
+  KNOWN_EDGE_KINDS,
+  characterDataSchema,
+  behaviorTriggerSchema,
+  placeDataSchema,
+  eventDataSchema,
+} from "./world-graph-store";
+export type {
+  WorldGraphStore,
+  WorldNodeRecord,
+  WorldEdgeRecord,
+  CreateNodeInput,
+  UpdateNodeInput,
+  CreateEdgeInput,
+  WorldGraph,
+  NodeKind,
+  WorldEdgeKind,
+  CharacterNodeData,
+} from "./world-graph-store";
 
 export {
   parseWikilinks,

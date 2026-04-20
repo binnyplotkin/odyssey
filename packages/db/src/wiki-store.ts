@@ -12,7 +12,7 @@
  * `rebuildEdges(characterId)` is the safety valve for when drift shows up.
  */
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "./client";
 import {
   wikiEdgesTable,
@@ -64,6 +64,92 @@ function requireDb() {
   const db = getDb();
   if (!db) throw new Error("DATABASE_URL is required for the wiki store");
   return db;
+}
+
+/**
+ * Identify the orphan page IDs for a given source (pages whose only
+ * provenance is this source) and the edges that would cascade off them.
+ * Shared between the real purge and the preview.
+ */
+async function collectPurgeImpact(sourceId: string): Promise<{
+  orphanPageIds: string[];
+  edgeCount: number;
+}> {
+  const db = requireDb();
+
+  const targetRefs = await db
+    .select({ pageId: wikiSourceRefsTable.pageId })
+    .from(wikiSourceRefsTable)
+    .where(eq(wikiSourceRefsTable.sourceId, sourceId));
+  const candidatePageIds = Array.from(new Set(targetRefs.map((r) => r.pageId)));
+
+  if (candidatePageIds.length === 0) {
+    return { orphanPageIds: [], edgeCount: 0 };
+  }
+
+  const allRefs = await db
+    .select({ pageId: wikiSourceRefsTable.pageId })
+    .from(wikiSourceRefsTable)
+    .where(inArray(wikiSourceRefsTable.pageId, candidatePageIds));
+  const refCountByPage = new Map<string, number>();
+  for (const r of allRefs) {
+    refCountByPage.set(r.pageId, (refCountByPage.get(r.pageId) ?? 0) + 1);
+  }
+  const orphanPageIds = candidatePageIds.filter(
+    (id) => (refCountByPage.get(id) ?? 0) === 1,
+  );
+
+  if (orphanPageIds.length === 0) {
+    return { orphanPageIds, edgeCount: 0 };
+  }
+
+  const edgeRows = await db
+    .select({ id: wikiEdgesTable.id })
+    .from(wikiEdgesTable)
+    .where(
+      or(
+        inArray(wikiEdgesTable.fromPageId, orphanPageIds),
+        inArray(wikiEdgesTable.toPageId, orphanPageIds),
+      ),
+    );
+
+  return { orphanPageIds, edgeCount: edgeRows.length };
+}
+
+async function previewPurgeSourceImpl(sourceId: string): Promise<{
+  pagesRemoved: number;
+  edgesRemoved: number;
+}> {
+  const { orphanPageIds, edgeCount } = await collectPurgeImpact(sourceId);
+  return { pagesRemoved: orphanPageIds.length, edgesRemoved: edgeCount };
+}
+
+/**
+ * Delete a source plus any pages whose *only* provenance was this source.
+ * Shared by `purgeSource` (direct) and `purgeIngestionRun` (indirect).
+ */
+async function purgeSourceImpl(sourceId: string): Promise<{
+  sourceRemoved: number;
+  pagesRemoved: number;
+  edgesRemoved: number;
+}> {
+  const db = requireDb();
+  const { orphanPageIds, edgeCount } = await collectPurgeImpact(sourceId);
+
+  if (orphanPageIds.length > 0) {
+    await db.delete(wikiPagesTable).where(inArray(wikiPagesTable.id, orphanPageIds));
+  }
+
+  const sourceResult = await db
+    .delete(wikiSourcesTable)
+    .where(eq(wikiSourcesTable.id, sourceId))
+    .returning({ id: wikiSourcesTable.id });
+
+  return {
+    sourceRemoved: sourceResult.length,
+    pagesRemoved: orphanPageIds.length,
+    edgesRemoved: edgeCount,
+  };
 }
 
 function normalizePage(row: typeof wikiPagesTable.$inferSelect): WikiPageRecord {
@@ -351,6 +437,26 @@ export interface WikiStore {
   findSourceByHash(characterId: string, contentHash: string): Promise<WikiSourceRecord | null>;
   listSources(characterId: string): Promise<WikiSourceRecord[]>;
   removeSource(id: string): Promise<boolean>;
+  /**
+   * Delete a source and any pages whose *only* provenance was this source
+   * (orphan cleanup). Pages that also reference other sources are kept —
+   * they just lose their ref to this source via FK cascade. Edges cascade
+   * off deleted pages. Ingestion-log rows referencing this source get their
+   * `sourceId` nulled by FK `set null`.
+   */
+  purgeSource(id: string): Promise<{
+    sourceRemoved: number;
+    pagesRemoved: number;
+    edgesRemoved: number;
+  }>;
+  /**
+   * Read-only: counts what would be removed if `purgeSource(id)` ran now.
+   * Used to power the confirm-modal's blast radius panel.
+   */
+  previewPurgeSource(id: string): Promise<{
+    pagesRemoved: number;
+    edgesRemoved: number;
+  }>;
 
   // Source refs
   addSourceRefs(refs: CreateSourceRefInput[]): Promise<void>;
@@ -366,6 +472,28 @@ export interface WikiStore {
     result: FinishIngestionInput,
   ): Promise<WikiIngestionLogRecord | null>;
   listIngestionRuns(characterId: string, limit?: number): Promise<WikiIngestionLogRecord[]>;
+  /**
+   * Purge a single ingestion run: deletes the run row, and (if the run's
+   * source is not used by another run) purges that source + orphan pages.
+   */
+  purgeIngestionRun(runId: string): Promise<{
+    runRemoved: number;
+    sourceRemoved: number;
+    pagesRemoved: number;
+    edgesRemoved: number;
+  }>;
+
+  /**
+   * Wipe all ingested data for a character (pages, edges, sources, runs) while
+   * keeping the character row itself. `wiki_page_versions` and
+   * `wiki_source_refs` cascade off pages/sources automatically.
+   */
+  resetCharacterData(characterId: string): Promise<{
+    pagesRemoved: number;
+    edgesRemoved: number;
+    sourcesRemoved: number;
+    runsRemoved: number;
+  }>;
 }
 
 /* ── Implementation ─────────────────────────────────────────────── */
@@ -717,6 +845,14 @@ function neonStore(): WikiStore {
       return result.length > 0;
     },
 
+    async purgeSource(id) {
+      return purgeSourceImpl(id);
+    },
+
+    async previewPurgeSource(id) {
+      return previewPurgeSourceImpl(id);
+    },
+
     /* ── Source refs ─────────────────────────────────────── */
 
     async addSourceRefs(refs) {
@@ -826,6 +962,60 @@ function neonStore(): WikiStore {
         .orderBy(desc(wikiIngestionLogTable.startedAt))
         .limit(limit);
       return rows.map(normalizeIngestion);
+    },
+
+    async purgeIngestionRun(runId) {
+      const db = requireDb();
+      const [run] = await db
+        .select()
+        .from(wikiIngestionLogTable)
+        .where(eq(wikiIngestionLogTable.id, runId))
+        .limit(1);
+      if (!run) {
+        return { runRemoved: 0, sourceRemoved: 0, pagesRemoved: 0, edgesRemoved: 0 };
+      }
+
+      let purge = { sourceRemoved: 0, pagesRemoved: 0, edgesRemoved: 0 };
+      if (run.sourceId) {
+        // Keep the source if other runs still reference it — those runs would
+        // otherwise turn into "(deleted source)" rows. Purging is only safe
+        // when this run is the source's sole owner.
+        const otherRuns = await db
+          .select({ id: wikiIngestionLogTable.id })
+          .from(wikiIngestionLogTable)
+          .where(eq(wikiIngestionLogTable.sourceId, run.sourceId));
+        const hasOtherOwner = otherRuns.some((r) => r.id !== runId);
+        if (!hasOtherOwner) {
+          purge = await purgeSourceImpl(run.sourceId);
+        }
+      }
+
+      await db.delete(wikiIngestionLogTable).where(eq(wikiIngestionLogTable.id, runId));
+      return { runRemoved: 1, ...purge };
+    },
+
+    async resetCharacterData(characterId) {
+      const db = requireDb();
+      const [edges, pages, sources, runs] = await Promise.all([
+        db.delete(wikiEdgesTable)
+          .where(eq(wikiEdgesTable.characterId, characterId))
+          .returning({ id: wikiEdgesTable.id }),
+        db.delete(wikiPagesTable)
+          .where(eq(wikiPagesTable.characterId, characterId))
+          .returning({ id: wikiPagesTable.id }),
+        db.delete(wikiSourcesTable)
+          .where(eq(wikiSourcesTable.characterId, characterId))
+          .returning({ id: wikiSourcesTable.id }),
+        db.delete(wikiIngestionLogTable)
+          .where(eq(wikiIngestionLogTable.characterId, characterId))
+          .returning({ id: wikiIngestionLogTable.id }),
+      ]);
+      return {
+        pagesRemoved: pages.length,
+        edgesRemoved: edges.length,
+        sourcesRemoved: sources.length,
+        runsRemoved: runs.length,
+      };
     },
   };
 }

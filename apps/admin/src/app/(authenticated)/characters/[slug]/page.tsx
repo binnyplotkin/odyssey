@@ -29,6 +29,10 @@ export default async function CharacterOverviewPage({ params }: { params: Params
 
   const voiceIdPage = voiceIdPages[0] ?? null;
 
+  const lastRun = runs[0] ?? null;
+  const status: "live" | "draft" =
+    pages.length >= 5 && lastRun?.status === "succeeded" ? "live" : "draft";
+
   return (
     <CharacterOverview
       character={{
@@ -45,7 +49,8 @@ export default async function CharacterOverviewPage({ params }: { params: Params
         edgeCount: edges.length,
         sourceCount: sources.length,
         ingestionCount: runs.length,
-        lastIngestAt: runs[0]?.finishedAt ?? runs[0]?.startedAt ?? null,
+        lastIngestAt: lastRun?.finishedAt ?? lastRun?.startedAt ?? null,
+        status,
       }}
       eventCountByEra={Object.fromEntries(eventCountByEra)}
       voiceIdentity={

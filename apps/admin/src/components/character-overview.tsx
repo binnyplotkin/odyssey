@@ -5,6 +5,7 @@ import type { EraConfig } from "@odyssey/db";
 import {
   deleteCharacter,
   rebuildCharacterEdges,
+  resetCharacterData,
   updateCharacterEras,
   updateCharacterIngestionPrompt,
 } from "@/app/(authenticated)/characters/actions";
@@ -82,6 +83,7 @@ type Props = {
     sourceCount: number;
     ingestionCount: number;
     lastIngestAt: string | null;
+    status: "live" | "draft";
   };
   eventCountByEra: Record<string, number>;
   voiceIdentity: {
@@ -123,26 +125,35 @@ function IdentityCard({
     <div style={cardShell}>
       <div style={{
         position: "relative", height: 112,
-        background: gradient, padding: "16px 20px",
-        display: "flex", flexDirection: "column", justifyContent: "flex-end",
+        background: gradient,
       }}>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, color: "rgba(255,255,255,0.55)", letterSpacing: "0.06em" }}>
-          {character.slug}
-        </span>
+        <div style={{ position: "absolute", top: 14, right: 14 }}>
+          <StatusPill status={stats.status} />
+        </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 20px 20px 20px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginTop: -44 }}>
+        {/* Avatar overlaps the gradient via a relative wrapper (see
+            characters-grid.tsx for the source pattern). Avatar is absolutely
+            positioned so title/slug alignment is independent of font metrics. */}
+        <div style={{ position: "relative", marginTop: -44, minHeight: 64 }}>
           {character.image ? (
             <img
               src={character.image}
               alt={character.title}
               referrerPolicy="no-referrer"
-              style={{ width: 64, height: 64, flexShrink: 0, borderRadius: "50%", objectFit: "cover", border: "3px solid var(--panel)" }}
+              style={{
+                position: "absolute", top: 13, left: 0,
+                width: 64, height: 64, boxSizing: "border-box",
+                borderRadius: "50%", objectFit: "cover",
+                boxShadow: "0 0 0 3px var(--background)",
+              }}
             />
           ) : (
             <div style={{
-              width: 64, height: 64, flexShrink: 0, borderRadius: "50%",
-              background: avGradient, border: "3px solid var(--panel)",
+              position: "absolute", top: 13, left: 0,
+              width: 64, height: 64, boxSizing: "border-box",
+              borderRadius: "50%", background: avGradient,
+              boxShadow: "0 0 0 3px var(--background)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               <span style={{ fontFamily: T.fontHeading, fontSize: 26, fontWeight: 600, color: "#0C0E14", lineHeight: "28px" }}>
@@ -150,17 +161,38 @@ function IdentityCard({
               </span>
             </div>
           )}
-          <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 0, paddingTop: 44 }}>
-            <span style={{ fontFamily: T.fontHeading, fontSize: 22, fontWeight: 700, color: T.fg, lineHeight: "26px" }}>
+          <div style={{
+            paddingLeft: 86, // 64 avatar + 22 gap (matches grid card breathing room)
+            paddingTop: 38,
+            minWidth: 0,
+            display: "flex", flexDirection: "column", gap: 3,
+          }}>
+            <span style={{
+              display: "block",
+              fontFamily: T.fontHeading, fontSize: 22, fontWeight: 700, color: T.fg, lineHeight: "26px",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
               {character.title}
             </span>
-            {character.summary && (
-              <span style={{ fontFamily: T.fontBody, fontSize: 13, color: T.muted, lineHeight: "17px" }}>
-                {character.summary}
-              </span>
-            )}
+            <span style={{
+              display: "block",
+              fontFamily: T.fontBody, fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: "17px",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {character.slug}
+            </span>
           </div>
         </div>
+
+        {character.summary && (
+          <p style={{
+            margin: 0,
+            fontFamily: T.fontBody, fontSize: 13, lineHeight: "20px",
+            color: "rgba(255,255,255,0.7)",
+          }}>
+            {character.summary}
+          </p>
+        )}
 
         <div style={{
           display: "flex", alignItems: "center", gap: 28, paddingTop: 14,
@@ -181,6 +213,23 @@ function IdentityCard({
         </div>
       </div>
     </div>
+  );
+}
+
+function StatusPill({ status }: { status: "live" | "draft" }) {
+  const live = status === "live";
+  const color = live ? "#4ADE80" : "#FACC15";
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      padding: "4px 10px", borderRadius: 999,
+      background: live ? "rgba(74,222,128,0.12)" : "rgba(250,204,21,0.12)",
+      fontFamily: T.fontMono, fontSize: 10, fontWeight: 700,
+      color, letterSpacing: "0.08em",
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
+      {live ? "LIVE" : "DRAFT"}
+    </span>
   );
 }
 
@@ -503,7 +552,9 @@ function pickArr(fm: Record<string, unknown>, key: string): string[] {
 
 function DangerZoneCard({ characterId, characterTitle }: { characterId: string; characterTitle: string }) {
   const [rebuildMsg, setRebuildMsg] = useState<string | null>(null);
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [resetting, startReset] = useTransition();
   const [deleting, startDelete] = useTransition();
 
   function doRebuild() {
@@ -512,6 +563,25 @@ function DangerZoneCard({ characterId, characterTitle }: { characterId: string; 
       const res = await rebuildCharacterEdges(characterId);
       if (res.ok && res.data) setRebuildMsg(`Rebuilt: +${res.data.added} / −${res.data.removed}`);
       else if (!res.ok) setRebuildMsg(`Error: ${res.error}`);
+    });
+  }
+
+  function doReset() {
+    const confirmed = window.confirm(
+      `Reset all ingested data for "${characterTitle}"?\n\nDeletes every wiki page, edge, source, and ingestion run. The character row itself is kept. Cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setResetMsg(null);
+    startReset(async () => {
+      const res = await resetCharacterData(characterId);
+      if (res.ok && res.data) {
+        const d = res.data;
+        setResetMsg(
+          `Cleared: ${d.pagesRemoved} pages, ${d.edgesRemoved} edges, ${d.sourcesRemoved} sources, ${d.runsRemoved} runs`,
+        );
+      } else if (!res.ok) {
+        setResetMsg(`Error: ${res.error}`);
+      }
     });
   }
 
@@ -551,6 +621,17 @@ function DangerZoneCard({ characterId, characterTitle }: { characterId: string; 
           </div>
           <button type="button" onClick={doRebuild} disabled={pending} style={{ ...btnGhost, flexShrink: 0, opacity: pending ? 0.6 : 1 }}>
             {pending ? "…" : "Rebuild"}
+          </button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+            <span style={{ fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, color: T.fg }}>Reset ingested data</span>
+            <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {resetMsg ?? "Wipe pages, edges, sources, and runs. Keeps the character."}
+            </span>
+          </div>
+          <button type="button" onClick={doReset} disabled={resetting} style={{ ...btnDanger, flexShrink: 0, opacity: resetting ? 0.6 : 1 }}>
+            {resetting ? "…" : "Reset…"}
           </button>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>

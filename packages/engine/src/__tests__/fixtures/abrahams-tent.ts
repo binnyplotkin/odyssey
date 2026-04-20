@@ -2,7 +2,7 @@ import { WorldDefinition } from "@odyssey/types";
 import {
   getCharacterVoiceProfile,
   getNarratorVoiceProfile,
-} from "@odyssey/engine";
+} from "../../voice-mapping";
 
 export const abrahamsTentWorld: WorldDefinition = {
   id: "abrahams-tent",

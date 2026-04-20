@@ -509,7 +509,7 @@ export const worldRecordSchema = z.object({
   id: z.string(),
   title: z.string(),
   prompt: z.string(),
-  status: z.enum(["published", "draft"]).default("published"),
+  status: z.enum(["published", "draft", "archived"]).default("published"),
   definition: worldDefinitionSchema,
   version: z.number().int().min(1),
   createdAt: z.string(),

@@ -13,6 +13,7 @@
     "@odyssey/types": "*",
     "@odyssey/utils": "*",
     "@neondatabase/serverless": "^1.0.2",
-    "drizzle-orm": "^0.45.1"
+    "drizzle-orm": "^0.45.1",
+    "zod": "^4.3.6"
   }
 }

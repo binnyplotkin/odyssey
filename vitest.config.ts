@@ -12,7 +12,6 @@ export default defineConfig({
       "@odyssey/utils": path.resolve(__dirname, "packages/utils/src"),
       "@odyssey/db": path.resolve(__dirname, "packages/db/src"),
       "@odyssey/engine": path.resolve(__dirname, "packages/engine/src"),
-      "@/data/worlds": path.resolve(__dirname, "apps/web/src/data/worlds"),
     },
   },
 });

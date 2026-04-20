@@ -1,8 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import type { IngestionEvent, ModelId } from "@odyssey/wiki-ingest";
+import {
+  classifySource,
+  previewPurgeIngestionRun,
+  purgeIngestionRun,
+} from "@/app/(authenticated)/characters/actions";
+import { PurgeConfirmModal, type PurgePreview } from "./purge-confirm-modal";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -95,6 +101,49 @@ export function CharacterIngestion({
   const [stream, setStream] = useState<StreamState>(INITIAL_STREAM);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Auto-classification: fires on paste when the form is pristine. The user
+  // can always regenerate or edit the result.
+  const [classifying, setClassifying] = useState(false);
+  const [classifiedBy, setClassifiedBy] = useState<"ai" | null>(null);
+  const [classifyError, setClassifyError] = useState<string | null>(null);
+  // Progressive disclosure: the detail fields (kind/title/tags) only render
+  // after the classifier succeeds OR the user opts into manual fill. Keeps
+  // the starting state to just a single input.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  // Fresh ref → lets us cancel stale responses if the user pastes twice fast.
+  const classifyGenRef = useRef(0);
+
+  const runClassify = useCallback(
+    async (text: string, mode: "auto" | "regenerate") => {
+      const body = text.trim();
+      if (body.length < 80) return;
+      const gen = ++classifyGenRef.current;
+      setClassifying(true);
+      setClassifyError(null);
+      try {
+        const res = await classifySource(characterId, body);
+        if (gen !== classifyGenRef.current) return; // superseded
+        if (!res.ok) {
+          setClassifyError(res.error);
+          return;
+        }
+        if (!res.data) return;
+        // On auto-fire, only fill pristine fields; regenerate overwrites.
+        if (mode === "regenerate" || !title.trim()) setTitle(res.data.title);
+        if (mode === "regenerate" || tags.length === 0) setTags(res.data.tags);
+        setKind(res.data.kind);
+        setClassifiedBy("ai");
+        setDetailsOpen(true);
+      } catch (err) {
+        if (gen !== classifyGenRef.current) return;
+        setClassifyError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (gen === classifyGenRef.current) setClassifying(false);
+      }
+    },
+    [characterId, title, tags],
+  );
+
   const canCompile =
     title.trim().length > 0 && content.trim().length > 20 && stream.status !== "running";
 
@@ -186,6 +235,9 @@ export function CharacterIngestion({
     setTitle("");
     setTags([]);
     setContent("");
+    setClassifiedBy(null);
+    setClassifyError(null);
+    setDetailsOpen(false);
   }, []);
 
   /* ── Tag input handlers ────────────────────────────────────── */
@@ -206,6 +258,7 @@ export function CharacterIngestion({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
       {/* Missing-prompt warning */}
       {!hasIngestionPrompt && (
         <div style={{
@@ -244,6 +297,12 @@ export function CharacterIngestion({
             canCompile={canCompile}
             running={stream.status === "running"}
             onCompile={startRun}
+            classifying={classifying}
+            classifiedBy={classifiedBy}
+            classifyError={classifyError}
+            onClassify={runClassify}
+            detailsOpen={detailsOpen}
+            onOpenDetails={() => setDetailsOpen(true)}
           />
         </div>
         <div style={{ width: 520, flexShrink: 0 }}>
@@ -256,7 +315,7 @@ export function CharacterIngestion({
       </div>
 
       {/* History */}
-      <HistoryCard history={history} stats={stats} />
+      <HistoryCard history={history} stats={stats} characterId={characterId} />
     </div>
   );
 }
@@ -273,7 +332,27 @@ function SourceForm(p: {
   model: ModelId; setModel: (m: ModelId) => void;
   canCompile: boolean; running: boolean;
   onCompile: () => void;
+  classifying: boolean;
+  classifiedBy: "ai" | null;
+  classifyError: string | null;
+  onClassify: (text: string, mode: "auto" | "regenerate") => void;
+  detailsOpen: boolean;
+  onOpenDetails: () => void;
 }) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Auto-fire the classifier on paste — but only when the form is still
+  // pristine (no title, no tags). We read the textarea value *after* the
+  // default paste lands so we classify the full text, not a stale slice.
+  function handlePaste() {
+    if (p.classifying) return;
+    if (p.title.trim() || p.tags.length > 0) return;
+    requestAnimationFrame(() => {
+      const text = textareaRef.current?.value ?? "";
+      if (text.trim().length >= 500) p.onClassify(text, "auto");
+    });
+  }
+
   return (
     <div style={cardShell}>
       <div style={{
@@ -285,7 +364,7 @@ function SourceForm(p: {
             New Source
           </span>
           <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
-            Paste or upload raw material — the LLM compiles it into wiki pages.
+            Paste your text — we&apos;ll auto-fill the title, kind, and tags.
           </span>
         </div>
         <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
@@ -294,100 +373,61 @@ function SourceForm(p: {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "18px 20px 20px 20px" }}>
-        {/* Kind */}
-        <Field label="Source kind">
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {KINDS.map((k) => (
-              <button
-                key={k.value}
-                type="button"
-                onClick={() => p.setKind(k.value)}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "6px 12px", borderRadius: 999,
-                  border: `1px solid ${p.kind === k.value ? "rgba(140,231,210,0.4)" : T.border}`,
-                  background: p.kind === k.value ? "rgba(140,231,210,0.1)" : "transparent",
-                  color: p.kind === k.value ? "#8CE7D2" : T.muted,
-                  fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, cursor: "pointer",
-                }}
-              >
-                {p.kind === k.value && (
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#8CE7D2" }} />
-                )}
-                {k.label}
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        {/* Title */}
-        <Field label="Title">
-          <input
-            type="text"
-            value={p.title}
-            onChange={(e) => p.setTitle(e.target.value)}
-            placeholder="e.g. Genesis 22 — The Binding of Isaac"
-            style={inputStyle}
-          />
-        </Field>
-
-        {/* Tags */}
-        <Field label="Tags" optional help="Domain labels — searchable, no engine behaviour.">
-          <div style={{
-            display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
-            padding: "8px 12px", borderRadius: 10,
-            background: "var(--background)", border: `1px solid ${T.border}`,
-            minHeight: 42,
-          }}>
-            {p.tags.map((t) => (
-              <span key={t} style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "2px 8px 2px 10px", borderRadius: 999,
-                background: "rgba(251,167,192,0.1)", border: "1px solid rgba(251,167,192,0.25)",
-              }}>
-                <span style={{ fontFamily: T.fontBody, fontSize: 11, color: "#FBA7C0" }}>{t}</span>
-                <button
-                  type="button" onClick={() => p.removeTag(t)}
-                  aria-label={`remove ${t}`}
-                  style={{ border: "none", background: "transparent", color: "#FBA7C0", cursor: "pointer", padding: 0, display: "flex" }}
-                >
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              </span>
-            ))}
-            <input
-              type="text"
-              value={p.tagDraft}
-              onChange={(e) => p.setTagDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  p.addTag();
-                } else if (e.key === "Backspace" && !p.tagDraft && p.tags.length > 0) {
-                  p.removeTag(p.tags[p.tags.length - 1]);
-                }
-              }}
-              onBlur={p.addTag}
-              placeholder={p.tags.length === 0 ? "bible, genesis, torah…" : "+ add tag…"}
-              style={{
-                flex: 1, minWidth: 120, border: "none", outline: "none",
-                background: "transparent", color: T.fg,
-                fontFamily: T.fontBody, fontSize: 12,
-              }}
-            />
-          </div>
-        </Field>
-
-        {/* Content */}
+        {/* Content — always visible, always first. */}
         <Field
           label="Content"
-          trailing={<span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
-            {p.wordCount.toLocaleString()} words · {p.kbSize} kb
-          </span>}
+          trailing={
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {p.classifying && (
+                <span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: T.fontMono, fontSize: 10, color: "#8CE7D2" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#8CE7D2", animation: "pulse 1.5s ease-in-out infinite" }} />
+                  Analyzing…
+                </span>
+              )}
+              {!p.classifying && p.classifiedBy === "ai" && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: T.fontMono, fontSize: 10, color: "#8CE7D2" }}>
+                  <SparkIcon />
+                  AI-filled
+                  <button
+                    type="button"
+                    onClick={() => p.onClassify(p.content, "regenerate")}
+                    disabled={p.classifying || p.content.trim().length < 80}
+                    style={{
+                      marginLeft: 4, padding: 0, border: "none", background: "transparent",
+                      color: "#8CE7D2", textDecoration: "underline", cursor: "pointer",
+                      fontFamily: "inherit", fontSize: "inherit",
+                    }}
+                  >
+                    regenerate
+                  </button>
+                </span>
+              )}
+              {!p.classifying && p.classifiedBy !== "ai" && p.content.trim().length >= 500 && (
+                <button
+                  type="button"
+                  onClick={() => p.onClassify(p.content, "regenerate")}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                    padding: "3px 9px", borderRadius: 999,
+                    border: "1px solid rgba(140,231,210,0.3)", background: "rgba(140,231,210,0.08)",
+                    color: "#8CE7D2", fontFamily: T.fontMono, fontSize: 10, cursor: "pointer",
+                  }}
+                >
+                  <SparkIcon />
+                  Auto-fill
+                </button>
+              )}
+              <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+                {p.wordCount.toLocaleString()} words · {p.kbSize} kb
+              </span>
+            </div>
+          }
         >
           <textarea
+            ref={textareaRef}
             value={p.content}
             onChange={(e) => p.setContent(e.target.value)}
+            onPaste={handlePaste}
             rows={14}
             placeholder="Paste the full source text here. Markdown, plain prose, verse-numbered scripture — whatever the LLM should draw on."
             style={{
@@ -396,7 +436,115 @@ function SourceForm(p: {
               minHeight: 220,
             }}
           />
+          {p.classifyError && (
+            <span style={{ fontFamily: T.fontBody, fontSize: 11, color: "#E89090", marginTop: 4 }}>
+              Auto-fill failed: {p.classifyError}
+            </span>
+          )}
+          {/* Manual escape hatch when content is too short (or the user just
+              wants to skip the AI round-trip). Hidden once details open. */}
+          {!p.detailsOpen && !p.classifying && (
+            <button
+              type="button"
+              onClick={p.onOpenDetails}
+              style={{
+                alignSelf: "flex-start", marginTop: 6,
+                padding: 0, border: "none", background: "transparent",
+                color: T.muted, fontFamily: T.fontBody, fontSize: 11,
+                cursor: "pointer", textDecoration: "underline",
+              }}
+            >
+              Fill in details manually →
+            </button>
+          )}
         </Field>
+
+        {/* Details — kind, title, tags. Revealed after the classifier runs
+            or the user opts in manually via the link above. */}
+        {p.detailsOpen && (
+          <>
+            <Field label="Source kind">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {KINDS.map((k) => (
+                  <button
+                    key={k.value}
+                    type="button"
+                    onClick={() => p.setKind(k.value)}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "6px 12px", borderRadius: 999,
+                      border: `1px solid ${p.kind === k.value ? "rgba(140,231,210,0.4)" : T.border}`,
+                      background: p.kind === k.value ? "rgba(140,231,210,0.1)" : "transparent",
+                      color: p.kind === k.value ? "#8CE7D2" : T.muted,
+                      fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, cursor: "pointer",
+                    }}
+                  >
+                    {p.kind === k.value && (
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#8CE7D2" }} />
+                    )}
+                    {k.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <Field label="Title">
+              <input
+                type="text"
+                value={p.title}
+                onChange={(e) => p.setTitle(e.target.value)}
+                placeholder="e.g. Genesis 22 — The Binding of Isaac"
+                style={inputStyle}
+              />
+            </Field>
+
+            <Field label="Tags" optional help="Domain labels — searchable, no engine behaviour.">
+              <div style={{
+                display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
+                padding: "8px 12px", borderRadius: 10,
+                background: "var(--background)", border: `1px solid ${T.border}`,
+                minHeight: 42,
+              }}>
+                {p.tags.map((t) => (
+                  <span key={t} style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "2px 8px 2px 10px", borderRadius: 999,
+                    background: "rgba(251,167,192,0.1)", border: "1px solid rgba(251,167,192,0.25)",
+                  }}>
+                    <span style={{ fontFamily: T.fontBody, fontSize: 11, color: "#FBA7C0" }}>{t}</span>
+                    <button
+                      type="button" onClick={() => p.removeTag(t)}
+                      aria-label={`remove ${t}`}
+                      style={{ border: "none", background: "transparent", color: "#FBA7C0", cursor: "pointer", padding: 0, display: "flex" }}
+                    >
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  value={p.tagDraft}
+                  onChange={(e) => p.setTagDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      p.addTag();
+                    } else if (e.key === "Backspace" && !p.tagDraft && p.tags.length > 0) {
+                      p.removeTag(p.tags[p.tags.length - 1]);
+                    }
+                  }}
+                  onBlur={p.addTag}
+                  placeholder={p.tags.length === 0 ? "bible, genesis, torah…" : "+ add tag…"}
+                  style={{
+                    flex: 1, minWidth: 120, border: "none", outline: "none",
+                    background: "transparent", color: T.fg,
+                    fontFamily: T.fontBody, fontSize: 12,
+                  }}
+                />
+              </div>
+            </Field>
+          </>
+        )}
 
         {/* Footer actions */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 6 }}>
@@ -725,7 +873,9 @@ function StreamItem({ item }: { item: ProgressItem }) {
 
 /* ── History ───────────────────────────────────────────────────── */
 
-function HistoryCard({ history, stats }: { history: HistoryRow[]; stats: Props["stats"] }) {
+function HistoryCard({
+  history, stats, characterId,
+}: { history: HistoryRow[]; stats: Props["stats"]; characterId: string }) {
   const [filter, setFilter] = useState<"all" | "succeeded" | "failed">("all");
   const filtered = history.filter((r) => filter === "all" || r.status === filter);
 
@@ -781,19 +931,51 @@ function HistoryCard({ history, stats }: { history: HistoryRow[]; stats: Props["
             <span style={{ ...colHeader, width: 90, textAlign: "right" }}>Duration</span>
             <span style={{ ...colHeader, width: 90, textAlign: "right" }}>Tokens</span>
             <span style={{ ...colHeader, width: 90 }}>When</span>
+            <span style={{ width: 60, flexShrink: 0 }} />
           </div>
-          {filtered.map((r) => <HistoryRowView key={r.id} row={r} />)}
+          {filtered.map((r) => <HistoryRowView key={r.id} row={r} characterId={characterId} />)}
         </>
       )}
     </div>
   );
 }
 
-function HistoryRowView({ row }: { row: HistoryRow }) {
+function HistoryRowView({ row, characterId }: { row: HistoryRow; characterId: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<PurgePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const dur = durationLabel(row.startedAt, row.finishedAt);
   const when = relative(row.startedAt);
   const statusColor = row.status === "succeeded" ? "#4ADE80" : row.status === "failed" ? "#E89090" : "#8CE7D2";
   const iconBg = row.status === "succeeded" ? "rgba(74,222,128,0.12)" : row.status === "failed" ? "rgba(232,144,144,0.12)" : "rgba(140,231,210,0.12)";
+
+  function openPurge() {
+    setError(null);
+    setPreview(null);
+    setOpen(true);
+    setPreviewLoading(true);
+    void previewPurgeIngestionRun(characterId, row.id).then((res) => {
+      setPreviewLoading(false);
+      if (res.ok && res.data) setPreview(res.data);
+      else if (!res.ok) setError(res.error);
+    });
+  }
+
+  function confirmPurge() {
+    setError(null);
+    start(async () => {
+      const res = await purgeIngestionRun(characterId, row.id);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    });
+  }
 
   return (
     <div style={{
@@ -842,11 +1024,47 @@ function HistoryRowView({ row }: { row: HistoryRow }) {
       <span style={{ width: 90, flexShrink: 0, fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
         {when}
       </span>
+      <span style={{ width: 60, flexShrink: 0, display: "flex", justifyContent: "flex-end" }}>
+        <button
+          type="button"
+          onClick={openPurge}
+          disabled={pending}
+          title="Purge this run + its source + orphan pages"
+          style={{
+            padding: "4px 10px", borderRadius: 6,
+            border: "1px solid rgba(232,144,144,0.22)",
+            background: "transparent", color: "#E89090",
+            fontFamily: T.fontBody, fontSize: 10.5,
+            cursor: pending ? "not-allowed" : "pointer",
+            opacity: pending ? 0.5 : 1,
+          }}
+        >
+          {pending ? "…" : "Purge"}
+        </button>
+      </span>
+      <PurgeConfirmModal
+        open={open}
+        kind="run"
+        preview={preview}
+        loading={previewLoading}
+        pending={pending}
+        error={error}
+        onCancel={() => { if (!pending) setOpen(false); }}
+        onConfirm={confirmPurge}
+      />
     </div>
   );
 }
 
 /* ── Atoms ─────────────────────────────────────────────────────── */
+
+function SparkIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" />
+    </svg>
+  );
+}
 
 function Field({
   label, optional, help, trailing, children,

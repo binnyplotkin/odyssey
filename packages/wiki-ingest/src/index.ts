@@ -24,3 +24,5 @@ export type {
   OpPlan,
   WrittenPage,
 } from "./types";
+export { call, extractToolUse } from "./client";
+export type { CallOptions, CallResult } from "./client";

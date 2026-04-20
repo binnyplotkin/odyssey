@@ -1,4 +1,3 @@
-import { getWorldDefinitions } from "@/data/worlds";
 import { createSimulationService } from "@odyssey/engine";
 
 export const {
@@ -14,4 +13,4 @@ export const {
   getSessionTurns,
   replaySession,
   createIntroResult,
-} = createSimulationService(getWorldDefinitions());
+} = createSimulationService([]);

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -186,9 +187,10 @@ export const worldsTable = pgTable("worlds", {
 // ── Characters + Knowledge Graph ──────────────────────────────────────
 //
 // A character is global — one row, reused across any number of worlds via
-// the `world_characters` bridge. Each character has its own knowledge-graph
-// wiki (pages + edges + sources), because the wiki encodes that character's
-// perspective on source material and travels with them.
+// the world graph (`world_nodes` with kind='character', refId=character.id).
+// Each character has its own knowledge-graph wiki (pages + edges + sources),
+// because the wiki encodes that character's perspective on source material
+// and travels with them.
 
 /** Global characters (Abraham, Sarah, Narrator, …). */
 export const charactersTable = pgTable(
@@ -210,19 +212,6 @@ export const charactersTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-);
-
-/** World ↔ Character bridge (a character can appear in multiple worlds). */
-export const worldCharactersTable = pgTable(
-  "world_characters",
-  {
-    worldId: text("world_id").notNull().references(() => worldsTable.id, { onDelete: "cascade" }),
-    characterId: text("character_id").notNull().references(() => charactersTable.id, { onDelete: "cascade" }),
-    // Per-world role override (e.g. "narrator", "host", "guest") — optional.
-    roleInWorld: text("role_in_world"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [primaryKey({ columns: [t.worldId, t.characterId] })],
 );
 
 /**
@@ -335,6 +324,60 @@ export const wikiSourceRefsTable = pgTable(
   (t) => [
     index("wiki_source_refs_page_idx").on(t.pageId),
     index("wiki_source_refs_source_idx").on(t.sourceId),
+  ],
+);
+
+// ── World Graph ───────────────────────────────────────────────────────
+//
+// A world is a graph. Nodes are typed entities inside a world; edges are
+// typed directed relationships between them. `kind` is a discriminator
+// validated in the app (character | place | event to start). Character
+// nodes reference the global `characters` library via `refId`; other
+// kinds are native to the world. Kind-specific fields live in `data`.
+
+/** Typed entity inside a world (character | place | event | …). */
+export const worldNodesTable = pgTable(
+  "world_nodes",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    worldId: text("world_id").notNull().references(() => worldsTable.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),                        // character | place | event (extend later)
+    refId: text("ref_id"),                                // characters.id when kind='character'; else null
+    label: text("label").notNull(),                       // display name in this world
+    summary: text("summary"),
+    data: jsonb("data").notNull().default({}),            // kind-specific fields, validated app-side
+    position: jsonb("position"),                          // { x, y } for canvas editor
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("world_nodes_world_idx").on(t.worldId),
+    index("world_nodes_world_kind_idx").on(t.worldId, t.kind),
+    index("world_nodes_ref_idx").on(t.refId),
+    // Prevent the same library entity from being imported twice into one world.
+    // Partial — only enforced when refId is set.
+    uniqueIndex("world_nodes_world_ref_uniq")
+      .on(t.worldId, t.kind, t.refId)
+      .where(sql`${t.refId} IS NOT NULL`),
+  ],
+);
+
+/** Typed directed edge between two nodes in the same world. */
+export const worldEdgesTable = pgTable(
+  "world_edges",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    worldId: text("world_id").notNull().references(() => worldsTable.id, { onDelete: "cascade" }),
+    fromNodeId: text("from_node_id").notNull().references(() => worldNodesTable.id, { onDelete: "cascade" }),
+    toNodeId: text("to_node_id").notNull().references(() => worldNodesTable.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),                         // knows | happens_at | involves | member_of | plays | …
+    data: jsonb("data").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("world_edges_unique_idx").on(t.fromNodeId, t.toNodeId, t.kind),
+    index("world_edges_world_idx").on(t.worldId),
+    index("world_edges_to_node_idx").on(t.toNodeId),
   ],
 );
 

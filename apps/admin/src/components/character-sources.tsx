@@ -10,7 +10,11 @@ import type {
   WikiSourceRecord,
   WikiSourceRefRecord,
 } from "@odyssey/db";
-import { deleteSource } from "@/app/(authenticated)/characters/actions";
+import {
+  deleteSource,
+  previewPurgeSource,
+} from "@/app/(authenticated)/characters/actions";
+import { PurgeConfirmModal, type PurgePreview } from "./purge-confirm-modal";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -681,54 +685,81 @@ function RunsBlock({ runs }: { runs: WikiIngestionLogRecord[] }) {
 }
 
 function DangerBlock({
-  source, characterId, pageCount, onDeleted,
+  source, characterId, onDeleted,
 }: {
   source: WikiSourceRecord; characterId: string; pageCount: number; onDeleted: () => void;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<PurgePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
-  function doDelete() {
-    const confirmText = pageCount > 0
-      ? `Delete "${source.title}"?\n\nThis source backs ${pageCount} wiki page${pageCount === 1 ? "" : "s"}. The pages themselves are not removed — but their provenance references to this source will be wiped. Cannot be undone.`
-      : `Delete "${source.title}"?\n\nCannot be undone.`;
-    if (!window.confirm(confirmText)) return;
+  function openModal() {
+    setError(null);
+    setPreview(null);
+    setOpen(true);
+    setPreviewLoading(true);
+    void previewPurgeSource(characterId, source.id).then((res) => {
+      setPreviewLoading(false);
+      if (res.ok && res.data) setPreview(res.data);
+      else if (!res.ok) setError(res.error);
+    });
+  }
+
+  function confirm() {
     setError(null);
     start(async () => {
       const res = await deleteSource(characterId, source.id);
-      if (!res.ok) setError(res.error);
-      else onDeleted();
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setOpen(false);
+      onDeleted();
     });
   }
 
   return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-      padding: "14px 20px", borderTop: "1px solid rgba(232,144,144,0.15)",
-      background: "rgba(232,144,144,0.03)",
-    }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <span style={{ fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, color: T.fg }}>
-          Delete source
-        </span>
-        <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
-          {error ?? "Removes this source + its page provenance. Pages themselves stay."}
-        </span>
+    <>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        padding: "14px 20px", borderTop: "1px solid rgba(232,144,144,0.15)",
+        background: "rgba(232,144,144,0.03)",
+      }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, color: T.fg }}>
+            Purge source
+          </span>
+          <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
+            Removes this source + any pages whose only provenance was this source.
+          </span>
+        </div>
+        <button
+          type="button" onClick={openModal} disabled={pending}
+          style={{
+            padding: "5px 12px", borderRadius: 8,
+            border: "1px solid rgba(232,144,144,0.3)",
+            background: "rgba(232,144,144,0.04)",
+            color: "#E89090",
+            fontFamily: T.fontBody, fontSize: 11, cursor: pending ? "not-allowed" : "pointer",
+            flexShrink: 0, opacity: pending ? 0.6 : 1,
+          }}
+        >
+          {pending ? "Purging…" : "Purge…"}
+        </button>
       </div>
-      <button
-        type="button" onClick={doDelete} disabled={pending}
-        style={{
-          padding: "5px 12px", borderRadius: 8,
-          border: "1px solid rgba(232,144,144,0.3)",
-          background: "rgba(232,144,144,0.04)",
-          color: "#E89090",
-          fontFamily: T.fontBody, fontSize: 11, cursor: pending ? "not-allowed" : "pointer",
-          flexShrink: 0, opacity: pending ? 0.6 : 1,
-        }}
-      >
-        {pending ? "Deleting…" : "Delete…"}
-      </button>
-    </div>
+      <PurgeConfirmModal
+        open={open}
+        kind="source"
+        preview={preview}
+        loading={previewLoading}
+        pending={pending}
+        error={error}
+        onCancel={() => { if (!pending) setOpen(false); }}
+        onConfirm={confirm}
+      />
+    </>
   );
 }
 

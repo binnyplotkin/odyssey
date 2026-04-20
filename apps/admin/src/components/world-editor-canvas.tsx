@@ -20,6 +20,9 @@ import type {
   RelationshipDefinition,
 } from "@odyssey/types";
 import { WorldEditorPanel } from "./world-editor-panel";
+import { CharacterPicker } from "./character-picker";
+import { CharacterInspector } from "./character-inspector";
+import { listCharacterKnowsEdges } from "@/app/(authenticated)/worlds/[worldId]/editor/actions";
 import type { EntityType, EditorNode } from "./world-editor";
 
 /* ── Design Tokens (matching Paper designs) ────────────────── */
@@ -76,6 +79,17 @@ type EditorEdge = {
   from: string;
   to: string;
   label?: string;
+  kind?: "knows" | "structural";
+  attitude?: string;
+};
+
+const ATTITUDE_COLORS: Record<string, string> = {
+  loving:     "#E879A0",
+  loyal:      "#7AE5C5",
+  protective: "#A88CFF",
+  grieving:   "#8A8FA3",
+  resentful:  "#E36D76",
+  wary:       "#E8B76A",
 };
 
 type DragState =
@@ -123,7 +137,7 @@ function buildNodesFromWorld(world: WorldDefinition): EditorNode[] {
     nodes.push({
       id: `node-char-${char.id}`, entityType: "character", entityId: char.id,
       label: char.name, subtitle: `${char.title} · ${char.archetype}`,
-      x: 500, y: 80 + i * (170 + gap), w: 220, h: 160, collapsed: false,
+      x: 500, y: 80 + i * (90 + gap), w: 220, h: 76, collapsed: false,
     });
   });
 
@@ -300,25 +314,134 @@ function WorldCoreContent({ world }: { world: WorldDefinition }) {
   );
 }
 
-function CharacterContent({ char, world }: { char: CharacterDefinition; world: WorldDefinition }) {
-  const groupIds = char.groupIds?.length ? char.groupIds : char.groupId ? [char.groupId] : [];
-  const groups = groupIds.map((gid) => world.groups.find((g) => g.id === gid)).filter(Boolean);
+/**
+ * CharacterChipNode — compact, read-at-a-glance chip matching Paper 10IE-0.
+ * Avatar (initial on pink gradient) + link dot, name row with kind dot, role
+ * caption (archetype, uppercase), and a slug reference line that appears only
+ * when selected.
+ */
+function CharacterChipNode({
+  node, char, isSelected, hasErrors, errorMessage, isDragging, onPointerDown, onContextMenu,
+}: {
+  node: EditorNode;
+  char: CharacterDefinition;
+  isSelected: boolean;
+  hasErrors: boolean;
+  errorMessage?: string;
+  isDragging: boolean;
+  onPointerDown: (e: PointerEvent<HTMLElement>) => void;
+  onContextMenu: (e: MouseEvent<HTMLElement>) => void;
+}) {
+  const initial = (char.name || char.id || "?").trim().charAt(0).toUpperCase() || "?";
+  const roleCaption = char.archetype && char.archetype !== "unspecified" ? char.archetype : char.title || "";
+  const slug = char.id;
+  const [hover, setHover] = useState(false);
+
+  // border + shadow per Paper states (Default / Hover / Selected / Error)
+  const border = hasErrors
+    ? "1.5px solid #E36D76"
+    : isSelected
+    ? "1.5px solid #E8A0B5"
+    : hover
+    ? "1px solid #3A4050"
+    : "1px solid #242934";
+  const background = hover && !isSelected ? "#161A22" : "#13161D";
+  const boxShadow = hasErrors
+    ? "rgba(227,109,118,0.14) 0 0 0 4px"
+    : isSelected
+    ? "rgba(232,160,181,0.12) 0 0 0 4px"
+    : hover
+    ? "rgba(0,0,0,0.6) 0 8px 24px -12px"
+    : "rgba(0,0,0,0.35) 0 4px 16px -8px";
+
   return (
-    <div style={{ marginTop: 4, fontFamily: T.fontBody }}>
-      <div style={{ fontSize: 11, color: T.textSecondary, marginBottom: 4 }}>
-        {char.title} · {groups.map((g) => g?.name).join(", ")}
-      </div>
-      <div style={{ fontSize: 10, color: T.textTertiary, marginBottom: 6, fontStyle: "italic" }}>
-        &ldquo;{char.speakingStyle.slice(0, 50)}&rdquo;
-      </div>
-      {char.tags && char.tags.length > 0 && (
-        <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-          {char.tags.map((tag) => (
-            <Badge key={tag} text={tag} color={NODE_COLORS.character.dot} />
-          ))}
+    <article
+      style={{
+        position: "absolute", left: node.x, top: node.y, width: node.w,
+        display: "flex", alignItems: "stretch", gap: 10,
+        padding: "10px 14px 10px 10px",
+        borderRadius: 12,
+        border,
+        background,
+        boxShadow,
+        cursor: isDragging ? "grabbing" : "grab",
+        userSelect: "none",
+        boxSizing: "border-box",
+        transition: "box-shadow 150ms, border-color 150ms, background 150ms",
+      }}
+      onPointerDown={onPointerDown}
+      onContextMenu={onContextMenu}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+    >
+      {/* Avatar slot */}
+      <div style={{ position: "relative", width: 40, height: 40, flexShrink: 0 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          backgroundImage:
+            "linear-gradient(in oklab 135deg, oklab(78.1% 0.089 0.0005) 0%, oklab(56.5% 0.095 -0.0008) 100%)",
+        }}>
+          <span style={{
+            fontFamily: T.fontHeading, fontSize: 17, fontWeight: 500,
+            color: "#2A0E18", lineHeight: "22px", letterSpacing: "-0.01em",
+          }}>
+            {initial}
+          </span>
         </div>
-      )}
-    </div>
+        {/* Link dot — mint when linked to library, amber if errors, hidden otherwise */}
+        <div
+          title={hasErrors ? (errorMessage || "Error") : "Linked to global character library"}
+          style={{
+            position: "absolute", right: -3, bottom: -3,
+            width: 11, height: 11, borderRadius: 999,
+            background: hasErrors ? "#E8B76A" : "#7AE5C5",
+            border: "2px solid #13161D",
+            boxSizing: "border-box",
+          }}
+        />
+      </div>
+
+      {/* Content column */}
+      <div style={{
+        display: "flex", flexDirection: "column", gap: 2, paddingTop: 2,
+        minWidth: 0, flex: 1,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{
+            width: 5, height: 5, borderRadius: 999,
+            background: "#E8A0B5", flexShrink: 0,
+          }} />
+          <span style={{
+            fontFamily: T.fontBody, fontSize: 13, fontWeight: 500,
+            color: "#E7EAF0", lineHeight: "16px", letterSpacing: "-0.005em",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {char.name}
+          </span>
+        </div>
+        {roleCaption && (
+          <div style={{
+            fontFamily: T.fontBody, fontSize: 9, fontWeight: 500,
+            color: "#7C8494", lineHeight: "12px",
+            letterSpacing: "0.14em", textTransform: "uppercase",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {roleCaption}
+          </div>
+        )}
+        {isSelected && (
+          <div style={{
+            marginTop: 2,
+            fontFamily: "'DM Mono', 'JetBrains Mono', monospace",
+            fontSize: 9, color: "#5B6272", lineHeight: "12px",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            → characters.{slug}
+          </div>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -390,22 +513,24 @@ function InitialStateContent({ world }: { world: WorldDefinition }) {
 const addableTypes: { type: EntityType; label: string; description: string }[] = [
   { type: "world", label: "World Core", description: "Setting, theme, and narrative frame" },
   { type: "role", label: "Role", description: "Player identity, authority, and goals" },
-  { type: "character", label: "Character", description: "NPC with personality, emotions, and voice" },
   { type: "group", label: "Group", description: "Faction with influence, goals, and dynamics" },
   { type: "event", label: "Event", description: "Scenario with stakes, actors, and triggers" },
   { type: "state", label: "Initial State", description: "Starting metrics, relationships, and flags" },
 ];
 
-const creatable: EntityType[] = ["character", "group", "role", "event", "relationship"];
+const creatable: EntityType[] = ["group", "role", "event", "relationship"];
 
 /* ── Component ───────────────────────────────────────────── */
 
-type Props = { worlds: { id: string; title: string }[] };
+type Props = {
+  worlds?: { id: string; title: string }[];
+  fixedWorldId?: string;
+};
 
-export function WorldEditorCanvas({ worlds }: Props) {
+export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
-  const [worldId, setWorldId] = useState(worlds[0]?.id ?? "");
+  const [worldId, setWorldId] = useState(fixedWorldId ?? worlds?.[0]?.id ?? "");
   const [world, setWorld] = useState<WorldDefinition | null>(null);
   const [dirty, setDirty] = useState(false);
 
@@ -423,6 +548,7 @@ export function WorldEditorCanvas({ worlds }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
 
   const nodeLookup = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes]);
@@ -444,14 +570,38 @@ export function WorldEditorCanvas({ worlds }: Props) {
     setContextMenu(null);
 
     startLoading(async () => {
-      const response = await fetch(`/api/worlds/${id}`, { cache: "no-store" });
+      const [response, knowsRes] = await Promise.all([
+        fetch(`/api/worlds/${id}`, { cache: "no-store" }),
+        listCharacterKnowsEdges(id),
+      ]);
       if (!response.ok) { setSaveError("Failed to load world."); return; }
       const payload = (await response.json()) as { world: WorldDefinition };
       const w = payload.world;
       setWorld(w);
       const builtNodes = buildNodesFromWorld(w);
       setNodes(builtNodes);
-      setEdges(buildEdgesFromWorld(w, builtNodes));
+      const structural = buildEdgesFromWorld(w, builtNodes);
+      const knows: EditorEdge[] =
+        knowsRes.ok && knowsRes.data
+          ? knowsRes.data.edges.flatMap<EditorEdge>((e) => {
+              const fromNode = builtNodes.find(
+                (n) => n.entityType === "character" && n.entityId === e.fromSlug,
+              );
+              const toNode = builtNodes.find(
+                (n) => n.entityType === "character" && n.entityId === e.toSlug,
+              );
+              if (!fromNode || !toNode) return [];
+              return [{
+                id: `knows-${e.id}`,
+                from: fromNode.id,
+                to: toNode.id,
+                kind: "knows",
+                attitude: e.attitude,
+                label: e.attitude,
+              }];
+            })
+          : [];
+      setEdges([...structural, ...knows]);
       setValidationErrors(validateWorld(w));
     });
   }
@@ -460,6 +610,26 @@ export function WorldEditorCanvas({ worlds }: Props) {
     if (worldId) loadWorld(worldId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ⌘K / Ctrl+K opens the character picker from anywhere in the editor.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        if (world) {
+          setPickerOpen(true);
+          setAddMenuOpen(false);
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [world]);
+
+  function handleCharacterLinked() {
+    setPickerOpen(false);
+    if (worldId) loadWorld(worldId);
+  }
 
   function saveWorld() {
     if (!world) return;
@@ -714,7 +884,7 @@ export function WorldEditorCanvas({ worlds }: Props) {
     if (!world || node.collapsed) return null;
     switch (node.entityType) {
       case "world": return <WorldCoreContent world={world} />;
-      case "character": { const c = world.characters.find((ch) => ch.id === node.entityId); return c ? <CharacterContent char={c} world={world} /> : null; }
+      case "character": return null; // rendered by CharacterChipNode
       case "group": { const g = world.groups.find((gr) => gr.id === node.entityId); return g ? <GroupContent group={g} world={world} /> : null; }
       case "role": { const r = world.roles.find((ro) => ro.id === node.entityId); return r ? <RoleContent role={r} /> : null; }
       case "event": { const e = world.eventTemplates.find((ev) => ev.id === node.entityId); return e ? <EventContent event={e} world={world} /> : null; }
@@ -745,7 +915,7 @@ export function WorldEditorCanvas({ worlds }: Props) {
 
       <div style={{
         display: "flex", flexDirection: "column",
-        height: "100vh", margin: "-2rem",
+        height: "calc(100% + 4rem)", margin: "-2rem",
         overflow: "hidden", background: T.canvasBg, color: T.textPrimary,
       }}>
 
@@ -759,24 +929,28 @@ export function WorldEditorCanvas({ worlds }: Props) {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontFamily: T.fontHeading, fontSize: 13, fontWeight: 500, color: T.textSecondary }}>World Editor</span>
-            <div style={{ width: 1, height: 18, background: T.borderSubtle }} />
+            {!fixedWorldId && (
+              <>
+                <span style={{ fontFamily: T.fontHeading, fontSize: 13, fontWeight: 500, color: T.textSecondary }}>World Editor</span>
+                <div style={{ width: 1, height: 18, background: T.borderSubtle }} />
 
-            <select
-              value={worldId}
-              onChange={(e) => loadWorld(e.target.value)}
-              disabled={isLoading}
-              style={{
-                background: "transparent", border: "none", outline: "none", cursor: "pointer",
-                fontFamily: T.fontHeading, fontSize: 14, fontWeight: 600, color: T.textPrimary,
-              }}
-            >
-              {worlds.map((w) => (
-                <option key={w.id} value={w.id} style={{ background: T.chrome, color: T.textPrimary }}>
-                  {w.title}
-                </option>
-              ))}
-            </select>
+                <select
+                  value={worldId}
+                  onChange={(e) => loadWorld(e.target.value)}
+                  disabled={isLoading}
+                  style={{
+                    background: "transparent", border: "none", outline: "none", cursor: "pointer",
+                    fontFamily: T.fontHeading, fontSize: 14, fontWeight: 600, color: T.textPrimary,
+                  }}
+                >
+                  {(worlds ?? []).map((w) => (
+                    <option key={w.id} value={w.id} style={{ background: T.chrome, color: T.textPrimary }}>
+                      {w.title}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
 
             {/* Status badges */}
             {saveStatus === "saved" && (
@@ -974,6 +1148,45 @@ export function WorldEditorCanvas({ worlds }: Props) {
 
                       <div style={{ height: 1, background: T.borderSubtle, margin: "4px 10px" }} />
 
+                      <div style={{ padding: "8px 10px 6px", fontFamily: T.fontMono, fontSize: 9, fontWeight: 700, color: T.textQuaternary, letterSpacing: "0.08em" }}>
+                        FROM LIBRARY
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => { setAddMenuOpen(false); setPickerOpen(true); }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 8,
+                          width: "100%", border: "none", background: "transparent", cursor: "pointer", textAlign: "left",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--card)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <div style={{
+                          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                          background: "rgba(232,121,160,0.12)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                            <circle cx="7" cy="5" r="2.2" stroke="#E879A0" strokeWidth="1.3" />
+                            <path d="M3 12c0-2.2 1.8-3.6 4-3.6s4 1.4 4 3.6" stroke="#E879A0" strokeWidth="1.3" strokeLinecap="round" />
+                          </svg>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ fontFamily: T.fontHeading, fontSize: 13, fontWeight: 600, color: "#E879A0" }}>Character from library</div>
+                            <span style={{
+                              fontFamily: T.fontMono, fontSize: 9, letterSpacing: "0.06em",
+                              color: T.textQuaternary, padding: "1px 5px", borderRadius: 4,
+                              background: "rgba(255,255,255,0.06)",
+                            }}>
+                              ⌘K
+                            </span>
+                          </div>
+                          <div style={{ fontFamily: T.fontBody, fontSize: 11, color: T.textSecondary }}>Link a global character into this world</div>
+                        </div>
+                      </button>
+
                       <button type="button" style={{
                         display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 8,
                         width: "100%", border: "none", background: "transparent", cursor: "pointer", textAlign: "left",
@@ -1027,12 +1240,20 @@ export function WorldEditorCanvas({ worlds }: Props) {
                       if (!from || !to) return null;
                       const { start, end } = getEdgeAnchors(from, to);
                       const midX = (start.x + end.x) / 2;
+                      const isKnows = edge.kind === "knows";
+                      const stroke = isKnows
+                        ? (edge.attitude && ATTITUDE_COLORS[edge.attitude]) ?? "#E879A0"
+                        : "var(--card-border)";
                       return (
                         <path
                           key={edge.id}
                           d={`M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${end.y}, ${end.x} ${end.y}`}
-                          stroke="var(--card-border)" strokeWidth={1.5} fill="none"
-                          markerEnd="url(#canvas-arrow)"
+                          stroke={stroke}
+                          strokeWidth={isKnows ? 1.25 : 1.5}
+                          strokeDasharray={isKnows ? "4 3" : undefined}
+                          strokeOpacity={isKnows ? 0.75 : 1}
+                          fill="none"
+                          markerEnd={isKnows ? undefined : "url(#canvas-arrow)"}
                         />
                       );
                     })}
@@ -1044,6 +1265,25 @@ export function WorldEditorCanvas({ worlds }: Props) {
                     const isSelected = selectedNodeId === node.id;
                     const nodeErrors = errorsForNode(node.id);
                     const hasErrors = nodeErrors.length > 0;
+
+                    if (node.entityType === "character" && world) {
+                      const char = world.characters.find((c) => c.id === node.entityId);
+                      if (char) {
+                        return (
+                          <CharacterChipNode
+                            key={node.id}
+                            node={node}
+                            char={char}
+                            isSelected={isSelected}
+                            hasErrors={hasErrors}
+                            errorMessage={nodeErrors[0]?.message}
+                            isDragging={dragState?.type === "node" && dragState.nodeId === node.id}
+                            onPointerDown={(e) => startNodeDrag(e, node.id)}
+                            onContextMenu={(e) => handleContextMenu(e, node.id)}
+                          />
+                        );
+                      }
+                    }
 
                     return (
                       <article
@@ -1071,6 +1311,12 @@ export function WorldEditorCanvas({ worlds }: Props) {
                         {/* Header */}
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={{ width: 8, height: 8, borderRadius: "50%", background: color.dot, flexShrink: 0 }} />
+                          {node.entityType === "character" && (
+                            <span
+                              title="Linked to global character library"
+                              style={{ width: 6, height: 6, borderRadius: "50%", background: "#7AE5C5", flexShrink: 0, boxShadow: "0 0 6px rgba(122,229,197,0.6)" }}
+                            />
+                          )}
                           <span style={{ fontFamily: T.fontMono, fontSize: 9, fontWeight: 700, color: color.dot, letterSpacing: "0.08em" }}>
                             {ENTITY_LABELS[node.entityType]}
                           </span>
@@ -1136,6 +1382,91 @@ export function WorldEditorCanvas({ worlds }: Props) {
                   })}
                 </div>
               )}
+
+              {/* Validation / save strip */}
+              {world && (() => {
+                const hasErrors = validationErrors.length > 0;
+                const savedJustNow = saveStatus === "saved" && !dirty;
+                const status = hasErrors
+                  ? { dot: "#F5C67A", glow: "rgba(245, 198, 122, 0.5)", label: `Draft · ${validationErrors.length} warning${validationErrors.length === 1 ? "" : "s"}` }
+                  : savedJustNow
+                  ? { dot: "#8DF0C8", glow: "rgba(141, 240, 200, 0.5)", label: "Saved" }
+                  : dirty
+                  ? { dot: "#F5C67A", glow: "rgba(245, 198, 122, 0.5)", label: "Unsaved changes" }
+                  : { dot: "#8DF0C8", glow: "rgba(141, 240, 200, 0.5)", label: "Draft · ready" };
+                const reason = hasErrors
+                  ? validationErrors[0].message
+                  : savedJustNow
+                  ? "All changes saved"
+                  : dirty
+                  ? "Save before publishing"
+                  : "No issues detected";
+                return (
+                  <div
+                    data-pan-ignore="true"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    style={{
+                      position: "absolute", left: 24, bottom: 24, zIndex: 25,
+                      display: "flex", alignItems: "center", gap: 14,
+                      padding: "10px 14px", borderRadius: 10,
+                      background: "rgba(17, 19, 24, 0.9)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      backdropFilter: "blur(12px)",
+                      WebkitBackdropFilter: "blur(12px)",
+                      fontFamily: T.fontBody,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{
+                        width: 8, height: 8, borderRadius: 999, background: status.dot,
+                        boxShadow: `0 0 10px ${status.glow}`,
+                      }} />
+                      <div style={{ fontSize: 12, fontWeight: 500, color: T.textPrimary }}>
+                        {status.label}
+                      </div>
+                    </div>
+                    <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.08)" }} />
+                    <div style={{
+                      fontFamily: T.fontMono, fontSize: 10,
+                      letterSpacing: "0.06em", color: T.textSecondary,
+                      maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {reason}
+                    </div>
+                    <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.08)" }} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={saveWorld}
+                        disabled={!dirty || isSaving}
+                        style={{
+                          padding: "5px 12px", borderRadius: 7,
+                          border: "1px solid rgba(255,255,255,0.1)", background: "transparent",
+                          color: dirty ? T.textPrimary : T.textTertiary,
+                          fontFamily: T.fontBody, fontSize: 11, fontWeight: 500,
+                          cursor: dirty && !isSaving ? "pointer" : "not-allowed",
+                          opacity: isSaving ? 0.6 : 1,
+                        }}
+                      >
+                        {isSaving ? "Saving…" : "Save draft"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled
+                        title="Publish flow coming soon"
+                        style={{
+                          padding: "5px 14px", borderRadius: 7, border: "none",
+                          background: "rgba(143, 209, 203, 0.3)", color: "rgba(12, 14, 20, 0.6)",
+                          fontFamily: T.fontBody, fontSize: 11, fontWeight: 600,
+                          cursor: "not-allowed",
+                        }}
+                      >
+                        Publish
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Context Menu */}
               {contextMenu && (
@@ -1232,26 +1563,51 @@ export function WorldEditorCanvas({ worlds }: Props) {
           {/* ── Detail Panel ─────────────────────────────────── */}
           {selectedNode && world && (
             <div style={{
-              width: 360, flexShrink: 0, background: T.chrome,
-              borderLeft: `1px solid ${T.borderSubtle}`, overflow: "auto",
+              width: 420, flexShrink: 0, background: T.chrome,
+              borderLeft: `1px solid ${T.borderSubtle}`, overflow: "hidden",
+              display: "flex", flexDirection: "column",
             }}>
-              <WorldEditorPanel
-                node={selectedNode}
-                world={world}
-                errors={errorsForNode(selectedNode.id)}
-                onUpdateCharacter={updateCharacter}
-                onUpdateGroup={updateGroup}
-                onUpdateRole={updateRole}
-                onUpdateEvent={updateEvent}
-                onUpdateRelationship={updateRelationship}
-                onUpdateWorld={updateWorldField}
-                onDelete={deleteEntity}
-                onClose={() => setSelectedNodeId(null)}
-              />
+              {selectedNode.entityType === "character" ? (
+                <CharacterInspector
+                  worldId={worldId}
+                  characterSlug={selectedNode.entityId}
+                  onClose={() => setSelectedNodeId(null)}
+                  onUnlinked={() => {
+                    setSelectedNodeId(null);
+                    loadWorld(worldId);
+                  }}
+                />
+              ) : (
+                <div style={{ overflow: "auto" }}>
+                  <WorldEditorPanel
+                    node={selectedNode}
+                    world={world}
+                    errors={errorsForNode(selectedNode.id)}
+                    onUpdateCharacter={updateCharacter}
+                    onUpdateGroup={updateGroup}
+                    onUpdateRole={updateRole}
+                    onUpdateEvent={updateEvent}
+                    onUpdateRelationship={updateRelationship}
+                    onUpdateWorld={updateWorldField}
+                    onDelete={deleteEntity}
+                    onClose={() => setSelectedNodeId(null)}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* ── Character Picker (⌘K) ──────────────────────────────── */}
+      {worldId && (
+        <CharacterPicker
+          worldId={worldId}
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onLinked={handleCharacterLinked}
+        />
+      )}
     </>
   );
 }

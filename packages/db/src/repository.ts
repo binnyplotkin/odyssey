@@ -1,8 +1,9 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "./client";
-import { worldsTable } from "./schema";
+import { charactersTable, worldNodesTable, worldsTable } from "./schema";
 import { isoNow } from "@odyssey/utils";
-import { WorldDefinition, worldRecordSchema, WorldRecord } from "@odyssey/types";
+import { CharacterDefinition, WorldDefinition, worldRecordSchema, WorldRecord } from "@odyssey/types";
+import type { CharacterNodeData } from "./world-graph-store";
 
 export type WorldSource = "static" | "dynamic";
 
@@ -153,6 +154,106 @@ function isMissingWorldsTableError(error: unknown) {
   return code === "42P01";
 }
 
+/**
+ * Graph-is-source-of-truth hydration.
+ *
+ * If the world has character nodes in the unified graph, synthesize the
+ * `WorldDefinition.characters[]` array from them (merged with any existing
+ * entry for default-filling). The engine keeps reading `world.characters`
+ * synchronously; this function is the seam between the graph and the legacy
+ * JSONB shape. Worlds with no graph character nodes pass through untouched
+ * so non-migrated worlds keep working.
+ */
+async function hydrateCharactersFromGraph(
+  worldId: string,
+  definition: WorldDefinition,
+): Promise<WorldDefinition> {
+  const db = getDb();
+  if (!db) return definition;
+
+  let nodes: Array<typeof worldNodesTable.$inferSelect>;
+  try {
+    nodes = await db
+      .select()
+      .from(worldNodesTable)
+      .where(and(eq(worldNodesTable.worldId, worldId), eq(worldNodesTable.kind, "character")));
+  } catch (error) {
+    if (isMissingWorldsTableError(error)) return definition;
+    throw error;
+  }
+  if (nodes.length === 0) return definition;
+
+  const refIds = nodes.map((n) => n.refId).filter((id): id is string => !!id);
+  if (refIds.length === 0) return definition;
+
+  const chars = await db
+    .select({
+      id: charactersTable.id,
+      slug: charactersTable.slug,
+      title: charactersTable.title,
+    })
+    .from(charactersTable)
+    .where(inArray(charactersTable.id, refIds));
+  const charById = new Map(chars.map((c) => [c.id, c]));
+
+  const existingBySlug = new Map(definition.characters.map((c) => [c.id, c]));
+
+  const hydrated: CharacterDefinition[] = [];
+  const seenSlugs = new Set<string>();
+
+  for (const node of nodes) {
+    if (!node.refId) continue;
+    const global = charById.get(node.refId);
+    if (!global) continue;
+    const slug = global.slug;
+    seenSlugs.add(slug);
+
+    const data = (node.data ?? {}) as CharacterNodeData;
+    const overrides = (data.overrides ?? {}) as Record<string, unknown>;
+    const existing = existingBySlug.get(slug);
+
+    const motivations =
+      (overrides.motivationsList as string[] | undefined) ??
+      (data.motivations ? data.motivations.split("; ").filter(Boolean) : undefined) ??
+      existing?.motivations ??
+      ["(unspecified)"];
+
+    const emotionalBaseline =
+      (overrides.emotionalBaselineScores as CharacterDefinition["emotionalBaseline"] | undefined) ??
+      existing?.emotionalBaseline ??
+      { anger: 50, fear: 50, hope: 50, loyalty: 50 };
+
+    hydrated.push({
+      id: slug,
+      name: node.label || global.title,
+      title: existing?.title ?? global.title,
+      archetype: data.archetype ?? existing?.archetype ?? "unspecified",
+      ...(overrides.groupId !== undefined ? { groupId: overrides.groupId as string } : existing?.groupId ? { groupId: existing.groupId } : {}),
+      ...(overrides.groupIds !== undefined ? { groupIds: overrides.groupIds as string[] } : existing?.groupIds ? { groupIds: existing.groupIds } : {}),
+      motivations: motivations.length > 0 ? motivations : ["(unspecified)"],
+      emotionalBaseline,
+      speakingStyle: data.speakingStyle ?? existing?.speakingStyle ?? "unspecified",
+      ...(overrides.voice !== undefined ? { voice: overrides.voice as CharacterDefinition["voice"] } : existing?.voice ? { voice: existing.voice } : {}),
+      ...(overrides.backstory !== undefined ? { backstory: overrides.backstory as string } : existing?.backstory ? { backstory: existing.backstory } : {}),
+      ...(overrides.visualDescription !== undefined ? { visualDescription: overrides.visualDescription as string } : existing?.visualDescription ? { visualDescription: existing.visualDescription } : {}),
+      ...(overrides.knowledgeDomains !== undefined ? { knowledgeDomains: overrides.knowledgeDomains as string[] } : existing?.knowledgeDomains ? { knowledgeDomains: existing.knowledgeDomains } : {}),
+      ...(data.behaviorTriggers !== undefined ? { behaviorTriggers: data.behaviorTriggers } : existing?.behaviorTriggers ? { behaviorTriggers: existing.behaviorTriggers } : {}),
+      ...(overrides.dialogueExamples !== undefined ? { dialogueExamples: overrides.dialogueExamples as string[] } : existing?.dialogueExamples ? { dialogueExamples: existing.dialogueExamples } : {}),
+      ...(overrides.secrets !== undefined ? { secrets: overrides.secrets as string[] } : existing?.secrets ? { secrets: existing.secrets } : {}),
+      ...(overrides.deathCondition !== undefined ? { deathCondition: overrides.deathCondition as string } : existing?.deathCondition ? { deathCondition: existing.deathCondition } : {}),
+      ...(overrides.tags !== undefined ? { tags: overrides.tags as string[] } : existing?.tags ? { tags: existing.tags } : {}),
+      ...(existing?.npcRelationships ? { npcRelationships: existing.npcRelationships } : {}),
+    });
+  }
+
+  // Preserve characters in the JSONB that aren't yet in the graph
+  const legacy = definition.characters.filter((c) => !seenSlugs.has(c.id));
+  const merged = [...hydrated, ...legacy];
+  if (merged.length === 0) return definition;
+
+  return { ...definition, characters: merged };
+}
+
 class MemoryWorldRepository implements WorldRepository {
   constructor(private readonly staticWorlds: WorldDefinition[]) {}
 
@@ -264,7 +365,12 @@ class NeonWorldRepository implements WorldRepository {
         .where(eq(worldsTable.status, "published"))
         .orderBy(desc(worldsTable.updatedAt));
 
-      const dynamicWorlds = rows.map((row) => parseWorldRow(row).definition);
+      const dynamicWorlds = await Promise.all(
+        rows.map(async (row) => {
+          const def = parseWorldRow(row).definition;
+          return hydrateCharactersFromGraph(def.id, def);
+        }),
+      );
 
       return mergeWorlds(this.staticWorlds, dynamicWorlds);
     } catch (error) {
@@ -291,7 +397,8 @@ class NeonWorldRepository implements WorldRepository {
       const row = rows[0];
 
       if (row) {
-        return parseWorldRow(row).definition;
+        const def = parseWorldRow(row).definition;
+        return hydrateCharactersFromGraph(def.id, def);
       }
 
       return getStaticWorld(this.staticWorlds, worldId);
@@ -331,12 +438,13 @@ class NeonWorldRepository implements WorldRepository {
 
       if (row) {
         const record = parseWorldRow(row);
+        const hydrated = await hydrateCharactersFromGraph(record.definition.id, record.definition);
 
         return {
           source: "dynamic" as const,
           editable: true,
-          world: record.definition,
-          record,
+          world: hydrated,
+          record: { ...record, definition: hydrated },
         };
       }
 

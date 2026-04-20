@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kingdomWorld } from "@/data/worlds/kingdom";
+import { kingdomWorld } from "./fixtures/kingdom";
 import { RuleBasedEventSelector } from "../event-selector";
 import { TextGenerationAdapter } from "../interfaces";
 import { RollingMemorySummarizer } from "../memory-summarizer";

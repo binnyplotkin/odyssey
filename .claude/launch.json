@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:preview", "-w", "apps/admin"],
+      "port": 3001,
+      "autoPort": true
+    }
+  ]
+}

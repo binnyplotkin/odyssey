@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { getWorldDefinitions } from "@/data/worlds";
+import { getWorldDefinitions } from "./fixtures";
 import { createSimulationService } from "../service";
 
 describe("simulation service", () => {

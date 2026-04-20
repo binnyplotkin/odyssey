@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "./client";
-import { charactersTable, worldCharactersTable } from "./schema";
+import { charactersTable, worldNodesTable } from "./schema";
 import type {
   CharacterRecord,
   CreateCharacterInput,
@@ -44,10 +44,7 @@ export interface CharacterStore {
   update(id: string, input: UpdateCharacterInput): Promise<CharacterRecord | null>;
   remove(id: string): Promise<boolean>;
 
-  // World bridge
-  linkToWorld(characterId: string, worldId: string, roleInWorld?: string): Promise<void>;
-  unlinkFromWorld(characterId: string, worldId: string): Promise<void>;
-  listForWorld(worldId: string): Promise<CharacterRecord[]>;
+  // Count distinct worlds this character is part of (via world_nodes graph).
   countWorldsFor(characterId: string): Promise<number>;
 }
 
@@ -125,62 +122,17 @@ function neonStore(): CharacterStore {
       return result.length > 0;
     },
 
-    async linkToWorld(characterId, worldId, roleInWorld) {
-      const db = requireDb();
-      // Idempotent: ignore duplicate (we have a composite PK).
-      try {
-        await db.insert(worldCharactersTable).values({
-          worldId,
-          characterId,
-          roleInWorld: roleInWorld ?? null,
-        });
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        // 23505 = unique_violation — link already exists, that's fine.
-        if (!/23505|duplicate key/i.test(msg)) throw e;
-      }
-    },
-
-    async unlinkFromWorld(characterId, worldId) {
-      const db = requireDb();
-      await db
-        .delete(worldCharactersTable)
-        .where(
-          and(
-            eq(worldCharactersTable.worldId, worldId),
-            eq(worldCharactersTable.characterId, characterId),
-          ),
-        );
-    },
-
-    async listForWorld(worldId) {
-      const db = requireDb();
-      const rows = await db
-        .select({
-          id: charactersTable.id,
-          slug: charactersTable.slug,
-          title: charactersTable.title,
-          summary: charactersTable.summary,
-          image: charactersTable.image,
-          eras: charactersTable.eras,
-          ingestionPrompt: charactersTable.ingestionPrompt,
-          createdAt: charactersTable.createdAt,
-          updatedAt: charactersTable.updatedAt,
-        })
-        .from(worldCharactersTable)
-        .innerJoin(charactersTable, eq(worldCharactersTable.characterId, charactersTable.id))
-        .where(eq(worldCharactersTable.worldId, worldId));
-      return rows
-        .map(normalize)
-        .sort((a, b) => a.title.localeCompare(b.title));
-    },
-
     async countWorldsFor(characterId) {
       const db = requireDb();
       const [row] = await db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(worldCharactersTable)
-        .where(eq(worldCharactersTable.characterId, characterId));
+        .select({ n: sql<number>`count(distinct ${worldNodesTable.worldId})::int` })
+        .from(worldNodesTable)
+        .where(
+          and(
+            eq(worldNodesTable.kind, "character"),
+            eq(worldNodesTable.refId, characterId),
+          ),
+        );
       return row?.n ?? 0;
     },
   };
