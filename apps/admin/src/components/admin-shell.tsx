@@ -75,7 +75,7 @@ const items: SidebarItem[] = [
   { href: "/voice-test", label: "Voice Test", section: "Tools", icon: icons.voice },
   { href: "/voice-test-2", label: "Voice Test 2", section: "Tools", icon: icons.voice },
   { href: "/voice-test-3", label: "Voice Test 3", section: "Tools", icon: icons.waveform },
-  { href: "/voice-test-4", label: "3D Waveform", section: "Tools", icon: icons.waveform },
+  { href: "/voice-test-4", label: "Voice Test 4", section: "Tools", icon: icons.waveform },
   { href: "/abrahams-tent", label: "Abraham's Tent", section: "Demos", icon: icons.tent },
 ];
 
