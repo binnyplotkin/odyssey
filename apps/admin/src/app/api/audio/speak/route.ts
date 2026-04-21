@@ -1,16 +1,85 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createTextToSpeechAdapter, resolveTtsAttemptOrder } from "@odyssey/engine";
 
+function getKyutaiBaseUrl() {
+  return (process.env.KYUTAI_BASE_URL ?? "").trim().replace(/\/+$/, "");
+}
+
+function isKyutaiTtsEnabled() {
+  return (process.env.TTS_PROVIDER ?? "").trim().toLowerCase() === "kyutai";
+}
+
+async function arrayBufferToBase64(buffer: ArrayBuffer) {
+  return Buffer.from(buffer).toString("base64");
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
       text?: string;
       voice?: string;
-      provider?: "openai" | "elevenlabs";
+      provider?: string;
     };
 
     if (!body.text) {
       return NextResponse.json({ error: "text is required." }, { status: 400 });
+    }
+
+    if (isKyutaiTtsEnabled()) {
+      const baseUrl = getKyutaiBaseUrl();
+      if (!baseUrl) {
+        return NextResponse.json(
+          { error: "KYUTAI_BASE_URL is required when TTS_PROVIDER=kyutai." },
+          { status: 503 },
+        );
+      }
+
+      const response = await fetch(`${baseUrl}/speak`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: body.text,
+          voice: body.voice ?? null,
+        }),
+      });
+
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!response.ok) {
+        const errorPayload = contentType.includes("application/json")
+          ? (await response.json()) as { error?: string; detail?: string }
+          : { error: await response.text() };
+        return NextResponse.json(
+          {
+            error: errorPayload.error ?? errorPayload.detail ?? "Kyutai TTS failed.",
+          },
+          { status: response.status },
+        );
+      }
+
+      if (contentType.includes("application/json")) {
+        const payload = (await response.json()) as {
+          audioBase64?: string;
+          mimeType?: string;
+          provider?: string;
+          fallbackUsed?: boolean;
+        };
+        return NextResponse.json({
+          audioBase64: payload.audioBase64 ?? "",
+          mimeType: payload.mimeType ?? "audio/mpeg",
+          provider: payload.provider ?? "kyutai",
+          requestedProvider: "kyutai",
+          fallbackUsed: payload.fallbackUsed ?? false,
+        });
+      }
+
+      const audioBuffer = await response.arrayBuffer();
+      return NextResponse.json({
+        audioBase64: await arrayBufferToBase64(audioBuffer),
+        mimeType: contentType || "audio/mpeg",
+        provider: "kyutai",
+        requestedProvider: "kyutai",
+        fallbackUsed: false,
+      });
     }
 
     const requestedProvider = body.provider;
