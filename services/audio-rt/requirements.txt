@@ -3,5 +3,5 @@ uvicorn[standard]==0.35.0
 torch==2.8.0
 moshi==0.2.11
 julius==0.2.7
-sphn==0.1.6
+sphn==0.2.1
 soundfile==0.13.1
