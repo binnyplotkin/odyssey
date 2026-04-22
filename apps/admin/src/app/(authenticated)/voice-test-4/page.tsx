@@ -15,6 +15,9 @@ type TurnRecord = {
   assistantText: string;
   latencyMs: number;
   at: string;
+  sttProvider?: string;
+  ttsProvider?: string;
+  llmModel?: string;
 };
 
 type SpeakPayload = {
@@ -29,6 +32,13 @@ type SpeakPayload = {
 type ReplyPayload = {
   reply?: string;
   model?: string;
+  provider?: string;
+  error?: string;
+};
+
+type TranscribePayload = {
+  transcript?: string;
+  provider?: string;
   error?: string;
 };
 
@@ -255,7 +265,7 @@ export default function VoiceTest4Page() {
     return Math.sqrt(rms / timeData.length);
   }
 
-  async function transcribeBlob(blob: Blob) {
+  async function transcribeBlob(blob: Blob): Promise<{ transcript: string; provider: string } | null> {
     const audioBase64 = await blobToBase64(blob);
     const response = await fetch("/api/audio/transcribe", {
       method: "POST",
@@ -266,24 +276,31 @@ export default function VoiceTest4Page() {
       }),
     });
 
-    const payload = (await response.json()) as { transcript?: string; error?: string };
+    const payload = (await response.json()) as TranscribePayload;
     if (!response.ok) {
       throw new Error(payload.error ?? "Transcription failed.");
     }
+    const provider = (payload.provider ?? "unknown").toLowerCase();
 
     const transcript = (payload.transcript ?? "").trim();
     if (!transcript) {
-      throw new Error("Transcription returned empty text.");
+      addCheck({
+        name: "POST /api/audio/transcribe",
+        ok: false,
+        detail: `200 provider=${provider} empty transcript (likely short/unclear speech). Continuing to listen.`,
+        at: nowLabel(),
+      });
+      return null;
     }
 
     addCheck({
       name: "POST /api/audio/transcribe",
       ok: true,
-      detail: `200 transcript: ${transcript.slice(0, 120)}`,
+      detail: `200 provider=${provider} transcript: ${transcript.slice(0, 120)}`,
       at: nowLabel(),
     });
 
-    return transcript;
+    return { transcript, provider };
   }
 
   async function generateReply(transcript: string) {
@@ -301,7 +318,7 @@ export default function VoiceTest4Page() {
     addCheck({
       name: "POST /api/audio/reply",
       ok: true,
-      detail: `200 model=${payload.model ?? "unknown"} reply: ${payload.reply.slice(0, 100)}`,
+      detail: `200 provider=${payload.provider ?? "openai"} model=${payload.model ?? "unknown"} reply: ${payload.reply.slice(0, 100)}`,
       at: nowLabel(),
     });
 
@@ -311,13 +328,13 @@ export default function VoiceTest4Page() {
     };
   }
 
-  async function speakText(text: string) {
+  async function speakText(text: string, preferredProvider?: string) {
     const response = await fetch("/api/audio/speak", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text,
-        provider: "openai",
+        provider: preferredProvider,
       }),
     });
 
@@ -371,7 +388,7 @@ export default function VoiceTest4Page() {
       addCheck({
         name: "POST /api/audio/speak",
         ok: true,
-        detail: "200 audio payload received and played.",
+        detail: `200 provider=${payload.provider ?? preferredProvider ?? "unknown"} audio payload received and played.${payload.fallbackUsed ? " fallback=true" : ""}`,
         at: nowLabel(),
       });
     } catch (playbackError) {
@@ -445,7 +462,11 @@ export default function VoiceTest4Page() {
 
     try {
       const startedAt = performance.now();
-      const transcript = await transcribeBlob(blob);
+      const transcribeResult = await transcribeBlob(blob);
+      if (!transcribeResult) {
+        return;
+      }
+      const transcript = transcribeResult.transcript;
       setLastTranscript(transcript);
 
       const replyResult = await generateReply(transcript);
@@ -453,7 +474,7 @@ export default function VoiceTest4Page() {
       setLastModel(replyResult.model);
 
       setPhase("speaking");
-      await speakText(replyResult.reply);
+      await speakText(replyResult.reply, routing?.ttsProvider);
 
       setTurns((current) => [
         {
@@ -462,6 +483,9 @@ export default function VoiceTest4Page() {
           assistantText: replyResult.reply,
           latencyMs: Math.round(performance.now() - startedAt),
           at: nowLabel(),
+          sttProvider: transcribeResult.provider,
+          ttsProvider: routing?.ttsProvider ?? "unknown",
+          llmModel: replyResult.model ?? "unknown",
         },
         ...current,
       ].slice(0, 20));
@@ -725,6 +749,9 @@ export default function VoiceTest4Page() {
                 className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4"
               >
                 <p className="text-xs text-[var(--muted)]">{turn.at} · {turn.latencyMs} ms</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  stt={turn.sttProvider ?? "unknown"} · llm={turn.llmModel ?? "unknown"} · tts={turn.ttsProvider ?? "unknown"}
+                </p>
                 <p className="mt-2 text-sm"><span className="text-[var(--muted)]">You:</span> {turn.userText}</p>
                 <p className="mt-2 text-sm"><span className="text-[var(--muted)]">AI:</span> {turn.assistantText}</p>
               </article>

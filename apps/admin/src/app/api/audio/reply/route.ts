@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       reply,
       model,
+      provider: "openai",
     });
   } catch (error) {
     return NextResponse.json(
