@@ -32,6 +32,14 @@ type ReplyPayload = {
   error?: string;
 };
 
+type RoutingSnapshot = {
+  sttProvider: string;
+  ttsProvider: string;
+  replyModel: string;
+  kyutaiConfigured: boolean;
+  kyutaiBaseUrl: string;
+};
+
 const RECORDER_MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
   "audio/webm",
@@ -98,6 +106,7 @@ export default function VoiceTest4Page() {
   const [lastTranscript, setLastTranscript] = useState("");
   const [lastReply, setLastReply] = useState("");
   const [lastModel, setLastModel] = useState("");
+  const [routing, setRouting] = useState<RoutingSnapshot | null>(null);
   const [turns, setTurns] = useState<TurnRecord[]>([]);
   const [checks, setChecks] = useState<ProbeResult[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +189,7 @@ export default function VoiceTest4Page() {
         fetch("/api/healthz", { cache: "no-store" }),
         fetch("/api/audio/config", { cache: "no-store" }),
       ]);
+      const configText = await config.text();
 
       addCheck({
         name: "GET /api/healthz",
@@ -191,9 +201,32 @@ export default function VoiceTest4Page() {
       addCheck({
         name: "GET /api/audio/config",
         ok: config.ok,
-        detail: `${config.status} ${(await config.text()).slice(0, 180)}`,
+        detail: `${config.status} ${configText.slice(0, 180)}`,
         at: nowLabel(),
       });
+
+      if (config.ok) {
+        try {
+          const parsed = JSON.parse(configText) as {
+            config?: {
+              llm?: { replyModel?: string };
+              routing?: { sttProvider?: string; ttsProvider?: string };
+              kyutai?: { configured?: boolean; baseUrl?: string | null };
+            };
+          };
+          setRouting({
+            sttProvider: parsed.config?.routing?.sttProvider ?? "unknown",
+            ttsProvider: parsed.config?.routing?.ttsProvider ?? "unknown",
+            replyModel: parsed.config?.llm?.replyModel ?? "gpt-4o-mini",
+            kyutaiConfigured: Boolean(parsed.config?.kyutai?.configured),
+            kyutaiBaseUrl: parsed.config?.kyutai?.baseUrl ?? "",
+          });
+        } catch {
+          setRouting(null);
+        }
+      } else {
+        setRouting(null);
+      }
     } catch (checkError) {
       addCheck({
         name: "startup checks",
@@ -627,6 +660,20 @@ export default function VoiceTest4Page() {
           </div>
 
           <div className="mt-4 grid gap-3">
+            <div className="rounded-lg border border-[var(--border)] bg-black/30 p-3">
+              <p className="text-xs uppercase tracking-[0.08em] text-[var(--muted)]">Current audio routing</p>
+              {routing ? (
+                <div className="mt-2 space-y-1 text-xs text-[var(--muted)]">
+                  <p>STT: {routing.sttProvider}</p>
+                  <p>LLM: {routing.replyModel}</p>
+                  <p>TTS: {routing.ttsProvider}</p>
+                  <p>Kyutai: {routing.kyutaiConfigured ? "configured" : "not configured"}</p>
+                  {routing.kyutaiBaseUrl ? <p className="truncate">Kyutai URL: {routing.kyutaiBaseUrl}</p> : null}
+                </div>
+              ) : (
+                <p className="mt-1 text-sm text-[var(--muted)]">Routing not loaded yet.</p>
+              )}
+            </div>
             <div className="rounded-lg border border-[var(--border)] bg-black/30 p-3">
               <p className="text-xs uppercase tracking-[0.08em] text-[var(--muted)]">Last transcript</p>
               <p className="mt-1 text-sm text-[var(--muted)]">{lastTranscript || "Waiting for speech..."}</p>
