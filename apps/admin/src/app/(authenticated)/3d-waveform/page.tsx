@@ -245,11 +245,6 @@ type SurfaceLayer = {
   sizes: Float32Array;
   prevY: Float32Array;
   prevRise: Float32Array;
-  xBase: Float32Array;
-  zBase: Float32Array;
-  xNorm: Float32Array;
-  zNorm: Float32Array;
-  regionRand: Float32Array;
   pointsGeo: BufferGeometry;
   pointsMat: ShaderMaterial;
   lines: LineLayer[];
@@ -286,12 +281,11 @@ function OceanField() {
   const groupRef = useRef<Group>(null);
   const oceanRef = useRef<OceanRef | null>(null);
   const smoothRef = useRef({ energy: 0, bass: 0, mid: 0, high: 0, peak: 0 });
-  const modeRef = useRef({ activity: 0, loud: 0, presence: 0, engage: 0, idle: 1 });
+  const modeRef = useRef({ activity: 0, loud: 0, presence: 0, engage: 0 });
   const rollRef = useRef({ offset: 0, speed: 0 });
   const phaseRef = useRef({ a: Math.random() * TAU, b: Math.random() * TAU });
   const sparkCursorRef = useRef(0);
   const frameRef = useRef(0);
-  const simAccumRef = useRef(0);
 
   useEffect(() => {
     const group = groupRef.current;
@@ -306,11 +300,6 @@ function OceanField() {
       const sizes = new Float32Array(count);
       const prevY = new Float32Array(count);
       const prevRise = new Float32Array(count);
-      const xBase = new Float32Array(count);
-      const zBase = new Float32Array(count);
-      const xNorm = new Float32Array(count);
-      const zNorm = new Float32Array(count);
-      const regionRand = new Float32Array(count);
 
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
@@ -319,16 +308,9 @@ function OceanField() {
           const zn = r / (ROWS - 1);
           const x = (xn - 0.5) * FIELD_WIDTH;
           const z = -zn * FIELD_DEPTH + 4 + cfg.zShift;
-          const xw = x / (FIELD_WIDTH * 0.5);
-          const zw = zn * 2 - 1 + li * 0.28;
           positions[i * 3] = x;
           positions[i * 3 + 1] = -0.02;
           positions[i * 3 + 2] = z;
-          xBase[i] = x;
-          zBase[i] = z;
-          xNorm[i] = xw;
-          zNorm[i] = zw;
-          regionRand[i] = 0.68 + (((Math.sin((xw * 17.13 + zw * 23.91 + li * 3.7) * 12.9898) * 43758.5453) % 1 + 1) % 1) * 0.74;
           prevY[i] = -0.02;
           prevRise[i] = 0;
           colors[i * 3] = C_BASE.r;
@@ -434,11 +416,6 @@ function OceanField() {
         sizes,
         prevY,
         prevRise,
-        xBase,
-        zBase,
-        xNorm,
-        zNorm,
-        regionRand,
         pointsGeo,
         pointsMat,
         lines,
@@ -624,17 +601,10 @@ function OceanField() {
   useFrame((_, delta) => {
     const ocean = oceanRef.current;
     if (!ocean) return;
-
-    // Run the expensive wave simulation at a stable fixed step to avoid
-    // bursty CPU spikes when mic is enabled.
-    simAccumRef.current += delta;
-    const simStep = AUDIO.active ? 1 / 30 : 1 / 24;
-    if (simAccumRef.current < simStep) return;
-
     frameRef.current += 1;
     const updateLinesThisFrame = (frameRef.current & 1) === 0;
-    const dt = Math.min(0.05, simAccumRef.current);
-    simAccumRef.current = 0;
+
+    const dt = Math.min(0.04, delta);
     const t = performance.now() * 0.001;
 
     const s = smoothRef.current;
@@ -662,10 +632,6 @@ function OceanField() {
 
     const response = m.activity;
     const loudness = m.loud;
-    const idleCondition = !AUDIO.active && m.presence < 0.04 && response < 0.04 && energy < 0.03 && peak < 0.02;
-    m.idle += ((idleCondition ? 1 : 0) - m.idle) * (idleCondition ? 0.05 : 0.14);
-    const idleBlend = clamp01(m.idle);
-    const idleMode = idleBlend > 0.92;
     const geomDrive = clamp01(response * 0.22 + energy * 1.85 + peak * 0.52);
     const seaDrive = 0.64 + geomDrive * 0.48;
     const roll = rollRef.current;
@@ -696,10 +662,10 @@ function OceanField() {
           const i = r * COLS + c;
           const xn = c / (COLS - 1);
           const zn = r / (ROWS - 1);
-          const x = layer.xBase[i];
-          const z = layer.zBase[i] + 2;
-          const xw = layer.xNorm[i];
-          const zw = layer.zNorm[i];
+          const x = (xn - 0.5) * FIELD_WIDTH;
+          const z = -zn * FIELD_DEPTH + 6 + layer.zShift;
+          const xw = x / (FIELD_WIDTH * 0.5);
+          const zw = zn * 2 - 1 + li * 0.28;
           const idleBlend = 1 - activeGate;
           const idleFactor = 1 - response;
           const idleFlow = layerTime * (0.076 + idleFactor * (0.17 + li * 0.018));
@@ -713,37 +679,10 @@ function OceanField() {
             (Math.sin(layerTime * (0.22 + li * 0.022) + xw * 1.8 + li * 0.35) * (0.011 + idleFactor * 0.018) +
               acrossRippleB * (0.006 + idleFactor * 0.01)) *
               idleBlend;
-          const regionRand = layer.regionRand[i];
+          const regionRand = 0.68 + (((Math.sin((xw * 17.13 + zw * 23.91 + li * 3.7) * 12.9898) * 43758.5453) % 1 + 1) % 1) * 0.74;
 
           layer.positions[i * 3] = x;
           layer.positions[i * 3 + 2] = z;
-
-          if (idleMode) {
-            const idleFlow = layerTime * (0.16 + li * 0.03);
-            const swellA = Math.sin((xw * 0.86 + zw * 1.08) * TAU - idleFlow + li * 0.52);
-            const swellB = Math.sin((xw * -0.62 + zw * 0.74) * TAU - idleFlow * 0.82 + li * 0.83 + 0.9);
-            const swellC = Math.sin((xw * 0.28 - zw * 0.52) * TAU - idleFlow * 0.68 + li * 0.37 + 1.8);
-            const yTarget = -0.03 - li * 0.05 + (swellA * 0.075 + swellB * 0.058 + swellC * 0.036) * layer.amp;
-
-            const yPrev = layer.positions[i * 3 + 1];
-            const y = yPrev + (yTarget - yPrev) * 0.12;
-            layer.positions[i * 3 + 1] = y;
-            layer.prevRise[i] = y - layer.prevY[i];
-            layer.prevY[i] = y;
-
-            const idleShimmer = Math.sin(layerTime * 0.62 + xw * 1.8 + zw * 1.2 + li * 0.5) * 0.5 + 0.5;
-            tmp.copy(C_DEEP);
-            tmp.lerp(C_BASE, 0.72 + (1 - zn) * 0.14 + idleShimmer * 0.08);
-            tmp.lerp(C_GLOW, 0.28 + (1 - zn) * 0.12 + idleShimmer * 0.1);
-            tmp.lerp(C_HIGHLIGHT, 0.06 + idleShimmer * 0.08);
-            tmp.multiplyScalar((1.0 + (1 - zn) * 0.3) * layer.alpha);
-
-            layer.colors[i * 3] = tmp.r;
-            layer.colors[i * 3 + 1] = tmp.g;
-            layer.colors[i * 3 + 2] = tmp.b;
-            layer.sizes[i] = (0.54 + (1 - zn) * 0.16 + idleShimmer * 0.08) * layer.glow;
-            continue;
-          }
 
           let broad = 0;
           let audioBroad = 0;
@@ -1006,10 +945,7 @@ function OceanField() {
           (line.geo.attributes.position as BufferAttribute).needsUpdate = true;
           (line.geo.attributes.color as BufferAttribute).needsUpdate = true;
           const distanceFade = 1 - li / (ocean.layers.length - 1);
-          const idleOpacity = (0.06 + distanceFade * 0.07) * layer.alpha;
-          const liveOpacity =
-            (0.08 + globalShimmer * 0.2 + loudness * 0.1) * layer.alpha * (0.72 + distanceFade * 0.48);
-          line.mat.opacity = idleOpacity * idleBlend + liveOpacity * (1 - idleBlend);
+          line.mat.opacity = (0.08 + globalShimmer * 0.2 + loudness * 0.1) * layer.alpha * (0.72 + distanceFade * 0.48);
         }
       }
 
@@ -1017,53 +953,36 @@ function OceanField() {
       (layer.pointsGeo.attributes.color as BufferAttribute).needsUpdate = true;
       (layer.pointsGeo.attributes.aSize as BufferAttribute).needsUpdate = true;
       const distanceFade = 1 - li / (ocean.layers.length - 1);
-      const idleFade = (0.52 + distanceFade * 0.2) * layer.alpha;
-      const liveFade =
+      layer.pointsMat.uniforms.uFade.value =
         (0.52 + globalShimmer * 0.28 + loudness * 0.14 + peak * 0.1) * layer.alpha * (0.74 + distanceFade * 0.56);
-      layer.pointsMat.uniforms.uFade.value = idleFade * idleBlend + liveFade * (1 - idleBlend);
     }
 
     const sparks = ocean.sparks;
-    if (idleMode) {
-      for (let i = 0; i < SPARK_COUNT; i++) {
+    for (let i = 0; i < SPARK_COUNT; i++) {
+      sparks.ages[i] += dt;
+      if (sparks.ages[i] >= sparks.life[i]) {
         sparks.alphas[i] = 0;
+        continue;
       }
-    } else {
-      for (let i = 0; i < SPARK_COUNT; i++) {
-        sparks.ages[i] += dt;
-        if (sparks.ages[i] >= sparks.life[i]) {
-          sparks.alphas[i] = 0;
-          continue;
-        }
-        const lifeT = sparks.ages[i] / sparks.life[i];
-        const i3 = i * 3;
-        sparks.vel[i3] *= 0.985;
-        sparks.vel[i3 + 2] *= 0.985;
-        sparks.vel[i3 + 1] = sparks.vel[i3 + 1] * 0.968 - (0.004 + loudness * 0.004) * dt * 60;
+      const lifeT = sparks.ages[i] / sparks.life[i];
+      const i3 = i * 3;
+      sparks.vel[i3] *= 0.985;
+      sparks.vel[i3 + 2] *= 0.985;
+      sparks.vel[i3 + 1] = sparks.vel[i3 + 1] * 0.968 - (0.004 + loudness * 0.004) * dt * 60;
 
-        sparks.positions[i3] += sparks.vel[i3] * dt * 60;
-        sparks.positions[i3 + 1] += sparks.vel[i3 + 1] * dt * 60;
-        sparks.positions[i3 + 2] += sparks.vel[i3 + 2] * dt * 60;
-        sparks.alphas[i] = (1 - lifeT) * (0.04 + response * 0.2 + loudness * 0.34);
-      }
+      sparks.positions[i3] += sparks.vel[i3] * dt * 60;
+      sparks.positions[i3 + 1] += sparks.vel[i3 + 1] * dt * 60;
+      sparks.positions[i3 + 2] += sparks.vel[i3 + 2] * dt * 60;
+      sparks.alphas[i] = (1 - lifeT) * (0.04 + response * 0.2 + loudness * 0.34);
     }
     (sparks.geo.attributes.position as BufferAttribute).needsUpdate = true;
     (sparks.geo.attributes.color as BufferAttribute).needsUpdate = true;
     (sparks.geo.attributes.aSize as BufferAttribute).needsUpdate = true;
     (sparks.geo.attributes.aAlpha as BufferAttribute).needsUpdate = true;
-    const sparkIdleGlow = 0.08;
-    const sparkLiveGlow = 0.08 + response * 0.26 + loudness * 0.4;
-    sparks.mat.uniforms.uGlow.value = sparkIdleGlow * idleBlend + sparkLiveGlow * (1 - idleBlend);
-    if (!idleMode && idleBlend > 0.05) {
-      const damp = 1 - idleBlend;
-      for (let i = 0; i < SPARK_COUNT; i++) {
-        sparks.alphas[i] *= damp;
-      }
-    }
+    sparks.mat.uniforms.uGlow.value = 0.08 + response * 0.26 + loudness * 0.4;
 
     const floats = ocean.floats;
-    const floatStride = idleBlend > 0.8 ? 2 : 1;
-    for (let i = 0; i < FLOAT_COUNT; i += floatStride) {
+    for (let i = 0; i < FLOAT_COUNT; i++) {
       const i3 = i * 3;
       floats.positions[i3] += floats.drift[i3] * (dt * 60);
       floats.positions[i3 + 1] += floats.drift[i3 + 1] * (dt * 60);
@@ -1127,8 +1046,7 @@ export default function VoiceTest4Page() {
         frameloop="always"
         camera={{ position: [0, 3.8, 18.6], fov: 42 }}
         style={{ width: "100%", height: "100%" }}
-        dpr={[1, 1.25]}
-        gl={{ antialias: false, alpha: false, powerPreference: "high-performance" }}
+        gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
       >
         <Scene />
       </Canvas>
