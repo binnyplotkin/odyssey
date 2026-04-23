@@ -291,6 +291,7 @@ function OceanField() {
   const phaseRef = useRef({ a: Math.random() * TAU, b: Math.random() * TAU });
   const sparkCursorRef = useRef(0);
   const frameRef = useRef(0);
+  const simAccumRef = useRef(0);
 
   useEffect(() => {
     const group = groupRef.current;
@@ -623,10 +624,17 @@ function OceanField() {
   useFrame((_, delta) => {
     const ocean = oceanRef.current;
     if (!ocean) return;
+
+    // Run the expensive wave simulation at a stable fixed step to avoid
+    // bursty CPU spikes when mic is enabled.
+    simAccumRef.current += delta;
+    const simStep = AUDIO.active ? 1 / 30 : 1 / 24;
+    if (simAccumRef.current < simStep) return;
+
     frameRef.current += 1;
     const updateLinesThisFrame = (frameRef.current & 1) === 0;
-
-    const dt = Math.min(0.04, delta);
+    const dt = Math.min(0.05, simAccumRef.current);
+    simAccumRef.current = 0;
     const t = performance.now() * 0.001;
 
     const s = smoothRef.current;
