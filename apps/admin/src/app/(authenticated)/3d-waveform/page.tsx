@@ -245,6 +245,11 @@ type SurfaceLayer = {
   sizes: Float32Array;
   prevY: Float32Array;
   prevRise: Float32Array;
+  xBase: Float32Array;
+  zBase: Float32Array;
+  xNorm: Float32Array;
+  zNorm: Float32Array;
+  regionRand: Float32Array;
   pointsGeo: BufferGeometry;
   pointsMat: ShaderMaterial;
   lines: LineLayer[];
@@ -300,6 +305,11 @@ function OceanField() {
       const sizes = new Float32Array(count);
       const prevY = new Float32Array(count);
       const prevRise = new Float32Array(count);
+      const xBase = new Float32Array(count);
+      const zBase = new Float32Array(count);
+      const xNorm = new Float32Array(count);
+      const zNorm = new Float32Array(count);
+      const regionRand = new Float32Array(count);
 
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
@@ -308,9 +318,16 @@ function OceanField() {
           const zn = r / (ROWS - 1);
           const x = (xn - 0.5) * FIELD_WIDTH;
           const z = -zn * FIELD_DEPTH + 4 + cfg.zShift;
+          const xw = x / (FIELD_WIDTH * 0.5);
+          const zw = zn * 2 - 1 + li * 0.28;
           positions[i * 3] = x;
           positions[i * 3 + 1] = -0.02;
           positions[i * 3 + 2] = z;
+          xBase[i] = x;
+          zBase[i] = z;
+          xNorm[i] = xw;
+          zNorm[i] = zw;
+          regionRand[i] = 0.68 + (((Math.sin((xw * 17.13 + zw * 23.91 + li * 3.7) * 12.9898) * 43758.5453) % 1 + 1) % 1) * 0.74;
           prevY[i] = -0.02;
           prevRise[i] = 0;
           colors[i * 3] = C_BASE.r;
@@ -416,6 +433,11 @@ function OceanField() {
         sizes,
         prevY,
         prevRise,
+        xBase,
+        zBase,
+        xNorm,
+        zNorm,
+        regionRand,
         pointsGeo,
         pointsMat,
         lines,
@@ -602,7 +624,8 @@ function OceanField() {
     const ocean = oceanRef.current;
     if (!ocean) return;
     frameRef.current += 1;
-    const updateLinesThisFrame = (frameRef.current & 1) === 0;
+    const lineUpdateStride = modeRef.current.engage > 0.2 ? 2 : 4;
+    const updateLinesThisFrame = frameRef.current % lineUpdateStride === 0;
 
     const dt = Math.min(0.04, delta);
     const t = performance.now() * 0.001;
@@ -662,10 +685,10 @@ function OceanField() {
           const i = r * COLS + c;
           const xn = c / (COLS - 1);
           const zn = r / (ROWS - 1);
-          const x = (xn - 0.5) * FIELD_WIDTH;
-          const z = -zn * FIELD_DEPTH + 6 + layer.zShift;
-          const xw = x / (FIELD_WIDTH * 0.5);
-          const zw = zn * 2 - 1 + li * 0.28;
+          const x = layer.xBase[i];
+          const z = layer.zBase[i] + 2;
+          const xw = layer.xNorm[i];
+          const zw = layer.zNorm[i];
           const idleBlend = 1 - activeGate;
           const idleFactor = 1 - response;
           const idleFlow = layerTime * (0.076 + idleFactor * (0.17 + li * 0.018));
@@ -679,7 +702,7 @@ function OceanField() {
             (Math.sin(layerTime * (0.22 + li * 0.022) + xw * 1.8 + li * 0.35) * (0.011 + idleFactor * 0.018) +
               acrossRippleB * (0.006 + idleFactor * 0.01)) *
               idleBlend;
-          const regionRand = 0.68 + (((Math.sin((xw * 17.13 + zw * 23.91 + li * 3.7) * 12.9898) * 43758.5453) % 1 + 1) % 1) * 0.74;
+          const regionRand = layer.regionRand[i];
 
           layer.positions[i * 3] = x;
           layer.positions[i * 3 + 2] = z;
@@ -1046,7 +1069,8 @@ export default function VoiceTest4Page() {
         frameloop="always"
         camera={{ position: [0, 3.8, 18.6], fov: 42 }}
         style={{ width: "100%", height: "100%" }}
-        gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
+        dpr={[1, 1.25]}
+        gl={{ antialias: false, alpha: false, powerPreference: "high-performance" }}
       >
         <Scene />
       </Canvas>
