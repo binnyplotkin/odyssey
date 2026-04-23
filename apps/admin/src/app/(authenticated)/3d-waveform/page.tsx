@@ -52,12 +52,12 @@ const C_DEEP = new Color(COLORS.deep);
 
 const FIELD_WIDTH = 54;
 const FIELD_DEPTH = 74;
-const ROWS = 46;
-const COLS = 92;
+const ROWS = 40;
+const COLS = 78;
 const TAU = Math.PI * 2;
 const LINE_STEP = 4;
-const SPARK_COUNT = 220;
-const FLOAT_COUNT = 90;
+const SPARK_COUNT = 140;
+const FLOAT_COUNT = 72;
 
 const SURFACE_LAYERS = [
   { zShift: 2.2, amp: 1.14, glow: 1.2, alpha: 1.0 },
@@ -603,7 +603,9 @@ function OceanField() {
     if (!ocean) return;
     frameRef.current += 1;
     const idleOnly = !AUDIO.active && modeRef.current.presence < 0.22 && modeRef.current.activity < 0.06;
-    const lineStride = idleOnly ? 5 : modeRef.current.activity > 0.14 ? 2 : 3;
+    const lineStride = idleOnly ? 5 : modeRef.current.activity > 0.14 ? 3 : 4;
+    const activeSimStride = AUDIO.active ? 2 : 1;
+    const activeSimOffset = frameRef.current % activeSimStride;
     const updateLinesThisFrame = frameRef.current % lineStride === 0;
 
     const dt = Math.min(0.04, delta);
@@ -725,6 +727,9 @@ function OceanField() {
       }
 
       for (let r = 0; r < ROWS; r++) {
+        if (!idleOnly && activeSimStride > 1 && (r % activeSimStride) !== activeSimOffset) {
+          continue;
+        }
         for (let c = 0; c < COLS; c++) {
           const i = r * COLS + c;
           const xn = c / (COLS - 1);
@@ -1000,6 +1005,9 @@ function OceanField() {
         for (let li2 = 0; li2 < layer.lines.length; li2++) {
           const line = layer.lines[li2];
           const row = line.row;
+          if (!idleOnly && activeSimStride > 1 && (row % activeSimStride) !== activeSimOffset) {
+            continue;
+          }
           for (let c = 0; c < COLS; c++) {
             const src = row * COLS + c;
             line.positions[c * 3] = layer.positions[src * 3];
