@@ -286,7 +286,7 @@ function OceanField() {
   const groupRef = useRef<Group>(null);
   const oceanRef = useRef<OceanRef | null>(null);
   const smoothRef = useRef({ energy: 0, bass: 0, mid: 0, high: 0, peak: 0 });
-  const modeRef = useRef({ activity: 0, loud: 0, presence: 0, engage: 0 });
+  const modeRef = useRef({ activity: 0, loud: 0, presence: 0, engage: 0, idle: 1 });
   const rollRef = useRef({ offset: 0, speed: 0 });
   const phaseRef = useRef({ a: Math.random() * TAU, b: Math.random() * TAU });
   const sparkCursorRef = useRef(0);
@@ -624,8 +624,7 @@ function OceanField() {
     const ocean = oceanRef.current;
     if (!ocean) return;
     frameRef.current += 1;
-    const lineUpdateStride = modeRef.current.engage > 0.2 ? 2 : 4;
-    const updateLinesThisFrame = frameRef.current % lineUpdateStride === 0;
+    const updateLinesThisFrame = (frameRef.current & 1) === 0;
 
     const dt = Math.min(0.04, delta);
     const t = performance.now() * 0.001;
@@ -655,7 +654,10 @@ function OceanField() {
 
     const response = m.activity;
     const loudness = m.loud;
-    const idleMode = !AUDIO.active && m.presence < 0.04 && response < 0.04 && energy < 0.03 && peak < 0.02;
+    const idleCondition = !AUDIO.active && m.presence < 0.04 && response < 0.04 && energy < 0.03 && peak < 0.02;
+    m.idle += ((idleCondition ? 1 : 0) - m.idle) * (idleCondition ? 0.05 : 0.14);
+    const idleBlend = clamp01(m.idle);
+    const idleMode = idleBlend > 0.92;
     const geomDrive = clamp01(response * 0.22 + energy * 1.85 + peak * 0.52);
     const seaDrive = 0.64 + geomDrive * 0.48;
     const roll = rollRef.current;
@@ -721,15 +723,17 @@ function OceanField() {
             layer.prevRise[i] = y - layer.prevY[i];
             layer.prevY[i] = y;
 
+            const idleShimmer = Math.sin(layerTime * 0.62 + xw * 1.8 + zw * 1.2 + li * 0.5) * 0.5 + 0.5;
             tmp.copy(C_DEEP);
-            tmp.lerp(C_BASE, 0.68 + (1 - zn) * 0.12);
-            tmp.lerp(C_GLOW, 0.2 + (1 - zn) * 0.08);
-            tmp.multiplyScalar((0.94 + (1 - zn) * 0.28) * layer.alpha);
+            tmp.lerp(C_BASE, 0.72 + (1 - zn) * 0.14 + idleShimmer * 0.08);
+            tmp.lerp(C_GLOW, 0.28 + (1 - zn) * 0.12 + idleShimmer * 0.1);
+            tmp.lerp(C_HIGHLIGHT, 0.06 + idleShimmer * 0.08);
+            tmp.multiplyScalar((1.0 + (1 - zn) * 0.3) * layer.alpha);
 
             layer.colors[i * 3] = tmp.r;
             layer.colors[i * 3 + 1] = tmp.g;
             layer.colors[i * 3 + 2] = tmp.b;
-            layer.sizes[i] = (0.5 + (1 - zn) * 0.12) * layer.glow * 0.92;
+            layer.sizes[i] = (0.54 + (1 - zn) * 0.16 + idleShimmer * 0.08) * layer.glow;
             continue;
           }
 
@@ -994,9 +998,10 @@ function OceanField() {
           (line.geo.attributes.position as BufferAttribute).needsUpdate = true;
           (line.geo.attributes.color as BufferAttribute).needsUpdate = true;
           const distanceFade = 1 - li / (ocean.layers.length - 1);
-          line.mat.opacity = idleMode
-            ? (0.045 + distanceFade * 0.055) * layer.alpha
-            : (0.08 + globalShimmer * 0.2 + loudness * 0.1) * layer.alpha * (0.72 + distanceFade * 0.48);
+          const idleOpacity = (0.06 + distanceFade * 0.07) * layer.alpha;
+          const liveOpacity =
+            (0.08 + globalShimmer * 0.2 + loudness * 0.1) * layer.alpha * (0.72 + distanceFade * 0.48);
+          line.mat.opacity = idleOpacity * idleBlend + liveOpacity * (1 - idleBlend);
         }
       }
 
@@ -1004,9 +1009,10 @@ function OceanField() {
       (layer.pointsGeo.attributes.color as BufferAttribute).needsUpdate = true;
       (layer.pointsGeo.attributes.aSize as BufferAttribute).needsUpdate = true;
       const distanceFade = 1 - li / (ocean.layers.length - 1);
-      layer.pointsMat.uniforms.uFade.value = idleMode
-        ? (0.42 + distanceFade * 0.16) * layer.alpha
-        : (0.52 + globalShimmer * 0.28 + loudness * 0.14 + peak * 0.1) * layer.alpha * (0.74 + distanceFade * 0.56);
+      const idleFade = (0.52 + distanceFade * 0.2) * layer.alpha;
+      const liveFade =
+        (0.52 + globalShimmer * 0.28 + loudness * 0.14 + peak * 0.1) * layer.alpha * (0.74 + distanceFade * 0.56);
+      layer.pointsMat.uniforms.uFade.value = idleFade * idleBlend + liveFade * (1 - idleBlend);
     }
 
     const sparks = ocean.sparks;
@@ -1037,10 +1043,18 @@ function OceanField() {
     (sparks.geo.attributes.color as BufferAttribute).needsUpdate = true;
     (sparks.geo.attributes.aSize as BufferAttribute).needsUpdate = true;
     (sparks.geo.attributes.aAlpha as BufferAttribute).needsUpdate = true;
-    sparks.mat.uniforms.uGlow.value = idleMode ? 0.04 : 0.08 + response * 0.26 + loudness * 0.4;
+    const sparkIdleGlow = 0.08;
+    const sparkLiveGlow = 0.08 + response * 0.26 + loudness * 0.4;
+    sparks.mat.uniforms.uGlow.value = sparkIdleGlow * idleBlend + sparkLiveGlow * (1 - idleBlend);
+    if (!idleMode && idleBlend > 0.05) {
+      const damp = 1 - idleBlend;
+      for (let i = 0; i < SPARK_COUNT; i++) {
+        sparks.alphas[i] *= damp;
+      }
+    }
 
     const floats = ocean.floats;
-    const floatStride = idleMode ? 2 : 1;
+    const floatStride = idleBlend > 0.8 ? 2 : 1;
     for (let i = 0; i < FLOAT_COUNT; i += floatStride) {
       const i3 = i * 3;
       floats.positions[i3] += floats.drift[i3] * (dt * 60);
