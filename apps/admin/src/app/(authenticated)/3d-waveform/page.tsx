@@ -52,12 +52,12 @@ const C_DEEP = new Color(COLORS.deep);
 
 const FIELD_WIDTH = 54;
 const FIELD_DEPTH = 74;
-const ROWS = 52;
-const COLS = 104;
+const ROWS = 46;
+const COLS = 92;
 const TAU = Math.PI * 2;
 const LINE_STEP = 4;
-const SPARK_COUNT = 320;
-const FLOAT_COUNT = 120;
+const SPARK_COUNT = 220;
+const FLOAT_COUNT = 90;
 
 const SURFACE_LAYERS = [
   { zShift: 2.2, amp: 1.14, glow: 1.2, alpha: 1.0 },
@@ -602,7 +602,8 @@ function OceanField() {
     const ocean = oceanRef.current;
     if (!ocean) return;
     frameRef.current += 1;
-    const lineStride = modeRef.current.activity > 0.14 ? 2 : 3;
+    const idleOnly = !AUDIO.active && modeRef.current.presence < 0.22 && modeRef.current.activity < 0.06;
+    const lineStride = idleOnly ? 5 : modeRef.current.activity > 0.14 ? 2 : 3;
     const updateLinesThisFrame = frameRef.current % lineStride === 0;
 
     const dt = Math.min(0.04, delta);
@@ -657,6 +658,71 @@ function OceanField() {
       const layerTime = t * (1 + li * 0.13);
       const layerDepthNorm = li / Math.max(1, ocean.layers.length - 1);
       const idleSpeedBoost = 1 + (1 - response) * 3.7;
+      if (idleOnly) {
+        const idleTime = t * (0.34 + li * 0.04);
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            const i = r * COLS + c;
+            const xn = c / (COLS - 1);
+            const zn = r / (ROWS - 1);
+            const x = (xn - 0.5) * FIELD_WIDTH;
+            const z = -zn * FIELD_DEPTH + 6 + layer.zShift;
+            const xw = x / (FIELD_WIDTH * 0.5);
+            const zw = zn * 2 - 1 + li * 0.28;
+            const yTarget =
+              -0.03 -
+              li * 0.05 +
+              (Math.sin((zw * 0.95 + xw * 0.22) * TAU - idleTime) * 0.07 +
+                Math.sin((zw * 1.28 - xw * 0.16) * TAU - idleTime * 0.78 + li * 0.6) * 0.045 +
+                Math.sin((zw * 0.42 + xw * 0.4) * TAU - idleTime * 0.44 + li * 0.9) * 0.03) *
+                layer.amp;
+            const yPrev = layer.positions[i * 3 + 1];
+            const y = yPrev + (yTarget - yPrev) * 0.16;
+
+            layer.positions[i * 3] = x;
+            layer.positions[i * 3 + 1] = y;
+            layer.positions[i * 3 + 2] = z;
+
+            const bright = clamp01(0.24 + (1 - zn) * 0.35 + Math.abs(y) * 3.5);
+            tmp.copy(C_DEEP);
+            tmp.lerp(C_BASE, 0.72);
+            tmp.lerp(C_GLOW, 0.14 + bright * 0.25);
+            tmp.multiplyScalar((0.96 + (1 - zn) * 0.5) * layer.alpha);
+
+            layer.colors[i * 3] = tmp.r;
+            layer.colors[i * 3 + 1] = tmp.g;
+            layer.colors[i * 3 + 2] = tmp.b;
+            layer.sizes[i] = (0.48 + bright * 0.46) * layer.glow;
+          }
+        }
+
+        if (updateLinesThisFrame) {
+          for (let li2 = 0; li2 < layer.lines.length; li2++) {
+            const line = layer.lines[li2];
+            const row = line.row;
+            for (let c = 0; c < COLS; c++) {
+              const src = row * COLS + c;
+              line.positions[c * 3] = layer.positions[src * 3];
+              line.positions[c * 3 + 1] = layer.positions[src * 3 + 1];
+              line.positions[c * 3 + 2] = layer.positions[src * 3 + 2];
+              line.colors[c * 3] = layer.colors[src * 3];
+              line.colors[c * 3 + 1] = layer.colors[src * 3 + 1];
+              line.colors[c * 3 + 2] = layer.colors[src * 3 + 2];
+            }
+            (line.geo.attributes.position as BufferAttribute).needsUpdate = true;
+            (line.geo.attributes.color as BufferAttribute).needsUpdate = true;
+            const distanceFade = 1 - li / (ocean.layers.length - 1);
+            line.mat.opacity = 0.07 * layer.alpha * (0.72 + distanceFade * 0.42);
+          }
+        }
+
+        (layer.pointsGeo.attributes.position as BufferAttribute).needsUpdate = true;
+        (layer.pointsGeo.attributes.color as BufferAttribute).needsUpdate = true;
+        (layer.pointsGeo.attributes.aSize as BufferAttribute).needsUpdate = true;
+        const distanceFade = 1 - li / (ocean.layers.length - 1);
+        layer.pointsMat.uniforms.uFade.value = 0.52 * layer.alpha * (0.74 + distanceFade * 0.42);
+        continue;
+      }
 
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
@@ -959,7 +1025,7 @@ function OceanField() {
     }
 
     const sparks = ocean.sparks;
-    const sparseSparkUpdate = response < 0.1 && (frameRef.current & 1) === 1;
+    const sparseSparkUpdate = idleOnly ? (frameRef.current & 3) !== 0 : response < 0.1 && (frameRef.current & 1) === 1;
     for (let i = 0; i < SPARK_COUNT; i++) {
       if (sparseSparkUpdate && (i & 1) === 1) continue;
       sparks.ages[i] += dt;
@@ -1047,7 +1113,7 @@ export default function VoiceTest4Page() {
     >
       <Canvas
         frameloop="always"
-        dpr={[1, 1.35]}
+        dpr={[1, 1.2]}
         camera={{ position: [0, 3.8, 18.6], fov: 42 }}
         style={{ width: "100%", height: "100%" }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
