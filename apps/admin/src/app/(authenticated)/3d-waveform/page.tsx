@@ -52,12 +52,12 @@ const C_DEEP = new Color(COLORS.deep);
 
 const FIELD_WIDTH = 54;
 const FIELD_DEPTH = 74;
-const ROWS = 58;
-const COLS = 118;
+const ROWS = 52;
+const COLS = 104;
 const TAU = Math.PI * 2;
-const LINE_STEP = 3;
-const SPARK_COUNT = 520;
-const FLOAT_COUNT = 150;
+const LINE_STEP = 4;
+const SPARK_COUNT = 320;
+const FLOAT_COUNT = 120;
 
 const SURFACE_LAYERS = [
   { zShift: 2.2, amp: 1.14, glow: 1.2, alpha: 1.0 },
@@ -602,7 +602,8 @@ function OceanField() {
     const ocean = oceanRef.current;
     if (!ocean) return;
     frameRef.current += 1;
-    const updateLinesThisFrame = (frameRef.current & 1) === 0;
+    const lineStride = modeRef.current.activity > 0.14 ? 2 : 3;
+    const updateLinesThisFrame = frameRef.current % lineStride === 0;
 
     const dt = Math.min(0.04, delta);
     const t = performance.now() * 0.001;
@@ -958,7 +959,9 @@ function OceanField() {
     }
 
     const sparks = ocean.sparks;
+    const sparseSparkUpdate = response < 0.1 && (frameRef.current & 1) === 1;
     for (let i = 0; i < SPARK_COUNT; i++) {
+      if (sparseSparkUpdate && (i & 1) === 1) continue;
       sparks.ages[i] += dt;
       if (sparks.ages[i] >= sparks.life[i]) {
         sparks.alphas[i] = 0;
@@ -1044,6 +1047,7 @@ export default function VoiceTest4Page() {
     >
       <Canvas
         frameloop="always"
+        dpr={[1, 1.35]}
         camera={{ position: [0, 3.8, 18.6], fov: 42 }}
         style={{ width: "100%", height: "100%" }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
