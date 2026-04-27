@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useHeaderContent } from "@/components/header-context";
+import { UserRowMenu, type UserRowMenuAction } from "@/components/user-row-menu";
+import { EditProfileModal } from "@/components/edit-profile-modal";
+import { ResetPasswordModal } from "@/components/reset-password-modal";
+import { DeleteUserModal } from "@/components/delete-user-modal";
+import { changeUserRole, signOutAllSessions } from "@/app/(authenticated)/users/actions";
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -162,12 +167,73 @@ function matchesJoinedFilter(u: UserRow, f: JoinedValue): boolean {
 
 /* ── Component ─────────────────────────────────────────────── */
 
+type MenuState = { user: UserRow; anchor: { top: number; left: number } } | null;
+type ModalKind = "edit" | "reset" | "delete";
+
 export function UsersTable({ users, currentUserId }: Props) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Filters>({});
   const [sortBy, setSortBy] = useState<SortBy>("lastActive");
   const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
   const filterRef = useRef<HTMLDivElement | null>(null);
+
+  const [menu, setMenu] = useState<MenuState>(null);
+  const [modal, setModal] = useState<{ kind: ModalKind; user: UserRow } | null>(null);
+  const [, startTransition] = useTransition();
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+
+  const openMenu = useCallback((user: UserRow, anchor: { top: number; left: number }) => {
+    setMenu({ user, anchor });
+  }, []);
+
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const closeModal = useCallback(() => setModal(null), []);
+
+  const handleMenuAction = useCallback(
+    (action: UserRowMenuAction) => {
+      if (!menu) return;
+      const user = menu.user;
+      setMenu(null);
+
+      switch (action) {
+        case "edit":
+          setModal({ kind: "edit", user });
+          break;
+        case "resetPassword":
+          setModal({ kind: "reset", user });
+          break;
+        case "delete":
+          setModal({ kind: "delete", user });
+          break;
+        case "toggleRole": {
+          if (user.id === currentUserId && user.role === "admin") {
+            setActionError("You can't demote your own admin account.");
+            return;
+          }
+          const nextRole = user.role === "admin" ? "user" : "admin";
+          setBusyUserId(user.id);
+          startTransition(async () => {
+            const res = await changeUserRole(user.id, nextRole);
+            setBusyUserId(null);
+            if (!res.ok) setActionError(res.error);
+          });
+          break;
+        }
+        case "signOutAll": {
+          if (user.sessionCount === 0) return;
+          setBusyUserId(user.id);
+          startTransition(async () => {
+            const res = await signOutAllSessions(user.id);
+            setBusyUserId(null);
+            if (!res.ok) setActionError(res.error);
+          });
+          break;
+        }
+      }
+    },
+    [menu, currentUserId],
+  );
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -450,7 +516,13 @@ export function UsersTable({ users, currentUserId }: Props) {
       }}>
         <HeaderRow />
         {filtered.map((u) => (
-          <UserDataRow key={u.id} user={u} isCurrent={u.id === currentUserId} />
+          <UserDataRow
+            key={u.id}
+            user={u}
+            isCurrent={u.id === currentUserId}
+            busy={busyUserId === u.id}
+            onOpenMenu={openMenu}
+          />
         ))}
         {filtered.length === 0 && (
           <div style={{
@@ -461,6 +533,82 @@ export function UsersTable({ users, currentUserId }: Props) {
           </div>
         )}
       </div>
+
+      {actionError && (
+        <ActionErrorBanner message={actionError} onDismiss={() => setActionError(null)} />
+      )}
+
+      {menu && (
+        <UserRowMenu
+          anchor={menu.anchor}
+          role={menu.user.role}
+          isCurrent={menu.user.id === currentUserId}
+          onSelect={handleMenuAction}
+          onClose={closeMenu}
+        />
+      )}
+
+      <EditProfileModal
+        open={modal?.kind === "edit"}
+        target={modal?.kind === "edit" ? {
+          id: modal.user.id,
+          name: modal.user.name,
+          email: modal.user.email,
+          role: modal.user.role,
+        } : null}
+        isSelf={modal?.user.id === currentUserId}
+        onClose={closeModal}
+        onSaved={closeModal}
+      />
+
+      <ResetPasswordModal
+        open={modal?.kind === "reset"}
+        target={modal?.kind === "reset" ? {
+          id: modal.user.id,
+          name: modal.user.name,
+          email: modal.user.email,
+          authMethods: modal.user.authMethods,
+        } : null}
+        onClose={closeModal}
+        onSaved={closeModal}
+      />
+
+      <DeleteUserModal
+        open={modal?.kind === "delete"}
+        target={modal?.kind === "delete" ? {
+          id: modal.user.id,
+          name: modal.user.name,
+          email: modal.user.email,
+          sessionCount: modal.user.sessionCount,
+        } : null}
+        onClose={closeModal}
+        onDeleted={closeModal}
+      />
+    </div>
+  );
+}
+
+function ActionErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  useEffect(() => {
+    const id = setTimeout(onDismiss, 6000);
+    return () => clearTimeout(id);
+  }, [onDismiss]);
+  return (
+    <div
+      role="status"
+      style={{
+        position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+        padding: "10px 14px", borderRadius: 10,
+        background: "rgba(243,114,114,0.10)",
+        border: "1px solid rgba(243,114,114,0.32)",
+        color: "#F4A8A8",
+        fontFamily: T.fontBody, fontSize: 12,
+        boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
+        zIndex: 1100,
+      }}
+      onClick={onDismiss}
+    >
+      {message}
     </div>
   );
 }
@@ -547,7 +695,17 @@ function HeaderRow() {
 
 /* ── Data row ──────────────────────────────────────────────── */
 
-function UserDataRow({ user, isCurrent }: { user: UserRow; isCurrent: boolean }) {
+function UserDataRow({
+  user,
+  isCurrent,
+  busy,
+  onOpenMenu,
+}: {
+  user: UserRow;
+  isCurrent: boolean;
+  busy: boolean;
+  onOpenMenu: (user: UserRow, anchor: { top: number; left: number }) => void;
+}) {
   const active = formatRelative(user.lastActiveAt);
 
   return (
@@ -557,6 +715,7 @@ function UserDataRow({ user, isCurrent }: { user: UserRow; isCurrent: boolean })
         padding: "14px 20px",
         borderBottom: `1px solid ${T.border}`,
         transition: "background 100ms",
+        opacity: busy ? 0.55 : 1,
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = T.cardHover; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -632,10 +791,16 @@ function UserDataRow({ user, isCurrent }: { user: UserRow; isCurrent: boolean })
 
       <button
         type="button"
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          onOpenMenu(user, { top: rect.bottom + 6, left: rect.right });
+        }}
+        disabled={busy}
         style={{
           width: 24, height: 24, flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
-          border: "none", background: "transparent", cursor: "pointer",
+          border: "none", background: "transparent",
+          cursor: busy ? "not-allowed" : "pointer",
           color: T.muted, borderRadius: 4,
         }}
         aria-label="User actions"
