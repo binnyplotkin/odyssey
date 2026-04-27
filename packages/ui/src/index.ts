@@ -9,7 +9,7 @@
  */
 
 export { Sidebar } from "./components/sidebar";
-export type { SidebarItem, SidebarAction, SidebarProps } from "./components/sidebar";
+export type { SidebarItem, SidebarAction, SidebarProps, SidebarTab } from "./components/sidebar";
 
 export const forest = {
   950: "#000500",

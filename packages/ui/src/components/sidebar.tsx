@@ -11,6 +11,16 @@ export type SidebarItem = {
   icon?: ReactNode;
   /** Optional group key — items sharing the same section are clustered under a label. */
   section?: string;
+  /**
+   * Optional tab key — when the parent Sidebar declares `tabs`, items are filtered to only
+   * those whose `tab` matches the active tab. Items without a tab are always visible.
+   */
+  tab?: string;
+};
+
+export type SidebarTab = {
+  key: string;
+  label: string;
 };
 
 export type SidebarAction = {
@@ -26,6 +36,12 @@ export type SidebarProps = {
   brandIcon?: ReactNode;
   /** Navigation items — order is preserved, sections are rendered in encounter order. */
   items: SidebarItem[];
+  /**
+   * Optional tab toggle rendered above the navigation. Items without a `tab` field are always
+   * visible; items with one are shown only when their tab is active. When a user navigates to
+   * an item bound to a different tab, the sidebar switches to keep the current page visible.
+   */
+  tabs?: SidebarTab[];
   /** Footer actions (e.g. logout) pinned to the bottom. */
   actions?: SidebarAction[];
   /** Current route pathname — used to derive active state. */
@@ -119,6 +135,7 @@ export function Sidebar({
   brand,
   brandIcon,
   items,
+  tabs,
   actions,
   pathname,
   linkComponent,
@@ -133,8 +150,37 @@ export function Sidebar({
   children,
 }: SidebarProps) {
   const LinkTag = linkComponent ?? "a";
-  const sections = useMemo(() => groupBySection(items), [items]);
   const icon = brandIcon ?? <DefaultBrandIcon />;
+
+  const [activeTab, setActiveTab] = useState<string | null>(() => tabs?.[0]?.key ?? null);
+
+  // When the user navigates to an item bound to a tab, follow it so the active page stays
+  // visible. Intentionally omits activeTab from deps — otherwise clicking a tab while on a page
+  // bound to a different tab would immediately revert.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!tabs || tabs.length === 0) return;
+    const current = items.find((item) => isActive(pathname, item.href));
+    if (current?.tab) {
+      setActiveTab(current.tab);
+    }
+  }, [pathname, items, tabs]);
+
+  const selectTab = useCallback((key: string) => {
+    setActiveTab(key);
+  }, []);
+
+  const { topSections, tabbedSections } = useMemo(() => {
+    if (!tabs || tabs.length === 0) {
+      return { topSections: [] as Section[], tabbedSections: groupBySection(items) };
+    }
+    const topItems = items.filter((item) => !item.tab);
+    const tabItems = items.filter((item) => item.tab === activeTab);
+    return {
+      topSections: groupBySection(topItems),
+      tabbedSections: groupBySection(tabItems),
+    };
+  }, [items, tabs, activeTab]);
 
   const [collapsed, setCollapsed] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -174,6 +220,56 @@ export function Sidebar({
   }, [userMenuOpen]);
 
   const userInitial = userName ? userName.charAt(0).toUpperCase() : null;
+
+  const renderItem = (item: SidebarItem) => {
+    const active = isActive(pathname, item.href);
+    return (
+      <LinkTag
+        key={item.href}
+        href={item.href}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "8px 10px",
+          borderRadius: 8,
+          fontSize: "0.8125rem",
+          fontWeight: active ? 500 : 400,
+          color: active ? "var(--accent-strong)" : "var(--foreground)",
+          background: active
+            ? "var(--accent-soft)"
+            : hoveredId === `nav-${item.href}`
+              ? "var(--panel)"
+              : "transparent",
+          transition: "background 150ms, color 150ms, opacity 150ms",
+          cursor: "pointer",
+          textDecoration: "none",
+          whiteSpace: "nowrap",
+        }}
+        onMouseEnter={() => setHoveredId(`nav-${item.href}`)}
+        onMouseLeave={() => setHoveredId(null)}
+      >
+        {item.icon && (
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 18,
+              height: 18,
+              flexShrink: 0,
+              color: active ? "var(--accent-strong)" : "var(--foreground)",
+              opacity: active ? 1 : 0.8,
+              transition: "color 150ms, opacity 150ms",
+            }}
+          >
+            {item.icon}
+          </span>
+        )}
+        {item.label}
+      </LinkTag>
+    );
+  };
 
   /* ── Single stable DOM — sidebar width toggles ────────────── */
   return (
@@ -248,9 +344,61 @@ export function Sidebar({
             overflowY: "auto",
           }}
         >
-          {sections.map((section, sectionIndex) => (
+          {/* Tab toggle */}
+          {tabs && tabs.length > 0 && (
             <div
-              key={section.key ?? `section-${sectionIndex}`}
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 2,
+                padding: 3,
+                background: "var(--panel)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                flexShrink: 0,
+              }}
+            >
+              {tabs.map((tab) => {
+                const selected = tab.key === activeTab;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => selectTab(tab.key)}
+                    onMouseEnter={() => setHoveredId(`tab-${tab.key}`)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "5px 0",
+                      border: "none",
+                      background: selected
+                        ? "var(--accent-soft)"
+                        : hoveredId === `tab-${tab.key}` ? "var(--accent-soft)" : "transparent",
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      fontFamily: "var(--font-mono, ui-monospace, SFMono-Regular, monospace)",
+                      fontSize: 10,
+                      lineHeight: "12px",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: selected ? "var(--accent-strong)" : "var(--muted)",
+                      transition: "background 150ms, color 150ms",
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {topSections.map((section, sectionIndex) => (
+            <div
+              key={section.key ?? `top-section-${sectionIndex}`}
               style={{ display: "flex", flexDirection: "column", gap: 2 }}
             >
               {section.key && (
@@ -268,56 +416,31 @@ export function Sidebar({
                 </div>
               )}
 
-              {section.items.map((item) => {
-                const active = isActive(pathname, item.href);
+              {section.items.map((item) => renderItem(item))}
+            </div>
+          ))}
 
-                return (
-                  <LinkTag
-                    key={item.href}
-                    href={item.href}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "8px 10px",
-                      borderRadius: 8,
-                      fontSize: "0.8125rem",
-                      fontWeight: active ? 500 : 400,
-                      color: active ? "var(--accent-strong)" : "var(--foreground)",
-                      background: active
-                        ? "var(--accent-soft)"
-                        : hoveredId === `nav-${item.href}`
-                          ? "var(--panel)"
-                          : "transparent",
-                      transition: "background 150ms, color 150ms, opacity 150ms",
-                      cursor: "pointer",
-                      textDecoration: "none",
-                      whiteSpace: "nowrap",
-                    }}
-                    onMouseEnter={() => setHoveredId(`nav-${item.href}`)}
-                    onMouseLeave={() => setHoveredId(null)}
-                  >
-                    {item.icon && (
-                      <span
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: 18,
-                          height: 18,
-                          flexShrink: 0,
-                          color: active ? "var(--accent-strong)" : "var(--foreground)",
-                          opacity: active ? 1 : 0.8,
-                          transition: "color 150ms, opacity 150ms",
-                        }}
-                      >
-                        {item.icon}
-                      </span>
-                    )}
-                    {item.label}
-                  </LinkTag>
-                );
-              })}
+          {tabbedSections.map((section, sectionIndex) => (
+            <div
+              key={section.key ?? `tabbed-section-${sectionIndex}`}
+              style={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
+              {section.key && (
+                <div
+                  style={{
+                    padding: "0 8px 8px",
+                    fontSize: "0.6875rem",
+                    fontWeight: 500,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: "var(--muted)",
+                  }}
+                >
+                  {section.key}
+                </div>
+              )}
+
+              {section.items.map((item) => renderItem(item))}
             </div>
           ))}
         </div>

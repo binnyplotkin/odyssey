@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { Sidebar, type SidebarItem } from "@odyssey/ui";
+import { Sidebar, type SidebarItem, type SidebarTab } from "@odyssey/ui";
 import { HeaderProvider, useHeaderContent } from "./header-context";
 import { SettingsOverlay } from "./settings-overlay";
 import {
@@ -59,25 +59,31 @@ const odysseyIcon = (
 
 /* ── Nav items ────────────────────────────────────────────────── */
 
+const tabs: SidebarTab[] = [
+  { key: "dev", label: "Dev" },
+  { key: "app", label: "App" },
+  { key: "infra", label: "Infra" },
+];
+
 const items: SidebarItem[] = [
   { href: "/", label: "Dashboard", icon: icons.dashboard },
-  { href: "/roadmap", label: "Roadmap", section: "Project", icon: icons.roadmap },
-  { href: "/board", label: "Board", section: "Project", icon: icons.board },
-  { href: "/docs", label: "Docs", section: "Project", icon: icons.docs },
-  { href: "/changelog", label: "Changelog", section: "Project", icon: icons.changelog },
-  { href: "/worlds", label: "Worlds", section: "Studio", icon: icons.worlds },
-  { href: "/characters", label: "Characters", section: "Studio", icon: icons.characters },
-  { href: "/users", label: "Users", section: "Database", icon: icons.users },
-  { href: "/sessions", label: "Sessions", section: "Database", icon: icons.sessions },
-  { href: "/engine", label: "Engine", section: "Tools", icon: icons.engine },
-  { href: "/editor", label: "Editor", section: "Tools", icon: icons.editor },
-  { href: "/builder", label: "Builder", section: "Tools", icon: icons.builder },
-  { href: "/voice-test", label: "Voice Test", section: "Tools", icon: icons.voice },
-  { href: "/voice-test-2", label: "Voice Test 2", section: "Tools", icon: icons.waveform },
-  { href: "/3d-waveform", label: "3D Waveform", section: "Tools", icon: icons.waveform },
-  { href: "/voice-test-3", label: "Voice Test 3", section: "Tools", icon: icons.waveform },
-  { href: "/voice-test-4", label: "Voice Test 4", section: "Tools", icon: icons.waveform },
-  { href: "/abrahams-tent", label: "Abraham's Tent", section: "Demos", icon: icons.tent },
+  { href: "/roadmap", label: "Roadmap", section: "Project", icon: icons.roadmap, tab: "dev" },
+  { href: "/board", label: "Board", section: "Project", icon: icons.board, tab: "dev" },
+  { href: "/docs", label: "Docs", section: "Project", icon: icons.docs, tab: "dev" },
+  { href: "/changelog", label: "Changelog", section: "Project", icon: icons.changelog, tab: "dev" },
+  { href: "/worlds", label: "Worlds", section: "Studio", icon: icons.worlds, tab: "app" },
+  { href: "/characters", label: "Characters", section: "Studio", icon: icons.characters, tab: "app" },
+  { href: "/users", label: "Users", section: "Ops", icon: icons.users, tab: "app" },
+  { href: "/sessions", label: "Sessions", section: "Database", icon: icons.sessions, tab: "infra" },
+  { href: "/engine", label: "Engine", section: "Tools", icon: icons.engine, tab: "infra" },
+  { href: "/editor", label: "Editor", section: "Tools", icon: icons.editor, tab: "infra" },
+  { href: "/builder", label: "Builder", section: "Tools", icon: icons.builder, tab: "infra" },
+  { href: "/voice-test", label: "Voice Test", section: "Tools", icon: icons.voice, tab: "infra" },
+  { href: "/voice-test-2", label: "Voice Test 2", section: "Tools", icon: icons.waveform, tab: "infra" },
+  { href: "/3d-waveform", label: "3D Waveform", section: "Tools", icon: icons.waveform, tab: "infra" },
+  { href: "/voice-test-3", label: "Voice Test 3", section: "Tools", icon: icons.waveform, tab: "infra" },
+  { href: "/voice-test-4", label: "Voice Test 4", section: "Tools", icon: icons.waveform, tab: "infra" },
+  { href: "/abrahams-tent", label: "Abraham's Tent", section: "Demos", icon: icons.tent, tab: "infra" },
 ];
 
 /* ── Shell Component ──────────────────────────────────────────── */
@@ -133,6 +139,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
       brand="Odyssey"
       brandIcon={odysseyIcon}
       items={items}
+      tabs={tabs}
       pathname={pathname}
       linkComponent={Link}
       userName={userName}
