@@ -2,7 +2,6 @@
 
 import {
   type PointerEvent,
-  type WheelEvent,
   type MouseEvent,
   useCallback,
   useEffect,
@@ -221,9 +220,14 @@ function buildEdgesFromWorld(world: WorldDefinition, nodes: EditorNode[]): Edito
   return edges;
 }
 
-function getEdgeAnchors(from: EditorNode, to: EditorNode) {
-  const fc = { x: from.x + from.w / 2, y: from.y + from.h / 2 };
-  const tc = { x: to.x + to.w / 2, y: to.y + to.h / 2 };
+/* Edges connect to the midpoint of whichever side faces the peer node.
+ * `node.h` is a seed value from buildNodesFromWorld; real articles flow
+ * to content and rarely match it. Callers pass in a measured height per
+ * endpoint (from the ResizeObserver below) so top/bottom anchors land
+ * flush with the visible edge of the card, not 10-20px off. */
+function getEdgeAnchors(from: EditorNode, to: EditorNode, fromH: number, toH: number) {
+  const fc = { x: from.x + from.w / 2, y: from.y + fromH / 2 };
+  const tc = { x: to.x + to.w / 2, y: to.y + toH / 2 };
   const dx = tc.x - fc.x;
   const dy = tc.y - fc.y;
   if (Math.abs(dx) >= Math.abs(dy)) {
@@ -233,8 +237,8 @@ function getEdgeAnchors(from: EditorNode, to: EditorNode) {
     };
   }
   return {
-    start: { x: fc.x, y: dy >= 0 ? from.y + from.h : from.y },
-    end: { x: tc.x, y: dy >= 0 ? to.y : to.y + to.h },
+    start: { x: fc.x, y: dy >= 0 ? from.y + fromH : from.y },
+    end: { x: tc.x, y: dy >= 0 ? to.y : to.y + toH },
   };
 }
 
@@ -321,7 +325,7 @@ function WorldCoreContent({ world }: { world: WorldDefinition }) {
  * when selected.
  */
 function CharacterChipNode({
-  node, char, isSelected, hasErrors, errorMessage, isDragging, onPointerDown, onContextMenu,
+  node, char, isSelected, hasErrors, errorMessage, isDragging, onPointerDown, onContextMenu, setNodeEl,
 }: {
   node: EditorNode;
   char: CharacterDefinition;
@@ -331,6 +335,7 @@ function CharacterChipNode({
   isDragging: boolean;
   onPointerDown: (e: PointerEvent<HTMLElement>) => void;
   onContextMenu: (e: MouseEvent<HTMLElement>) => void;
+  setNodeEl?: (el: HTMLElement | null) => void;
 }) {
   const initial = (char.name || char.id || "?").trim().charAt(0).toUpperCase() || "?";
   const roleCaption = char.archetype && char.archetype !== "unspecified" ? char.archetype : char.title || "";
@@ -356,6 +361,8 @@ function CharacterChipNode({
 
   return (
     <article
+      ref={setNodeEl}
+      data-node-id={node.id}
       style={{
         position: "absolute", left: node.x, top: node.y, width: node.w,
         display: "flex", alignItems: "stretch", gap: 10,
@@ -550,6 +557,59 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+
+  /* Measured rendered heights per node. node.h is a seed from
+   * buildNodesFromWorld and rarely matches the laid-out size (articles
+   * are auto-height). A ResizeObserver updates this map so edges anchor
+   * to the actual visible top/bottom of each card. */
+  const [measuredHeights, setMeasuredHeights] = useState<Record<string, number>>({});
+  const nodeElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const sizeObserverRef = useRef<ResizeObserver | null>(null);
+
+  useEffect(() => {
+    const observer = new ResizeObserver((entries) => {
+      setMeasuredHeights((prev) => {
+        let next: Record<string, number> | null = null;
+        for (const entry of entries) {
+          const el = entry.target as HTMLElement;
+          const id = el.dataset.nodeId;
+          if (!id) continue;
+          const h = el.offsetHeight;
+          if (h > 0 && prev[id] !== h) {
+            if (!next) next = { ...prev };
+            next[id] = h;
+          }
+        }
+        return next ?? prev;
+      });
+    });
+    sizeObserverRef.current = observer;
+    // Catch any refs that attached before this effect ran.
+    nodeElsRef.current.forEach((el) => observer.observe(el));
+    return () => {
+      observer.disconnect();
+      sizeObserverRef.current = null;
+    };
+  }, []);
+
+  const setNodeEl = useCallback((id: string, el: HTMLElement | null) => {
+    const map = nodeElsRef.current;
+    const prev = map.get(id);
+    const obs = sizeObserverRef.current;
+    if (prev && prev !== el) {
+      obs?.unobserve(prev);
+      map.delete(id);
+    }
+    if (el) {
+      map.set(id, el);
+      obs?.observe(el);
+      // Prime the map so the first edge render doesn't fall back to node.h.
+      const h = el.offsetHeight;
+      if (h > 0) {
+        setMeasuredHeights((m) => (m[id] === h ? m : { ...m, [id]: h }));
+      }
+    }
+  }, []);
 
   const nodeLookup = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes]);
   const selectedNode = selectedNodeId ? nodeLookup[selectedNodeId] ?? null : null;
@@ -823,17 +883,55 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
     setDragState(null);
   }
 
-  function onWheel(event: WheelEvent<HTMLDivElement>) {
-    event.preventDefault();
+  /* Zoom is anchored to a client point (cursor for wheel, viewport center for
+   * buttons). We avoid calling setCamera inside setZoom's updater — that
+   * violates the "updater must be pure" rule and fires twice in StrictMode,
+   * doubling the camera shift. Refs mirror the latest values so chained
+   * events (fast scroll wheels) compose correctly without waiting for
+   * React to commit the previous update. */
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const cameraRef = useRef(camera);
+  cameraRef.current = camera;
+
+  const zoomAt = useCallback((clientX: number, clientY: number, factor: number) => {
     const rect = viewportRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const px = event.clientX - rect.left;
-    const py = event.clientY - rect.top;
-    setZoom((pz) => {
-      const nz = clamp(event.deltaY < 0 ? pz * 1.09 : pz * 0.91, 0.25, 2.0);
-      setCamera((pc) => ({ x: px - ((px - pc.x) / pz) * nz, y: py - ((py - pc.y) / pz) * nz }));
-      return nz;
-    });
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    const pz = zoomRef.current;
+    const nz = clamp(pz * factor, 0.25, 2.0);
+    if (nz === pz) return;
+    const pc = cameraRef.current;
+    const nc = {
+      x: px - ((px - pc.x) / pz) * nz,
+      y: py - ((py - pc.y) / pz) * nz,
+    };
+    zoomRef.current = nz;
+    cameraRef.current = nc;
+    setZoom(nz);
+    setCamera(nc);
+  }, []);
+
+  /* React's onWheel is passive, so preventDefault is a no-op there and the
+   * page scrolls behind the canvas. Attach a native listener with
+   * passive:false so wheel-to-zoom doesn't leak to the document. */
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    function onWheelNative(e: WheelEvent) {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      zoomAt(e.clientX, e.clientY, factor);
+    }
+    el.addEventListener("wheel", onWheelNative, { passive: false });
+    return () => el.removeEventListener("wheel", onWheelNative);
+  }, [zoomAt]);
+
+  function zoomViewportCenter(factor: number) {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
   }
 
   function handleContextMenu(event: MouseEvent<HTMLElement>, nodeId: string) {
@@ -1022,7 +1120,6 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
               onPointerMove={onPointerMove}
               onPointerUp={stopDragging}
               onPointerCancel={stopDragging}
-              onWheel={onWheel}
               onContextMenu={(e) => { e.preventDefault(); }}
             >
               {/* Loading overlay */}
@@ -1238,7 +1335,9 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                       const from = nodeLookup[edge.from];
                       const to = nodeLookup[edge.to];
                       if (!from || !to) return null;
-                      const { start, end } = getEdgeAnchors(from, to);
+                      const fromH = measuredHeights[edge.from] ?? from.h;
+                      const toH = measuredHeights[edge.to] ?? to.h;
+                      const { start, end } = getEdgeAnchors(from, to, fromH, toH);
                       const midX = (start.x + end.x) / 2;
                       const isKnows = edge.kind === "knows";
                       const stroke = isKnows
@@ -1280,6 +1379,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                             isDragging={dragState?.type === "node" && dragState.nodeId === node.id}
                             onPointerDown={(e) => startNodeDrag(e, node.id)}
                             onContextMenu={(e) => handleContextMenu(e, node.id)}
+                            setNodeEl={(el) => setNodeEl(node.id, el)}
                           />
                         );
                       }
@@ -1288,6 +1388,8 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                     return (
                       <article
                         key={node.id}
+                        ref={(el) => setNodeEl(node.id, el)}
+                        data-node-id={node.id}
                         style={{
                           position: "absolute", left: node.x, top: node.y, width: node.w,
                           padding: node.collapsed ? "8px 12px" : 14,
@@ -1546,12 +1648,12 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span>{nodes.length} nodes</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <button type="button" onClick={() => setZoom((z) => clamp(z * 0.9, 0.25, 2.0))}
+                  <button type="button" onClick={() => zoomViewportCenter(1 / 1.1)}
                     style={{ border: `1px solid ${T.borderSubtle}`, background: "transparent", color: T.textSecondary, borderRadius: 3, padding: "1px 6px", cursor: "pointer", fontSize: 11 }}>
                     −
                   </button>
                   <span style={{ minWidth: 36, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
-                  <button type="button" onClick={() => setZoom((z) => clamp(z * 1.12, 0.25, 2.0))}
+                  <button type="button" onClick={() => zoomViewportCenter(1.1)}
                     style={{ border: `1px solid ${T.borderSubtle}`, background: "transparent", color: T.textSecondary, borderRadius: 3, padding: "1px 6px", cursor: "pointer", fontSize: 11 }}>
                     +
                   </button>
