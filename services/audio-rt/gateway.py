@@ -29,6 +29,7 @@ class SpeakRequest(BaseModel):
 class KyutaiSttRuntime:
     def __init__(self) -> None:
         self._lock = Lock()
+        self._transcribe_lock = Lock()
         self._loaded = False
         self._error: str | None = None
         self._mimi = None
@@ -81,54 +82,56 @@ class KyutaiSttRuntime:
         }
 
     def transcribe_file(self, file_path: str) -> str:
-        self._load()
-        assert self._mimi is not None
-        assert self._tokenizer is not None
-        assert self._lm_gen is not None
+        # Kyutai streaming contexts are single-session; concurrent requests must serialize.
+        with self._transcribe_lock:
+            self._load()
+            assert self._mimi is not None
+            assert self._tokenizer is not None
+            assert self._lm_gen is not None
 
-        audio, input_sample_rate = sphn.read(file_path)
-        audio = torch.from_numpy(audio).to(self._device)
-        if audio.ndim == 1:
-            audio = audio.unsqueeze(0)
-        elif audio.ndim > 1:
-            audio = audio.mean(dim=0, keepdim=True)
+            audio, input_sample_rate = sphn.read(file_path)
+            audio = torch.from_numpy(audio).to(self._device)
+            if audio.ndim == 1:
+                audio = audio.unsqueeze(0)
+            elif audio.ndim > 1:
+                audio = audio.mean(dim=0, keepdim=True)
 
-        audio = julius.resample_frac(audio, input_sample_rate, self._mimi.sample_rate)
-        if audio.shape[-1] % self._mimi.frame_size != 0:
-            to_pad = self._mimi.frame_size - audio.shape[-1] % self._mimi.frame_size
-            audio = torch.nn.functional.pad(audio, (0, to_pad))
+            audio = julius.resample_frac(audio, input_sample_rate, self._mimi.sample_rate)
+            if audio.shape[-1] % self._mimi.frame_size != 0:
+                to_pad = self._mimi.frame_size - audio.shape[-1] % self._mimi.frame_size
+                audio = torch.nn.functional.pad(audio, (0, to_pad))
 
-        n_prefix_chunks = math.ceil(self._audio_silence_prefix_seconds * self._mimi.frame_rate)
-        n_suffix_chunks = math.ceil(self._audio_delay_seconds * self._mimi.frame_rate)
-        silence_chunk = torch.zeros(
-            (1, 1, self._mimi.frame_size),
-            dtype=torch.float32,
-            device=self._device,
-        )
+            n_prefix_chunks = math.ceil(self._audio_silence_prefix_seconds * self._mimi.frame_rate)
+            n_suffix_chunks = math.ceil(self._audio_delay_seconds * self._mimi.frame_rate)
+            silence_chunk = torch.zeros(
+                (1, 1, self._mimi.frame_size),
+                dtype=torch.float32,
+                device=self._device,
+            )
 
-        chunks = itertools.chain(
-            itertools.repeat(silence_chunk, n_prefix_chunks),
-            torch.split(audio[:, None], self._mimi.frame_size, dim=-1),
-            itertools.repeat(silence_chunk, n_suffix_chunks),
-        )
+            chunks = itertools.chain(
+                itertools.repeat(silence_chunk, n_prefix_chunks),
+                torch.split(audio[:, None], self._mimi.frame_size, dim=-1),
+                itertools.repeat(silence_chunk, n_suffix_chunks),
+            )
 
-        text_tokens_accum = []
-        with self._mimi.streaming(1), self._lm_gen.streaming(1):
-            for audio_chunk in chunks:
-                audio_tokens = self._mimi.encode(audio_chunk)
-                text_tokens = self._lm_gen.step(audio_tokens)
-                if text_tokens is not None:
-                    text_tokens_accum.append(text_tokens)
+            text_tokens_accum = []
+            with self._mimi.streaming(1), self._lm_gen.streaming(1):
+                for audio_chunk in chunks:
+                    audio_tokens = self._mimi.encode(audio_chunk)
+                    text_tokens = self._lm_gen.step(audio_tokens)
+                    if text_tokens is not None:
+                        text_tokens_accum.append(text_tokens)
 
-        if not text_tokens_accum:
-            return ""
+            if not text_tokens_accum:
+                return ""
 
-        utterance_tokens = torch.concat(text_tokens_accum, dim=-1)
-        text_tokens = utterance_tokens.cpu().view(-1)
-        transcript = self._tokenizer.decode(
-            text_tokens[text_tokens > self._padding_token_id].numpy().tolist(),
-        )
-        return transcript.strip()
+            utterance_tokens = torch.concat(text_tokens_accum, dim=-1)
+            text_tokens = utterance_tokens.cpu().view(-1)
+            transcript = self._tokenizer.decode(
+                text_tokens[text_tokens > self._padding_token_id].numpy().tolist(),
+            )
+            return transcript.strip()
 
 
 stt_runtime = KyutaiSttRuntime()
@@ -151,37 +154,70 @@ def _extension_from_mime(mime_type: str) -> str:
     return mapping.get(normalized, ".webm")
 
 
+def _decode_source_to_wav(source_path: str, wav_path: str) -> tuple[bool, str]:
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            source_path,
+            "-ac",
+            "1",
+            wav_path,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0, result.stderr.strip() or "ffmpeg failed."
+
+
+def _candidate_extensions(mime_type: str) -> list[str]:
+    preferred = _extension_from_mime(mime_type)
+    normalized = (mime_type or "").split(";")[0].strip().lower()
+    candidates = [preferred]
+
+    # Some browser recorder paths mislabel container types intermittently.
+    if normalized in {"audio/mp4", "audio/m4a", "audio/aac"}:
+        candidates.extend([".webm", ".ogg"])
+    elif normalized in {"audio/webm", "audio/ogg"}:
+        candidates.extend([".mp4", ".m4a"])
+    else:
+        candidates.extend([".webm", ".mp4", ".m4a", ".ogg", ".wav"])
+
+    deduped: list[str] = []
+    for ext in candidates:
+        if ext not in deduped:
+            deduped.append(ext)
+    return deduped
+
+
 def _decode_to_wav_bytes(audio_base64: str, mime_type: str) -> bytes:
     try:
         raw = base64.b64decode(audio_base64, validate=True)
     except Exception as error:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"Invalid audioBase64 payload: {error}") from error
 
-    ext = _extension_from_mime(mime_type)
     with tempfile.TemporaryDirectory() as temp_dir:
-        source_path = os.path.join(temp_dir, f"input{ext}")
         wav_path = os.path.join(temp_dir, "input.wav")
-        with open(source_path, "wb") as source_file:
-            source_file.write(raw)
 
-        result = subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                source_path,
-                "-ac",
-                "1",
-                wav_path,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
+        last_error = "ffmpeg failed."
+        decoded = False
+        for ext in _candidate_extensions(mime_type):
+            source_path = os.path.join(temp_dir, f"input{ext}")
+            with open(source_path, "wb") as source_file:
+                source_file.write(raw)
+
+            ok, stderr = _decode_source_to_wav(source_path, wav_path)
+            if ok:
+                decoded = True
+                break
+            last_error = stderr
+
+        if not decoded:
             raise HTTPException(
                 status_code=400,
-                detail=f"Could not decode audio input: {result.stderr.strip() or 'ffmpeg failed.'}",
+                detail=f"Could not decode audio input: {last_error}",
             )
 
         with open(wav_path, "rb") as wav_file:

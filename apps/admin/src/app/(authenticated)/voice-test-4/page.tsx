@@ -53,8 +53,6 @@ type RoutingSnapshot = {
 const RECORDER_MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
   "audio/webm",
-  "audio/mp4",
-  "audio/aac",
 ] as const;
 
 const TURN_MIN_MS = 700;
@@ -437,11 +435,6 @@ export default function VoiceTest4Page() {
       recorder.onstop = () => {
         resolve(new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" }));
       };
-      try {
-        recorder.requestData();
-      } catch {
-        // Ignore unsupported requestData implementations.
-      }
       recorder.stop();
     });
 
@@ -534,7 +527,7 @@ export default function VoiceTest4Page() {
     };
 
     try {
-      recorder.start(250);
+      recorder.start();
     } catch (recorderStartError) {
       const detail =
         recorderStartError instanceof Error
