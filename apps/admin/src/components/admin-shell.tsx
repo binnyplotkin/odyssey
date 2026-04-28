@@ -83,6 +83,7 @@ const items: SidebarItem[] = [
   { href: "/3d-waveform", label: "3D Waveform", section: "Tools", icon: icons.waveform, tab: "infra" },
   { href: "/voice-test-3", label: "Voice Test 3", section: "Tools", icon: icons.waveform, tab: "infra" },
   { href: "/voice-test-4", label: "Voice Test 4", section: "Tools", icon: icons.waveform, tab: "infra" },
+  { href: "/voice-debug", label: "Voice Debug", section: "Tools", icon: icons.waveform, tab: "infra" },
   { href: "/abrahams-tent", label: "Abraham's Tent", section: "Demos", icon: icons.tent, tab: "infra" },
 ];
 

@@ -16,6 +16,7 @@ export default auth((req) => {
     pathname === "/api/audio/speak" ||
     pathname === "/api/audio/transcribe" ||
     pathname === "/api/audio/reply" ||
+    pathname === "/api/audio/gateway-health" ||
     pathname.startsWith("/api/auth") ||
     pathname === "/login"
   ) {

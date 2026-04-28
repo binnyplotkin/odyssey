@@ -5,7 +5,10 @@ function getKyutaiBaseUrl() {
   return (process.env.KYUTAI_BASE_URL ?? "").trim().replace(/\/+$/, "");
 }
 
-function isKyutaiTtsEnabled() {
+function isKyutaiTtsRequest(provider?: string) {
+  if (provider !== undefined) {
+    return provider.trim().toLowerCase() === "kyutai";
+  }
   return (process.env.TTS_PROVIDER ?? "").trim().toLowerCase() === "kyutai";
 }
 
@@ -14,6 +17,7 @@ async function arrayBufferToBase64(buffer: ArrayBuffer) {
 }
 
 export async function POST(request: NextRequest) {
+  const startedAt = performance.now();
   try {
     const body = (await request.json()) as {
       text?: string;
@@ -25,11 +29,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "text is required." }, { status: 400 });
     }
 
-    if (isKyutaiTtsEnabled()) {
+    if (isKyutaiTtsRequest(body.provider)) {
       const baseUrl = getKyutaiBaseUrl();
       if (!baseUrl) {
         return NextResponse.json(
-          { error: "KYUTAI_BASE_URL is required when TTS_PROVIDER=kyutai." },
+          { error: "KYUTAI_BASE_URL is required when TTS provider=kyutai." },
           { status: 503 },
         );
       }
@@ -41,16 +45,20 @@ export async function POST(request: NextRequest) {
           text: body.text,
           voice: body.voice ?? null,
         }),
+        signal: AbortSignal.timeout(120000),
       });
 
       const contentType = response.headers.get("content-type") ?? "";
       if (!response.ok) {
         const errorPayload = contentType.includes("application/json")
-          ? (await response.json()) as { error?: string; detail?: string }
+          ? ((await response.json()) as { error?: string; detail?: string })
           : { error: await response.text() };
         return NextResponse.json(
           {
             error: errorPayload.error ?? errorPayload.detail ?? "Kyutai TTS failed.",
+            provider: "kyutai",
+            requestedProvider: "kyutai",
+            latencyMs: Math.round(performance.now() - startedAt),
           },
           { status: response.status },
         );
@@ -69,6 +77,7 @@ export async function POST(request: NextRequest) {
           provider: payload.provider ?? "kyutai",
           requestedProvider: "kyutai",
           fallbackUsed: payload.fallbackUsed ?? false,
+          latencyMs: Math.round(performance.now() - startedAt),
         });
       }
 
@@ -79,6 +88,7 @@ export async function POST(request: NextRequest) {
         provider: "kyutai",
         requestedProvider: "kyutai",
         fallbackUsed: false,
+        latencyMs: Math.round(performance.now() - startedAt),
       });
     }
 
@@ -116,6 +126,7 @@ export async function POST(request: NextRequest) {
           provider,
           requestedProvider: requestedProvider ?? null,
           fallbackUsed: provider !== primaryProvider,
+          latencyMs: Math.round(performance.now() - startedAt),
         });
       } catch (attemptError) {
         attemptErrors.push(
@@ -130,12 +141,16 @@ export async function POST(request: NextRequest) {
       {
         error: "TTS unavailable for both providers.",
         details: attemptErrors,
+        latencyMs: Math.round(performance.now() - startedAt),
       },
       { status: 503 },
     );
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Speech generation failed." },
+      {
+        error: error instanceof Error ? error.message : "Speech generation failed.",
+        latencyMs: Math.round(performance.now() - startedAt),
+      },
       { status: 500 },
     );
   }

@@ -5,15 +5,20 @@ function getKyutaiBaseUrl() {
   return (process.env.KYUTAI_BASE_URL ?? "").trim().replace(/\/+$/, "");
 }
 
-function isKyutaiSttEnabled() {
-  return (process.env.STT_PROVIDER ?? "").trim().toLowerCase() === "kyutai";
+function resolveSttProvider(requested?: string) {
+  const normalized = (requested ?? process.env.STT_PROVIDER ?? "openai")
+    .trim()
+    .toLowerCase();
+  return normalized === "kyutai" ? "kyutai" : "openai";
 }
 
 export async function POST(request: NextRequest) {
+  const startedAt = performance.now();
   try {
     const body = (await request.json()) as {
       audioBase64?: string;
       mimeType?: string;
+      provider?: string;
     };
 
     if (!body.audioBase64 || !body.mimeType) {
@@ -23,11 +28,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (isKyutaiSttEnabled()) {
+    const provider = resolveSttProvider(body.provider);
+
+    if (provider === "kyutai") {
       const baseUrl = getKyutaiBaseUrl();
       if (!baseUrl) {
         return NextResponse.json(
-          { error: "KYUTAI_BASE_URL is required when STT_PROVIDER=kyutai." },
+          { error: "KYUTAI_BASE_URL is required when STT provider=kyutai." },
           { status: 503 },
         );
       }
@@ -39,10 +46,13 @@ export async function POST(request: NextRequest) {
           audioBase64: body.audioBase64,
           mimeType: body.mimeType,
         }),
+        signal: AbortSignal.timeout(120000),
       });
 
       const payload = (await response.json()) as {
         transcript?: string;
+        provider?: string;
+        model?: string;
         error?: string;
         detail?: string;
       };
@@ -51,6 +61,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: payload.error ?? payload.detail ?? "Kyutai transcription failed.",
+            provider: "kyutai",
+            latencyMs: Math.round(performance.now() - startedAt),
           },
           { status: response.status },
         );
@@ -59,6 +71,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         transcript: payload.transcript ?? "",
         provider: "kyutai",
+        model: payload.model ?? "kyutai-stt",
+        latencyMs: Math.round(performance.now() - startedAt),
       });
     }
 
@@ -68,10 +82,18 @@ export async function POST(request: NextRequest) {
       mimeType: body.mimeType,
     });
 
-    return NextResponse.json({ transcript, provider: "openai" });
+    return NextResponse.json({
+      transcript,
+      provider: "openai",
+      model: "gpt-4o-mini-transcribe",
+      latencyMs: Math.round(performance.now() - startedAt),
+    });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Transcription failed." },
+      {
+        error: error instanceof Error ? error.message : "Transcription failed.",
+        latencyMs: Math.round(performance.now() - startedAt),
+      },
       { status: 500 },
     );
   }
