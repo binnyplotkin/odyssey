@@ -59,6 +59,11 @@ const TAU = Math.PI * 2;
 const LINE_STEP = 5;
 const SPARK_COUNT = 420;
 const FLOAT_COUNT = 56;
+const MAX_VOICE_WAVE_SCALE = 1.45;
+const MIN_VOICE_WAVE_SCALE = 0.015;
+const LOUDNESS_DB_FLOOR = -54;
+const LOUDNESS_DB_CEIL = -2;
+const LOUDNESS_CURVE_EXPONENT = 2.2;
 
 const SURFACE_LAYERS = [
   { zShift: 2.2, amp: 1.14, glow: 1.2, alpha: 1.0 },
@@ -178,7 +183,7 @@ function useAudioAnalysis() {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
+          autoGainControl: false,
         },
       });
       streamRef.current = stream;
@@ -286,7 +291,16 @@ function OceanField() {
   const groupRef = useRef<Group>(null);
   const oceanRef = useRef<OceanRef | null>(null);
   const smoothRef = useRef({ energy: 0, bass: 0, mid: 0, high: 0, peak: 0 });
-  const modeRef = useRef({ activity: 0, loud: 0, presence: 0, engage: 0, volume: 0 });
+  const modeRef = useRef({
+    activity: 0,
+    loud: 0,
+    presence: 0,
+    engage: 0,
+    volume: 0,
+    voiceLevel: 0,
+    waveScale: 1,
+    motionScale: 1,
+  });
   const gateRef = useRef({ floor: 0.012 });
   const rollRef = useRef({ offset: 0, speed: 0, drift: 0.00044 });
   const topologyRef = useRef(0);
@@ -645,14 +659,36 @@ function OceanField() {
       ? smoothstep(0.01, 0.34, gatedSignal * 2.35 + AUDIO.peak * 0.26 + AUDIO.energy * 0.12)
       : 0;
     m.volume += (volumeTarget - m.volume) * (volumeTarget > m.volume ? 0.09 : 0.035);
+    const dbSignal = micOn
+      ? Math.max(1e-4, gatedSignal * 1.2 + AUDIO.energy * 0.18 + AUDIO.peak * 0.08)
+      : 1e-4;
+    const loudnessDb = micOn ? 20 * Math.log10(dbSignal) : -60;
+    const loudnessDbNormRaw = micOn ? smoothstep(LOUDNESS_DB_FLOOR, LOUDNESS_DB_CEIL, loudnessDb) : 0;
+    // Keep normal speaking in mid-range and reserve peak height for very loud/yelling speech.
+    const loudnessDbNorm = Math.pow(loudnessDbNormRaw, LOUDNESS_CURVE_EXPONENT);
+    m.voiceLevel +=
+      (loudnessDbNorm - m.voiceLevel) *
+      (loudnessDbNorm > m.voiceLevel ? 0.1 : 0.035);
+    const voiceLevel = clamp01(m.voiceLevel);
+    const waveScaleTarget = micOn
+      ? MIN_VOICE_WAVE_SCALE + voiceLevel * (MAX_VOICE_WAVE_SCALE - MIN_VOICE_WAVE_SCALE)
+      : 1;
+    m.waveScale += (waveScaleTarget - m.waveScale) * (waveScaleTarget > m.waveScale ? 0.1 : 0.03);
+    const motionScaleTarget = micOn ? 0.6 + voiceLevel * 1.45 : 1;
+    m.motionScale +=
+      (motionScaleTarget - m.motionScale) *
+      (motionScaleTarget > m.motionScale ? 0.11 : 0.05);
 
     const response = clamp01(m.activity);
     const loudness = clamp01(m.loud);
     const waveDrive = clamp01(m.engage);
     const volumeStrength = Math.pow(clamp01(m.volume), 1.28);
     const rollActivityRaw = micOn
-      ? smoothstep(0.12, 0.92, waveDrive * 0.42 + response * 0.24 + loudness * 0.34 + volumeStrength * 1.05) *
-        volumeStrength
+      ? smoothstep(
+          0.08,
+          0.92,
+          voiceLevel * 1.2 + waveDrive * 0.24 + response * 0.18 + loudness * 0.14 + volumeStrength * 0.4,
+        ) * (0.2 + voiceLevel * 0.8)
       : 0;
     const audioPresenceTarget = micOn
       ? smoothstep(0.026, 0.22, gatedSignal + AUDIO.mid * 0.04 + AUDIO.bass * 0.03 + AUDIO.peak * 0.06)
@@ -688,7 +724,9 @@ function OceanField() {
 
     const roll = rollRef.current;
     const targetRollSpeed =
-      rollActivity * (0.00085 + waveDrive * 0.0038 + volumeStrength * 0.015 + loudness * 0.004 + energy * 0.0032);
+      rollActivity *
+      (0.00085 + waveDrive * 0.0038 + volumeStrength * 0.015 + loudness * 0.004 + energy * 0.0032) *
+      m.motionScale;
     roll.speed += (targetRollSpeed - roll.speed) * (audioActive ? 0.14 : 0.008);
     if (roll.speed < 0.00002) roll.speed = 0;
     // Keep a subtle baseline movement so calm states never feel frozen.
@@ -718,8 +756,8 @@ function OceanField() {
       const calmScale = !micOn ? 0.26 : 0.04;
       const activeScale = 2.22;
       const topologyTarget =
-        micOn && audioPresence > 0.09
-          ? smoothstep(0.12, 0.94, rollActivity) * volumeStrength
+        micOn && audioPresence > 0.05
+          ? smoothstep(0.04, 1, voiceLevel) * (0.2 + rollActivity * 0.8)
           : 0;
       topologyRef.current +=
         (topologyTarget - topologyRef.current) *
@@ -1001,7 +1039,16 @@ function OceanField() {
             }
           }
 
-          const yTarget = baseY + ambientWave * ambientScale;
+          const bandW1 = 0.5 + 0.5 * Math.sin((xw * 1.62 + zw * 0.97 + li * 0.43) * TAU);
+          const bandW2 = 0.5 + 0.5 * Math.sin((xw * -1.14 + zw * 1.28 + li * 0.61 + 1.3) * TAU);
+          const bandW3 = 0.5 + 0.5 * Math.sin((xw * 0.88 - zw * 1.44 + li * 0.37 + 2.2) * TAU);
+          const bandMix = (bandW1 * bass + bandW2 * mid + bandW3 * high) / (bandW1 + bandW2 + bandW3 + 1e-6);
+          const bandNorm = clamp01((bandMix - 0.04) / 0.92);
+          const bandVariance = 0.72 + bandNorm * 0.56;
+          const localWaveScale = micOn
+            ? Math.min(MAX_VOICE_WAVE_SCALE, Math.max(0.02, m.waveScale * bandVariance))
+            : 1;
+          const yTarget = baseY + ambientWave * ambientScale * localWaveScale;
           const yPrev = layer.positions[i * 3 + 1];
           const followBase = !micOn ? 0.205 : audioActive ? 0.27 + waveDrive * 0.09 : 0.082;
           const follow = Math.min(0.28, followBase * (dt * 60));
