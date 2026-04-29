@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { decode as msgpackDecode, encode as msgpackEncode } from "@msgpack/msgpack";
-import { MOSHI_WS_URL } from "./moshi-client";
+import { MOSHI_WS_URL, msgpackDecode, msgpackEncode } from "./moshi-client";
 
 type ConnState = "idle" | "connecting" | "streaming" | "closing" | "error";
 
