@@ -20,6 +20,13 @@ function requireDb() {
   return db;
 }
 
+function isMissingCharactersTableError(error: unknown) {
+  const code =
+    (error as { code?: string })?.code ??
+    (error as { cause?: { code?: string } })?.cause?.code;
+  return code === "42P01";
+}
+
 function normalize(row: typeof charactersTable.$inferSelect): CharacterRecord {
   return {
     id: row.id,
@@ -53,31 +60,46 @@ export interface CharacterStore {
 function neonStore(): CharacterStore {
   return {
     async list() {
-      const db = requireDb();
-      const rows = await db.select().from(charactersTable);
-      return rows
-        .map(normalize)
-        .sort((a, b) => a.title.localeCompare(b.title));
+      try {
+        const db = requireDb();
+        const rows = await db.select().from(charactersTable);
+        return rows
+          .map(normalize)
+          .sort((a, b) => a.title.localeCompare(b.title));
+      } catch (error) {
+        if (isMissingCharactersTableError(error)) return [];
+        throw error;
+      }
     },
 
     async getById(id) {
-      const db = requireDb();
-      const [row] = await db
-        .select()
-        .from(charactersTable)
-        .where(eq(charactersTable.id, id))
-        .limit(1);
-      return row ? normalize(row) : null;
+      try {
+        const db = requireDb();
+        const [row] = await db
+          .select()
+          .from(charactersTable)
+          .where(eq(charactersTable.id, id))
+          .limit(1);
+        return row ? normalize(row) : null;
+      } catch (error) {
+        if (isMissingCharactersTableError(error)) return null;
+        throw error;
+      }
     },
 
     async getBySlug(slug) {
-      const db = requireDb();
-      const [row] = await db
-        .select()
-        .from(charactersTable)
-        .where(eq(charactersTable.slug, slug))
-        .limit(1);
-      return row ? normalize(row) : null;
+      try {
+        const db = requireDb();
+        const [row] = await db
+          .select()
+          .from(charactersTable)
+          .where(eq(charactersTable.slug, slug))
+          .limit(1);
+        return row ? normalize(row) : null;
+      } catch (error) {
+        if (isMissingCharactersTableError(error)) return null;
+        throw error;
+      }
     },
 
     async create(input) {
@@ -123,17 +145,22 @@ function neonStore(): CharacterStore {
     },
 
     async countWorldsFor(characterId) {
-      const db = requireDb();
-      const [row] = await db
-        .select({ n: sql<number>`count(distinct ${worldNodesTable.worldId})::int` })
-        .from(worldNodesTable)
-        .where(
-          and(
-            eq(worldNodesTable.kind, "character"),
-            eq(worldNodesTable.refId, characterId),
-          ),
-        );
-      return row?.n ?? 0;
+      try {
+        const db = requireDb();
+        const [row] = await db
+          .select({ n: sql<number>`count(distinct ${worldNodesTable.worldId})::int` })
+          .from(worldNodesTable)
+          .where(
+            and(
+              eq(worldNodesTable.kind, "character"),
+              eq(worldNodesTable.refId, characterId),
+            ),
+          );
+        return row?.n ?? 0;
+      } catch (error) {
+        if (isMissingCharactersTableError(error)) return 0;
+        throw error;
+      }
     },
   };
 }

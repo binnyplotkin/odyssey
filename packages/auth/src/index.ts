@@ -131,10 +131,18 @@ export function createAuth(overrides?: Partial<NextAuthConfig>) {
       }),
     ],
     callbacks: {
-      async jwt({ token, user }) {
+      async jwt({ token, user, trigger, session }) {
         if (user) {
           token.id = user.id!;
           token.role = (user as any).role ?? await getUserRole(user.id!);
+        }
+        if (trigger === "update") {
+          const updatedName =
+            (session as { name?: string | null } | undefined)?.name ??
+            (session as { user?: { name?: string | null } } | undefined)?.user?.name;
+          if (updatedName && updatedName.trim()) {
+            token.name = updatedName.trim();
+          }
         }
         return token;
       },
