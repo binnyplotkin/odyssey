@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EraConfig, WikiEdgeRecord, WikiPageRecord } from "@odyssey/db";
 import { ChatGraph } from "@/components/chat-graph";
+import { CharacterVoicePanel } from "@/components/character-voice-panel";
+import { useHeaderContent } from "@/components/header-context";
+
+type ChatMode = "chat" | "voice";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -89,11 +93,13 @@ const MODEL_OPTIONS = [
 ] as const;
 
 export function CharacterChat({ character, pages, edges }: Props) {
+  const { setContent, setFlush } = useHeaderContent();
   const [model, setModel] = useState<string>("claude-sonnet-4-5");
   const [budget, setBudget] = useState<number>(3000);
 
   const [activeEntities, setActiveEntities] = useState<string[]>([]);
   const [location, setLocation] = useState<string | null>(null);
+  const [mode, setMode] = useState<ChatMode>("chat");
 
   const defaultMoment = useMemo<Moment | null>(() => {
     const sortedEras = [...character.eras].sort((a, b) => b.order - a.order);
@@ -113,6 +119,27 @@ export function CharacterChat({ character, pages, edges }: Props) {
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [turns]);
+
+  // Render the chat-specific header into the global header bar, and remove
+  // the page padding so the chat fills the viewport edge-to-edge.
+  useEffect(() => {
+    setFlush(true);
+    return () => setFlush(false);
+  }, [setFlush]);
+
+  useEffect(() => {
+    setContent(
+      <ChatHeaderInner
+        character={character}
+        model={model}
+        setModel={setModel}
+        moment={moment}
+        setMoment={setMoment}
+        eras={character.eras}
+      />,
+    );
+    return () => setContent(null);
+  }, [setContent, character, model, moment]);
 
   const pageBySlug = useMemo(
     () => new Map(pages.map((p) => [p.slug, p] as const)),
@@ -279,10 +306,9 @@ export function CharacterChat({ character, pages, edges }: Props) {
   /* ── Render ────────────────────────────────────────────────────── */
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--background)" }}>
-      <TopBar character={character} model={model} setModel={setModel} moment={moment} setMoment={setMoment} eras={character.eras} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--background)" }}>
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        {/* Left: chat */}
+        {/* Left: chat or voice */}
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, borderRight: `1px solid ${T.border}` }}>
           <SceneBar
             activeEntities={activeEntities}
@@ -292,31 +318,45 @@ export function CharacterChat({ character, pages, edges }: Props) {
             entityOptions={entityOptions}
             budget={budget}
             setBudget={setBudget}
+            mode={mode}
+            setMode={setMode}
           />
-          <div
-            ref={scrollRef}
-            style={{
-              flex: 1, minHeight: 0, overflow: "auto",
-              display: "flex", flexDirection: "column", gap: 22,
-              padding: "24px 32px 24px 32px",
-            }}
-          >
-            {turns.length === 0 ? (
-              <EmptyState character={character} />
-            ) : (
-              turns.map((turn) => <TurnView key={turn.id} turn={turn} />)
-            )}
-          </div>
-          <Composer
-            input={input}
-            setInput={setInput}
-            onSend={() => send(input)}
-            onCancel={cancel}
-            onClear={clearChat}
-            onRerun={reRunLast}
-            busy={busy}
-            hasTurns={turns.length > 0}
-          />
+          {mode === "chat" ? (
+            <>
+              <div
+                ref={scrollRef}
+                style={{
+                  flex: 1, minHeight: 0, overflow: "auto",
+                  display: "flex", flexDirection: "column", gap: 22,
+                  padding: "24px 32px 24px 32px",
+                }}
+              >
+                {turns.length === 0 ? (
+                  <EmptyState character={character} />
+                ) : (
+                  turns.map((turn) => <TurnView key={turn.id} turn={turn} />)
+                )}
+              </div>
+              <Composer
+                input={input}
+                setInput={setInput}
+                onSend={() => send(input)}
+                onCancel={cancel}
+                onClear={clearChat}
+                onRerun={reRunLast}
+                busy={busy}
+                hasTurns={turns.length > 0}
+              />
+            </>
+          ) : (
+            <CharacterVoicePanel
+              character={character}
+              moment={moment}
+              scene={{ activeEntities, location }}
+              model={model}
+              tokenBudget={budget}
+            />
+          )}
         </div>
 
         {/* Right: graph + trace panel */}
@@ -332,9 +372,9 @@ export function CharacterChat({ character, pages, edges }: Props) {
   );
 }
 
-/* ── Top bar ───────────────────────────────────────────────────── */
+/* ── Chat header (rendered into the global header bar) ──────────── */
 
-function TopBar({
+function ChatHeaderInner({
   character, model, setModel, moment, setMoment, eras,
 }: {
   character: CharacterProp;
@@ -343,22 +383,18 @@ function TopBar({
   eras: EraConfig[];
 }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 14, padding: "12px 24px",
-      borderBottom: `1px solid ${T.border}`, background: "var(--background)",
-      height: 60, boxSizing: "border-box", flexShrink: 0,
-    }}>
+    <>
       <Link href={`/characters/${character.slug}`} style={{
         display: "flex", alignItems: "center", justifyContent: "center",
-        width: 30, height: 30, borderRadius: 8,
+        width: 28, height: 28, borderRadius: 6,
         border: `1px solid ${T.border}`, background: "transparent",
-        color: T.muted, textDecoration: "none", flexShrink: 0,
+        color: T.muted, textDecoration: "none", flexShrink: 0, marginRight: 14,
       }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
       </Link>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-        <CharacterAvatar character={character} size={28} />
-        <span style={{ fontFamily: T.fontHeading, fontSize: 17, fontWeight: 700, color: T.fg, whiteSpace: "nowrap" }}>
+        <CharacterAvatar character={character} size={24} />
+        <span style={{ fontFamily: T.fontHeading, fontSize: 16, fontWeight: 700, color: T.fg, whiteSpace: "nowrap" }}>
           {character.title}
         </span>
         <span style={{ width: 1, height: 20, background: T.border }} />
@@ -370,24 +406,26 @@ function TopBar({
         </span>
       </div>
       <div style={{ flex: 1 }} />
-      <MomentPicker moment={moment} setMoment={setMoment} eras={eras} />
-      <select
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-        style={{
-          padding: "6px 10px", borderRadius: 8,
-          border: `1px solid ${T.border}`, background: "transparent",
-          color: T.fg, fontFamily: T.fontBody, fontSize: 11, outline: "none",
-          cursor: "pointer",
-        }}
-      >
-        {MODEL_OPTIONS.map((m) => (
-          <option key={m.id} value={m.id} style={{ background: "var(--background)", color: T.fg }}>
-            {m.label}
-          </option>
-        ))}
-      </select>
-    </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <MomentPicker moment={moment} setMoment={setMoment} eras={eras} />
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          style={{
+            padding: "6px 10px", borderRadius: 8,
+            border: `1px solid ${T.border}`, background: "transparent",
+            color: T.fg, fontFamily: T.fontBody, fontSize: 11, outline: "none",
+            cursor: "pointer",
+          }}
+        >
+          {MODEL_OPTIONS.map((m) => (
+            <option key={m.id} value={m.id} style={{ background: "var(--background)", color: T.fg }}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
   );
 }
 
@@ -446,12 +484,13 @@ function MomentPicker({
 
 function SceneBar({
   activeEntities, setActiveEntities, location, setLocation,
-  entityOptions, budget, setBudget,
+  entityOptions, budget, setBudget, mode, setMode,
 }: {
   activeEntities: string[]; setActiveEntities: (s: string[]) => void;
   location: string | null; setLocation: (s: string | null) => void;
   entityOptions: string[];
   budget: number; setBudget: (n: number) => void;
+  mode: ChatMode; setMode: (m: ChatMode) => void;
 }) {
   const [draft, setDraft] = useState("");
   const suggestions = useMemo(() => {
@@ -581,6 +620,63 @@ function SceneBar({
           <span style={{ fontFamily: T.fontMono, fontSize: 11, color: "#8CE7D2", width: 48, textAlign: "right" }}>
             {budget.toLocaleString()}
           </span>
+        </div>
+
+        <span style={{ flex: 1 }} />
+
+        {/* Mode toggle: Chat ↔ Voice */}
+        <div
+          role="tablist"
+          aria-label="Conversation mode"
+          style={{
+            display: "inline-flex",
+            padding: 2,
+            borderRadius: 8,
+            border: `1px solid ${T.border}`,
+            background: "rgba(0,0,0,0.25)",
+          }}
+        >
+          {(["chat", "voice"] as const).map((m) => {
+            const active = mode === m;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setMode(m)}
+                style={{
+                  padding: "5px 12px",
+                  fontFamily: T.fontMono,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: active ? T.fg : T.muted,
+                  background: active ? "rgba(140, 231, 210, 0.12)" : "transparent",
+                  border: "none",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {m === "chat" ? (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                ) : (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                  </svg>
+                )}
+                {m}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

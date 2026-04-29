@@ -72,6 +72,8 @@ export type SidebarProps = {
   onSettings?: () => void;
   /** Dynamic content injected into the header bar (between brand/hamburger and actions). */
   headerContent?: ReactNode;
+  /** Padding for the main content area. Defaults to "2rem". Pass "0" for flush layouts (e.g. immersive playgrounds). */
+  mainPadding?: string;
   /** Page content — rendered beside the sidebar. */
   children?: ReactNode;
 };
@@ -147,6 +149,7 @@ export function Sidebar({
   theme = "dark",
   onSettings,
   headerContent,
+  mainPadding = "2rem",
   children,
 }: SidebarProps) {
   const LinkTag = linkComponent ?? "a";
@@ -767,7 +770,7 @@ export function Sidebar({
           </div>
         </header>
 
-        <main style={{ flex: 1, overflow: "auto", minHeight: 0, padding: "2rem", position: "relative" }}>
+        <main style={{ flex: 1, overflow: "auto", minHeight: 0, padding: mainPadding, position: "relative" }}>
           {children}
         </main>
       </div>

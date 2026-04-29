@@ -91,7 +91,7 @@ const items: SidebarItem[] = [
 
 function AdminShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { content: headerContent } = useHeaderContent();
+  const { content: headerContent, flush } = useHeaderContent();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { data: session } = useSession();
   const [theme, setTheme] = useState<"dark" | "light" | "system">(() => {
@@ -146,6 +146,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
       userName={userName}
       userRole={userRole}
       headerContent={headerContent}
+      mainPadding={flush ? "0" : "2rem"}
       onSignOut={() => signOut({ callbackUrl: "/login" })}
       theme={theme}
       onThemeChange={handleThemeChange}

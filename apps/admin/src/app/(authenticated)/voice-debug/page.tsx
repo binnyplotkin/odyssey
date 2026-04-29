@@ -6,7 +6,7 @@ import {
   decodeBlobToPCM24k,
   synthesizeBatchViaKyutai,
   transcribeBatchViaRustServer,
-} from "./moshi-client";
+} from "@/lib/moshi-client";
 
 type SttProvider = "kyutai-rust" | "kyutai" | "openai";
 type TtsProvider = "kyutai-rust" | "elevenlabs" | "openai";

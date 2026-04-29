@@ -48,13 +48,17 @@ export {
   OpenAISpeechToTextAdapter,
   OpenAITextToSpeechAdapter,
   ElevenLabsTextToSpeechAdapter,
+  KyutaiSpeechToTextAdapter,
+  KyutaiTextToSpeechAdapter,
+  createSpeechToTextAdapter,
   createTextToSpeechAdapter,
+  resolveSttProvider,
   resolveTtsProvider,
   resolveTtsAttemptOrder,
   getAudioRuntimeConfig,
   getElevenLabsPricingGuardInfo,
 } from "./audio";
-export type { TtsProvider } from "./audio";
+export type { SttProvider, TtsProvider } from "./audio";
 export {
   getVoiceDiscoveryDebugInfo,
   getNarratorVoiceProfile,

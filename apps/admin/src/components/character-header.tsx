@@ -53,6 +53,11 @@ export function CharacterHeader({ character }: Props) {
   const initial = character.title.charAt(0).toUpperCase();
 
   useEffect(() => {
+    // Chat route renders its own immersive header — leave it alone so this
+    // layout-level header doesn't compete for the global header slot.
+    if (pathname.endsWith("/chat")) {
+      return;
+    }
     setContent(
       <>
         <Link
@@ -142,7 +147,7 @@ export function CharacterHeader({ character }: Props) {
       </>,
     );
     return () => setContent(null);
-  }, [setContent, character.id, character.slug, character.title, activeTab, gradient, initial]);
+  }, [pathname, setContent, character.id, character.slug, character.title, activeTab, gradient, initial]);
 
   return null;
 }
