@@ -25,7 +25,7 @@ export function SettingsOverlay({
   theme: "dark" | "light" | "system";
   onThemeChange: (t: "dark" | "light" | "system") => void;
 }) {
-  const { data: session } = useSession();
+  const { data: session, update } = useSession();
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -161,7 +161,7 @@ export function SettingsOverlay({
         {/* Content */}
         <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
           {activeTab === "profile" && (
-            <ProfileTab user={user} hoveredId={hoveredId} setHoveredId={setHoveredId} />
+            <ProfileTab user={user} hoveredId={hoveredId} setHoveredId={setHoveredId} onNameUpdated={update} />
           )}
           {activeTab === "appearance" && (
             <AppearanceTab theme={theme} onThemeChange={onThemeChange} hoveredId={hoveredId} setHoveredId={setHoveredId} />
@@ -181,13 +181,76 @@ function ProfileTab({
   user,
   hoveredId,
   setHoveredId,
+  onNameUpdated,
 }: {
   user: { name?: string | null; email?: string | null; role?: string } | undefined;
   hoveredId: string | null;
   setHoveredId: (id: string | null) => void;
+  onNameUpdated: (data?: Record<string, unknown>) => Promise<unknown>;
 }) {
-  const initials = user?.name
-    ? user.name
+  const [nameInput, setNameInput] = useState(user?.name ?? "");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [saveError, setSaveError] = useState("");
+  const [profileName, setProfileName] = useState(user?.name ?? "");
+
+  useEffect(() => {
+    setNameInput(user?.name ?? "");
+    setProfileName(user?.name ?? "");
+  }, [user?.name]);
+
+  const handleSaveName = async () => {
+    const trimmedName = nameInput.trim();
+    if (!trimmedName) {
+      setSaveError("Name cannot be empty.");
+      setSaveState("error");
+      return;
+    }
+
+    setSaveState("saving");
+    setSaveError("");
+
+    try {
+      const res = await fetch("/api/account/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmedName }),
+      });
+
+      const raw = await res.text();
+      let payload: { error?: string; success?: boolean; name?: string } = {};
+      try {
+        payload = raw ? (JSON.parse(raw) as typeof payload) : {};
+      } catch {
+        // non-JSON response (e.g., framework error page)
+      }
+
+      if (!res.ok) {
+        const fallback =
+          raw && !raw.startsWith("<!DOCTYPE html")
+            ? raw.slice(0, 180)
+            : `Failed to update profile (HTTP ${res.status}).`;
+        setSaveError(payload.error ?? fallback);
+        setSaveState("error");
+        return;
+      }
+
+      // Persisted to DB; if session refresh fails we still consider save successful.
+      setProfileName(trimmedName);
+      try {
+        await onNameUpdated({ name: trimmedName, user: { name: trimmedName } });
+      } catch {
+        // Session refresh can fail in some local/dev setups; DB update already succeeded.
+      }
+      setSaveState("success");
+      setTimeout(() => setSaveState("idle"), 2000);
+    } catch {
+      setSaveError("Failed to update profile.");
+      setSaveState("error");
+    }
+  };
+
+  const initials = profileName
+    ? profileName
         .split(" ")
         .map((w) => w[0])
         .join("")
@@ -214,14 +277,65 @@ function ProfileTab({
           <span style={{ fontWeight: 700, fontSize: "1.25rem", color: "var(--accent-strong)" }}>{initials}</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span style={{ fontWeight: 600, fontSize: "1rem", color: "var(--foreground)" }}>{user?.name ?? "—"}</span>
+          <span style={{ fontWeight: 600, fontSize: "1rem", color: "var(--foreground)" }}>{profileName || "—"}</span>
           <span style={{ fontSize: "0.8125rem", color: "var(--muted)" }}>{user?.email ?? "—"}</span>
         </div>
       </div>
 
       {/* Fields */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <FieldRow label="Name" value={user?.name ?? "—"} />
+        <div style={{ display: "grid", gap: 8 }}>
+          <span style={{ fontSize: "0.75rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            Name
+          </span>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input
+              value={nameInput}
+              onChange={(e) => {
+                setNameInput(e.target.value);
+                if (saveState !== "idle") {
+                  setSaveState("idle");
+                  setSaveError("");
+                }
+              }}
+              placeholder="Enter your display name"
+              style={{
+                flex: 1,
+                height: 40,
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+                background: "var(--panel)",
+                color: "var(--foreground)",
+                fontSize: "0.9rem",
+                padding: "0 12px",
+                outline: "none",
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleSaveName}
+              disabled={saveState === "saving" || nameInput.trim().length === 0 || nameInput.trim() === profileName.trim()}
+              style={{
+                height: 40,
+                padding: "0 14px",
+                borderRadius: 10,
+                border: "1px solid var(--accent)",
+                background: saveState === "saving" ? "var(--accent-soft)" : "var(--accent)",
+                color: "var(--accent-foreground)",
+                fontWeight: 600,
+                cursor: "pointer",
+                opacity:
+                  saveState === "saving" || nameInput.trim().length === 0 || nameInput.trim() === profileName.trim()
+                    ? 0.6
+                    : 1,
+              }}
+            >
+              {saveState === "saving" ? "Saving..." : "Save"}
+            </button>
+          </div>
+          {saveState === "success" && <span style={{ color: "var(--accent)", fontSize: "0.78rem" }}>Name updated.</span>}
+          {saveState === "error" && <span style={{ color: "#f87171", fontSize: "0.78rem" }}>{saveError}</span>}
+        </div>
         <FieldRow label="Email" value={user?.email ?? "—"} />
         <FieldRow label="Role" value={user?.role ?? "—"} />
       </div>

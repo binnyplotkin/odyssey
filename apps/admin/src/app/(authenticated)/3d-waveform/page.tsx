@@ -1031,11 +1031,19 @@ function OceanField() {
               activeBlend * 0.2 +
               waveDrive * 0.2,
           );
+          const activeWaveGlowDim = micOn && audioActive ? 0.62 : 1;
 
           tmp.copy(C_DEEP);
           tmp.lerp(C_BASE, calmState ? 0.92 : 0.75);
-          tmp.lerp(C_GLOW, (calmState ? 0.39 : 0.34) + bright * (audioActive ? 0.5 : 0.36) + crest * 0.16);
-          tmp.lerp(C_HIGHLIGHT, bright * (audioActive ? 0.68 : 0.47) + crest * 0.35);
+          tmp.lerp(
+            C_GLOW,
+            ((calmState ? 0.39 : 0.34) + bright * (audioActive ? 0.5 : 0.36) + crest * 0.16) *
+              activeWaveGlowDim,
+          );
+          tmp.lerp(
+            C_HIGHLIGHT,
+            (bright * (audioActive ? 0.68 : 0.47) + crest * 0.35) * activeWaveGlowDim,
+          );
           tmp.lerp(C_CORE, bright * (audioActive ? 0.3 : 0.2) + peak * 0.1 + crest * 0.18);
           tmp.multiplyScalar((calmState ? 1.14 : 1.0) * (1.02 + (1 - zn) * 0.54) * layer.alpha);
 
@@ -1099,7 +1107,8 @@ function OceanField() {
           line.mat.opacity =
             (0.075 + globalShimmer * 0.14 + loudness * 0.18 + activeBlend * 0.08) *
             layer.alpha *
-            (0.72 + distanceFade * 0.48);
+            (0.72 + distanceFade * 0.48) *
+            (micOn && audioActive ? 0.72 : 1);
         }
       }
 
@@ -1109,7 +1118,8 @@ function OceanField() {
       layer.pointsMat.uniforms.uFade.value =
         (0.58 + globalShimmer * 0.26 + loudness * 0.2 + peak * 0.1) *
         layer.alpha *
-        (0.74 + distanceFade * 0.56);
+        (0.74 + distanceFade * 0.56) *
+        (micOn && audioActive ? 0.68 : 1);
     }
 
     const sparks = ocean.sparks;

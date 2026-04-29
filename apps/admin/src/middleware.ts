@@ -12,6 +12,9 @@ export default auth((req) => {
   // Allow health, auth routes, and login page through
   if (
     pathname === "/api/healthz" ||
+    pathname === "/api/dev/reset-password" ||
+    pathname === "/api/account/profile" ||
+    pathname === "/api/account/password" ||
     pathname === "/api/audio/config" ||
     pathname === "/api/audio/speak" ||
     pathname === "/api/audio/transcribe" ||

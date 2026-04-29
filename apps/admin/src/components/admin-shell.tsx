@@ -132,7 +132,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     setTheme(t);
   }, []);
 
-  const userName = session?.user?.name ?? "Admin";
+  const userName = session?.user?.name?.trim() || "Admin";
   const userRole = session?.user?.role === "admin" ? "Admin" : "User";
 
   return (
