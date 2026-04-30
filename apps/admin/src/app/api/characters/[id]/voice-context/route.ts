@@ -51,7 +51,9 @@ export async function POST(
     body = {};
   }
 
-  const character = await getCharacterStore().getById(id);
+  const fallbackCharacter =
+    id === "abraham-fallback" ? { id, slug: "abraham", title: "Abraham" } : null;
+  const character = fallbackCharacter ?? (await getCharacterStore().getById(id));
   if (!character) {
     return jsonError(404, "character not found");
   }

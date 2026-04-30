@@ -116,6 +116,20 @@ export function CharacterHeader({ character }: Props) {
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <Link
+            href={`/characters/${character.slug}/voice`}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "6px 12px", borderRadius: 8,
+              border: "1px solid rgba(140,231,210,0.35)",
+              background: "rgba(140,231,210,0.1)",
+              color: "#BFF5EF",
+              fontFamily: T.fontBody, fontSize: 11, fontWeight: 600,
+              textDecoration: "none", whiteSpace: "nowrap",
+            }}
+          >
+            Speak 3D
+          </Link>
+          <Link
             href={`/characters/${character.slug}/ingestion`}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,

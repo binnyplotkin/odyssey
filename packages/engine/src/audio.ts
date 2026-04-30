@@ -1,4 +1,4 @@
-import { decode as msgpackDecode, encode as msgpackEncode } from "@msgpack/msgpack";
+import { decode as msgpackDecode, encode as msgpackEncode } from "./msgpack-lite";
 import { WebSocket } from "ws";
 import { getOpenAIClient } from "./openai-client";
 import { SpeechToTextAdapter, TextToSpeechAdapter } from "./interfaces";
@@ -9,6 +9,7 @@ export const ELEVENLABS_DEFAULT_MODEL_ID = "eleven_flash_v2_5";
 
 const KYUTAI_TTS_DEFAULT_VOICE = "expresso/ex03-ex01_happy_001_channel1_334s.wav";
 const KYUTAI_TTS_TARGET_SAMPLE_RATE = 24000;
+const KYUTAI_PUBLIC_TTS_BASE_URL = "https://binnyplotkin--audio-rt-moshi-tts-serve.modal.run";
 
 function getKyutaiSttBaseUrl(): string | null {
   const raw = (process.env.KYUTAI_BASE_URL ?? "").trim().replace(/\/+$/, "");
@@ -17,7 +18,7 @@ function getKyutaiSttBaseUrl(): string | null {
 
 function getKyutaiTtsBaseUrl(): string | null {
   const raw = (process.env.KYUTAI_TTS_BASE_URL ?? "").trim().replace(/\/+$/, "");
-  return raw || null;
+  return raw || KYUTAI_PUBLIC_TTS_BASE_URL;
 }
 
 function getKyutaiApiKey(): string {

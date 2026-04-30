@@ -320,6 +320,7 @@ export function CharacterChat({ character, pages, edges }: Props) {
             setBudget={setBudget}
             mode={mode}
             setMode={setMode}
+            characterSlug={character.slug}
           />
           {mode === "chat" ? (
             <>
@@ -484,13 +485,14 @@ function MomentPicker({
 
 function SceneBar({
   activeEntities, setActiveEntities, location, setLocation,
-  entityOptions, budget, setBudget, mode, setMode,
+  entityOptions, budget, setBudget, mode, setMode, characterSlug,
 }: {
   activeEntities: string[]; setActiveEntities: (s: string[]) => void;
   location: string | null; setLocation: (s: string | null) => void;
   entityOptions: string[];
   budget: number; setBudget: (n: number) => void;
   mode: ChatMode; setMode: (m: ChatMode) => void;
+  characterSlug: string;
 }) {
   const [draft, setDraft] = useState("");
   const suggestions = useMemo(() => {
@@ -638,6 +640,38 @@ function SceneBar({
         >
           {(["chat", "voice"] as const).map((m) => {
             const active = mode === m;
+            if (m === "voice") {
+              return (
+                <Link
+                  key={m}
+                  href={`/characters/${characterSlug}/voice`}
+                  style={{
+                    padding: "5px 12px",
+                    fontFamily: T.fontMono,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: T.muted,
+                    background: "transparent",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    textDecoration: "none",
+                  }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                  </svg>
+                  {m}
+                </Link>
+              );
+            }
             return (
               <button
                 key={m}

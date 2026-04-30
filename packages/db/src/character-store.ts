@@ -27,6 +27,15 @@ function isMissingCharactersTableError(error: unknown) {
   return code === "42P01";
 }
 
+function isRecoverableCharacterReadError(error: unknown) {
+  if (isMissingCharactersTableError(error)) return true;
+  const message =
+    (error as { message?: string })?.message ??
+    (error as { cause?: { message?: string } })?.cause?.message ??
+    "";
+  return message.includes("Failed query:");
+}
+
 function normalize(row: typeof charactersTable.$inferSelect): CharacterRecord {
   return {
     id: row.id,
@@ -67,7 +76,7 @@ function neonStore(): CharacterStore {
           .map(normalize)
           .sort((a, b) => a.title.localeCompare(b.title));
       } catch (error) {
-        if (isMissingCharactersTableError(error)) return [];
+        if (isRecoverableCharacterReadError(error)) return [];
         throw error;
       }
     },
@@ -82,7 +91,7 @@ function neonStore(): CharacterStore {
           .limit(1);
         return row ? normalize(row) : null;
       } catch (error) {
-        if (isMissingCharactersTableError(error)) return null;
+        if (isRecoverableCharacterReadError(error)) return null;
         throw error;
       }
     },
@@ -97,7 +106,7 @@ function neonStore(): CharacterStore {
           .limit(1);
         return row ? normalize(row) : null;
       } catch (error) {
-        if (isMissingCharactersTableError(error)) return null;
+        if (isRecoverableCharacterReadError(error)) return null;
         throw error;
       }
     },
@@ -158,7 +167,7 @@ function neonStore(): CharacterStore {
           );
         return row?.n ?? 0;
       } catch (error) {
-        if (isMissingCharactersTableError(error)) return 0;
+        if (isRecoverableCharacterReadError(error)) return 0;
         throw error;
       }
     },

@@ -15,8 +15,11 @@ export async function POST(request: NextRequest) {
     }
 
     const requestedProvider = body.provider;
-    const attempts = resolveTtsAttemptOrder(requestedProvider);
-    const primaryProvider = attempts[0];
+    const primaryAttempts = resolveTtsAttemptOrder(requestedProvider);
+    const attempts = Array.from(
+      new Set([...primaryAttempts, "kyutai", "elevenlabs", "openai"]),
+    );
+    const primaryProvider = primaryAttempts[0];
     const attemptErrors: string[] = [];
 
     for (const providerName of attempts) {
@@ -45,7 +48,7 @@ export async function POST(request: NextRequest) {
             provider === "elevenlabs"
               ? "ElevenLabs unavailable (missing key or voice ID)."
               : provider === "kyutai"
-                ? "Kyutai TTS unavailable (KYUTAI_TTS_BASE_URL not set)."
+                ? "Kyutai TTS unavailable."
                 : "OpenAI TTS unavailable (missing API key).",
           );
           continue;

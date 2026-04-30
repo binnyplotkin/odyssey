@@ -194,6 +194,43 @@ function IdentityCard({
           </p>
         )}
 
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <a
+            href={`/characters/${character.slug}/chat`}
+            style={{
+              textDecoration: "none",
+              border: "1px solid rgba(140,231,210,0.35)",
+              background: "rgba(140,231,210,0.08)",
+              color: "#BFF5EF",
+              padding: "6px 10px",
+              borderRadius: 999,
+              fontFamily: T.fontMono,
+              fontSize: 10,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}
+          >
+            Open Chat
+          </a>
+          <a
+            href={`/characters/${character.slug}/voice`}
+            style={{
+              textDecoration: "none",
+              border: "1px solid rgba(191,245,239,0.46)",
+              background: "rgba(143,209,203,0.16)",
+              color: "#D5FFF8",
+              padding: "6px 10px",
+              borderRadius: 999,
+              fontFamily: T.fontMono,
+              fontSize: 10,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}
+          >
+            Speak
+          </a>
+        </div>
+
         <div style={{
           display: "flex", alignItems: "center", gap: 28, paddingTop: 14,
           borderTop: `1px solid ${T.border}`,

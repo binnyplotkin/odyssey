@@ -59,6 +59,18 @@ function decodeBase64ToFloat32(base64: string): Float32Array {
   return new Float32Array(copy);
 }
 
+function decodeBase64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
+}
+
 /**
  * Fire a /voice-stream call now and start buffering its SSE events. Caller
  * decides later (via `commit`) whether to actually play the result or drop
@@ -265,10 +277,20 @@ type Props = {
   scene: Scene;
   model: string;
   tokenBudget: number;
+  waveformSource?: "mic-and-tts" | "tts-only";
+  onWaveformAudio?: (audio: {
+    energy: number;
+    bass: number;
+    mid: number;
+    high: number;
+    peak: number;
+    active: boolean;
+  }) => void;
 };
 
 const VAD_PAUSE_THRESHOLD = 0.5;
 const VAD_AUTO_STOP_MS = 500;
+const WORD_IDLE_FINALIZE_MS = 950;
 // Kyutai STT emits text ~500ms after the corresponding audio. Words that
 // arrive within this window of a finalize are residual from the previous
 // utterance and must be dropped before they trigger a phantom barge-in.
@@ -329,7 +351,10 @@ export function CharacterVoicePanel({
   scene,
   model,
   tokenBudget,
+  waveformSource = "mic-and-tts",
+  onWaveformAudio,
 }: Props) {
+  const allowMicWaveform = waveformSource === "mic-and-tts";
   const [voiceModeActive, setVoiceModeActive] = useState(false);
   const [phase, setPhase] = useState<VoicePhase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -353,6 +378,7 @@ export function CharacterVoicePanel({
     fadeOutToZero: () => void;
     abortActiveTurn: () => void;
   } | null>(null);
+  const browserTtsCancelRef = useRef<(() => void) | null>(null);
   const currentReplyContextRef = useRef<ReplyContext | null>(null);
 
   // Speculation that's been kicked off when VAD's pause-prediction crossed
@@ -363,6 +389,7 @@ export function CharacterVoicePanel({
 
   // Pause-detection bookkeeping for the current listening window.
   const pauseTimerRef = useRef<number | null>(null);
+  const idleFinalizeTimerRef = useRef<number | null>(null);
   const speechStartedRef = useRef(false);
 
   // Continuous-STT bookkeeping.
@@ -387,6 +414,24 @@ export function CharacterVoicePanel({
   // stale-closure issues when WS events fire across renders).
   const phaseRef = useRef<VoicePhase>("idle");
   const voiceModeActiveRef = useRef(false);
+
+  function clearIdleFinalizeTimer() {
+    if (idleFinalizeTimerRef.current !== null) {
+      window.clearTimeout(idleFinalizeTimerRef.current);
+      idleFinalizeTimerRef.current = null;
+    }
+  }
+
+  function scheduleIdleFinalize() {
+    clearIdleFinalizeTimer();
+    idleFinalizeTimerRef.current = window.setTimeout(() => {
+      idleFinalizeTimerRef.current = null;
+      if (!voiceModeActiveRef.current) return;
+      if (!speechStartedRef.current) return;
+      if (phaseRef.current === "thinking") return;
+      finalizeCurrentTurn();
+    }, WORD_IDLE_FINALIZE_MS);
+  }
 
   useEffect(() => {
     return () => {
@@ -541,6 +586,7 @@ export function CharacterVoicePanel({
           currentTurnWordsRef.current.push(text);
           setCurrentTurnTranscript(currentTurnWordsRef.current.join(" "));
           speechStartedRef.current = true;
+          scheduleIdleFinalize();
 
           console.log(
             `[voice] Word "${text}" (phase=${phaseRef.current}, mic=${lastMicLevelRef.current.toFixed(3)})`,
@@ -610,6 +656,17 @@ export function CharacterVoicePanel({
         onLevel: (rms) => {
           lastMicLevelRef.current = rms;
           setMicLevel(rms);
+          if (allowMicWaveform && phaseRef.current !== "speaking") {
+            const energy = Math.max(0, Math.min(1, rms * 8.5));
+            onWaveformAudio?.({
+              energy,
+              bass: energy * 0.82,
+              mid: energy * 0.94,
+              high: energy * 0.64,
+              peak: energy,
+              active: voiceModeActiveRef.current,
+            });
+          }
         },
         onError: (message) => {
           setError(message);
@@ -655,6 +712,11 @@ export function CharacterVoicePanel({
       window.clearTimeout(pauseTimerRef.current);
       pauseTimerRef.current = null;
     }
+    clearIdleFinalizeTimer();
+    if (browserTtsCancelRef.current) {
+      browserTtsCancelRef.current();
+      browserTtsCancelRef.current = null;
+    }
 
     // Cancel any in-flight reply (fade audio + abort SSE).
     if (activeAudioRef.current) {
@@ -697,6 +759,14 @@ export function CharacterVoicePanel({
     setMicLevel(0);
     setVadPause(0);
     setTtsFirstAudioMs(null);
+    onWaveformAudio?.({
+      energy: 0,
+      bass: 0,
+      mid: 0,
+      high: 0,
+      peak: 0,
+      active: false,
+    });
     setVoiceModeActive(false);
     applyPhase("idle");
   }
@@ -743,6 +813,12 @@ export function CharacterVoicePanel({
   }
 
   function finalizeCurrentTurn() {
+    clearIdleFinalizeTimer();
+    if (pauseTimerRef.current !== null) {
+      window.clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = null;
+    }
+
     const transcript = currentTurnWordsRef.current.join(" ").trim();
     if (!transcript) {
       speechStartedRef.current = false;
@@ -794,6 +870,10 @@ export function CharacterVoicePanel({
 
   function interruptCurrentReply() {
     const ctx = currentReplyContextRef.current;
+    if (browserTtsCancelRef.current) {
+      browserTtsCancelRef.current();
+      browserTtsCancelRef.current = null;
+    }
 
     // Fade scheduled audio to silence (~60ms) then abort the underlying
     // speculation/SSE stream. The server detects the abort and tears down
@@ -844,6 +924,7 @@ export function CharacterVoicePanel({
     let replyMs: number | null = null;
     let ttsFirstAudio: number | null = null;
     let ttsDurationMs: number | null = null;
+    let streamedAnyAudio = false;
     const replyStartedAt = performance.now();
 
     currentReplyContextRef.current = {
@@ -864,8 +945,57 @@ export function CharacterVoicePanel({
     const audioContext = ensureAudioContext();
     const gainNode = audioContext.createGain();
     gainNode.gain.value = 1;
-    gainNode.connect(audioContext.destination);
+    const analyserNode = audioContext.createAnalyser();
+    analyserNode.fftSize = 512;
+    analyserNode.smoothingTimeConstant = 0.24;
+    gainNode.connect(analyserNode);
+    analyserNode.connect(audioContext.destination);
     let nextStartTime = audioContext.currentTime;
+    let analyserRaf = 0;
+
+    const emitTtsMetrics = () => {
+      if (!onWaveformAudio || phaseRef.current !== "speaking") return;
+      const freq = new Uint8Array(analyserNode.frequencyBinCount);
+      const time = new Uint8Array(analyserNode.fftSize);
+      analyserNode.getByteFrequencyData(freq);
+      analyserNode.getByteTimeDomainData(time);
+
+      let rms = 0;
+      for (let i = 0; i < time.length; i += 1) {
+        const v = (time[i] - 128) / 128;
+        rms += v * v;
+      }
+      rms = Math.sqrt(rms / time.length);
+
+      const n = freq.length;
+      const bEnd = Math.floor(n * 0.16);
+      const mEnd = Math.floor(n * 0.56);
+      let bass = 0;
+      let mid = 0;
+      let high = 0;
+      for (let i = 0; i < n; i += 1) {
+        const v = freq[i] / 255;
+        if (i < bEnd) bass += v;
+        else if (i < mEnd) mid += v;
+        else high += v;
+      }
+      bass /= Math.max(1, bEnd);
+      mid /= Math.max(1, mEnd - bEnd);
+      high /= Math.max(1, n - mEnd);
+      const spectral = (bass + mid + high) / 3;
+      const energy = Math.max(0, Math.min(1, rms * 6.4 + spectral * 1.2));
+
+      onWaveformAudio({
+        energy,
+        bass,
+        mid,
+        high,
+        peak: Math.max(0, Math.min(1, energy * 0.85 + high * 0.25)),
+        active: true,
+      });
+
+      analyserRaf = window.requestAnimationFrame(emitTtsMetrics);
+    };
 
     const fadeOutToZero = () => {
       const now = audioContext.currentTime;
@@ -881,6 +1011,7 @@ export function CharacterVoicePanel({
     const scheduleAudio = (samples: Float32Array) => {
       try {
         if (samples.length === 0) return;
+        streamedAnyAudio = true;
         const audioBuffer = audioContext.createBuffer(
           1,
           samples.length,
@@ -901,6 +1032,221 @@ export function CharacterVoicePanel({
       } catch (err) {
         console.error("[voice] failed to schedule audio frame", err);
       }
+    };
+
+    const playFallbackTts = async (
+      text: string,
+    ): Promise<{ ok: boolean; error?: string; durationMs?: number }> => {
+      const trimmed = text.trim();
+      if (!trimmed) return { ok: false, error: "Fallback text was empty." };
+
+      const speakWithBrowserTts = async (): Promise<{
+        ok: boolean;
+        error?: string;
+        durationMs?: number;
+      }> => {
+        if (
+          typeof window === "undefined" ||
+          typeof SpeechSynthesisUtterance === "undefined" ||
+          !("speechSynthesis" in window)
+        ) {
+          return {
+            ok: false,
+            error: "Browser speech synthesis is unavailable.",
+          };
+        }
+
+        const synth = window.speechSynthesis;
+        try {
+          synth.cancel();
+        } catch {
+          /* ignore */
+        }
+
+        return await new Promise((resolve) => {
+          const utterance = new SpeechSynthesisUtterance(trimmed);
+          utterance.lang = "en-US";
+          utterance.rate = 0.95;
+          utterance.pitch = 0.9;
+          utterance.volume = 1;
+
+          const voices = synth.getVoices();
+          const preferredVoice =
+            voices.find((v) => /alex|daniel|fred|thomas/i.test(v.name)) ??
+            voices.find((v) => v.lang.toLowerCase().startsWith("en")) ??
+            null;
+          if (preferredVoice) {
+            utterance.voice = preferredVoice;
+          }
+
+          let settled = false;
+          let burst = 0;
+          let raf = 0;
+          const startedAt = performance.now();
+
+          const finish = (result: { ok: boolean; error?: string; durationMs?: number }) => {
+            if (settled) return;
+            settled = true;
+            if (raf !== 0) {
+              window.cancelAnimationFrame(raf);
+              raf = 0;
+            }
+            browserTtsCancelRef.current = null;
+            onWaveformAudio?.({
+              energy: 0,
+              bass: 0,
+              mid: 0,
+              high: 0,
+              peak: 0,
+              active: false,
+            });
+            resolve(result);
+          };
+
+          const pumpWave = () => {
+            if (settled) return;
+            burst *= 0.84;
+            const t = performance.now() * 0.01;
+            const energy = Math.max(
+              0.05,
+              Math.min(0.82, 0.18 + Math.abs(Math.sin(t)) * 0.24 + burst * 0.56),
+            );
+            onWaveformAudio?.({
+              energy,
+              bass: Math.max(0, Math.min(1, energy * 0.82)),
+              mid: Math.max(0, Math.min(1, energy * 0.96)),
+              high: Math.max(0, Math.min(1, energy * 0.64 + burst * 0.2)),
+              peak: Math.max(0, Math.min(1, energy * 0.9 + burst * 0.24)),
+              active: true,
+            });
+            raf = window.requestAnimationFrame(pumpWave);
+          };
+
+          browserTtsCancelRef.current = () => {
+            try {
+              synth.cancel();
+            } catch {
+              /* ignore */
+            }
+            finish({
+              ok: false,
+              error: "Browser speech cancelled.",
+              durationMs: Math.round(performance.now() - startedAt),
+            });
+          };
+
+          utterance.onstart = () => {
+            if (phaseRef.current === "thinking") {
+              applyPhase("speaking");
+            }
+            if (ttsFirstAudio === null) {
+              const latencyMs = Math.round(performance.now() - replyStartedAt);
+              ttsFirstAudio = latencyMs;
+              setTtsFirstAudioMs(latencyMs);
+              if (currentReplyContextRef.current?.turnId === turnId) {
+                currentReplyContextRef.current.ttsFirstAudioMs = latencyMs;
+              }
+            }
+            pumpWave();
+          };
+
+          utterance.onboundary = () => {
+            burst = Math.min(1, burst + 0.42);
+          };
+
+          utterance.onend = () => {
+            finish({
+              ok: true,
+              durationMs: Math.round(performance.now() - startedAt),
+            });
+          };
+
+          utterance.onerror = (event) => {
+            finish({
+              ok: false,
+              error: `Browser speech failed: ${event.error || "unknown error"}`,
+              durationMs: Math.round(performance.now() - startedAt),
+            });
+          };
+
+          try {
+            synth.speak(utterance);
+          } catch (err) {
+            finish({
+              ok: false,
+              error: err instanceof Error ? err.message : "Browser speech threw.",
+              durationMs: Math.round(performance.now() - startedAt),
+            });
+          }
+        });
+      };
+
+      const response = await fetch("/api/audio/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: trimmed }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        audioBase64?: string;
+        mimeType?: string;
+        provider?: string;
+        error?: string;
+        details?: string[];
+      };
+
+      if (!response.ok || !payload.audioBase64 || !payload.mimeType) {
+        const detail =
+          payload.error ??
+          (Array.isArray(payload.details) ? payload.details.join(" | ") : "") ??
+          `HTTP ${response.status}`;
+        console.warn(
+          "[voice] fallback /api/audio/speak failed",
+          response.status,
+          detail,
+        );
+        return await speakWithBrowserTts();
+      }
+
+      const encoded = decodeBase64ToArrayBuffer(payload.audioBase64);
+      const decoded = await audioContext.decodeAudioData(encoded.slice(0));
+      if (decoded.length === 0) {
+        return await speakWithBrowserTts();
+      }
+
+      if (phaseRef.current === "thinking") {
+        applyPhase("speaking");
+      }
+      if (onWaveformAudio && analyserRaf === 0) {
+        analyserRaf = window.requestAnimationFrame(emitTtsMetrics);
+      }
+
+      if (ttsFirstAudio === null) {
+        const latencyMs = Math.round(performance.now() - replyStartedAt);
+        ttsFirstAudio = latencyMs;
+        setTtsFirstAudioMs(latencyMs);
+        if (currentReplyContextRef.current?.turnId === turnId) {
+          currentReplyContextRef.current.ttsFirstAudioMs = latencyMs;
+        }
+      }
+
+      const source = audioContext.createBufferSource();
+      source.buffer = decoded;
+      source.connect(gainNode);
+      const now = audioContext.currentTime;
+      const startAt = Math.max(now, nextStartTime);
+      source.start(startAt);
+      nextStartTime = startAt + decoded.duration;
+      await new Promise<void>((resolve) => {
+        source.onended = () => resolve();
+      });
+      ttsDurationMs = Math.max(
+        ttsDurationMs ?? 0,
+        Math.round(decoded.duration * 1000),
+      );
+      console.log(
+        `[voice] fallback tts playback complete (${payload.provider ?? "unknown"})`,
+      );
+      return { ok: true, durationMs: Math.round(decoded.duration * 1000) };
     };
 
     // Get or create the speculation that owns the LLM→TTS stream.
@@ -954,6 +1300,7 @@ export function CharacterVoicePanel({
             setLiveReply(assistant);
           },
           onFirstAudio: (latencyMs) => {
+            streamedAnyAudio = true;
             ttsFirstAudio = latencyMs;
             setTtsFirstAudioMs(latencyMs);
             if (currentReplyContextRef.current?.turnId === turnId) {
@@ -961,6 +1308,9 @@ export function CharacterVoicePanel({
             }
             if (phaseRef.current === "thinking") {
               applyPhase("speaking");
+              if (onWaveformAudio && analyserRaf === 0) {
+                analyserRaf = window.requestAnimationFrame(emitTtsMetrics);
+              }
             }
             console.log(
               `[voice] tts first audio ${latencyMs}ms after stream start`,
@@ -996,6 +1346,26 @@ export function CharacterVoicePanel({
         return;
       }
 
+      if (!streamedAnyAudio) {
+        console.log(
+          "[voice] streamed turn had no audio frames; trying /api/audio/speak fallback",
+        );
+        const fallback = await playFallbackTts(assistant);
+        if (!fallback.ok) {
+          throw new Error(
+            `Voice reply text arrived, but no TTS audio was available. ${fallback.error ?? ""}`.trim(),
+          );
+        }
+        if (ttsDurationMs === null && typeof fallback.durationMs === "number") {
+          ttsDurationMs = fallback.durationMs;
+        }
+      }
+
+      // The user may have barged-in while fallback audio was playing.
+      if (currentReplyContextRef.current?.turnId !== turnId) {
+        return;
+      }
+
       setVoiceTurns((current) => [
         ...current,
         {
@@ -1011,6 +1381,25 @@ export function CharacterVoicePanel({
         },
       ]);
       setLiveReply("");
+      if (allowMicWaveform) {
+        onWaveformAudio?.({
+          energy: Math.max(0, Math.min(1, lastMicLevelRef.current * 8.5)),
+          bass: Math.max(0, Math.min(1, lastMicLevelRef.current * 6.8)),
+          mid: Math.max(0, Math.min(1, lastMicLevelRef.current * 7.6)),
+          high: Math.max(0, Math.min(1, lastMicLevelRef.current * 5.2)),
+          peak: Math.max(0, Math.min(1, lastMicLevelRef.current * 8.5)),
+          active: voiceModeActiveRef.current,
+        });
+      } else {
+        onWaveformAudio?.({
+          energy: 0,
+          bass: 0,
+          mid: 0,
+          high: 0,
+          peak: 0,
+          active: false,
+        });
+      }
       currentReplyContextRef.current = null;
 
       // Drop straight back into listening — mic stays on.
@@ -1044,7 +1433,19 @@ export function CharacterVoicePanel({
       setError(message);
       applyPhase("error");
       currentReplyContextRef.current = null;
+      onWaveformAudio?.({
+        energy: 0,
+        bass: 0,
+        mid: 0,
+        high: 0,
+        peak: 0,
+        active: voiceModeActiveRef.current,
+      });
     } finally {
+      if (analyserRaf !== 0) {
+        window.cancelAnimationFrame(analyserRaf);
+        analyserRaf = 0;
+      }
       if (activeAudioRef.current?.gainNode === gainNode) {
         activeAudioRef.current = null;
       }

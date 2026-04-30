@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { decode as msgpackDecode, encode as msgpackEncode } from "@msgpack/msgpack";
 import { WebSocket as NodeWebSocket } from "ws";
 import { getCharacterStore } from "@odyssey/db";
 
@@ -55,6 +54,247 @@ const ANTHROPIC_DEFAULT_MODEL = "claude-haiku-4-5";
 const DEFAULT_MAX_TOKENS = 200;
 const TTS_DEFAULT_VOICE = "expresso/ex03-ex01_happy_001_channel1_334s.wav";
 const TTS_SAMPLE_RATE = 24000;
+const TTS_PUBLIC_BASE_URL = "https://binnyplotkin--audio-rt-moshi-tts-serve.modal.run";
+
+function utf8Encode(input: string): Uint8Array {
+  return new TextEncoder().encode(input);
+}
+
+function utf8Decode(input: Uint8Array): string {
+  return new TextDecoder().decode(input);
+}
+
+function concatBytes(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
+function encodeNumber(value: number): Uint8Array {
+  if (Number.isInteger(value) && value >= 0 && value <= 0x7f) {
+    return Uint8Array.of(value);
+  }
+  if (Number.isInteger(value) && value >= -32 && value < 0) {
+    return Uint8Array.of(0xe0 | (value + 32));
+  }
+  if (Number.isInteger(value) && value >= 0 && value <= 0xff) {
+    return Uint8Array.of(0xcc, value);
+  }
+  if (Number.isInteger(value) && value >= -0x80 && value <= 0x7f) {
+    return Uint8Array.of(0xd0, value & 0xff);
+  }
+  if (Number.isInteger(value) && value >= 0 && value <= 0xffff) {
+    return Uint8Array.of(0xcd, (value >> 8) & 0xff, value & 0xff);
+  }
+  if (Number.isInteger(value) && value >= -0x8000 && value <= 0x7fff) {
+    return Uint8Array.of(0xd1, (value >> 8) & 0xff, value & 0xff);
+  }
+  const buffer = new ArrayBuffer(9);
+  const view = new DataView(buffer);
+  view.setUint8(0, 0xcb);
+  view.setFloat64(1, value, false);
+  return new Uint8Array(buffer);
+}
+
+function encodeString(value: string): Uint8Array {
+  const bytes = utf8Encode(value);
+  const length = bytes.length;
+  if (length <= 31) {
+    return concatBytes([Uint8Array.of(0xa0 | length), bytes]);
+  }
+  if (length <= 0xff) {
+    return concatBytes([Uint8Array.of(0xd9, length), bytes]);
+  }
+  if (length <= 0xffff) {
+    return concatBytes([Uint8Array.of(0xda, (length >> 8) & 0xff, length & 0xff), bytes]);
+  }
+  return concatBytes([
+    Uint8Array.of(0xdb, (length >>> 24) & 0xff, (length >>> 16) & 0xff, (length >>> 8) & 0xff, length & 0xff),
+    bytes,
+  ]);
+}
+
+function msgpackEncode(value: unknown): Uint8Array {
+  if (value === null || value === undefined) {
+    return Uint8Array.of(0xc0);
+  }
+  if (typeof value === "boolean") {
+    return Uint8Array.of(value ? 0xc3 : 0xc2);
+  }
+  if (typeof value === "number") {
+    return encodeNumber(value);
+  }
+  if (typeof value === "string") {
+    return encodeString(value);
+  }
+  if (Array.isArray(value)) {
+    const items = value.map((entry) => msgpackEncode(entry));
+    const length = items.length;
+    let header: Uint8Array;
+    if (length <= 15) {
+      header = Uint8Array.of(0x90 | length);
+    } else if (length <= 0xffff) {
+      header = Uint8Array.of(0xdc, (length >> 8) & 0xff, length & 0xff);
+    } else {
+      header = Uint8Array.of(
+        0xdd,
+        (length >>> 24) & 0xff,
+        (length >>> 16) & 0xff,
+        (length >>> 8) & 0xff,
+        length & 0xff,
+      );
+    }
+    return concatBytes([header, ...items]);
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined);
+    const length = entries.length;
+    let header: Uint8Array;
+    if (length <= 15) {
+      header = Uint8Array.of(0x80 | length);
+    } else if (length <= 0xffff) {
+      header = Uint8Array.of(0xde, (length >> 8) & 0xff, length & 0xff);
+    } else {
+      header = Uint8Array.of(
+        0xdf,
+        (length >>> 24) & 0xff,
+        (length >>> 16) & 0xff,
+        (length >>> 8) & 0xff,
+        length & 0xff,
+      );
+    }
+    const chunks: Uint8Array[] = [header];
+    for (const [key, entryValue] of entries) {
+      chunks.push(encodeString(key));
+      chunks.push(msgpackEncode(entryValue));
+    }
+    return concatBytes(chunks);
+  }
+  throw new Error("Unsupported MessagePack value.");
+}
+
+function msgpackDecode(bytes: Uint8Array): unknown {
+  let offset = 0;
+
+  const read = (): unknown => {
+    const prefix = bytes[offset++];
+    if (prefix <= 0x7f) return prefix;
+    if ((prefix & 0xe0) === 0xa0) {
+      const length = prefix & 0x1f;
+      const out = utf8Decode(bytes.subarray(offset, offset + length));
+      offset += length;
+      return out;
+    }
+    if ((prefix & 0xf0) === 0x90) {
+      const length = prefix & 0x0f;
+      const out: unknown[] = [];
+      for (let i = 0; i < length; i += 1) out.push(read());
+      return out;
+    }
+    if ((prefix & 0xf0) === 0x80) {
+      const length = prefix & 0x0f;
+      const out: Record<string, unknown> = {};
+      for (let i = 0; i < length; i += 1) {
+        const key = read();
+        out[String(key)] = read();
+      }
+      return out;
+    }
+    if (prefix >= 0xe0) return prefix - 0x100;
+    switch (prefix) {
+      case 0xc0:
+        return null;
+      case 0xc2:
+        return false;
+      case 0xc3:
+        return true;
+      case 0xcc: {
+        return bytes[offset++];
+      }
+      case 0xcd: {
+        const value = (bytes[offset] << 8) | bytes[offset + 1];
+        offset += 2;
+        return value;
+      }
+      case 0xd0: {
+        const value = (bytes[offset] << 24) >> 24;
+        offset += 1;
+        return value;
+      }
+      case 0xd1: {
+        const value = (bytes[offset] << 8) | bytes[offset + 1];
+        offset += 2;
+        return (value << 16) >> 16;
+      }
+      case 0xd9: {
+        const length = bytes[offset++];
+        const out = utf8Decode(bytes.subarray(offset, offset + length));
+        offset += length;
+        return out;
+      }
+      case 0xda: {
+        const length = (bytes[offset] << 8) | bytes[offset + 1];
+        offset += 2;
+        const out = utf8Decode(bytes.subarray(offset, offset + length));
+        offset += length;
+        return out;
+      }
+      case 0xdb: {
+        const length =
+          (bytes[offset] << 24) |
+          (bytes[offset + 1] << 16) |
+          (bytes[offset + 2] << 8) |
+          bytes[offset + 3];
+        offset += 4;
+        const out = utf8Decode(bytes.subarray(offset, offset + length));
+        offset += length;
+        return out;
+      }
+      case 0xdc: {
+        const length = (bytes[offset] << 8) | bytes[offset + 1];
+        offset += 2;
+        const out: unknown[] = [];
+        for (let i = 0; i < length; i += 1) out.push(read());
+        return out;
+      }
+      case 0xde: {
+        const length = (bytes[offset] << 8) | bytes[offset + 1];
+        offset += 2;
+        const out: Record<string, unknown> = {};
+        for (let i = 0; i < length; i += 1) {
+          const key = read();
+          out[String(key)] = read();
+        }
+        return out;
+      }
+      case 0xca: {
+        const view = new DataView(bytes.buffer, bytes.byteOffset + offset, 4);
+        const value = view.getFloat32(0, false);
+        offset += 4;
+        return value;
+      }
+      case 0xcb: {
+        const view = new DataView(bytes.buffer, bytes.byteOffset + offset, 8);
+        const value = view.getFloat64(0, false);
+        offset += 8;
+        return value;
+      }
+      default:
+        throw new Error(`Unsupported MessagePack prefix 0x${prefix.toString(16)}.`);
+    }
+  };
+
+  const value = read();
+  if (offset !== bytes.length) {
+    throw new Error("Unexpected trailing MessagePack bytes.");
+  }
+  return value;
+}
 
 export async function POST(
   req: NextRequest,
@@ -73,24 +313,38 @@ export async function POST(
 
   const promptChunk = body.promptChunk ?? "";
 
-  const character = await getCharacterStore().getById(id);
+  const fallbackCharacter =
+    id === "abraham-fallback" ? { id, slug: "abraham", title: "Abraham" } : null;
+  const character = fallbackCharacter ?? (await getCharacterStore().getById(id));
   if (!character) return jsonError(404, "character not found");
 
-  const provider: LlmProvider = body.provider ?? "cerebras";
+  const requestedProvider: LlmProvider = body.provider ?? "cerebras";
+  const hasCerebras = Boolean(process.env.CEREBRAS_API_KEY?.trim());
+  const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  const provider: LlmProvider =
+    requestedProvider === "cerebras"
+      ? hasCerebras
+        ? "cerebras"
+        : hasAnthropic
+          ? "anthropic"
+          : "cerebras"
+      : hasAnthropic
+        ? "anthropic"
+        : hasCerebras
+          ? "cerebras"
+          : "anthropic";
   const maxTokens = Math.max(64, Math.min(1024, body.maxTokens ?? DEFAULT_MAX_TOKENS));
   const voice = body.voice ?? TTS_DEFAULT_VOICE;
 
-  if (provider === "cerebras" && !process.env.CEREBRAS_API_KEY?.trim()) {
-    return jsonError(500, "CEREBRAS_API_KEY is not set on the server.");
-  }
-  if (provider === "anthropic" && !process.env.ANTHROPIC_API_KEY?.trim()) {
-    return jsonError(500, "ANTHROPIC_API_KEY is not set on the server.");
+  if (!hasCerebras && !hasAnthropic) {
+    return jsonError(
+      500,
+      "No LLM provider key configured. Set CEREBRAS_API_KEY or ANTHROPIC_API_KEY.",
+    );
   }
 
-  const ttsBaseUrl = (process.env.KYUTAI_TTS_BASE_URL ?? "").trim().replace(/\/+$/, "");
-  if (!ttsBaseUrl) {
-    return jsonError(500, "KYUTAI_TTS_BASE_URL is not set on the server.");
-  }
+  const ttsBaseUrl = ((process.env.KYUTAI_TTS_BASE_URL ?? "").trim().replace(/\/+$/, "") ||
+    TTS_PUBLIC_BASE_URL);
   const ttsApiKey = (process.env.KYUTAI_API_KEY ?? "public_token").trim();
 
   const encoder = new TextEncoder();
@@ -225,7 +479,7 @@ export async function POST(
           }
           resolve();
         });
-        ttsWs.once("error", (err) => reject(err));
+        ttsWs.once("error", (err: unknown) => reject(err));
       });
 
       try {
@@ -255,9 +509,11 @@ export async function POST(
           }
         };
 
+        let emittedAnyToken = false;
         const onToken = (delta: string) => {
           if (req.signal.aborted) return;
           if (!delta) return;
+          emittedAnyToken = true;
           sendEvent("token", { delta });
           tokenBuffer.value += delta;
           const match = tokenBuffer.value.match(/^([\s\S]*\s)(\S*)$/);
@@ -267,29 +523,60 @@ export async function POST(
           }
         };
 
-        if (provider === "cerebras") {
-          modelId = body.model ?? CEREBRAS_DEFAULT_MODEL;
-          ({ inputTokens, outputTokens } = await streamFromCerebras({
-            apiKey: process.env.CEREBRAS_API_KEY!.trim(),
-            model: modelId,
-            systemPrompt,
-            history,
-            message,
-            maxTokens,
-            onToken,
-            abortSignal: req.signal,
-          }));
-        } else {
-          modelId = body.model ?? ANTHROPIC_DEFAULT_MODEL;
-          ({ inputTokens, outputTokens } = await streamFromAnthropic({
-            apiKey: process.env.ANTHROPIC_API_KEY!.trim(),
-            model: modelId,
-            systemPrompt,
-            history,
-            message,
-            maxTokens,
-            onToken,
-          }));
+        const providerOrder: LlmProvider[] =
+          provider === "cerebras" ? ["cerebras", "anthropic"] : ["anthropic", "cerebras"];
+        const canUse = (p: LlmProvider) => (p === "cerebras" ? hasCerebras : hasAnthropic);
+        let chosenProvider: LlmProvider | null = null;
+        let lastProviderError: unknown = null;
+
+        for (const attemptProvider of providerOrder) {
+          if (!canUse(attemptProvider)) continue;
+          try {
+            if (attemptProvider === "cerebras") {
+              modelId = body.model ?? CEREBRAS_DEFAULT_MODEL;
+              ({ inputTokens, outputTokens } = await streamFromCerebras({
+                apiKey: process.env.CEREBRAS_API_KEY!.trim(),
+                model: modelId,
+                systemPrompt,
+                history,
+                message,
+                maxTokens,
+                onToken,
+                abortSignal: req.signal,
+              }));
+            } else {
+              modelId = body.model ?? ANTHROPIC_DEFAULT_MODEL;
+              ({ inputTokens, outputTokens } = await streamFromAnthropic({
+                apiKey: process.env.ANTHROPIC_API_KEY!.trim(),
+                model: modelId,
+                systemPrompt,
+                history,
+                message,
+                maxTokens,
+                onToken,
+              }));
+            }
+            chosenProvider = attemptProvider;
+            break;
+          } catch (providerErr) {
+            lastProviderError = providerErr;
+            const messageText =
+              providerErr instanceof Error ? providerErr.message.toLowerCase() : String(providerErr).toLowerCase();
+            const authLike =
+              messageText.includes("401") ||
+              messageText.includes("403") ||
+              messageText.includes("unauthorized") ||
+              messageText.includes("invalid api key") ||
+              messageText.includes("authentication") ||
+              messageText.includes("permission");
+            if (emittedAnyToken || !authLike) {
+              throw providerErr;
+            }
+          }
+        }
+
+        if (!chosenProvider) {
+          throw (lastProviderError ?? new Error("No LLM provider attempt succeeded."));
         }
 
         if (req.signal.aborted) return;
@@ -326,7 +613,7 @@ export async function POST(
               ? Math.round(firstAudioAt - startedAt)
               : -1,
           totalMs: Math.round(performance.now() - startedAt),
-          provider,
+          provider: chosenProvider,
           model: modelId,
         });
       } catch (err: unknown) {
