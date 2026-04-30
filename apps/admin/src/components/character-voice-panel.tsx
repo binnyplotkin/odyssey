@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   MOSHI_TTS_BASE_URL_HTTP,
   MoshiStreamingSttSession,
@@ -248,7 +248,18 @@ type CharacterProp = {
 type Moment = { era: string; index: number };
 type Scene = { activeEntities: string[]; location: string | null };
 
-type VoicePhase = "idle" | "warming" | "listening" | "thinking" | "speaking" | "error";
+export type VoicePhase = "idle" | "warming" | "listening" | "thinking" | "speaking" | "error";
+
+export type CharacterVoicePanelVoiceState = {
+  active: boolean;
+  phase: VoicePhase;
+};
+
+export type CharacterVoicePanelHandle = {
+  toggleVoiceMode: () => void;
+  enterVoiceMode: () => void;
+  exitVoiceMode: () => void;
+};
 
 type VoiceTurn = {
   id: string;
@@ -286,6 +297,7 @@ type Props = {
     peak: number;
     active: boolean;
   }) => void;
+  onVoiceStateChange?: (state: CharacterVoicePanelVoiceState) => void;
 };
 
 const VAD_PAUSE_THRESHOLD = 0.5;
@@ -345,7 +357,8 @@ function phaseColor(phase: VoicePhase, voiceModeActive: boolean) {
   }
 }
 
-export function CharacterVoicePanel({
+export const CharacterVoicePanel = forwardRef<CharacterVoicePanelHandle, Props>(function CharacterVoicePanel(
+{
   character,
   moment,
   scene,
@@ -353,7 +366,10 @@ export function CharacterVoicePanel({
   tokenBudget,
   waveformSource = "mic-and-tts",
   onWaveformAudio,
-}: Props) {
+  onVoiceStateChange,
+}: Props,
+ref,
+) {
   const allowMicWaveform = waveformSource === "mic-and-tts";
   const [voiceModeActive, setVoiceModeActive] = useState(false);
   const [phase, setPhase] = useState<VoicePhase>("idle");
@@ -364,6 +380,7 @@ export function CharacterVoicePanel({
   const [micLevel, setMicLevel] = useState(0);
   const [ttsFirstAudioMs, setTtsFirstAudioMs] = useState<number | null>(null);
   const [voiceTurns, setVoiceTurns] = useState<VoiceTurn[]>([]);
+  const [transcriptPanelHidden, setTranscriptPanelHidden] = useState(false);
 
   // Long-lived for the duration of voice mode.
   const sttSessionRef = useRef<MoshiStreamingSttSession | null>(null);
@@ -439,6 +456,10 @@ export function CharacterVoicePanel({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    onVoiceStateChange?.({ active: voiceModeActive, phase });
+  }, [onVoiceStateChange, phase, voiceModeActive]);
 
   function applyPhase(next: VoicePhase) {
     phaseRef.current = next;
@@ -1468,6 +1489,22 @@ export function CharacterVoicePanel({
     }
   }
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      toggleVoiceMode: () => {
+        toggleVoiceMode();
+      },
+      enterVoiceMode: () => {
+        void enterVoiceMode();
+      },
+      exitVoiceMode: () => {
+        void exitVoiceMode();
+      },
+    }),
+    [enterVoiceMode, exitVoiceMode, toggleVoiceMode],
+  );
+
   const isListening = voiceModeActive && phase === "listening";
   const micPercent = Math.max(0, Math.min(100, Math.round(micLevel * 1200)));
   const vadPercent = Math.max(0, Math.min(100, Math.round(vadPause * 100)));
@@ -1677,248 +1714,313 @@ export function CharacterVoicePanel({
           ) : null}
         </div>
 
-        {error ? (
-          <div
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setTranscriptPanelHidden((prev) => !prev)}
             style={{
-              padding: "10px 14px",
-              borderRadius: 8,
-              border: "1px solid rgba(248, 113, 113, 0.3)",
-              background: "rgba(248, 113, 113, 0.08)",
-              color: "#f87171",
-              fontFamily: T.fontBody,
-              fontSize: 13,
-            }}
-          >
-            {error}
-          </div>
-        ) : null}
-
-        {currentTurnTranscript ? (
-          <div
-            style={{
-              padding: 14,
-              borderRadius: 10,
+              padding: "6px 10px",
+              borderRadius: 7,
               border: `1px solid ${T.border}`,
-              background: T.panel,
+              background: transcriptPanelHidden ? "rgba(140,231,210,0.1)" : "transparent",
+              color: transcriptPanelHidden ? T.accent : T.muted,
+              fontFamily: T.fontMono,
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              cursor: "pointer",
             }}
+            aria-expanded={!transcriptPanelHidden}
+            aria-controls="voice-transcript-panel"
           >
-            <p
-              style={{
-                fontFamily: T.fontMono,
-                fontSize: 10,
-                color: T.muted,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                margin: 0,
-                marginBottom: 6,
-              }}
-            >
-              You {isListening ? "saying" : phase === "thinking" || phase === "speaking" ? "(barging in)" : "said"}
-            </p>
-            <p
-              style={{
-                fontFamily: T.fontBody,
-                fontSize: 14,
-                color: T.fg,
-                margin: 0,
-              }}
-            >
-              {currentTurnTranscript}
-            </p>
-          </div>
-        ) : null}
+            {transcriptPanelHidden ? "Show transcript" : "Hide transcript"}
+          </button>
+        </div>
 
-        {liveReply ? (
+        {!transcriptPanelHidden ? (
           <div
-            style={{
-              padding: 14,
-              borderRadius: 10,
-              border: `1px solid ${T.border}`,
-              background: T.panel,
-            }}
-          >
-            <p
-              style={{
-                fontFamily: T.fontMono,
-                fontSize: 10,
-                color: T.muted,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                margin: 0,
-                marginBottom: 6,
-              }}
-            >
-              {character.title}
-            </p>
-            <p
-              style={{
-                fontFamily: T.fontBody,
-                fontSize: 14,
-                color: T.fg,
-                margin: 0,
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {liveReply}
-            </p>
-          </div>
-        ) : null}
-
-        {voiceTurns.length > 0 ? (
-          <div
+            id="voice-transcript-panel"
             style={{
               display: "flex",
               flexDirection: "column",
               gap: 14,
-              marginTop: 8,
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <span
+            {error ? (
+              <div
                 style={{
-                  fontFamily: T.fontMono,
-                  fontSize: 10,
-                  fontWeight: 500,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: T.muted,
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(248, 113, 113, 0.3)",
+                  background: "rgba(248, 113, 113, 0.08)",
+                  color: "#f87171",
+                  fontFamily: T.fontBody,
+                  fontSize: 13,
                 }}
               >
-                Voice history · {voiceTurns.length}
-              </span>
-              <button
-                type="button"
-                onClick={clearTurns}
-                style={{
-                  padding: "4px 10px",
-                  fontFamily: T.fontMono,
-                  fontSize: 10,
-                  fontWeight: 500,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: T.muted,
-                  background: "transparent",
-                  border: `1px solid ${T.border}`,
-                  borderRadius: 6,
-                  cursor: "pointer",
-                }}
-              >
-                Clear
-              </button>
-            </div>
-            {voiceTurns.map((turn) => (
-              <article
-                key={turn.id}
+                {error}
+              </div>
+            ) : null}
+
+            {currentTurnTranscript ? (
+              <div
                 style={{
                   padding: 14,
                   borderRadius: 10,
-                  border: `1px solid ${
-                    turn.status === "error"
-                      ? "rgba(248,113,113,0.3)"
-                      : turn.status === "interrupted"
-                        ? "rgba(250,204,21,0.3)"
-                        : T.border
-                  }`,
+                  border: `1px solid ${T.border}`,
                   background: T.panel,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
                 }}
               >
-                {turn.status === "interrupted" ? (
-                  <span
-                    style={{
-                      alignSelf: "flex-start",
-                      padding: "2px 8px",
-                      borderRadius: 4,
-                      background: "rgba(250,204,21,0.08)",
-                      border: "1px solid rgba(250,204,21,0.25)",
-                      fontFamily: T.fontMono,
-                      fontSize: 9,
-                      fontWeight: 600,
-                      color: "#FACC15",
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Interrupted
-                  </span>
-                ) : null}
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <span
-                    style={{
-                      fontFamily: T.fontMono,
-                      fontSize: 10,
-                      color: T.muted,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    You
-                  </span>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontFamily: T.fontBody,
-                      fontSize: 13,
-                      color: T.fg,
-                    }}
-                  >
-                    {turn.user || "(empty)"}
-                  </p>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <span
-                    style={{
-                      fontFamily: T.fontMono,
-                      fontSize: 10,
-                      color: T.muted,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {character.title}
-                  </span>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontFamily: T.fontBody,
-                      fontSize: 13,
-                      color: T.fg,
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {turn.assistant ||
-                      (turn.error ? `Error: ${turn.error}` : "(empty)")}
-                  </p>
-                </div>
-                <div
+                <p
                   style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 12,
                     fontFamily: T.fontMono,
                     fontSize: 10,
                     color: T.muted,
-                    letterSpacing: "0.06em",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    margin: 0,
+                    marginBottom: 6,
                   }}
                 >
-                  <span>listen {turn.listenMs ?? "—"}ms</span>
-                  <span>reply {turn.replyMs ?? "—"}ms</span>
-                  <span>tts→1st {turn.ttsFirstAudioMs ?? "—"}ms</span>
-                  <span>tts dur {turn.ttsDurationMs ?? "—"}ms</span>
+                  You{" "}
+                  {isListening
+                    ? "saying"
+                    : phase === "thinking" || phase === "speaking"
+                      ? "(barging in)"
+                      : "said"}
+                </p>
+                <p
+                  style={{
+                    fontFamily: T.fontBody,
+                    fontSize: 14,
+                    color: T.fg,
+                    margin: 0,
+                  }}
+                >
+                  {currentTurnTranscript}
+                </p>
+              </div>
+            ) : null}
+
+            {liveReply ? (
+              <div
+                style={{
+                  padding: 14,
+                  borderRadius: 10,
+                  border: `1px solid ${T.border}`,
+                  background: T.panel,
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: T.fontMono,
+                    fontSize: 10,
+                    color: T.muted,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    margin: 0,
+                    marginBottom: 6,
+                  }}
+                >
+                  {character.title}
+                </p>
+                <p
+                  style={{
+                    fontFamily: T.fontBody,
+                    fontSize: 14,
+                    color: T.fg,
+                    margin: 0,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {liveReply}
+                </p>
+              </div>
+            ) : null}
+
+            {voiceTurns.length > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14,
+                  marginTop: 8,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: T.fontMono,
+                      fontSize: 10,
+                      fontWeight: 500,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      color: T.muted,
+                    }}
+                  >
+                    Voice history · {voiceTurns.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearTurns}
+                    style={{
+                      padding: "4px 10px",
+                      fontFamily: T.fontMono,
+                      fontSize: 10,
+                      fontWeight: 500,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: T.muted,
+                      background: "transparent",
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 6,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Clear
+                  </button>
                 </div>
-              </article>
-            ))}
+                {voiceTurns.map((turn) => (
+                  <article
+                    key={turn.id}
+                    style={{
+                      padding: 14,
+                      borderRadius: 10,
+                      border: `1px solid ${
+                        turn.status === "error"
+                          ? "rgba(248,113,113,0.3)"
+                          : turn.status === "interrupted"
+                            ? "rgba(250,204,21,0.3)"
+                            : T.border
+                      }`,
+                      background: T.panel,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}
+                  >
+                    {turn.status === "interrupted" ? (
+                      <span
+                        style={{
+                          alignSelf: "flex-start",
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          background: "rgba(250,204,21,0.08)",
+                          border: "1px solid rgba(250,204,21,0.25)",
+                          fontFamily: T.fontMono,
+                          fontSize: 9,
+                          fontWeight: 600,
+                          color: "#FACC15",
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Interrupted
+                      </span>
+                    ) : null}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <span
+                        style={{
+                          fontFamily: T.fontMono,
+                          fontSize: 10,
+                          color: T.muted,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        You
+                      </span>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontFamily: T.fontBody,
+                          fontSize: 13,
+                          color: T.fg,
+                        }}
+                      >
+                        {turn.user || "(empty)"}
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <span
+                        style={{
+                          fontFamily: T.fontMono,
+                          fontSize: 10,
+                          color: T.muted,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {character.title}
+                      </span>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontFamily: T.fontBody,
+                          fontSize: 13,
+                          color: T.fg,
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {turn.assistant || (turn.error ? `Error: ${turn.error}` : "(empty)")}
+                      </p>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 12,
+                        fontFamily: T.fontMono,
+                        fontSize: 10,
+                        color: T.muted,
+                        letterSpacing: "0.06em",
+                      }}
+                    >
+                      <span>listen {turn.listenMs ?? "—"}ms</span>
+                      <span>reply {turn.replyMs ?? "—"}ms</span>
+                      <span>tts→1st {turn.ttsFirstAudioMs ?? "—"}ms</span>
+                      <span>tts dur {turn.ttsDurationMs ?? "—"}ms</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        ) : (
+          <div
+            id="voice-transcript-panel"
+            style={{
+              marginTop: 4,
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: `1px solid ${T.border}`,
+              background: T.panel,
+              fontFamily: T.fontMono,
+              fontSize: 10,
+              color: T.muted,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}
+          >
+            Transcript hidden
+            {voiceTurns.length > 0 ? ` · ${voiceTurns.length} turn${voiceTurns.length === 1 ? "" : "s"}` : ""}
+          </div>
+        )}
       </div>
     </div>
   );
-}
+});
+
+CharacterVoicePanel.displayName = "CharacterVoicePanel";
