@@ -32,6 +32,15 @@ type SpeculationCommitCallbacks = {
   onError: (message: string) => void;
 };
 
+type WorldSessionEventDraft = {
+  id: string;
+  turnId?: string | null;
+  type: string;
+  source: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
 type Speculation = {
   /** Aborts the in-flight SSE fetch and discards any buffered state. */
   abort: () => void;
@@ -370,6 +379,9 @@ type Props = {
 const VAD_PAUSE_THRESHOLD = 0.5;
 const VAD_AUTO_STOP_MS = 500;
 const WORD_IDLE_FINALIZE_MS = 950;
+const WORLD_EVENT_FLUSH_MS = 500;
+const WORLD_EVENT_MAX_BATCH = 200;
+const CAPTURE_RAW_STT_STEP_EVENTS = true;
 // Kyutai STT emits text ~500ms after the corresponding audio. Words that
 // arrive within this window of a finalize are residual from the previous
 // utterance and must be dropped before they trigger a phantom barge-in.
@@ -1244,6 +1256,11 @@ ref,
     promise: Promise<VoiceContext> | null;
     cached: VoiceContext | null;
   }>({ promise: null, cached: null });
+  const worldSessionIdRef = useRef<string | null>(null);
+  const worldSessionReadyRef = useRef<Promise<string | null> | null>(null);
+  const currentInputTurnIdRef = useRef<string | null>(null);
+  const worldEventQueueRef = useRef<WorldSessionEventDraft[]>([]);
+  const worldEventFlushTimerRef = useRef<number | null>(null);
 
   // Mirror of `phase` for synchronous reads inside async callbacks (avoids
   // stale-closure issues when WS events fire across renders).
@@ -1329,6 +1346,174 @@ ref,
     return audioContextRef.current;
   }
 
+  function createWorldSession(): Promise<string | null> {
+    const sessionId = crypto.randomUUID();
+    worldSessionIdRef.current = sessionId;
+    const initialScene = {
+      activeEntities: scene.activeEntities,
+      location: scene.location ?? null,
+    };
+    const promise = fetch("/api/world-sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: sessionId,
+        characterId: character.id,
+        mode: "voice",
+        initialMoment: moment,
+        initialScene,
+        currentMoment: moment,
+        currentScene: initialScene,
+        metadata: {
+          source: "character-voice-panel",
+          characterSlug: character.slug,
+        },
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`world-sessions returned ${res.status}`);
+        }
+        return sessionId;
+      })
+      .catch((err) => {
+        console.warn("[voice] world session create failed; continuing without persistence", err);
+        if (worldSessionIdRef.current === sessionId) {
+          worldSessionIdRef.current = null;
+        }
+        return null;
+      });
+    worldSessionReadyRef.current = promise;
+    return promise;
+  }
+
+  function currentEventTurnId(): string | null {
+    return currentInputTurnIdRef.current ?? currentReplyContextRef.current?.turnId ?? null;
+  }
+
+  function flushWorldEvents() {
+    if (worldEventFlushTimerRef.current !== null) {
+      window.clearTimeout(worldEventFlushTimerRef.current);
+      worldEventFlushTimerRef.current = null;
+    }
+    const sessionId = worldSessionIdRef.current;
+    if (!sessionId || worldEventQueueRef.current.length === 0) return;
+
+    const events = worldEventQueueRef.current.splice(0, WORLD_EVENT_MAX_BATCH);
+    const post = () =>
+      fetch(`/api/world-sessions/${sessionId}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ events }),
+        keepalive: events.length <= 25,
+      }).catch((err) => {
+        console.warn("[voice] world event batch persist failed", err);
+      });
+
+    const ready = worldSessionReadyRef.current;
+    if (ready) {
+      void ready.then((confirmedSessionId) => {
+        if (confirmedSessionId === sessionId) void post();
+      });
+    } else {
+      void post();
+    }
+
+    if (worldEventQueueRef.current.length > 0) {
+      worldEventFlushTimerRef.current = window.setTimeout(
+        flushWorldEvents,
+        WORLD_EVENT_FLUSH_MS,
+      );
+    }
+  }
+
+  function queueWorldEvent(
+    type: string,
+    source: string,
+    payload: Record<string, unknown>,
+    options: { turnId?: string | null; flushNow?: boolean } = {},
+  ) {
+    if (!worldSessionIdRef.current) return;
+    worldEventQueueRef.current.push({
+      id: crypto.randomUUID(),
+      turnId: options.turnId === undefined ? currentEventTurnId() : options.turnId,
+      type,
+      source,
+      payload,
+      createdAt: new Date().toISOString(),
+    });
+
+    if (options.flushNow || worldEventQueueRef.current.length >= WORLD_EVENT_MAX_BATCH) {
+      flushWorldEvents();
+      return;
+    }
+    if (worldEventFlushTimerRef.current === null) {
+      worldEventFlushTimerRef.current = window.setTimeout(
+        flushWorldEvents,
+        WORLD_EVENT_FLUSH_MS,
+      );
+    }
+  }
+
+  function endWorldSession(status = "ended") {
+    flushWorldEvents();
+    const sessionId = worldSessionIdRef.current;
+    worldSessionIdRef.current = null;
+    worldSessionReadyRef.current = null;
+    currentInputTurnIdRef.current = null;
+    if (!sessionId) return;
+    void fetch(`/api/world-sessions/${sessionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+      keepalive: true,
+    }).catch((err) => {
+      console.warn("[voice] world session end failed", err);
+    });
+  }
+
+  function persistWorldTurn(args: {
+    turnId: string;
+    status: VoiceTurn["status"];
+    userTranscript: string;
+    assistant: string;
+    listenMs: number | null;
+    replyMs: number | null;
+    ttsFirstAudio: number | null;
+    ttsDurationMs: number | null;
+    trace?: Trace;
+    extraMetadata?: Record<string, unknown>;
+  }) {
+    const sessionId = worldSessionIdRef.current;
+    if (!sessionId) return;
+    const traceJson = args.trace?.toJSON() ?? {};
+    const latencySummary = args.trace?.summary() ?? {};
+    void fetch(`/api/world-sessions/${sessionId}/turns/${args.turnId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        inputMode: "voice",
+        userText: args.userTranscript,
+        assistantText: args.assistant,
+        provider,
+        model,
+        status: args.status,
+        completedAt: new Date().toISOString(),
+        audioMetrics: {
+          listenMs: args.listenMs,
+          replyMs: args.replyMs,
+          ttsFirstAudioMs: args.ttsFirstAudio,
+          ttsDurationMs: args.ttsDurationMs,
+        },
+        latencySummary,
+        trace: traceJson,
+        metadata: args.extraMetadata ?? {},
+      }),
+    }).catch((err) => {
+      console.warn("[voice] world turn persist failed", err);
+    });
+  }
+
   async function enterVoiceMode() {
     if (voiceModeActiveRef.current) return;
     applyPhase("idle");
@@ -1344,6 +1529,8 @@ ref,
     lastFinalizeAtRef.current = null;
     lastMicLevelRef.current = 0;
     voiceContextRef.current = { promise: null, cached: null };
+    currentInputTurnIdRef.current = null;
+    const worldSessionPromise = createWorldSession();
     setStartupStatus({
       ...createInitialStartupStatus(),
       context: "pending",
@@ -1358,10 +1545,12 @@ ref,
     // first reply can skip the ~2s curator step.
     voiceContextRef.current.promise = (async () => {
       const startedAt = performance.now();
+      const worldSessionId = await worldSessionPromise;
       const res = await fetch(`/api/characters/${character.id}/voice-context`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          sessionId: worldSessionId ?? undefined,
           moment,
           scene: {
             activeEntities: scene.activeEntities,
@@ -1509,7 +1698,7 @@ ref,
             sttWordCount: current.sttWordCount + (type === "Word" ? 1 : 0),
           }));
         },
-        onWord: (text) => {
+        onWord: (text, startTime) => {
           const now = performance.now();
           const finalizedAt = lastFinalizeAtRef.current;
           const residualAge = finalizedAt !== null ? now - finalizedAt : null;
@@ -1523,6 +1712,21 @@ ref,
             console.log(
               `[voice] thinking-phase Word dropped "${text}" (likely residual; barge-in is only allowed during speaking)`,
             );
+            queueWorldEvent(
+              "stt.word",
+              "stt",
+              {
+                text,
+                startTime,
+                accepted: false,
+                dropReason: "thinking-phase-residual",
+                phase: phaseRef.current,
+                micLevel: lastMicLevelRef.current,
+                residualAgeMs: residualAge !== null ? Math.round(residualAge) : null,
+                performanceNowMs: Math.round(now),
+              },
+              { flushNow: true },
+            );
             return;
           }
 
@@ -1533,20 +1737,54 @@ ref,
             console.log(
               `[voice] residual Word dropped "${text}" (Δ=${Math.round(residualAge)}ms after finalize, phase=${phaseRef.current})`,
             );
+            queueWorldEvent(
+              "stt.word",
+              "stt",
+              {
+                text,
+                startTime,
+                accepted: false,
+                dropReason: "residual-grace-window",
+                phase: phaseRef.current,
+                micLevel: lastMicLevelRef.current,
+                residualAgeMs: Math.round(residualAge),
+                performanceNowMs: Math.round(now),
+              },
+              { flushNow: true },
+            );
             return;
           }
 
           if (currentTurnWordsRef.current.length === 0) {
+            currentInputTurnIdRef.current = crypto.randomUUID();
             turnFirstWordAtRef.current = now;
             // Open a fresh per-turn telemetry trace at first Word.
             turnTraceRef.current = new Trace();
-            turnTraceRef.current.mark("turn.user-start", { word: text });
+            turnTraceRef.current.mark("turn.user-start", {
+              word: text,
+              turnId: currentInputTurnIdRef.current,
+            });
             setPipelineStatus((current) => ({
               ...createInitialPipelineStatus(),
               speculation: current.speculation === "buffering" ? "buffering" : "idle",
               currentTranscript: text,
             }));
           }
+          queueWorldEvent(
+            "stt.word",
+            "stt",
+            {
+              text,
+              startTime,
+              accepted: true,
+              wordIndex: currentTurnWordsRef.current.length,
+              phase: phaseRef.current,
+              micLevel: lastMicLevelRef.current,
+              residualAgeMs: residualAge !== null ? Math.round(residualAge) : null,
+              performanceNowMs: Math.round(now),
+            },
+            { flushNow: true },
+          );
           currentTurnWordsRef.current.push(text);
           const nextTranscript = currentTurnWordsRef.current.join(" ");
           setCurrentTurnTranscript(nextTranscript);
@@ -1606,7 +1844,20 @@ ref,
           }
         },
         onPausePrediction: (p) => {
+          const stepAt = performance.now();
           setVadPause(p);
+          if (CAPTURE_RAW_STT_STEP_EVENTS) {
+            queueWorldEvent("stt.step", "stt", {
+              pausePrediction: p,
+              phase: phaseRef.current,
+              micLevel: lastMicLevelRef.current,
+              speechStarted: speechStartedRef.current,
+              wordCountInTurn: currentTurnWordsRef.current.length,
+              threshold: VAD_PAUSE_THRESHOLD,
+              aboveThreshold: p > VAD_PAUSE_THRESHOLD,
+              performanceNowMs: Math.round(stepAt),
+            });
+          }
           // Pause auto-finalize only fires while listening (not during
           // thinking/speaking).
           if (phaseRef.current !== "listening") return;
@@ -1745,6 +1996,24 @@ ref,
       speculationRef.current.abort();
       speculationRef.current = null;
     }
+    if (currentReplyContextRef.current) {
+      const ctx = currentReplyContextRef.current;
+      const trace = turnTraceRef.current;
+      trace?.mark("turn.interrupted", { reason: "voice-mode-exit" });
+      persistWorldTurn({
+        turnId: ctx.turnId,
+        status: "interrupted",
+        userTranscript: ctx.userTranscript,
+        assistant: ctx.assistant,
+        listenMs: ctx.listenMs,
+        replyMs: Math.round(performance.now() - ctx.replyStartedAt),
+        ttsFirstAudio: ctx.ttsFirstAudioMs,
+        ttsDurationMs: null,
+        trace: trace ?? undefined,
+        extraMetadata: { reason: "voice-mode-exit" },
+      });
+      turnTraceRef.current = null;
+    }
     currentReplyContextRef.current = null;
 
     // Stop the long-lived STT session.
@@ -1769,6 +2038,7 @@ ref,
     lastFinalizeAtRef.current = null;
     lastMicLevelRef.current = 0;
     voiceContextRef.current = { promise: null, cached: null };
+    endWorldSession("ended");
     speechStartedRef.current = false;
     setStartupStatus(createInitialStartupStatus());
     setPipelineStatus(createInitialPipelineStatus());
@@ -1841,6 +2111,8 @@ ref,
     speculationRef.current = startSpeculation({
       url: `/api/characters/${character.id}/voice-stream`,
       body: {
+        sessionId: worldSessionIdRef.current ?? undefined,
+        turnId: currentInputTurnIdRef.current ?? undefined,
         promptChunk: cachedContext.promptChunk,
         message: transcript,
         history,
@@ -1853,6 +2125,7 @@ ref,
 
   function finalizeCurrentTurn() {
     clearIdleFinalizeTimer();
+    flushWorldEvents();
     if (pauseTimerRef.current !== null) {
       window.clearTimeout(pauseTimerRef.current);
       pauseTimerRef.current = null;
@@ -1866,6 +2139,7 @@ ref,
       if (speculationRef.current) {
         speculationRef.current.abort();
         speculationRef.current = null;
+        currentInputTurnIdRef.current = null;
         setPipelineStatus((current) => ({
           ...current,
           speculation: "aborted",
@@ -1935,6 +2209,7 @@ ref,
 
   function interruptCurrentReply() {
     const ctx = currentReplyContextRef.current;
+    flushWorldEvents();
     if (browserTtsCancelRef.current) {
       browserTtsCancelRef.current();
       browserTtsCancelRef.current = null;
@@ -1953,6 +2228,20 @@ ref,
     // visible in the history, then clear the context so the in-flight
     // runReplyAndSpeak knows it has been handled.
     if (ctx) {
+      const trace = turnTraceRef.current;
+      trace?.mark("turn.interrupted");
+      persistWorldTurn({
+        turnId: ctx.turnId,
+        status: "interrupted",
+        userTranscript: ctx.userTranscript,
+        assistant: ctx.assistant,
+        listenMs: ctx.listenMs,
+        replyMs: Math.round(performance.now() - ctx.replyStartedAt),
+        ttsFirstAudio: ctx.ttsFirstAudioMs,
+        ttsDurationMs: null,
+        trace: trace ?? undefined,
+        extraMetadata: { reason: "barge-in-or-exit" },
+      });
       setVoiceTurns((current) => [
         ...current,
         {
@@ -1968,6 +2257,7 @@ ref,
         },
       ]);
       currentReplyContextRef.current = null;
+      turnTraceRef.current = null;
     }
 
     setLiveReply("");
@@ -1984,7 +2274,8 @@ ref,
     setLiveReply("");
     setTtsFirstAudioMs(null);
 
-    const turnId = crypto.randomUUID();
+    const turnId = currentInputTurnIdRef.current ?? crypto.randomUUID();
+    currentInputTurnIdRef.current = null;
     let assistant = "";
     let replyMs: number | null = null;
     let ttsFirstAudio: number | null = null;
@@ -2409,6 +2700,8 @@ ref,
       speculation = startSpeculation({
         url: `/api/characters/${character.id}/voice-stream`,
         body: {
+          sessionId: worldSessionIdRef.current ?? undefined,
+          turnId,
           promptChunk: cachedContext?.promptChunk ?? "",
           message: userTranscript,
           history,
@@ -2601,6 +2894,17 @@ ref,
         }
         console.log(trace.print(`turn ${turnId.slice(0, 8)}`));
         console.log(`[voice] turn summary`, trace.summary());
+        persistWorldTurn({
+          turnId,
+          status: "complete",
+          userTranscript,
+          assistant: assistant.trim(),
+          listenMs,
+          replyMs,
+          ttsFirstAudio,
+          ttsDurationMs,
+          trace,
+        });
         turnTraceRef.current = null;
       }
 
@@ -2729,6 +3033,21 @@ ref,
           ttsDurationMs,
         },
       ]);
+      const trace = turnTraceRef.current;
+      trace?.mark("turn.error", { message });
+      persistWorldTurn({
+        turnId,
+        status: "error",
+        userTranscript,
+        assistant,
+        listenMs,
+        replyMs,
+        ttsFirstAudio,
+        ttsDurationMs,
+        trace: trace ?? undefined,
+        extraMetadata: { message },
+      });
+      turnTraceRef.current = null;
       setError(message);
       applyPhase("error");
       currentReplyContextRef.current = null;

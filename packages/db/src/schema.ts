@@ -92,6 +92,112 @@ export const turnsTable = pgTable("turns", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 });
 
+// ── Global live world sessions ─────────────────────────────────────────
+//
+// These tables are intentionally broader than "voice sessions". Voice, chat,
+// and future narrator/world-simulation runs should all land here so one
+// session can explain context routing, turns, trace timings, and eventual
+// world-state changes.
+
+export const worldSessionsTable = pgTable(
+  "world_sessions",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id").references(() => usersTable.id, { onDelete: "set null" }),
+    worldId: text("world_id").references(() => worldsTable.id, { onDelete: "set null" }),
+    characterId: text("character_id").references(() => charactersTable.id, { onDelete: "set null" }),
+    mode: text("mode").notNull(), // chat | voice | mixed | simulation
+    status: text("status").notNull().default("active"),
+    initialMoment: jsonb("initial_moment"),
+    initialScene: jsonb("initial_scene"),
+    currentMoment: jsonb("current_moment"),
+    currentScene: jsonb("current_scene"),
+    metadata: jsonb("metadata").notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    lastActiveAt: timestamp("last_active_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("world_sessions_character_idx").on(table.characterId),
+    index("world_sessions_world_idx").on(table.worldId),
+    index("world_sessions_last_active_idx").on(table.lastActiveAt),
+  ],
+);
+
+export const worldSessionContextBuildsTable = pgTable(
+  "world_session_context_builds",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id").notNull().references(() => worldSessionsTable.id, { onDelete: "cascade" }),
+    turnId: text("turn_id"),
+    mode: text("mode").notNull(),
+    promptKind: text("prompt_kind").notNull(),
+    query: text("query"),
+    moment: jsonb("moment"),
+    scene: jsonb("scene"),
+    tokenBudget: integer("token_budget"),
+    tokensUsed: integer("tokens_used"),
+    tokensBudget: integer("tokens_budget"),
+    selectedPages: jsonb("selected_pages").notNull().default([]),
+    curatorTrace: jsonb("curator_trace").notNull().default({}),
+    timingTrace: jsonb("timing_trace").notNull().default({}),
+    promptChunk: text("prompt_chunk"),
+    systemPrompt: text("system_prompt"),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("world_session_context_session_idx").on(table.sessionId),
+    index("world_session_context_turn_idx").on(table.turnId),
+  ],
+);
+
+export const worldSessionTurnsTable = pgTable(
+  "world_session_turns",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id").notNull().references(() => worldSessionsTable.id, { onDelete: "cascade" }),
+    turnIndex: integer("turn_index"),
+    inputMode: text("input_mode").notNull(),
+    userText: text("user_text"),
+    assistantText: text("assistant_text"),
+    provider: text("provider"),
+    model: text("model"),
+    status: text("status").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    tokenUsage: jsonb("token_usage").notNull().default({}),
+    audioMetrics: jsonb("audio_metrics").notNull().default({}),
+    latencySummary: jsonb("latency_summary").notNull().default({}),
+    trace: jsonb("trace").notNull().default({}),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("world_session_turns_session_idx").on(table.sessionId),
+    index("world_session_turns_status_idx").on(table.status),
+  ],
+);
+
+export const worldSessionEventsTable = pgTable(
+  "world_session_events",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id").notNull().references(() => worldSessionsTable.id, { onDelete: "cascade" }),
+    turnId: text("turn_id"),
+    type: text("type").notNull(),
+    source: text("source").notNull(), // user | assistant | system | stt | llm | tts | world
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("world_session_events_session_idx").on(table.sessionId),
+    index("world_session_events_turn_idx").on(table.turnId),
+    index("world_session_events_type_idx").on(table.type),
+  ],
+);
+
 // ── Roadmap ─────────────────────────────────────────────────────────
 
 export const versionsTable = pgTable("versions", {

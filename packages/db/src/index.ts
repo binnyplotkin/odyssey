@@ -6,6 +6,10 @@ export {
   verificationTokensTable,
   sessionsTable,
   turnsTable,
+  worldSessionsTable,
+  worldSessionContextBuildsTable,
+  worldSessionTurnsTable,
+  worldSessionEventsTable,
   versionsTable,
   featuresTable,
   worldsTable,
@@ -24,6 +28,20 @@ export {
 } from "./schema";
 export { getPersistenceStore } from "./store";
 export type { PersistenceStore } from "./store";
+export { getWorldSessionStore } from "./world-session-store";
+export type {
+  WorldSessionStore,
+  WorldSessionRecord,
+  WorldSessionSummaryRecord,
+  WorldSessionDetailRecord,
+  WorldSessionContextBuildRecord,
+  WorldSessionTurnRecord,
+  WorldSessionEventRecord,
+  CreateWorldSessionInput,
+  RecordContextBuildInput,
+  UpsertWorldSessionTurnInput,
+  AppendWorldSessionEventInput,
+} from "./world-session-store";
 export { getWorldRepository } from "./repository";
 export type { WorldRepository, WorldDetail, WorldSource } from "./repository";
 export { getTicketStore } from "./ticket-store";

@@ -3,6 +3,7 @@ import {
   buildCharacterContext,
   CharacterContextError,
 } from "@/lib/character-context";
+import { getWorldSessionStore } from "@odyssey/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,8 @@ export const dynamic = "force-dynamic";
  * available via the regular /chat route.
  */
 type ContextBody = {
+  sessionId?: string;
+  turnId?: string;
   moment?: { era: string; index: number };
   scene?: { activeEntities?: string[]; location?: string };
   tokenBudget?: number;
@@ -66,6 +69,38 @@ export async function POST(
       scene: body.scene,
       tokenBudget: body.tokenBudget ?? 2500,
     });
+
+    if (body.sessionId) {
+      await getWorldSessionStore().recordContextBuild({
+        sessionId: body.sessionId,
+        turnId: body.turnId ?? null,
+        mode: context.routingMode,
+        promptKind: context.promptKind,
+        query: null,
+        moment: body.moment,
+        scene: body.scene,
+        tokenBudget: body.tokenBudget ?? 2500,
+        tokensUsed: context.tokensUsed,
+        tokensBudget: context.tokensBudget,
+        selectedPages: context.pages,
+        curatorTrace: context.trace,
+        timingTrace: context.timingTrace,
+        promptChunk: context.promptChunk,
+        systemPrompt: context.systemPrompt,
+      });
+      await getWorldSessionStore().appendEvent({
+        sessionId: body.sessionId,
+        type: "context.built",
+        source: "system",
+        payload: {
+          mode: context.routingMode,
+          promptKind: context.promptKind,
+          tokensUsed: context.tokensUsed,
+          selectedPages: context.pages.map((p) => p.slug),
+          elapsedMs: context.elapsedMs,
+        },
+      });
+    }
 
     return Response.json({
       characterTitle: context.character.title,

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { WebSocket as NodeWebSocket } from "ws";
-import { getCharacterStore } from "@odyssey/db";
+import { getCharacterStore, getWorldSessionStore } from "@odyssey/db";
 import { TraceEnvelope } from "@/lib/voice-trace";
 import { buildVoiceSystemPrompt } from "@/lib/character-system-prompt";
 
@@ -42,6 +42,8 @@ export const dynamic = "force-dynamic";
 type LlmProvider = "cerebras" | "anthropic";
 
 type VoiceStreamBody = {
+  sessionId?: string;
+  turnId?: string;
   promptChunk?: string;
   message?: string;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
@@ -513,6 +515,8 @@ export async function POST(
         const systemPrompt = buildVoiceSystemPrompt(character.title, promptChunk);
         serverTrace.mark("server.context.attached", {
           characterId: character.id,
+          sessionId: body.sessionId ?? null,
+          turnId: body.turnId ?? null,
           promptChunkChars: promptChunk.length,
           systemPromptChars: systemPrompt.length,
           historyTurns: body.history?.length ?? 0,
@@ -660,6 +664,27 @@ export async function POST(
         await ttsClosedPromise;
 
         serverTrace.mark("server.tts.done", { audioSamples: totalSamples });
+        if (body.sessionId) {
+          await getWorldSessionStore().appendEvent({
+            sessionId: body.sessionId,
+            turnId: body.turnId ?? null,
+            type: "voice_stream.done",
+            source: "system",
+            payload: {
+              provider: chosenProvider,
+              model: modelId,
+              inputTokens,
+              outputTokens,
+              audioSamples: totalSamples,
+              firstAudioMs:
+                firstAudioAt !== null
+                  ? Math.round(firstAudioAt - startedAt)
+                  : -1,
+              totalMs: Math.round(performance.now() - startedAt),
+              serverTrace: serverTrace.toJSON(),
+            },
+          });
+        }
 
         sendEvent("done", {
           inputTokens,
@@ -679,6 +704,18 @@ export async function POST(
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         serverTrace.mark("server.error", { message: msg });
+        if (body.sessionId) {
+          await getWorldSessionStore().appendEvent({
+            sessionId: body.sessionId,
+            turnId: body.turnId ?? null,
+            type: "voice_stream.error",
+            source: "system",
+            payload: {
+              message: msg,
+              serverTrace: serverTrace.toJSON(),
+            },
+          });
+        }
         sendEvent("error", { message: msg });
       } finally {
         req.signal.removeEventListener("abort", onAbort);

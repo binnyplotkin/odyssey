@@ -1,17 +1,13 @@
-import { notFound } from "next/navigation";
-import { getAdminWorldRepository } from "@/lib/worlds";
-import { WorldHeader } from "@/components/world-header";
+import { Suspense } from "react";
+import { WorldHeaderShell } from "@/components/world-header-shell";
+import { WorldHeaderSkeleton } from "@/components/world-header-skeleton";
 
 type Params = Promise<{ worldId: string }>;
 
-function inferStatus(
-  world: { roles: unknown[]; characters: unknown[]; groups: unknown[]; eventTemplates: unknown[] },
-): "live" | "draft" | "archived" {
-  if (world.roles.length > 0 && world.characters.length > 0 && world.groups.length > 0 && world.eventTemplates.length > 0) {
-    return "live";
-  }
-  return "draft";
-}
+// World-detail lookup lives inside <Suspense>, not at the top level of the
+// layout — otherwise the layout itself suspends and the closest fallback
+// becomes /worlds/loading.tsx (the list skeleton), causing a list-skeleton
+// flash on every navigation into a world. Mirrors the [slug] layout fix.
 
 export default async function WorldLayout({
   children,
@@ -21,14 +17,12 @@ export default async function WorldLayout({
   params: Params;
 }) {
   const { worldId } = await params;
-  const detail = await getAdminWorldRepository().getWorldDetail(worldId);
-  if (!detail) notFound();
-
-  const status = inferStatus(detail.world);
 
   return (
     <>
-      <WorldHeader world={{ id: detail.world.id, title: detail.world.title, status }} />
+      <Suspense fallback={<WorldHeaderSkeleton />}>
+        <WorldHeaderShell worldId={worldId} />
+      </Suspense>
       {children}
     </>
   );
