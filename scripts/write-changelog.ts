@@ -23,6 +23,7 @@
 import OpenAI from "openai";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
+import { eq } from "drizzle-orm";
 import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
 
 /* ── Inline schema (avoids TS path-mapping issues in standalone script) ── */
@@ -139,11 +140,24 @@ async function classifyCommit(): Promise<{
 async function main() {
   console.log(`Processing commit ${commitSha.slice(0, 7)}: ${commitMsg.split("\n")[0]}`);
 
-  const entry = await classifyCommit();
-  console.log(`Classified as [${entry.category}]: ${entry.title}`);
-
   const sql = neon(process.env.DATABASE_URL!);
   const db = drizzle({ client: sql });
+
+  // Idempotency: a previous run may have already written an entry for this
+  // commit. Replays (workflow_dispatch backfills, retried CI jobs) must not
+  // create duplicates.
+  const existing = await db
+    .select({ id: changelogEntries.id })
+    .from(changelogEntries)
+    .where(eq(changelogEntries.commitSha, commitSha))
+    .limit(1);
+  if (existing.length > 0) {
+    console.log(`Changelog entry already exists for ${commitSha.slice(0, 7)} (id ${existing[0].id}); skipping.`);
+    return;
+  }
+
+  const entry = await classifyCommit();
+  console.log(`Classified as [${entry.category}]: ${entry.title}`);
 
   const [row] = await db
     .insert(changelogEntries)

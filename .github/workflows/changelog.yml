@@ -3,6 +3,17 @@ name: Write Changelog
 on:
   push:
     branches: [main]
+  # Manual replay — paste a SHA from the Actions tab → "Write Changelog"
+  # → "Run workflow". Used for backfilling commits that landed while the
+  # workflow was failing (e.g. bad secret), or for re-running after a
+  # prompt change. The script is idempotent (skips if a changelog entry
+  # already exists for the SHA), so re-runs are safe.
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Commit SHA to replay (defaults to current HEAD on main)"
+        required: false
+        type: string
 
 jobs:
   changelog:
@@ -11,7 +22,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2   # need parent for diff
+          # Replays need full history to resolve any past commit; pushes
+          # only need the parent commit for the diff stat.
+          fetch-depth: ${{ inputs.commit_sha && '0' || '2' }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -24,13 +37,15 @@ jobs:
       - name: Gather commit info
         id: info
         run: |
-          # Commit metadata
-          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          # Target: replay SHA if given (dispatched), else the pushed commit.
+          TARGET="${{ inputs.commit_sha || github.sha }}"
+          SHA=$(git rev-parse "$TARGET")
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "author=${{ github.event.head_commit.author.username || github.actor }}" >> "$GITHUB_OUTPUT"
           echo "branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
           # Commit message (handle multiline)
-          MSG=$(git log -1 --pretty=%B)
+          MSG=$(git log -1 --pretty=%B "$SHA")
           {
             echo "msg<<EOFMSG"
             echo "$MSG"
@@ -38,7 +53,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           # Diff stat
-          DIFF=$(git diff --stat HEAD~1 HEAD | tail -1)
+          DIFF=$(git diff --stat "$SHA^" "$SHA" | tail -1)
           echo "diff_summary=$DIFF" >> "$GITHUB_OUTPUT"
 
           # PR info (from merge commit message or GitHub event)

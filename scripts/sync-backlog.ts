@@ -386,12 +386,35 @@ async function rollupFeatures(featureIds: Set<string>) {
   }
 }
 
+/* ── Idempotency: detect prior sync for this commit ─────────────── */
+// applyProposal embeds the short SHA inside every activity item's text
+// (see the `shaRef` line above). A JSONB-text LIKE scan is cheap at our
+// scale (a few hundred tickets) and lets us short-circuit replays before
+// burning an LLM call.
+
+async function alreadySynced(): Promise<boolean> {
+  const shortSha = commitSha.slice(0, 7);
+  const rows = (await sql`
+    SELECT 1 FROM tickets
+    WHERE activity::text LIKE ${`%${shortSha}%`}
+    LIMIT 1
+  `) as unknown[];
+  return rows.length > 0;
+}
+
 /* ── Main ──────────────────────────────────────────────────────── */
 
 async function main() {
   console.log(
     `sync-backlog: ${commitSha.slice(0, 7)} — event=${eventKind} apply=${applyUpdates}`,
   );
+
+  if (await alreadySynced()) {
+    console.log(
+      `Commit ${commitSha.slice(0, 7)} already has activity entries on at least one ticket; skipping replay.`,
+    );
+    return;
+  }
 
   if (metaOnly) {
     console.log(
