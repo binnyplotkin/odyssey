@@ -155,3 +155,34 @@ textarea {
 .sidebar-item:hover span {
   opacity: 1 !important;
 }
+
+/* ── Skeleton loaders ───────────────────────────────────────── */
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  background-color: var(--panel);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--accent-soft) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  will-change: background-position;
+}
+
+.skeleton-static {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

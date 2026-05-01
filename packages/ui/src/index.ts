@@ -11,6 +11,9 @@
 export { Sidebar } from "./components/sidebar";
 export type { SidebarItem, SidebarAction, SidebarProps, SidebarTab } from "./components/sidebar";
 
+export { Skeleton, SkeletonText, SkeletonCard } from "./components/skeleton";
+export type { SkeletonProps } from "./components/skeleton";
+
 export const forest = {
   950: "#000500",
   900: "#0F2006",

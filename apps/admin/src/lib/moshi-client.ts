@@ -45,6 +45,22 @@ function encodeNumber(value: number): Uint8Array {
   return new Uint8Array(buffer);
 }
 
+function encodeArrayHeader(length: number): Uint8Array {
+  if (length <= 15) {
+    return Uint8Array.of(0x90 | length);
+  }
+  if (length <= 0xffff) {
+    return Uint8Array.of(0xdc, (length >> 8) & 0xff, length & 0xff);
+  }
+  return Uint8Array.of(
+    0xdd,
+    (length >>> 24) & 0xff,
+    (length >>> 16) & 0xff,
+    (length >>> 8) & 0xff,
+    length & 0xff,
+  );
+}
+
 function encodeString(value: string): Uint8Array {
   const bytes = utf8Encode(value);
   const length = bytes.length;
@@ -79,20 +95,7 @@ export function msgpackEncode(value: unknown): Uint8Array {
   if (Array.isArray(value)) {
     const items = value.map((entry) => msgpackEncode(entry));
     const length = items.length;
-    let header: Uint8Array;
-    if (length <= 15) {
-      header = Uint8Array.of(0x90 | length);
-    } else if (length <= 0xffff) {
-      header = Uint8Array.of(0xdc, (length >> 8) & 0xff, length & 0xff);
-    } else {
-      header = Uint8Array.of(
-        0xdd,
-        (length >>> 24) & 0xff,
-        (length >>> 16) & 0xff,
-        (length >>> 8) & 0xff,
-        length & 0xff,
-      );
-    }
+    const header = encodeArrayHeader(length);
     return concatBytes([header, ...items]);
   }
   if (typeof value === "object") {
@@ -120,6 +123,29 @@ export function msgpackEncode(value: unknown): Uint8Array {
     return concatBytes(chunks);
   }
   throw new Error("Unsupported MessagePack value.");
+}
+
+export function msgpackEncodeAudioFrame(samples: Float32Array): Uint8Array {
+  const sampleBytes = new Uint8Array(samples.length * 5);
+  const sampleView = new DataView(
+    sampleBytes.buffer,
+    sampleBytes.byteOffset,
+    sampleBytes.byteLength,
+  );
+  for (let i = 0; i < samples.length; i += 1) {
+    const offset = i * 5;
+    sampleView.setUint8(offset, 0xca);
+    sampleView.setFloat32(offset + 1, samples[i], false);
+  }
+  const chunks: Uint8Array[] = [
+    Uint8Array.of(0x82),
+    encodeString("type"),
+    encodeString("Audio"),
+    encodeString("pcm"),
+    encodeArrayHeader(samples.length),
+    sampleBytes,
+  ];
+  return concatBytes(chunks);
 }
 
 export function msgpackDecode(bytes: Uint8Array): unknown {
@@ -258,28 +284,49 @@ export const MOSHI_STT_BASE_URL_HTTP = MOSHI_WS_URL.replace(/^wss?:/, "https:").
 export const MOSHI_TTS_DEFAULT_VOICE =
   "expresso/ex03-ex01_happy_001_channel1_334s.wav";
 
+export type MoshiPrewarmResult = {
+  /** Round-trip ms for the STT container's first response, or null on error. */
+  sttMs: number | null;
+  /** Round-trip ms for the TTS container's first response, or null on error. */
+  ttsMs: number | null;
+};
+
 /**
- * Fire-and-forget HTTP probes to nudge Modal into spinning up the moshi-server
- * containers before the user's first turn lands. Each probe is a single GET
- * to the server root (which 404s but still triggers a container start). Safe
- * to call multiple times; safe to call when containers are already warm.
+ * Fire HTTP probes to nudge Modal into spinning up the moshi-server containers
+ * before the user's first turn lands. Each probe is a single GET to the server
+ * root (which 404s but still triggers a container start). Safe to call multiple
+ * times; safe to call when containers are already warm.
+ *
+ * Returns a promise that resolves once both probes have completed. The result
+ * carries the round-trip ms for each — callers can use this to flip a UI from
+ * "warming" to "ready" once both endpoints have responded. With `mode: no-cors`
+ * the response body is opaque (status 0), so we only know that the request
+ * completed, not whether it 200'd or 404'd.
  */
-export function prewarmMoshiServers(): void {
+export async function prewarmMoshiServers(): Promise<MoshiPrewarmResult> {
   const sttBase = MOSHI_WS_URL.replace(/^wss?:/, "https:").split("/api/")[0];
   const ttsBase = MOSHI_TTS_BASE_URL.replace(/^wss?:/, "https:").split("/api/")[0];
-  for (const url of [sttBase, ttsBase]) {
+
+  const probe = (url: string): Promise<number | null> => {
+    const startedAt = performance.now();
     // `no-cors` mode: response is opaque, but the request still reaches
     // Modal and triggers a container start. moshi-server doesn't set
     // Access-Control-Allow-Origin, so without this every prewarm noisily
     // fails CORS and shows red errors in console.
-    fetch(url, { method: "GET", cache: "no-store", mode: "no-cors" }).catch(() => {
-      /* expected — we just want the container to start */
-    });
-  }
+    return fetch(url, { method: "GET", cache: "no-store", mode: "no-cors" })
+      .then(() => performance.now() - startedAt)
+      .catch(() => null);
+  };
+
+  const [sttMs, ttsMs] = await Promise.all([probe(sttBase), probe(ttsBase)]);
+  return { sttMs, ttsMs };
 }
 
 export const MOSHI_TARGET_SAMPLE_RATE = 24000;
 export const MOSHI_FRAME_SIZE = 1920; // 80ms at 24kHz, matches mimi frame_size
+const LIVE_STT_TARGET_RMS = 0.075;
+const LIVE_STT_MIN_GAIN_RMS = 0.012;
+const LIVE_STT_MAX_GAIN = 3.5;
 
 export type MoshiServerMessage =
   | { type: "Step"; prs?: number[]; step_idx?: number }
@@ -288,6 +335,79 @@ export type MoshiServerMessage =
   | { type: "Marker"; id: number }
   | { type: "Ready" }
   | { type: "Error"; message?: string };
+
+type PcmFrameStats = {
+  rms: number;
+  peak: number;
+};
+
+function measurePcmFrame(samples: Float32Array): PcmFrameStats {
+  let sq = 0;
+  let peak = 0;
+  for (let i = 0; i < samples.length; i += 1) {
+    const v = samples[i];
+    sq += v * v;
+    const abs = v < 0 ? -v : v;
+    if (abs > peak) peak = abs;
+  }
+  return {
+    rms: Math.sqrt(sq / Math.max(1, samples.length)),
+    peak,
+  };
+}
+
+function prepareLiveSttFrame(samples: Float32Array): {
+  samples: Float32Array;
+  rawRms: number;
+  rawPeak: number;
+  sentRms: number;
+  sentPeak: number;
+  gain: number;
+  clippedSamples: number;
+} {
+  const raw = measurePcmFrame(samples);
+  const gain =
+    raw.rms >= LIVE_STT_MIN_GAIN_RMS
+      ? Math.max(1, Math.min(LIVE_STT_MAX_GAIN, LIVE_STT_TARGET_RMS / raw.rms))
+      : 1;
+
+  if (gain === 1) {
+    return {
+      samples,
+      rawRms: raw.rms,
+      rawPeak: raw.peak,
+      sentRms: raw.rms,
+      sentPeak: raw.peak,
+      gain,
+      clippedSamples: 0,
+    };
+  }
+
+  const boosted = new Float32Array(samples.length);
+  let clippedSamples = 0;
+  for (let i = 0; i < samples.length; i += 1) {
+    const v = samples[i] * gain;
+    if (v > 0.98) {
+      boosted[i] = 0.98;
+      clippedSamples += 1;
+    } else if (v < -0.98) {
+      boosted[i] = -0.98;
+      clippedSamples += 1;
+    } else {
+      boosted[i] = v;
+    }
+  }
+  const sent = measurePcmFrame(boosted);
+  return {
+    samples: boosted,
+    rawRms: raw.rms,
+    rawPeak: raw.peak,
+    sentRms: sent.rms,
+    sentPeak: sent.peak,
+    gain,
+    clippedSamples,
+  };
+}
 
 export type MoshiTtsServerMessage =
   | { type: "Audio"; pcm: number[] }
@@ -456,16 +576,11 @@ export async function transcribeBatchViaRustServer(
       );
     }, timeoutMs);
 
-    ws.onopen = () => {
-      const sendAudio = (frame: Float32Array) => {
-        if (ws.readyState !== WebSocket.OPEN) return;
-        ws.send(
-          msgpackEncode({
-            type: "Audio",
-            pcm: Array.from(frame),
-          }),
-        );
-      };
+	    ws.onopen = () => {
+	      const sendAudio = (frame: Float32Array) => {
+	        if (ws.readyState !== WebSocket.OPEN) return;
+	        ws.send(msgpackEncodeAudioFrame(frame));
+	      };
 
       // 1s leading silence
       sendAudio(new Float32Array(MOSHI_TARGET_SAMPLE_RATE));
@@ -687,6 +802,25 @@ export async function synthesizeBatchViaKyutai(
 /* ── Streaming STT session (live word emission) ─────────────────── */
 
 export type MoshiStreamingSttHandlers = {
+  /** Startup/capture lifecycle hooks used by the voice UI readiness checklist. */
+  onMicPermissionPending?: () => void;
+  onMicCapture?: () => void;
+  onWorkletLoading?: () => void;
+  onWorkletReady?: (sampleRate: number) => void;
+  onSocketConnecting?: (url: string) => void;
+  /** Called whenever an audio frame is actually sent to the STT websocket. */
+  onFrameSent?: (stats: {
+    framesSent: number;
+    rms: number;
+    peak: number;
+    rawRms: number;
+    rawPeak: number;
+    gain: number;
+    clippedSamples: number;
+    samples: number;
+  }) => void;
+  /** Called for every decoded server message, including Step keepalives. */
+  onServerMessage?: (type: MoshiServerMessage["type"]) => void;
   /** Called for every Word event the server emits as the user speaks. */
   onWord?: (text: string, startTime: number) => void;
   /** Pause prediction probability (0–1) from semantic VAD head 2 (~2s pause). */
@@ -745,6 +879,7 @@ export class MoshiStreamingSttSession {
 
     let stream: MediaStream;
     try {
+      handlers.onMicPermissionPending?.();
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -760,11 +895,14 @@ export class MoshiStreamingSttSession {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     }
     this.stream = stream;
+    handlers.onMicCapture?.();
     console.log("[MoshiStreamingSttSession] mic stream acquired");
 
     const audioContext = new AudioContext();
     this.audioContext = audioContext;
+    handlers.onWorkletLoading?.();
     await audioContext.audioWorklet.addModule("/audio-worklet/pcm-capture-worklet.js");
+    handlers.onWorkletReady?.(audioContext.sampleRate);
     console.log(
       "[MoshiStreamingSttSession] audio worklet loaded, contextRate=",
       audioContext.sampleRate,
@@ -781,6 +919,7 @@ export class MoshiStreamingSttSession {
     this.workletNode = node;
 
     console.log("[MoshiStreamingSttSession] opening ws to", MOSHI_WS_URL);
+    handlers.onSocketConnecting?.(MOSHI_WS_URL);
     const ws = new WebSocket(MOSHI_WS_URL);
     ws.binaryType = "arraybuffer";
     this.ws = ws;
@@ -789,20 +928,55 @@ export class MoshiStreamingSttSession {
       console.log("[MoshiStreamingSttSession] ws.onopen");
       handlers.onOpen?.();
 
-      // 1s of leading silence — required by some Kyutai STT models, harmless
-      // for the 1B en_fr default.
-      const silence = new Float32Array(MOSHI_TARGET_SAMPLE_RATE);
-      ws.send(msgpackEncode({ type: "Audio", pcm: Array.from(silence) }));
+	      // 1s of leading silence — required by some Kyutai STT models, harmless
+	      // for the 1B en_fr default.
+	      const silence = new Float32Array(MOSHI_TARGET_SAMPLE_RATE);
+	      ws.send(msgpackEncodeAudioFrame(silence));
+
+      // ── TEMP DIAGNOSTIC — log frame RMS + peak as they're sent to Moshi.
+      // If sent-RMS is near zero while mic-level RMS is non-zero, the audio
+      // is being lost between worklet and WS (transfer-list issue, etc).
+      // Removable once the chat-vs-voice-page asymmetry is resolved.
+      const sentStats = { frames: 0, sumRms: 0, peak: 0 };
+      let framesSent = 0;
+      let lastSentLogAt = 0;
 
       node.port.onmessage = (event) => {
         const data = event.data as
           | { type: "frame"; samples: Float32Array }
           | { type: "level"; rms: number };
-        if (data.type === "frame") {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(msgpackEncode({ type: "Audio", pcm: Array.from(data.samples) }));
-          }
-        } else if (data.type === "level") {
+	        if (data.type === "frame") {
+	          if (ws.readyState === WebSocket.OPEN) {
+	            const prepared = prepareLiveSttFrame(data.samples);
+	            framesSent += 1;
+	            sentStats.frames += 1;
+	            sentStats.sumRms += prepared.sentRms;
+	            if (prepared.sentPeak > sentStats.peak) sentStats.peak = prepared.sentPeak;
+	            handlers.onFrameSent?.({
+	              framesSent,
+	              rms: prepared.sentRms,
+	              peak: prepared.sentPeak,
+	              rawRms: prepared.rawRms,
+	              rawPeak: prepared.rawPeak,
+	              gain: prepared.gain,
+	              clippedSamples: prepared.clippedSamples,
+	              samples: prepared.samples.length,
+	            });
+	            const now = performance.now();
+	            if (now - lastSentLogAt > 1000) {
+              lastSentLogAt = now;
+              const meanRms = sentStats.sumRms / Math.max(1, sentStats.frames);
+              console.log(
+                `[moshi-send] last 1s: frames=${sentStats.frames} mean-rms=${meanRms.toFixed(4)} peak=${sentStats.peak.toFixed(4)}`,
+              );
+              sentStats.frames = 0;
+	              sentStats.sumRms = 0;
+	              sentStats.peak = 0;
+	            }
+	
+	            ws.send(msgpackEncodeAudioFrame(prepared.samples));
+	          }
+	        } else if (data.type === "level") {
           handlers.onLevel?.(data.rms);
         }
       };
@@ -810,9 +984,27 @@ export class MoshiStreamingSttSession {
       source.connect(node);
     };
 
+    // ── TEMP DIAGNOSTIC — logs every inbound Moshi message type. Remove once
+    // the chat-vs-voice-page transcript asymmetry is resolved.
+    const recvCounts: Record<string, number> = {};
+    let lastLogAt = 0;
     ws.onmessage = (event) => {
       try {
         const data = msgpackDecode(new Uint8Array(event.data as ArrayBuffer)) as MoshiServerMessage;
+        handlers.onServerMessage?.(data.type);
+        // Throttled aggregate log so the console doesn't drown in Step events.
+        recvCounts[data.type] = (recvCounts[data.type] ?? 0) + 1;
+        const now = performance.now();
+        if (now - lastLogAt > 1000) {
+          lastLogAt = now;
+          console.log("[moshi-recv] last 1s:", { ...recvCounts });
+          for (const k of Object.keys(recvCounts)) recvCounts[k] = 0;
+        }
+        // Always log non-Step messages immediately — they're the interesting ones.
+        if (data.type !== "Step") {
+          console.log("[moshi-recv]", data.type, data);
+        }
+
         if (data.type === "Word") {
           this.words.push({ text: data.text, startTime: data.start_time });
           handlers.onWord?.(data.text, data.start_time);
@@ -848,10 +1040,35 @@ export class MoshiStreamingSttSession {
     };
   }
 
+  /**
+   * Stop the session. WS close is sent FIRST with explicit code 1000 so the
+   * server-side container can reclaim the concurrency slot immediately —
+   * audio-rt holds the Modal worker hostage until it sees a clean close frame.
+   * Audio teardown can drag (audioContext.close awaits a tick); we don't want
+   * that latency in front of the close frame.
+   *
+   * Safe to call from synchronous unload paths — this method does the WS close
+   * and worklet disconnect synchronously before any await, so the close frame
+   * is queued before the page tears down even if the caller doesn't await.
+   */
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
 
+    // 1. Close WS first, explicit code, before anything async. ws.close() is
+    //    synchronous: it queues the close frame and the browser flushes it on
+    //    the next tick, even if the page is unloading.
+    if (this.ws) {
+      try {
+        this.ws.close(1000, "client stopping");
+      } catch {
+        /* ignore */
+      }
+      this.ws = null;
+    }
+
+    // 2. Detach worklet and source synchronously so no more frames are
+    //    produced (and no more `port.onmessage` calls into a closed WS).
     if (this.workletNode) {
       this.workletNode.port.onmessage = null;
       try {
@@ -869,10 +1086,15 @@ export class MoshiStreamingSttSession {
       }
       this.sourceNode = null;
     }
+
+    // 3. Release the mic stream — also synchronous, important so the browser's
+    //    "tab is using mic" indicator clears immediately.
     if (this.stream) {
       this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
     }
+
+    // 4. Audio context close last — awaitable, so any straggler GC can settle.
     if (this.audioContext) {
       try {
         await this.audioContext.close();
@@ -880,14 +1102,6 @@ export class MoshiStreamingSttSession {
         /* ignore */
       }
       this.audioContext = null;
-    }
-    if (this.ws) {
-      try {
-        this.ws.close();
-      } catch {
-        /* ignore */
-      }
-      this.ws = null;
     }
   }
 }

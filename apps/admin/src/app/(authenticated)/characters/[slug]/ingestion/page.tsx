@@ -29,8 +29,7 @@ export default async function IngestionTab({ params }: { params: Params }) {
   return (
     <CharacterIngestion
       characterId={character.id}
-      characterSlug={character.slug}
-      hasIngestionPrompt={!!(character.ingestionPrompt?.trim())}
+      ingestionPrompt={character.ingestionPrompt}
       history={runs.map((r) => ({
         id: r.id,
         sourceTitle: r.sourceId ? sourceById.get(r.sourceId)?.title ?? "(deleted source)" : "(inline)",

@@ -89,7 +89,7 @@ const items: SidebarItem[] = [
 
 /* ── Shell Component ──────────────────────────────────────────── */
 
-function AdminShellInner({ children }: { children: React.ReactNode }) {
+function AdminShellInner({ children, initialCollapsed }: { children: React.ReactNode; initialCollapsed?: boolean }) {
   const pathname = usePathname();
   const { content: headerContent, flush } = useHeaderContent();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -151,6 +151,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
       theme={theme}
       onThemeChange={handleThemeChange}
       onSettings={() => setSettingsOpen(true)}
+      initialCollapsed={initialCollapsed}
     >
       {children}
       <SettingsOverlay
@@ -163,10 +164,16 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AdminShell({ children }: { children: React.ReactNode }) {
+export function AdminShell({
+  children,
+  initialCollapsed,
+}: {
+  children: React.ReactNode;
+  initialCollapsed?: boolean;
+}) {
   return (
     <HeaderProvider>
-      <AdminShellInner>{children}</AdminShellInner>
+      <AdminShellInner initialCollapsed={initialCollapsed}>{children}</AdminShellInner>
     </HeaderProvider>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { EraConfig } from "@odyssey/db";
 import {
   CharacterVoicePanel,
@@ -12,6 +12,28 @@ import {
   createEmptyAudioData,
   type AudioData,
 } from "@/components/wavefield-stage";
+import { Menu, type MenuItem } from "@/components/menu";
+import {
+  DEFAULT_VOICE_MODEL,
+  modelMetaFor,
+  modelsFor,
+  providerFor,
+} from "@/lib/model-registry";
+import { prewarmMoshiServers } from "@/lib/moshi-client";
+
+/* ── Theme awareness ─────────────────────────────────────────────
+ * Fully theme-adaptive. The wavefield 3D scene itself is hardcoded dark
+ * (`backgroundColor: "#03060D"` in WavefieldStage), but the voice panel
+ * sitting on top tracks the global theme — light glass card on light
+ * theme, dark glass card on dark theme. Mapping:
+ *
+ *   - Panel surface bgs   → `var(--background)` mixed via color-mix()
+ *   - Accent borders/bgs  → `var(--accent-strong)` mixed
+ *   - Text + icons        → `var(--foreground)` mixed (flips light/dark)
+ *   - Status colors       → hardcoded (listening red, speaking green,
+ *                           warming yellow, error pink — semantic,
+ *                           theme-agnostic by design)
+ */
 
 type Props = {
   character: {
@@ -34,6 +56,55 @@ export function CharacterVoiceWavefield(props: Props) {
     active: false,
     phase: "idle",
   });
+  const [model, setModel] = useState<string>(DEFAULT_VOICE_MODEL);
+  // Lazy-mount the voice panel only after the user opts in. Mirrors how the
+  // test chat mounts the panel on entering voice mode — keeps STT WS handshake
+  // out of the page's initial-load critical path.
+  const [started, setStarted] = useState(false);
+  const [warmStartedAt] = useState<number>(() =>
+    typeof performance !== "undefined" ? performance.now() : Date.now(),
+  );
+  const [warmElapsedMs, setWarmElapsedMs] = useState(0);
+  const [warmStatus, setWarmStatus] = useState<"warming" | "ready" | "error">(
+    "warming",
+  );
+
+  // Fire HTTP probes at the Modal STT + TTS containers on mount so they're
+  // already booting while the user reads the page and picks a model. The
+  // promise resolves when both endpoints have responded; we use that to
+  // flip the UI from "warming" to "ready" so the user sees positive
+  // confirmation before they click Start.
+  useEffect(() => {
+    let cancelled = false;
+    prewarmMoshiServers().then(({ sttMs, ttsMs }) => {
+      if (cancelled) return;
+      if (sttMs !== null && ttsMs !== null) setWarmStatus("ready");
+      else setWarmStatus("error");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Tick a clock while the user is on the pre-flight screen. We use the
+  // elapsed time to surface a "still warming" hint if the user is fast and
+  // arrives before the containers are responsive.
+  useEffect(() => {
+    if (started) return;
+    const id = window.setInterval(() => {
+      setWarmElapsedMs(
+        (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+          warmStartedAt,
+      );
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [started, warmStartedAt]);
+
+  const availableModels = useMemo(() => modelsFor("voice"), []);
+  const provider = providerFor(model);
+  const modelMeta = modelMetaFor(model);
+  // Locked once the panel has mounted — model can't change mid-session.
+  const modelLocked = started;
 
   const defaultMoment = useMemo<Moment | null>(() => {
     const sorted = [...character.eras].sort((a, b) => b.order - a.order);
@@ -42,31 +113,33 @@ export function CharacterVoiceWavefield(props: Props) {
   }, [character.eras]);
 
   const dockGlow = !voiceState.active
-    ? "rgba(255,255,255,0.14)"
+    ? "color-mix(in srgb, var(--foreground) 14%, transparent)"
     : voiceState.phase === "listening"
       ? "rgba(239,68,68,0.58)"
       : voiceState.phase === "speaking"
         ? "rgba(74,222,128,0.56)"
         : voiceState.phase === "thinking" || voiceState.phase === "warming"
-          ? "rgba(140,231,210,0.56)"
+          ? "color-mix(in srgb, var(--accent-strong) 56%, transparent)"
           : "rgba(248,113,113,0.56)";
   const dockMicBackground = !voiceState.active
-    ? "rgba(8,14,22,0.7)"
+    ? "color-mix(in srgb, var(--background) 70%, transparent)"
     : voiceState.phase === "listening"
       ? "rgba(239,68,68,0.16)"
       : voiceState.phase === "speaking"
         ? "rgba(74,222,128,0.16)"
-        : "rgba(140,231,210,0.15)";
+        : "color-mix(in srgb, var(--accent-strong) 15%, transparent)";
 
   return (
-    <>
+    // Self-contained wrapper. All inner positioned children use `absolute`
+    // and resolve against this. Works whether the parent is a dedicated full
+    // page (e.g. /voice) or an embedded tab inside the chat workspace.
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
       <WavefieldStage audioData={waveAudioRef.current} atmosphere={1} />
 
       <div
         style={{
-          position: "fixed",
+          position: "absolute",
           inset: 0,
-          left: "var(--sidebar-width, 240px)",
           zIndex: 20,
           pointerEvents: "none",
           display: "flex",
@@ -79,10 +152,15 @@ export function CharacterVoiceWavefield(props: Props) {
           style={{
             width: "min(520px, 42vw)",
             minWidth: 420,
-            height: "calc(100vh - 40px)",
+            // Fill the parent flex container's content box (wavefield wrapper
+            // minus the parent's 20px padding). Using `height: 100%` instead of
+            // `calc(100vh - 40px)` so the card stays inside the workspace when
+            // embedded under a header (chat tab) — the dedicated /voice route
+            // works the same since its parent is the full main element.
+            height: "100%",
             borderRadius: 18,
-            border: "1px solid rgba(140,231,210,0.28)",
-            background: "rgba(8, 14, 22, 0.68)",
+            border: "1px solid color-mix(in srgb, var(--accent-strong) 28%, transparent)",
+            background: "color-mix(in srgb, var(--background) 68%, transparent)",
             backdropFilter: "blur(14px)",
             boxShadow: "0 18px 56px rgba(0,0,0,0.45)",
             overflow: "hidden",
@@ -100,8 +178,8 @@ export function CharacterVoiceWavefield(props: Props) {
               alignItems: "center",
               justifyContent: "space-between",
               padding: "12px 14px",
-              borderBottom: "1px solid rgba(140,231,210,0.2)",
-              background: "rgba(8,16,28,0.66)",
+              borderBottom: "1px solid color-mix(in srgb, var(--accent-strong) 20%, transparent)",
+              background: "color-mix(in srgb, var(--background) 66%, transparent)",
             }}
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -111,7 +189,7 @@ export function CharacterVoiceWavefield(props: Props) {
                   fontSize: 10,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  color: "rgba(191,245,239,0.85)",
+                  color: "color-mix(in srgb, var(--foreground) 85%, transparent)",
                 }}
               >
                 Voice Session
@@ -121,76 +199,286 @@ export function CharacterVoiceWavefield(props: Props) {
                   fontFamily: "'Space Grotesk', sans-serif",
                   fontSize: 16,
                   fontWeight: 600,
-                  color: "rgba(236,248,255,0.96)",
+                  color: "color-mix(in srgb, var(--foreground) 96%, transparent)",
                 }}
               >
-                Speak To {character.title}
+                Voice Pipeline
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <button
                 type="button"
+                aria-label="Hide voice session panel"
                 onClick={() => setVoiceUiHidden(true)}
                 style={{
-                  padding: "4px 10px",
-                  borderRadius: 7,
-                  border: "1px solid rgba(140,231,210,0.28)",
-                  background: "rgba(8,14,22,0.35)",
-                  color: "rgba(191,245,239,0.88)",
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  border: "1px solid color-mix(in srgb, var(--accent-strong) 28%, transparent)",
+                  background: "color-mix(in srgb, var(--background) 35%, transparent)",
+                  color: "color-mix(in srgb, var(--foreground) 88%, transparent)",
                   cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0,
                 }}
               >
-                Hide
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
-              <a
-                href={`/characters/${character.slug}`}
-                style={{
-                  textDecoration: "none",
-                  fontFamily: "'Inter', sans-serif",
-                  fontSize: 12,
-                  color: "rgba(191,245,239,0.9)",
-                }}
-              >
-                Back
-              </a>
             </div>
           </div>
 
-          <CharacterVoicePanel
-            ref={voicePanelRef}
-            character={{
-              id: character.id,
-              slug: character.slug,
-              title: character.title,
-              image: character.image,
+          {/* Pre-flight stage: pick the model BEFORE the panel mounts. Locked
+              while a session is active so it's clear which model is running. */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              padding: "10px 14px",
+              borderBottom: "1px solid color-mix(in srgb, var(--accent-strong) 18%, transparent)",
+              background: "color-mix(in srgb, var(--background) 55%, transparent)",
             }}
-            moment={defaultMoment}
-            scene={{ activeEntities: [], location: null }}
-            model="claude-sonnet-4-5"
-            tokenBudget={1500}
-            waveformSource="tts-only"
-            onVoiceStateChange={setVoiceState}
-            onWaveformAudio={(audio) => {
-              waveAudioRef.current.energy = audio.energy;
-              waveAudioRef.current.bass = audio.bass;
-              waveAudioRef.current.mid = audio.mid;
-              waveAudioRef.current.high = audio.high;
-              waveAudioRef.current.peak = audio.peak;
-              waveAudioRef.current.active = audio.active;
-            }}
-          />
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9.5,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "color-mix(in srgb, var(--foreground) 72%, transparent)",
+                }}
+              >
+                {modelLocked ? "Running" : "Model"}
+              </span>
+              {modelLocked && (
+                <span
+                  aria-hidden
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background:
+                      voiceState.phase === "listening"
+                        ? "#ef4444"
+                        : voiceState.phase === "speaking"
+                          ? "#4ade80"
+                          : "var(--accent-strong)",
+                    boxShadow: "0 0 6px currentColor",
+                  }}
+                />
+              )}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {modelLocked ? (
+                <span
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 7,
+                    border: "1px solid color-mix(in srgb, var(--accent-strong) 32%, transparent)",
+                    background: "color-mix(in srgb, var(--accent-strong) 10%, transparent)",
+                    color: "color-mix(in srgb, var(--foreground) 94%, transparent)",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                  }}
+                  title="Stop the session to change models"
+                >
+                  {modelMeta?.label ?? model}
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      opacity: 0.55,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {modelMeta?.provider}
+                  </span>
+                </span>
+              ) : (
+                <Menu
+                  value={model}
+                  onChange={setModel}
+	                  ariaLabel="Voice model"
+	                  disabled={modelLocked}
+	                  align="right"
+	                  minWidth={304}
+	                  items={availableModels.map((m): MenuItem<string> => ({
+	                    value: m.id,
+	                    label: m.label,
+                    meta: m.provider,
+                  }))}
+                  triggerStyle={{
+                    padding: "4px 10px",
+                    border: "1px solid color-mix(in srgb, var(--accent-strong) 32%, transparent)",
+                    background: "color-mix(in srgb, var(--background) 45%, transparent)",
+                    color: "color-mix(in srgb, var(--foreground) 94%, transparent)",
+                    fontFamily: "'JetBrains Mono', monospace",
+	                    fontSize: 10,
+	                    letterSpacing: "0.06em",
+	                    textTransform: "uppercase",
+	                    whiteSpace: "nowrap",
+	                  }}
+	                />
+              )}
+            </div>
+          </div>
+
+          {started ? (
+            <CharacterVoicePanel
+              ref={voicePanelRef}
+              character={{
+                id: character.id,
+                slug: character.slug,
+                title: character.title,
+                image: character.image,
+              }}
+              moment={defaultMoment}
+              scene={{ activeEntities: [], location: null }}
+              provider={provider}
+              model={model}
+              tokenBudget={1500}
+              waveformSource="tts-only"
+              onVoiceStateChange={setVoiceState}
+              onWaveformAudio={(audio) => {
+                waveAudioRef.current.energy = audio.energy;
+                waveAudioRef.current.bass = audio.bass;
+                waveAudioRef.current.mid = audio.mid;
+                waveAudioRef.current.high = audio.high;
+                waveAudioRef.current.peak = audio.peak;
+                waveAudioRef.current.active = audio.active;
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 18,
+                padding: "32px",
+                textAlign: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: 13,
+                  lineHeight: "20px",
+                  color: "color-mix(in srgb, var(--foreground) 78%, transparent)",
+                  maxWidth: 320,
+                }}
+              >
+                Pick the model you want to test, then tap{" "}
+                <strong style={{ color: "var(--foreground)" }}>Start session</strong> to
+                wake the voice pipeline.
+              </span>
+              <button
+                type="button"
+                onClick={() => setStarted(true)}
+                style={{
+                  padding: "10px 22px",
+                  borderRadius: 999,
+                  border: "1px solid color-mix(in srgb, var(--accent-strong) 42%, transparent)",
+                  background: "color-mix(in srgb, var(--accent-strong) 14%, transparent)",
+                  color: "var(--foreground)",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+                }}
+              >
+                Start session
+              </button>
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9.5,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "color-mix(in srgb, var(--foreground) 46%, transparent)",
+                }}
+              >
+                {modelMeta?.label ?? model} · {modelMeta?.provider ?? provider}
+              </span>
+              {/* Server health indicator. Hidden during the first ~1.5s
+                  ('ready' may resolve faster than that and we don't want a
+                  flash). After that, dot color tracks status and the message
+                  escalates with elapsed time only while still warming. */}
+              {warmElapsedMs > 1500 && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: 11,
+                    color: "color-mix(in srgb, var(--foreground) 62%, transparent)",
+                    marginTop: 4,
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background:
+                        warmStatus === "ready"
+                          ? "#4ade80"
+                          : warmStatus === "error"
+                            ? "#f87171"
+                            : "#FACC15",
+                      boxShadow:
+                        warmStatus === "ready"
+                          ? "0 0 6px rgba(74,222,128,0.55)"
+                          : warmStatus === "error"
+                            ? "0 0 6px rgba(248,113,113,0.6)"
+                            : "0 0 6px rgba(250,204,21,0.55)",
+                      animation:
+                        warmStatus === "warming"
+                          ? "voice-warm-pulse 1.4s ease-in-out infinite"
+                          : "none",
+                    }}
+                  />
+                  {warmStatus === "ready"
+                    ? "Voice servers ready"
+                    : warmStatus === "error"
+                      ? "Couldn't reach voice servers — try anyway?"
+                      : warmElapsedMs > 25000
+                        ? "Voice servers are still cold-starting — first start can take ~60s."
+                        : "Warming voice servers in the background…"}
+                </span>
+              )}
+              <style>{`
+                @keyframes voice-warm-pulse {
+                  0%, 100% { opacity: 1; }
+                  50% { opacity: 0.45; }
+                }
+              `}</style>
+            </div>
+          )}
         </div>
       </div>
 
       {voiceUiHidden ? (
         <div
           style={{
-            position: "fixed",
-            left: "var(--sidebar-width, 240px)",
+            position: "absolute",
+            left: 0,
             right: 0,
             bottom: 20,
             zIndex: 24,
@@ -206,8 +494,8 @@ export function CharacterVoiceWavefield(props: Props) {
               gap: 8,
               padding: "8px 10px",
               borderRadius: 999,
-              border: "1px solid rgba(140,231,210,0.28)",
-              background: "rgba(8,14,22,0.72)",
+              border: "1px solid color-mix(in srgb, var(--accent-strong) 28%, transparent)",
+              background: "color-mix(in srgb, var(--background) 72%, transparent)",
               backdropFilter: "blur(10px)",
               boxShadow: "0 14px 34px rgba(0,0,0,0.4)",
               pointerEvents: "auto",
@@ -223,7 +511,7 @@ export function CharacterVoiceWavefield(props: Props) {
                 borderRadius: "50%",
                 border: `2px solid ${dockGlow}`,
                 background: dockMicBackground,
-                color: "rgba(236,248,255,0.97)",
+                color: "color-mix(in srgb, var(--foreground) 97%, transparent)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -258,9 +546,9 @@ export function CharacterVoiceWavefield(props: Props) {
               style={{
                 padding: "8px 12px",
                 borderRadius: 999,
-                border: "1px solid rgba(140,231,210,0.32)",
-                background: "rgba(8,16,28,0.52)",
-                color: "rgba(191,245,239,0.94)",
+                border: "1px solid color-mix(in srgb, var(--accent-strong) 32%, transparent)",
+                background: "color-mix(in srgb, var(--background) 52%, transparent)",
+                color: "color-mix(in srgb, var(--foreground) 94%, transparent)",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 10,
                 letterSpacing: "0.08em",
@@ -273,6 +561,6 @@ export function CharacterVoiceWavefield(props: Props) {
           </div>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

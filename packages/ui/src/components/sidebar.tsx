@@ -60,8 +60,20 @@ export type SidebarProps = {
   userName?: string;
   /** User role label (e.g. "Admin"). */
   userRole?: string;
-  /** Persist collapsed state to localStorage under this key. */
+  /**
+   * Persist collapsed state under this cookie name. The cookie is set on
+   * toggle and read by the server during SSR — see `initialCollapsed`. The
+   * name doubles as a localStorage migration key (read once on mount and
+   * promoted to a cookie) so existing users don't pop open on first visit.
+   */
   storageKey?: string;
+  /**
+   * Server-rendered initial collapsed state. The parent layout reads the
+   * persisted cookie via `cookies()` and forwards it here so the first paint
+   * matches the user's preference — eliminates the open-then-close flash that
+   * happened when the state was hydrated from localStorage post-mount.
+   */
+  initialCollapsed?: boolean;
   /** Callback fired when the user clicks "Sign out" in the sidebar footer. */
   onSignOut?: () => void;
   /** Callback fired when the user selects a theme. */
@@ -144,6 +156,7 @@ export function Sidebar({
   userName,
   userRole,
   storageKey = "odyssey-sidebar-collapsed",
+  initialCollapsed = false,
   onSignOut,
   onThemeChange,
   theme = "dark",
@@ -185,7 +198,7 @@ export function Sidebar({
     };
   }, [items, tabs, activeTab]);
 
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [themeSubmenuOpen, setThemeSubmenuOpen] = useState(false);
@@ -195,15 +208,25 @@ export function Sidebar({
   const themeCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [themeSubmenuPos, setThemeSubmenuPos] = useState<{ top: number; left: number } | null>(null);
 
+  // One-shot migration: if a previous session persisted the state in
+  // localStorage but no cookie exists yet, copy it to the cookie so the
+  // server picks it up on the next request.
   useEffect(() => {
+    const cookieAlreadySet = document.cookie.split("; ").some((c) => c.startsWith(`${storageKey}=`));
+    if (cookieAlreadySet) return;
     const stored = localStorage.getItem(storageKey);
-    if (stored === "true") setCollapsed(true);
+    if (stored !== "true" && stored !== "false") return;
+    document.cookie = `${storageKey}=${stored}; path=/; max-age=31536000; SameSite=Lax`;
+    if (stored === "true" && !collapsed) setCollapsed(true);
+    localStorage.removeItem(storageKey);
+    // collapsed intentionally omitted — only run on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   const toggle = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev;
-      localStorage.setItem(storageKey, String(next));
+      document.cookie = `${storageKey}=${next}; path=/; max-age=31536000; SameSite=Lax`;
       return next;
     });
   }, [storageKey]);

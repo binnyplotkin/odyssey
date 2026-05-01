@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
-import { getCharacterStore } from "@odyssey/db";
-import { curate } from "@odyssey/wiki-curator";
+import {
+  buildCharacterContext,
+  CharacterContextError,
+} from "@/lib/character-context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,17 +53,14 @@ export async function POST(
     body = {};
   }
 
-  const fallbackCharacter =
-    id === "abraham-fallback" ? { id, slug: "abraham", title: "Abraham" } : null;
-  const character = fallbackCharacter ?? (await getCharacterStore().getById(id));
-  if (!character) {
-    return jsonError(404, "character not found");
-  }
-
-  const startedAt = performance.now();
   try {
-    const curated = await curate({
-      characterId: character.id,
+    const fallbackCharacter =
+      id === "abraham-fallback" ? { id, slug: "abraham", title: "Abraham" } : undefined;
+    const context = await buildCharacterContext({
+      characterId: id,
+      character: fallbackCharacter,
+      mode: "voice-baseline",
+      promptKind: "voice",
       query: undefined, // baseline — no specific query
       currentMoment: body.moment,
       scene: body.scene,
@@ -69,16 +68,23 @@ export async function POST(
     });
 
     return Response.json({
-      characterTitle: character.title,
-      promptChunk: curated.promptChunk,
-      pageSlugs: curated.pages.map((p) => p.page.slug),
-      tokensUsed: curated.tokensUsed,
+      characterTitle: context.character.title,
+      promptChunk: context.promptChunk,
+      systemPrompt: context.systemPrompt,
+      pageSlugs: context.pageSlugs,
+      pages: context.pages,
+      trace: context.trace,
+      tokensUsed: context.tokensUsed,
+      tokensBudget: context.tokensBudget,
       builtAt: new Date().toISOString(),
-      elapsedMs: Math.round(performance.now() - startedAt),
+      elapsedMs: context.elapsedMs,
+      routingMode: context.routingMode,
+      timingTrace: context.timingTrace,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Curator failed.";
-    return jsonError(500, message);
+    const status = err instanceof CharacterContextError ? err.status : 500;
+    return jsonError(status, message);
   }
 }
 

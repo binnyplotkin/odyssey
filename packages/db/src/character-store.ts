@@ -27,6 +27,12 @@ function isMissingCharactersTableError(error: unknown) {
   return code === "42P01";
 }
 
+/**
+ * Wider catch-and-return-null guard for "expected" read failures: missing
+ * table (fresh DB) plus the Neon driver's generic "Failed query:" wrapper
+ * — used at the read-method boundary so the UI gets `null` / `[]` instead
+ * of a 500 in those cases.
+ */
 function isRecoverableCharacterReadError(error: unknown) {
   if (isMissingCharactersTableError(error)) return true;
   const message =
@@ -34,6 +40,47 @@ function isRecoverableCharacterReadError(error: unknown) {
     (error as { cause?: { message?: string } })?.cause?.message ??
     "";
   return message.includes("Failed query:");
+}
+
+/**
+ * The Neon serverless driver speaks HTTP to Neon's edge proxy. Stale sockets
+ * occasionally fail with `fetch failed` / `ECONNRESET` mid-read. A single
+ * retry recovers the request without changing semantics. Reads only — never
+ * wrap writes (could double-apply).
+ */
+function isTransientFetchError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidates: unknown[] = [
+    error,
+    (error as { cause?: unknown }).cause,
+    (error as { sourceError?: unknown }).sourceError,
+  ];
+  for (const c of candidates) {
+    if (!c || typeof c !== "object") continue;
+    const code = (c as { code?: string }).code ?? "";
+    if (
+      code === "ECONNRESET" ||
+      code === "ECONNREFUSED" ||
+      code === "ETIMEDOUT" ||
+      code === "ENETUNREACH" ||
+      code === "EAI_AGAIN"
+    ) {
+      return true;
+    }
+    const message = (c as { message?: string }).message ?? "";
+    if (message.includes("fetch failed")) return true;
+  }
+  return false;
+}
+
+async function retryRead<T>(op: () => Promise<T>): Promise<T> {
+  try {
+    return await op();
+  } catch (error) {
+    if (!isTransientFetchError(error)) throw error;
+    await new Promise((r) => setTimeout(r, 80));
+    return await op();
+  }
 }
 
 function normalize(row: typeof charactersTable.$inferSelect): CharacterRecord {
@@ -70,8 +117,9 @@ function neonStore(): CharacterStore {
   return {
     async list() {
       try {
-        const db = requireDb();
-        const rows = await db.select().from(charactersTable);
+        const rows = await retryRead(() =>
+          requireDb().select().from(charactersTable),
+        );
         return rows
           .map(normalize)
           .sort((a, b) => a.title.localeCompare(b.title));
@@ -83,12 +131,13 @@ function neonStore(): CharacterStore {
 
     async getById(id) {
       try {
-        const db = requireDb();
-        const [row] = await db
-          .select()
-          .from(charactersTable)
-          .where(eq(charactersTable.id, id))
-          .limit(1);
+        const [row] = await retryRead(() =>
+          requireDb()
+            .select()
+            .from(charactersTable)
+            .where(eq(charactersTable.id, id))
+            .limit(1),
+        );
         return row ? normalize(row) : null;
       } catch (error) {
         if (isRecoverableCharacterReadError(error)) return null;
@@ -98,12 +147,13 @@ function neonStore(): CharacterStore {
 
     async getBySlug(slug) {
       try {
-        const db = requireDb();
-        const [row] = await db
-          .select()
-          .from(charactersTable)
-          .where(eq(charactersTable.slug, slug))
-          .limit(1);
+        const [row] = await retryRead(() =>
+          requireDb()
+            .select()
+            .from(charactersTable)
+            .where(eq(charactersTable.slug, slug))
+            .limit(1),
+        );
         return row ? normalize(row) : null;
       } catch (error) {
         if (isRecoverableCharacterReadError(error)) return null;

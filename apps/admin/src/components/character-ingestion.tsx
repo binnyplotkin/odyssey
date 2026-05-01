@@ -7,6 +7,7 @@ import {
   classifySource,
   previewPurgeIngestionRun,
   purgeIngestionRun,
+  updateCharacterIngestionPrompt,
 } from "@/app/(authenticated)/characters/actions";
 import { PurgeConfirmModal, type PurgePreview } from "./purge-confirm-modal";
 
@@ -56,11 +57,12 @@ type HistoryRow = {
 
 type Props = {
   characterId: string;
-  characterSlug: string;
-  hasIngestionPrompt: boolean;
+  ingestionPrompt: string | null;
   history: HistoryRow[];
   stats: { totalRuns: number; weekRuns: number; weekTokens: number };
 };
+
+type IngestionTab = "prompt" | "data";
 
 /* ── Run stream state ──────────────────────────────────────────── */
 
@@ -84,12 +86,14 @@ const INITIAL_STREAM: StreamState = {
 
 export function CharacterIngestion({
   characterId,
-  characterSlug,
-  hasIngestionPrompt,
+  ingestionPrompt,
   history,
   stats,
 }: Props) {
   const router = useRouter();
+
+  const hasIngestionPrompt = !!ingestionPrompt?.trim();
+  const [tab, setTab] = useState<IngestionTab>(hasIngestionPrompt ? "data" : "prompt");
 
   const [kind, setKind] = useState<SourceKind>("primary");
   const [title, setTitle] = useState("");
@@ -259,65 +263,303 @@ export function CharacterIngestion({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
-      {/* Missing-prompt warning */}
-      {!hasIngestionPrompt && (
-        <div style={{
-          display: "flex", alignItems: "flex-start", gap: 10,
-          padding: "12px 16px", borderRadius: 12,
-          background: "rgba(250,204,21,0.05)",
-          border: "1px solid rgba(250,204,21,0.25)",
-        }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FACC15" strokeWidth="2" strokeLinecap="round" style={{ marginTop: 1, flexShrink: 0 }}>
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-            <span style={{ fontFamily: T.fontBody, fontSize: 13, fontWeight: 500, color: T.fg }}>
-              No ingestion prompt set
-            </span>
-            <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "18px" }}>
-              This character has no domain-awareness steering. Ingestion will run, but the LLM won't know what tradition the source comes from.{" "}
-              <a href={`/characters/${characterSlug}`} style={{ color: "#8CE7D2", textDecoration: "none" }}>Set a prompt →</a>
-            </span>
+
+      {/* Tab toggle: Prompt ↔ Data */}
+      <IngestionTabToggle tab={tab} setTab={setTab} hasPrompt={hasIngestionPrompt} />
+
+      {/* Prompt tab */}
+      <div style={{ display: tab === "prompt" ? "block" : "none" }}>
+        <IngestionPromptEditor characterId={characterId} initialValue={ingestionPrompt} />
+      </div>
+
+      {/* Data tab */}
+      <div
+        style={{
+          display: tab === "data" ? "flex" : "none",
+          flexDirection: "column",
+          gap: 20,
+        }}
+      >
+        {/* Missing-prompt warning */}
+        {!hasIngestionPrompt && (
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: 10,
+            padding: "12px 16px", borderRadius: 12,
+            background: "rgba(250,204,21,0.05)",
+            border: "1px solid rgba(250,204,21,0.25)",
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FACC15" strokeWidth="2" strokeLinecap="round" style={{ marginTop: 1, flexShrink: 0 }}>
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
+              <span style={{ fontFamily: T.fontBody, fontSize: 13, fontWeight: 500, color: T.fg }}>
+                No ingestion prompt set
+              </span>
+              <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "18px" }}>
+                This character has no domain-awareness steering. Ingestion will run, but the LLM won&apos;t know what tradition the source comes from.{" "}
+                <button
+                  type="button"
+                  onClick={() => setTab("prompt")}
+                  style={{
+                    background: "none", border: "none", padding: 0,
+                    color: "#8CE7D2", cursor: "pointer", font: "inherit",
+                  }}
+                >
+                  Set a prompt →
+                </button>
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Top row: form + active run side-by-side */}
+        <div style={{ display: "flex", flexDirection: "row", gap: 20 }}>
+          <div style={{ flex: "1 1 0", minWidth: 0 }}>
+            <SourceForm
+              kind={kind} setKind={setKind}
+              title={title} setTitle={setTitle}
+              tags={tags} tagDraft={tagDraft} setTagDraft={setTagDraft} addTag={addTag} removeTag={removeTag}
+              content={content} setContent={setContent}
+              wordCount={wordCount} kbSize={kbSize}
+              model={model} setModel={setModel}
+              canCompile={canCompile}
+              running={stream.status === "running"}
+              onCompile={startRun}
+              classifying={classifying}
+              classifiedBy={classifiedBy}
+              classifyError={classifyError}
+              onClassify={runClassify}
+              detailsOpen={detailsOpen}
+              onOpenDetails={() => setDetailsOpen(true)}
+            />
+          </div>
+          <div style={{ width: 520, flexShrink: 0 }}>
+            <ActiveRunPanel
+              stream={stream}
+              onCancel={cancelRun}
+              onReset={resetForm}
+            />
           </div>
         </div>
-      )}
 
-      {/* Top row: form + active run side-by-side */}
-      <div style={{ display: "flex", flexDirection: "row", gap: 20 }}>
-        <div style={{ flex: "1 1 0", minWidth: 0 }}>
-          <SourceForm
-            kind={kind} setKind={setKind}
-            title={title} setTitle={setTitle}
-            tags={tags} tagDraft={tagDraft} setTagDraft={setTagDraft} addTag={addTag} removeTag={removeTag}
-            content={content} setContent={setContent}
-            wordCount={wordCount} kbSize={kbSize}
-            model={model} setModel={setModel}
-            canCompile={canCompile}
-            running={stream.status === "running"}
-            onCompile={startRun}
-            classifying={classifying}
-            classifiedBy={classifiedBy}
-            classifyError={classifyError}
-            onClassify={runClassify}
-            detailsOpen={detailsOpen}
-            onOpenDetails={() => setDetailsOpen(true)}
-          />
-        </div>
-        <div style={{ width: 520, flexShrink: 0 }}>
-          <ActiveRunPanel
-            stream={stream}
-            onCancel={cancelRun}
-            onReset={resetForm}
-          />
+        {/* History */}
+        <HistoryCard history={history} stats={stats} characterId={characterId} />
+      </div>
+    </div>
+  );
+}
+
+/* ── Tab toggle ────────────────────────────────────────────────── */
+
+function IngestionTabToggle({
+  tab, setTab, hasPrompt,
+}: {
+  tab: IngestionTab;
+  setTab: (t: IngestionTab) => void;
+  hasPrompt: boolean;
+}) {
+  const TABS: { value: IngestionTab; label: string }[] = [
+    { value: "prompt", label: "Prompt" },
+    { value: "data", label: "Data" },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Ingestion view"
+      style={{
+        display: "inline-flex", padding: 2, borderRadius: 8,
+        border: `1px solid ${T.border}`, background: "rgba(0,0,0,0.25)",
+        alignSelf: "flex-start",
+      }}
+    >
+      {TABS.map((t) => {
+        const active = tab === t.value;
+        const showWarn = t.value === "prompt" && !hasPrompt;
+        return (
+          <button
+            key={t.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => setTab(t.value)}
+            style={{
+              padding: "5px 14px",
+              fontFamily: T.fontMono, fontSize: 10, fontWeight: 600,
+              letterSpacing: "0.1em", textTransform: "uppercase",
+              color: active ? T.fg : T.muted,
+              background: active ? "rgba(140, 231, 210, 0.12)" : "transparent",
+              border: "none", borderRadius: 6, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: 6,
+            }}
+          >
+            {t.label}
+            {showWarn && (
+              <span
+                aria-hidden
+                style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: "#FACC15",
+                }}
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Ingestion prompt editor ───────────────────────────────────── */
+
+function IngestionPromptEditor({
+  characterId, initialValue,
+}: {
+  characterId: string;
+  initialValue: string | null;
+}) {
+  const [value, setValue] = useState(initialValue ?? "");
+  const [saved, setSaved] = useState<string>(initialValue ?? "");
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  const dirty = value !== saved;
+  const charCount = value.length;
+  const tokenEst = Math.ceil(value.length / 4);
+
+  function save() {
+    setError(null);
+    start(async () => {
+      const res = await updateCharacterIngestionPrompt(characterId, value);
+      if (res.ok) {
+        setSaved(value);
+        setSavedAt(new Date());
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  return (
+    <div style={cardShell}>
+      <div style={{
+        display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+        padding: "14px 20px", borderBottom: `1px solid ${T.border}`,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "4px 10px", borderRadius: 999,
+            background: "rgba(140,231,210,0.08)", border: "1px solid rgba(140,231,210,0.2)",
+          }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8CE7D2" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+            <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 600, color: "#8CE7D2", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Ingestion Prompt
+            </span>
+          </span>
+          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+            The single domain knob — injected into every compile run.
+          </span>
         </div>
       </div>
 
-      {/* History */}
-      <HistoryCard history={history} stats={stats} characterId={characterId} />
+      <div style={{
+        padding: "12px 20px", background: "rgba(140,231,210,0.04)",
+        borderBottom: `1px solid ${T.border}`,
+        display: "flex", alignItems: "flex-start", gap: 10,
+      }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8CE7D2" strokeWidth="2" strokeLinecap="round" style={{ marginTop: 1, flexShrink: 0 }}>
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4M12 8h.01" />
+        </svg>
+        <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "18px" }}>
+          The engine is domain-agnostic. Pages, edges, eras, source kinds — all generic. This prompt is where you teach the LLM what tradition this character belongs to and how to treat its sources.
+        </span>
+      </div>
+
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        rows={18}
+        placeholder="e.g. You are compiling source material into <Name>'s knowledge graph. <Name> is … Treat … as primary. Treat … as commentary. Always link … Voice: …"
+        style={{
+          width: "100%", border: "none", outline: "none", resize: "vertical",
+          padding: "18px 22px", background: "var(--background)",
+          fontFamily: T.fontMono, fontSize: 13, color: T.fg, lineHeight: "21px",
+          minHeight: 320, boxSizing: "border-box",
+        }}
+      />
+
+      {error && (
+        <div style={{
+          padding: "10px 20px", borderTop: `1px solid ${T.border}`,
+          background: "rgba(232,144,144,0.08)",
+          color: "#E89090", fontFamily: T.fontBody, fontSize: 13,
+        }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "12px 20px", borderTop: `1px solid ${T.border}`,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, letterSpacing: "0.05em" }}>
+            {charCount.toLocaleString()} chars · ~{tokenEst.toLocaleString()} tokens
+          </span>
+          {!dirty && savedAt && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: T.fontMono, fontSize: 10, color: "#4ADE80" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ADE80" }} />
+              Saved {relativeShort(savedAt)}
+            </span>
+          )}
+          {dirty && (
+            <span style={{ fontFamily: T.fontMono, fontSize: 10, color: "#FACC15" }}>
+              Unsaved changes
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {dirty && (
+            <button
+              type="button"
+              onClick={() => { setValue(saved); setError(null); }}
+              style={ghostBtn}
+            >
+              Discard
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={!dirty || pending}
+            onClick={save}
+            style={{
+              padding: "6px 16px", borderRadius: 8, border: "none",
+              background: T.accent, color: "var(--background)",
+              fontFamily: T.fontBody, fontSize: 12, fontWeight: 600,
+              cursor: !dirty || pending ? "not-allowed" : "pointer",
+              opacity: !dirty || pending ? 0.5 : 1,
+            }}
+          >
+            {pending ? "Saving…" : "Save prompt"}
+          </button>
+        </div>
+      </div>
     </div>
   );
+}
+
+function relativeShort(d: Date): string {
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return d.toLocaleString();
 }
 
 /* ── Source form ───────────────────────────────────────────────── */

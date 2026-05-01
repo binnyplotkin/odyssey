@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { WebSocket as NodeWebSocket } from "ws";
 import { getCharacterStore } from "@odyssey/db";
+import { TraceEnvelope } from "@/lib/voice-trace";
+import { buildVoiceSystemPrompt } from "@/lib/character-system-prompt";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -351,6 +353,15 @@ export async function POST(
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const startedAt = performance.now();
+      // Per-turn server-side telemetry. The browser rebases these events onto
+      // its `voice-stream.posted` mark when it merges the final trace shipped
+      // in the `done` event. Keep this milestone-only; audio frames stay hot.
+      const serverTrace = new TraceEnvelope();
+      serverTrace.mark("server.request.received", {
+        requestedProvider,
+        chosenProvider: provider,
+        model: body.model ?? null,
+      });
       let closed = false;
 
       const sendEvent = (event: string, data: unknown) => {
@@ -407,6 +418,9 @@ export async function POST(
           if (data.type === "Audio") {
             if (firstAudioAt === null) {
               firstAudioAt = performance.now();
+              serverTrace.mark("server.tts.first-audio", {
+                latencyMs: Math.round(firstAudioAt - startedAt),
+              });
               sendEvent("first-audio", {
                 latencyMs: Math.round(firstAudioAt - startedAt),
               });
@@ -433,11 +447,13 @@ export async function POST(
       });
 
       ttsWs.on("error", (err: Error) => {
+        serverTrace.mark("server.tts.error", { message: err.message });
         sendEvent("error", { message: `Kyutai TTS WebSocket error: ${err.message}` });
         ttsClosedResolve();
       });
 
       ttsWs.on("close", () => {
+        serverTrace.mark("server.tts.ws.close");
         ttsClosedResolve();
       });
 
@@ -463,15 +479,24 @@ export async function POST(
       // the perceived first-audio latency.
       let ttsReady = ttsWs.readyState === NodeWebSocket.OPEN;
       const pendingWords: string[] = [];
+      // Tracks whether we've sent any Text frame yet. Hoisted so both the
+      // WS-open drain path and the LLM streaming path can mark
+      // `tts.first-text` in whichever branch sends the first word.
+      let firstTextSent = false;
       const ttsReadyPromise = new Promise<void>((resolve, reject) => {
         if (ttsReady) {
           resolve();
           return;
         }
         ttsWs.once("open", () => {
+          serverTrace.mark("server.tts.ws.open");
           ttsReady = true;
           // Drain anything queued during the handshake.
-          if (ttsWs.readyState === NodeWebSocket.OPEN) {
+          if (ttsWs.readyState === NodeWebSocket.OPEN && pendingWords.length > 0) {
+            if (!firstTextSent) {
+              firstTextSent = true;
+              serverTrace.mark("server.tts.first-text");
+            }
             for (const word of pendingWords) {
               ttsWs.send(msgpackEncode({ type: "Text", text: word }));
             }
@@ -486,6 +511,14 @@ export async function POST(
         if (req.signal.aborted) return;
 
         const systemPrompt = buildVoiceSystemPrompt(character.title, promptChunk);
+        serverTrace.mark("server.context.attached", {
+          characterId: character.id,
+          promptChunkChars: promptChunk.length,
+          systemPromptChars: systemPrompt.length,
+          historyTurns: body.history?.length ?? 0,
+          messageChars: message.length,
+        });
+        sendEvent("trace", serverTrace.toJSON());
         const history: Array<{ role: "user" | "assistant"; content: string }> =
           (body.history ?? []).filter(
             (m) =>
@@ -502,6 +535,10 @@ export async function POST(
           if (req.signal.aborted) return;
           for (const word of text.split(/\s+/).filter(Boolean)) {
             if (ttsReady && ttsWs.readyState === NodeWebSocket.OPEN) {
+              if (!firstTextSent) {
+                firstTextSent = true;
+                serverTrace.mark("server.tts.first-text");
+              }
               ttsWs.send(msgpackEncode({ type: "Text", text: word }));
             } else {
               pendingWords.push(word);
@@ -513,6 +550,9 @@ export async function POST(
         const onToken = (delta: string) => {
           if (req.signal.aborted) return;
           if (!delta) return;
+          if (!emittedAnyToken) {
+            serverTrace.mark("server.llm.first-token");
+          }
           emittedAnyToken = true;
           sendEvent("token", { delta });
           tokenBuffer.value += delta;
@@ -532,6 +572,7 @@ export async function POST(
         for (const attemptProvider of providerOrder) {
           if (!canUse(attemptProvider)) continue;
           try {
+            serverTrace.mark("server.llm.attempt", { provider: attemptProvider });
             if (attemptProvider === "cerebras") {
               modelId = body.model ?? CEREBRAS_DEFAULT_MODEL;
               ({ inputTokens, outputTokens } = await streamFromCerebras({
@@ -557,9 +598,17 @@ export async function POST(
               }));
             }
             chosenProvider = attemptProvider;
+            serverTrace.mark("server.llm.succeeded", {
+              provider: attemptProvider,
+              model: modelId,
+            });
             break;
           } catch (providerErr) {
             lastProviderError = providerErr;
+            serverTrace.mark("server.llm.failed", {
+              provider: attemptProvider,
+              message: providerErr instanceof Error ? providerErr.message : String(providerErr),
+            });
             const messageText =
               providerErr instanceof Error ? providerErr.message.toLowerCase() : String(providerErr).toLowerCase();
             const authLike =
@@ -579,6 +628,13 @@ export async function POST(
           throw (lastProviderError ?? new Error("No LLM provider attempt succeeded."));
         }
 
+        serverTrace.mark("server.llm.done", {
+          provider: chosenProvider,
+          model: modelId,
+          inputTokens,
+          outputTokens,
+        });
+
         if (req.signal.aborted) return;
 
         // Flush any partial tail token, then signal end-of-stream to TTS.
@@ -596,11 +652,14 @@ export async function POST(
         await ttsReadyPromise;
         if (req.signal.aborted) return;
         if (ttsWs.readyState === NodeWebSocket.OPEN) {
+          serverTrace.mark("server.tts.eos-sent");
           ttsWs.send(msgpackEncode({ type: "Eos" }));
         }
 
         // Wait until TTS server finishes draining audio and closes the WS.
         await ttsClosedPromise;
+
+        serverTrace.mark("server.tts.done", { audioSamples: totalSamples });
 
         sendEvent("done", {
           inputTokens,
@@ -615,9 +674,11 @@ export async function POST(
           totalMs: Math.round(performance.now() - startedAt),
           provider: chosenProvider,
           model: modelId,
+          serverTrace: serverTrace.toJSON(),
         });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
+        serverTrace.mark("server.error", { message: msg });
         sendEvent("error", { message: msg });
       } finally {
         req.signal.removeEventListener("abort", onAbort);
@@ -755,27 +816,6 @@ async function streamFromCerebras(opts: {
     }
   }
   return { inputTokens, outputTokens };
-}
-
-function buildVoiceSystemPrompt(characterName: string, curatorChunk: string): string {
-  const trimmedChunk = curatorChunk.trim();
-  const contextSection = trimmedChunk
-    ? `The context below is what the runtime has pulled from your knowledge graph for this conversation — your voice, the people around you, the places you know, the events you've lived.
-
-Stay inside the knowledge below. If asked about something not in your context, say you do not know it — plainly, as you would. Do not invent facts. Do not quote scripture at yourself.
-
----
-
-${trimmedChunk}`
-    : `If asked about something specific you do not know about, say you do not know it — plainly, as you would. Do not invent facts.`;
-
-  return `You are ${characterName}.
-
-You speak in first person as ${characterName}. You do not narrate, stage-direct, or refer to yourself in the third person. You do not break character.
-
-You are in a real-time **voice** conversation. **Reply with one short sentence whenever possible. Two only if absolutely necessary. Never three or more.** Match the cadence of natural speech, not written exposition. Use contractions. Do not bullet-list. Do not number. Do not give long preambles. The user can always ask "tell me more" if they want more.
-
-${contextSection}`;
 }
 
 function jsonError(status: number, message: string) {

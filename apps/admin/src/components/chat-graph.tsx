@@ -16,12 +16,19 @@ import type {
 } from "@odyssey/db";
 
 const T = {
+  fg: "var(--foreground)",
   muted: "var(--muted)",
   border: "var(--border)",
   fontBody: "'Inter', sans-serif",
   fontHeading: "'Space Grotesk', sans-serif",
   fontMono: "var(--font-mono, 'JetBrains Mono', monospace)",
 };
+
+// Theme-aware stroke / fill helpers. Built on var(--foreground) so they
+// invert correctly between light and dark modes — the chat graph used to
+// hardcode white-with-low-alpha which made connection lines invisible on a
+// light background.
+const FG = (pct: number) => `color-mix(in srgb, var(--foreground) ${pct}%, transparent)`;
 
 const TYPE_COLOR: Record<WikiPageType, string> = {
   entity:         "#FBA7C0",
@@ -112,7 +119,7 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
   const emptyGraph = pages.length === 0;
 
   return (
-    <div style={{ position: "relative", background: "radial-gradient(circle at 50% 40%, rgba(255,255,255,0.02) 0%, rgba(0,0,0,0.15) 100%)" }}>
+    <div style={{ position: "relative", background: `radial-gradient(circle at 50% 40%, ${FG(2)} 0%, ${FG(8)} 100%)` }}>
       {emptyGraph ? (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: H, color: T.muted, fontFamily: T.fontBody, fontSize: 13 }}>
           No wiki pages yet.
@@ -127,7 +134,7 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
           {columns.map((col) => (
             <g key={col.key}>
               {col.index > 0 && (
-                <line x1={col.left} y1={HEADER_H} x2={col.left} y2={H - TIMELESS_H} stroke="rgba(255,255,255,0.06)" strokeDasharray="2 4" />
+                <line x1={col.left} y1={HEADER_H} x2={col.left} y2={H - TIMELESS_H} style={{ stroke: FG(6) }} strokeDasharray="2 4" />
               )}
               <text
                 x={col.center}
@@ -137,14 +144,14 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
                   fontFamily: T.fontMono,
                   fontSize: 9,
                   fontWeight: 600,
-                  fill: col.key === currentEra ? "#8CE7D2" : "rgba(255,255,255,0.35)",
+                  fill: col.key === currentEra ? "var(--accent-strong)" : FG(35),
                   letterSpacing: "0.1em",
                 }}
               >
                 {col.title.toUpperCase()}
               </text>
               {col.key === currentEra && (
-                <text x={col.center} y={HEADER_H + 6} textAnchor="middle" style={{ fontFamily: T.fontMono, fontSize: 8, fill: "rgba(140,231,210,0.6)", letterSpacing: "0.06em" }}>
+                <text x={col.center} y={HEADER_H + 6} textAnchor="middle" style={{ fontFamily: T.fontMono, fontSize: 8, fill: "color-mix(in srgb, var(--accent-strong) 70%, transparent)", letterSpacing: "0.06em" }}>
                   current
                 </text>
               )}
@@ -154,8 +161,8 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
           {/* Timeless band separator — only when we have an era layout */}
           {!isTypeMode && (
             <>
-              <line x1={SIDE_PAD} y1={H - TIMELESS_H} x2={W - SIDE_PAD} y2={H - TIMELESS_H} stroke="rgba(255,255,255,0.06)" strokeDasharray="2 4" />
-              <text x={SIDE_PAD} y={H - TIMELESS_H + 14} style={{ fontFamily: T.fontMono, fontSize: 8, fontWeight: 500, fill: "rgba(255,255,255,0.3)", letterSpacing: "0.1em" }}>
+              <line x1={SIDE_PAD} y1={H - TIMELESS_H} x2={W - SIDE_PAD} y2={H - TIMELESS_H} style={{ stroke: FG(6) }} strokeDasharray="2 4" />
+              <text x={SIDE_PAD} y={H - TIMELESS_H + 14} style={{ fontFamily: T.fontMono, fontSize: 8, fontWeight: 500, fill: FG(30), letterSpacing: "0.1em" }}>
                 TIMELESS
               </text>
             </>
@@ -176,9 +183,8 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
                 <line
                   key={e.id}
                   x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                  stroke="rgba(255,255,255,0.08)"
                   strokeWidth="0.75"
-                  style={{ pointerEvents: "none" }}
+                  style={{ pointerEvents: "none", stroke: FG(8) }}
                 />
               );
             })}
@@ -187,15 +193,14 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
           {/* Active edges — bright, colored by kind */}
           <g>
             {activeEdges.map((e, i) => {
-              const color = EDGE_COLOR[e.kind] ?? "rgba(255,255,255,0.35)";
+              const color = EDGE_COLOR[e.kind] ?? FG(35);
               return (
                 <line
                   key={i}
                   x1={e.from.x} y1={e.from.y} x2={e.to.x} y2={e.to.y}
-                  stroke={color}
                   strokeWidth="1.2"
                   strokeLinecap="round"
-                  style={{ pointerEvents: "none" }}
+                  style={{ pointerEvents: "none", stroke: color }}
                 />
               );
             })}
@@ -220,10 +225,10 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
         background: "var(--background)", border: `1px solid ${T.border}`,
         pointerEvents: "none",
       }}>
-        <LegendDot color="#8CE7D2" label="seed" ring />
-        <LegendDot color="#FFFFFFB3" label="selected" />
+        <LegendDot color="var(--accent-strong)" label="seed" ring />
+        <LegendDot color={FG(70)} label="selected" />
         <LegendDot color="#E89090" label="time-gated" dash />
-        <LegendDot color="rgba(255,255,255,0.35)" label="budget" />
+        <LegendDot color={FG(35)} label="budget" />
       </div>
     </div>
   );
@@ -266,12 +271,12 @@ function NodeDot({ node, state }: { node: Node; state: NodeState }) {
   return (
     <g transform={`translate(${node.x}, ${node.y})`} opacity={opacity} style={{ pointerEvents: "none" }}>
       {showRing && (
-        <circle r={r + 5} fill="none" stroke="#8CE7D2" strokeWidth="1.25" opacity="0.9" />
+        <circle r={r + 5} fill="none" style={{ stroke: "var(--accent-strong)" }} strokeWidth="1.25" opacity="0.9" />
       )}
       <circle
         r={r}
         fill={fill}
-        stroke={strokeColor}
+        style={{ stroke: strokeColor }}
         strokeWidth={strokeWidth}
         strokeDasharray={state === "time-gated" ? "2 2" : undefined}
       />
@@ -284,7 +289,7 @@ function NodeDot({ node, state }: { node: Node; state: NodeState }) {
               fontFamily: T.fontBody,
               fontSize: 9.5,
               fontWeight: state === "seed" || state === "selected" ? 600 : 500,
-              fill: state === "time-gated" ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.85)",
+              fill: state === "time-gated" ? FG(45) : FG(85),
               textDecoration: strikethrough ? "line-through" : "none",
             }}
           >
@@ -300,11 +305,13 @@ function LegendDot({ color, label, ring, dash }: { color: string; label: string;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
       <svg width="10" height="10" viewBox="0 0 10 10">
-        {ring && <circle cx="5" cy="5" r="4" fill="none" stroke={color} strokeWidth="1.25" />}
+        {ring && <circle cx="5" cy="5" r="4" fill="none" style={{ stroke: color }} strokeWidth="1.25" />}
         <circle
           cx="5" cy="5" r={ring ? 2.4 : 3.2}
-          fill={dash ? "transparent" : color}
-          stroke={dash ? color : undefined}
+          style={{
+            fill: dash ? "transparent" : color,
+            stroke: dash ? color : undefined,
+          }}
           strokeDasharray={dash ? "1.5 1.5" : undefined}
         />
       </svg>
@@ -526,7 +533,7 @@ function truncateLabel(s: string, max: number): string {
 }
 
 const EDGE_COLOR: Record<EdgeKind, string> = {
-  mentions:        "rgba(255,255,255,0.35)",
+  mentions:        FG(35),
   relates_to:      "rgba(251,167,192,0.7)",
   participates_in: "rgba(250,204,21,0.7)",
   happens_at:      "rgba(122,176,232,0.7)",

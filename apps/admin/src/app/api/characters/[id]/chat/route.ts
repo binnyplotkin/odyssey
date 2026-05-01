@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getCharacterStore } from "@odyssey/db";
-import { curate, type CurateRequest } from "@odyssey/wiki-curator";
+import { buildCharacterContext } from "@/lib/character-context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +32,12 @@ type ChatBody = {
   scene?: { activeEntities?: string[]; location?: string };
   model?: string;
   tokenBudget?: number;
+  /**
+   * When set to a non-empty string, replaces the entire system prompt and
+   * skips the curator. Used by the test-chat "system prompt" tab so the
+   * user can isolate model behavior from curator context.
+   */
+  systemPromptOverride?: string;
 };
 
 const DEFAULT_MODEL = "claude-sonnet-4-5";
@@ -69,38 +75,32 @@ export async function POST(
       };
 
       try {
-        // ── Curator ───────────────────────────────────────────────
-        const curateReq: CurateRequest = {
+        const override = body.systemPromptOverride?.trim();
+        const context = await buildCharacterContext({
           characterId: character.id,
+          character,
+          mode: override ? "override" : "chat-turn",
+          promptKind: "chat",
           query: message,
           currentMoment: body.moment,
           scene: body.scene,
           tokenBudget: body.tokenBudget ?? 3000,
-        };
-        const curated = await curate(curateReq);
-        send("curator", {
-          trace: curated.trace,
-          pages: curated.pages.map((p) => ({
-            slug: p.page.slug,
-            title: p.page.title,
-            type: p.page.type,
-            rendering: p.rendering,
-            score: p.score,
-            origin: p.origin,
-            trail: p.trail,
-            tokens: p.tokens,
-          })),
-          promptChunk: curated.promptChunk,
-          tokensUsed: curated.tokensUsed,
-          tokensBudget: curated.tokensBudget,
-          elapsedMs: curated.elapsedMs,
+          systemPromptOverride: override,
         });
-
-        // ── LLM system prompt: curator chunk + voice directive ───
-        const systemPrompt = buildSystemPrompt(
-          character.title,
-          curated.promptChunk,
-        );
+        const systemPrompt = context.systemPrompt;
+        send("curator", {
+          trace: context.trace,
+          pages: context.pages,
+          promptChunk: context.promptChunk,
+          tokensUsed: context.tokensUsed,
+          tokensBudget: context.tokensBudget,
+          elapsedMs: context.elapsedMs,
+          systemPrompt,
+          overridden: context.routingMode === "override",
+          routingMode: context.routingMode,
+          promptKind: context.promptKind,
+          timingTrace: context.timingTrace,
+        });
 
         // ── Claude streaming ─────────────────────────────────────
         const anthropic = new Anthropic({ apiKey });
@@ -161,20 +161,6 @@ export async function POST(
       "X-Accel-Buffering": "no",
     },
   });
-}
-
-function buildSystemPrompt(characterName: string, curatorChunk: string): string {
-  return `You are ${characterName}. The context below is what the runtime has pulled from your knowledge graph for this turn — your voice, the people around you, the places you know, the events you've lived.
-
-You speak in first person as ${characterName}. You do not narrate, stage-direct, or refer to yourself in the third person. You do not break character. Your language matches the Voice Identity section exactly — register, idiom, beliefs, taboos.
-
-Stay inside the knowledge the curator surfaced. If asked about something not in your context, say you do not know it — plainly, as you would. Do not invent facts. Do not quote scripture at yourself.
-
-Respond briefly. The cadence is intimate conversation, not exposition.
-
----
-
-${curatorChunk}`;
 }
 
 function jsonError(status: number, message: string) {

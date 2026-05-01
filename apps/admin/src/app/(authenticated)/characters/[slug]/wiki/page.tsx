@@ -5,7 +5,7 @@ import { CharacterWiki } from "@/components/character-wiki";
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ slug: string }>;
-type SearchParams = Promise<{ page?: string }>;
+type SearchParams = Promise<{ page?: string; edit?: string }>;
 
 export default async function WikiTab({
   params,
@@ -15,7 +15,7 @@ export default async function WikiTab({
   searchParams: SearchParams;
 }) {
   const { slug } = await params;
-  const { page: initialPageSlug } = await searchParams;
+  const { page: initialPageSlug, edit: editParam } = await searchParams;
 
   const character = await getCharacterStore().getBySlug(slug);
   if (!character) notFound();
@@ -46,6 +46,7 @@ export default async function WikiTab({
       sources={sources}
       initialSelectedSlug={selectedPage?.slug ?? null}
       initialSourceRefs={initialSourceRefs}
+      initialEditing={editParam === "1"}
     />
   );
 }

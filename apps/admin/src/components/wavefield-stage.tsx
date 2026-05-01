@@ -40,20 +40,61 @@ export function createEmptyAudioData(): AudioData {
 
 const AUDIO: AudioData = { ...EMPTY_AUDIO };
 
-const COLORS = {
+/**
+ * Particle palette is picked once at module load based on the active theme.
+ * Light-mode palette uses darker teals so the points/lines still read against
+ * the light page background. Theme switching after first load requires a
+ * page refresh — geometry buffer attributes are populated from these colors
+ * at component mount, not reactively.
+ */
+type Palette = {
+  base: string;
+  glow: string;
+  highlight: string;
+  core: string;
+  deep: string;
+  aurora: string;
+};
+
+const PALETTE_DARK: Palette = {
   base: "#8FD1CB",
   glow: "#BFF5EF",
   highlight: "#8FEDE1",
   core: "#6FE0D2",
   deep: "#041215",
-} as const;
+  aurora: "#7EEFFF",
+};
+
+// Light-mode palette: stays in the same cyan family as the dark palette so
+// the wavefield's identity is preserved, just nudged slightly darker /
+// more saturated so the points/lines still read against the light page bg.
+const PALETTE_LIGHT: Palette = {
+  base: "#6FBDB4",
+  glow: "#8ED9CF",
+  highlight: "#6FD2C5",
+  core: "#50C8B6",
+  deep: "#041215",
+  aurora: "#5DD3E0",
+};
+
+function pickPalette(): Palette {
+  if (typeof window === "undefined") return PALETTE_DARK;
+  const explicit = document.documentElement.dataset.theme;
+  if (explicit === "light") return PALETTE_LIGHT;
+  if (explicit === "dark") return PALETTE_DARK;
+  return window.matchMedia("(prefers-color-scheme: light)").matches
+    ? PALETTE_LIGHT
+    : PALETTE_DARK;
+}
+
+const COLORS = pickPalette();
 
 const C_BASE = new Color(COLORS.base);
 const C_GLOW = new Color(COLORS.glow);
 const C_HIGHLIGHT = new Color(COLORS.highlight);
 const C_CORE = new Color(COLORS.core);
 const C_DEEP = new Color(COLORS.deep);
-const C_AURORA = new Color("#7EEFFF");
+const C_AURORA = new Color(COLORS.aurora);
 
 const FIELD_WIDTH = 54;
 const FIELD_DEPTH = 74;
@@ -1228,16 +1269,15 @@ function Scene({ audioData }: { audioData: AudioData }) {
   return (
     <>
       <fog attach="fog" args={["#081120", 8, 66]} />
+      {/* Camera is locked to a curated preset. OrbitControls stays in the tree
+          with all interactions disabled — its `target` drives the camera's
+          lookAt. To tune a new preset, temporarily flip the `enable*` flags
+          to `true` (and re-add the camera-debug overlay) to capture values. */}
       <OrbitControls
-        enableRotate
-        enablePan
-        enableZoom
+        enableRotate={false}
+        enablePan={false}
+        enableZoom={false}
         target={[0, -0.62, -24]}
-        minDistance={8}
-        maxDistance={38}
-        rotateSpeed={0.48}
-        panSpeed={0.68}
-        zoomSpeed={0.64}
       />
       <OceanField audioData={audioData} />
     </>
@@ -1254,10 +1294,13 @@ export function WavefieldStage({
   return (
     <div
       style={{
-        position: "fixed",
+        position: "absolute",
         inset: 0,
-        left: "var(--sidebar-width, 240px)",
-        backgroundColor: "#03060D",
+        // Theme-adaptive container bg. The atmospheric radial gradients above
+        // this layer fade to transparent at their outer stops, so the page bg
+        // shows through — light in light theme, dark in dark theme. Particle
+        // colors + fog stay hardcoded as the wavefield's signature aesthetic.
+        backgroundColor: "var(--background)",
         overflow: "hidden",
       }}
     >
@@ -1357,7 +1400,7 @@ export function WavefieldStage({
       <Canvas
         frameloop="always"
         dpr={[0.75, 1]}
-        camera={{ position: [0, 3.8, 18.6], fov: 42 }}
+        camera={{ position: [0, 2.2, 3.22], fov: 42 }}
         style={{ width: "100%", height: "100%", position: "relative", zIndex: 3 }}
         gl={{ antialias: false, alpha: true, powerPreference: "high-performance" }}
       >

@@ -56,6 +56,8 @@ type Props = {
   sources: WikiSourceRecord[];
   initialSelectedSlug: string | null;
   initialSourceRefs: WikiSourceRefRecord[];
+  /** When true and a page is initially selected, mount straight into edit mode. */
+  initialEditing?: boolean;
 };
 
 type TypeFilter = "all" | WikiPageType;
@@ -69,7 +71,21 @@ export function CharacterWiki(props: Props) {
   );
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [search, setSearch] = useState("");
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(
+    !!props.initialEditing && !!props.initialSelectedSlug,
+  );
+
+  // Strip ?edit=1 from the URL once consumed — refresh should land in read mode
+  // unless the user re-enters edit. Preserves ?page= so deep links keep working.
+  useEffect(() => {
+    if (!props.initialEditing) return;
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("edit")) {
+      url.searchParams.delete("edit");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [props.initialEditing]);
 
   /* ── Source refs for the currently-selected page ─────────────── */
 
@@ -520,8 +536,8 @@ function PageRow({
 
 /* ── Detail card ───────────────────────────────────────────────── */
 
-function DetailCard({
-  page, edges, pageById, pageBySlug, sourceById, sourceRefs, onNavigate, onEdit, router,
+export function DetailCard({
+  page, edges, pageById, pageBySlug, sourceById, sourceRefs, onNavigate, onEdit, router, standalone,
 }: {
   page: WikiPageRecord;
   edges: WikiEdgeRecord[];
@@ -532,6 +548,8 @@ function DetailCard({
   onNavigate: (slug: string) => void;
   onEdit: () => void;
   router: ReturnType<typeof useRouter>;
+  /** When true, the card flows with the page (no internal viewport-clamped scroll). */
+  standalone?: boolean;
 }) {
   const outbound = edges.filter((e) => e.fromPageId === page.id);
   const inbound = edges.filter((e) => e.toPageId === page.id);
@@ -540,7 +558,12 @@ function DetailCard({
   void router;
 
   return (
-    <div style={{ ...cardShell, maxHeight: "82vh", overflow: "auto" }}>
+    <div
+      style={{
+        ...cardShell,
+        ...(standalone ? {} : { maxHeight: "82vh", overflow: "auto" }),
+      }}
+    >
       <TopBar page={page} typeColor={typeColor} onEdit={onEdit} />
       <TitleBlock page={page} />
       <Section title="Summary">

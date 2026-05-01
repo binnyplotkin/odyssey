@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getCharacterStore } from "@odyssey/db";
+import { buildVoiceSystemPrompt } from "@/lib/character-system-prompt";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -291,29 +292,6 @@ async function streamFromCerebras(opts: {
     provider: "cerebras",
     model: opts.model,
   });
-}
-
-/* ── System prompt ─────────────────────────────────────────────── */
-
-function buildVoiceSystemPrompt(characterName: string, curatorChunk: string): string {
-  const trimmedChunk = curatorChunk.trim();
-  const contextSection = trimmedChunk
-    ? `The context below is what the runtime has pulled from your knowledge graph for this conversation — your voice, the people around you, the places you know, the events you've lived.
-
-Stay inside the knowledge below. If asked about something not in your context, say you do not know it — plainly, as you would. Do not invent facts. Do not quote scripture at yourself.
-
----
-
-${trimmedChunk}`
-    : `If asked about something specific you do not know about, say you do not know it — plainly, as you would. Do not invent facts.`;
-
-  return `You are ${characterName}.
-
-You speak in first person as ${characterName}. You do not narrate, stage-direct, or refer to yourself in the third person. You do not break character.
-
-You are in a real-time **voice** conversation. **Reply with one short sentence whenever possible. Two only if absolutely necessary. Never three or more.** Match the cadence of natural speech, not written exposition. Use contractions. Do not bullet-list. Do not number. Do not give long preambles. The user can always ask "tell me more" if they want more.
-
-${contextSection}`;
 }
 
 function jsonError(status: number, message: string) {

@@ -42,7 +42,6 @@ export default async function CharacterOverviewPage({ params }: { params: Params
         summary: character.summary,
         image: character.image,
         eras: character.eras,
-        ingestionPrompt: character.ingestionPrompt,
       }}
       stats={{
         pageCount: pages.length,

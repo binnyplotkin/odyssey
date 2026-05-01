@@ -7,7 +7,6 @@ import {
   rebuildCharacterEdges,
   resetCharacterData,
   updateCharacterEras,
-  updateCharacterIngestionPrompt,
 } from "@/app/(authenticated)/characters/actions";
 import { EraEditor } from "@/components/era-editor";
 
@@ -75,7 +74,6 @@ type Props = {
     summary: string | null;
     image: string | null;
     eras: EraConfig[];
-    ingestionPrompt: string | null;
   };
   stats: {
     pageCount: number;
@@ -100,11 +98,10 @@ export function CharacterOverview({ character, stats, eventCountByEra, voiceIden
     <div style={{ display: "flex", flexDirection: "row", gap: 20 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 20, flex: "1 1 0", minWidth: 0 }}>
         <IdentityCard character={character} stats={stats} gradient={gradient} avGradient={avGradient} />
-        <IngestionPromptCard character={character} />
+        <VoiceIdentityCard voice={voiceIdentity} characterSlug={character.slug} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 20, width: 420, flexShrink: 0 }}>
         <ErasCard characterId={character.id} eras={character.eras} eventCountByEra={eventCountByEra} />
-        <VoiceIdentityCard voice={voiceIdentity} characterSlug={character.slug} />
         <DangerZoneCard characterId={character.id} characterTitle={character.title} />
       </div>
     </div>
@@ -270,135 +267,6 @@ function StatusPill({ status }: { status: "live" | "draft" }) {
   );
 }
 
-/* ── Ingestion prompt editor ───────────────────────────────────── */
-
-function IngestionPromptCard({ character }: { character: Props["character"] }) {
-  const [value, setValue] = useState(character.ingestionPrompt ?? "");
-  const [savedAt, setSavedAt] = useState<Date | null>(character.ingestionPrompt ? new Date() : null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  const dirty = value !== (character.ingestionPrompt ?? "");
-  const charCount = value.length;
-  const tokenEst = Math.ceil(value.length / 4); // rough
-
-  function save() {
-    setError(null);
-    start(async () => {
-      const res = await updateCharacterIngestionPrompt(character.id, value);
-      if (res.ok) setSavedAt(new Date());
-      else setError(res.error);
-    });
-  }
-
-  return (
-    <div style={cardShell}>
-      <div style={{
-        display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-        padding: "14px 20px", borderBottom: `1px solid ${T.border}`,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "4px 10px", borderRadius: 999,
-            background: "rgba(140,231,210,0.08)", border: "1px solid rgba(140,231,210,0.2)",
-          }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8CE7D2" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 600, color: "#8CE7D2", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              Ingestion Prompt
-            </span>
-          </span>
-          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
-            The single domain knob — injected into every compile run.
-          </span>
-        </div>
-      </div>
-
-      <div style={{
-        padding: "12px 20px", background: "rgba(140,231,210,0.04)",
-        borderBottom: `1px solid ${T.border}`,
-        display: "flex", alignItems: "flex-start", gap: 10,
-      }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8CE7D2" strokeWidth="2" strokeLinecap="round" style={{ marginTop: 1, flexShrink: 0 }}>
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 16v-4M12 8h.01" />
-        </svg>
-        <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "18px" }}>
-          The engine is domain-agnostic. Pages, edges, eras, source kinds — all generic. This prompt is where you teach the LLM what tradition this character belongs to and how to treat its sources.
-        </span>
-      </div>
-
-      <textarea
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        rows={18}
-        placeholder="e.g. You are compiling source material into <Name>'s knowledge graph. <Name> is … Treat … as primary. Treat … as commentary. Always link … Voice: …"
-        style={{
-          width: "100%", border: "none", outline: "none", resize: "vertical",
-          padding: "18px 22px", background: "var(--background)",
-          fontFamily: T.fontMono, fontSize: 13, color: T.fg, lineHeight: "21px",
-          minHeight: 320, boxSizing: "border-box",
-        }}
-      />
-
-      {error && (
-        <div style={{
-          padding: "10px 20px", borderTop: `1px solid ${T.border}`,
-          background: "rgba(232,144,144,0.08)",
-          color: "#E89090", fontFamily: T.fontBody, fontSize: 13,
-        }}>
-          {error}
-        </div>
-      )}
-
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "12px 20px", borderTop: `1px solid ${T.border}`,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, letterSpacing: "0.05em" }}>
-            {charCount.toLocaleString()} chars · ~{tokenEst.toLocaleString()} tokens
-          </span>
-          {!dirty && savedAt && (
-            <span style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: T.fontMono, fontSize: 10, color: "#4ADE80" }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ADE80" }} />
-              Saved {relative(savedAt.toISOString())}
-            </span>
-          )}
-          {dirty && (
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, color: "#FACC15" }}>
-              Unsaved changes
-            </span>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {dirty && (
-            <button
-              type="button"
-              onClick={() => { setValue(character.ingestionPrompt ?? ""); setError(null); }}
-              style={btnGhost}
-            >
-              Discard
-            </button>
-          )}
-          <button
-            type="button"
-            disabled={!dirty || pending}
-            onClick={save}
-            style={{
-              ...btnPrimary,
-              opacity: !dirty || pending ? 0.5 : 1,
-              cursor: !dirty || pending ? "not-allowed" : "pointer",
-            }}
-          >
-            {pending ? "Saving…" : "Save prompt"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── Eras ──────────────────────────────────────────────────────── */
 
 function ErasCard({
@@ -532,7 +400,7 @@ function VoiceIdentityCard({
         </div>
         {voice && (
           <a
-            href={`/characters/${characterSlug}/wiki#${voice.slug}`}
+            href={`/characters/${characterSlug}/wiki/${voice.slug}?edit=1`}
             style={{ fontFamily: T.fontBody, fontSize: 11, color: "#8CE7D2", textDecoration: "none" }}
           >
             Edit page →

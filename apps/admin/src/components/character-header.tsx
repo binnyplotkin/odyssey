@@ -116,20 +116,6 @@ export function CharacterHeader({ character }: Props) {
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <Link
-            href={`/characters/${character.slug}/voice`}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "6px 12px", borderRadius: 8,
-              border: "1px solid rgba(140,231,210,0.35)",
-              background: "rgba(140,231,210,0.1)",
-              color: "#BFF5EF",
-              fontFamily: T.fontBody, fontSize: 11, fontWeight: 600,
-              textDecoration: "none", whiteSpace: "nowrap",
-            }}
-          >
-            Speak 3D
-          </Link>
-          <Link
             href={`/characters/${character.slug}/ingestion`}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
@@ -155,7 +141,7 @@ export function CharacterHeader({ character }: Props) {
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
-            Test Chat
+            Chat
           </Link>
         </div>
       </>,

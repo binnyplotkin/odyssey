@@ -5,6 +5,7 @@ import {
   MOSHI_TTS_BASE_URL_HTTP,
   MoshiStreamingSttSession,
 } from "@/lib/moshi-client";
+import { Trace, type TracePayload } from "@/lib/voice-trace";
 
 const TTS_SAMPLE_RATE = 24000;
 
@@ -20,6 +21,7 @@ type DoneInfo = {
   totalTokens?: number;
   provider?: string;
   model?: string;
+  serverTrace?: TracePayload;
 };
 
 type SpeculationCommitCallbacks = {
@@ -101,6 +103,7 @@ function startSpeculation(args: {
   let firstAudioBuffered: number | null = null;
   let doneBuffered: DoneInfo | null = null;
   let errorBuffered: string | null = null;
+  let latestServerTrace: TracePayload | null = null;
 
   void (async () => {
     try {
@@ -161,6 +164,8 @@ function startSpeculation(args: {
               if (state.mode === "playing" && callbacksHolder.value) callbacksHolder.value.onToken(d.delta);
               else tokenBuffer.push(d.delta);
             }
+          } else if (eventName === "trace") {
+            latestServerTrace = payload as TracePayload;
           } else if (eventName === "first-audio") {
             const d = payload as { latencyMs?: number };
             if (typeof d.latencyMs === "number") {
@@ -177,6 +182,9 @@ function startSpeculation(args: {
             }
           } else if (eventName === "done") {
             const d = payload as DoneInfo;
+            if (!d.serverTrace && latestServerTrace) {
+              d.serverTrace = latestServerTrace;
+            }
             if (state.mode === "playing" && callbacksHolder.value) callbacksHolder.value.onDone(d);
             else doneBuffered = d;
           } else if (eventName === "error") {
@@ -255,6 +263,62 @@ export type CharacterVoicePanelVoiceState = {
   phase: VoicePhase;
 };
 
+type StartupStepState = "idle" | "pending" | "ready" | "active" | "error" | "closed";
+
+type VoiceStartupStatus = {
+  micPermission: StartupStepState;
+  micCapture: StartupStepState;
+  worklet: StartupStepState;
+  sttSocket: StartupStepState;
+  context: StartupStepState;
+  ttsPrewarm: StartupStepState;
+  framesSent: number;
+  lastFrameSentAt: number | null;
+  lastFrameRms: number;
+  lastFramePeak: number;
+  lastFrameGain: number;
+  lastFrameClippedSamples: number;
+  sttLastMessageAt: number | null;
+  sttStepCount: number;
+  sttWordCount: number;
+  contextTokens: number | null;
+  contextElapsedMs: number | null;
+  ttsPrewarmMs: number | null;
+  error: string | null;
+};
+
+type PipelineSegmentState = "idle" | "waiting" | "active" | "ready" | "aborted" | "error";
+
+type VoicePipelineStatus = {
+  currentTranscript: string;
+  finalizedTranscript: string;
+  speculation: "idle" | "buffering" | "committed" | "aborted";
+  llm: {
+    state: PipelineSegmentState;
+    provider: string;
+    model: string;
+    tokenEvents: number;
+    chars: number;
+    firstTokenAt: number | null;
+    lastTokenAt: number | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    preview: string;
+    error: string | null;
+  };
+  tts: {
+    state: PipelineSegmentState;
+    audioFrames: number;
+    audioSamples: number;
+    firstAudioMs: number | null;
+    lastAudioAt: number | null;
+    durationMs: number | null;
+    error: string | null;
+  };
+};
+
+type PipelineSectionId = "stt" | "llm" | "tts";
+
 export type CharacterVoicePanelHandle = {
   toggleVoiceMode: () => void;
   enterVoiceMode: () => void;
@@ -286,6 +350,9 @@ type Props = {
   character: CharacterProp;
   moment: Moment | null;
   scene: Scene;
+  /** LLM provider for per-turn voice replies (selected by the parent picker). */
+  provider: "cerebras" | "anthropic";
+  /** Model id for `provider` (e.g. "llama-3.3-70b" or "claude-haiku-4-5"). */
   model: string;
   tokenBudget: number;
   waveformSource?: "mic-and-tts" | "tts-only";
@@ -308,20 +375,67 @@ const WORD_IDLE_FINALIZE_MS = 950;
 // utterance and must be dropped before they trigger a phantom barge-in.
 const RESIDUAL_GRACE_MS = 700;
 
-// Voice mode overrides the parent's model/budget. Default LLM is Cerebras
-// Llama 3.3 70B — TTFT ~80–150ms vs Anthropic Haiku's ~800ms+, courtesy of
-// Cerebras's wafer-scale custom silicon. Quality is fine for the short
-// 1-2 sentence replies voice mode produces. The TopBar model dropdown
-// still controls text chat; these only apply through the voice panel.
-const VOICE_MODE_PROVIDER: "cerebras" | "anthropic" = "cerebras";
-// Anthropic-only fallback model (used if voice-chat route is asked to use
-// Anthropic as a back-up). Cerebras picks its own default server-side.
-const VOICE_MODE_ANTHROPIC_MODEL = "claude-haiku-4-5";
 // Curator budget (used for the /voice-context call only — the per-turn
-// voice-chat call doesn't run the curator).
+// voice-chat call doesn't run the curator). Provider/model are now picked
+// by the parent's mode-aware dropdown and arrive as props.
 const VOICE_MODE_TOKEN_BUDGET = 1500;
 
+function createInitialStartupStatus(): VoiceStartupStatus {
+  return {
+    micPermission: "idle",
+    micCapture: "idle",
+    worklet: "idle",
+    sttSocket: "idle",
+    context: "idle",
+    ttsPrewarm: "idle",
+    framesSent: 0,
+    lastFrameSentAt: null,
+    lastFrameRms: 0,
+    lastFramePeak: 0,
+    lastFrameGain: 1,
+    lastFrameClippedSamples: 0,
+    sttLastMessageAt: null,
+    sttStepCount: 0,
+    sttWordCount: 0,
+    contextTokens: null,
+    contextElapsedMs: null,
+    ttsPrewarmMs: null,
+    error: null,
+  };
+}
+
+function createInitialPipelineStatus(): VoicePipelineStatus {
+  return {
+    currentTranscript: "",
+    finalizedTranscript: "",
+    speculation: "idle",
+    llm: {
+      state: "idle",
+      provider: "",
+      model: "",
+      tokenEvents: 0,
+      chars: 0,
+      firstTokenAt: null,
+      lastTokenAt: null,
+      inputTokens: null,
+      outputTokens: null,
+      preview: "",
+      error: null,
+    },
+    tts: {
+      state: "idle",
+      audioFrames: 0,
+      audioSamples: 0,
+      firstAudioMs: null,
+      lastAudioAt: null,
+      durationMs: null,
+      error: null,
+    },
+  };
+}
+
 function phaseLabel(phase: VoicePhase, voiceModeActive: boolean) {
+  if (phase === "error") return "Voice setup failed";
   if (!voiceModeActive) return "Tap to enter voice mode";
   switch (phase) {
     case "warming":
@@ -332,14 +446,13 @@ function phaseLabel(phase: VoicePhase, voiceModeActive: boolean) {
       return "Thinking…";
     case "speaking":
       return "Speaking";
-    case "error":
-      return "Error";
     default:
       return "Connecting…";
   }
 }
 
 function phaseColor(phase: VoicePhase, voiceModeActive: boolean) {
+  if (phase === "error") return "#f87171";
   if (!voiceModeActive) return T.muted;
   switch (phase) {
     case "warming":
@@ -350,6 +463,145 @@ function phaseColor(phase: VoicePhase, voiceModeActive: boolean) {
       return T.accent;
     case "speaking":
       return "#4ade80";
+    default:
+      return T.muted;
+  }
+}
+
+function startupStateColor(state: StartupStepState, activeColor = T.accent) {
+  switch (state) {
+    case "ready":
+    case "active":
+      return "#4ade80";
+    case "pending":
+      return activeColor;
+    case "error":
+    case "closed":
+      return "#f87171";
+    default:
+      return T.muted;
+  }
+}
+
+function startupStateLabel(state: StartupStepState) {
+  switch (state) {
+    case "ready":
+      return "Ready";
+    case "active":
+      return "Active";
+    case "pending":
+      return "Starting";
+    case "error":
+      return "Error";
+    case "closed":
+      return "Closed";
+    default:
+      return "Waiting";
+  }
+}
+
+function ageLabel(timestamp: number | null, now: number) {
+  if (timestamp === null) return "never";
+  const delta = Math.max(0, Math.round(now - timestamp));
+  if (delta < 1000) return `${delta}ms ago`;
+  return `${(delta / 1000).toFixed(delta < 10000 ? 1 : 0)}s ago`;
+}
+
+function StatusRow({
+  label,
+  state,
+  detail,
+  activeColor,
+}: {
+  label: string;
+  state: StartupStepState;
+  detail: string;
+  activeColor?: string;
+}) {
+  const color = startupStateColor(state, activeColor);
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "14px minmax(0, 1fr) auto",
+        alignItems: "center",
+        gap: 9,
+        padding: "7px 0",
+        borderBottom: "1px solid color-mix(in srgb, var(--border) 65%, transparent)",
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: color,
+          boxShadow:
+            state === "pending" || state === "active"
+              ? `0 0 8px ${color}`
+              : "none",
+        }}
+      />
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontFamily: T.fontBody,
+            fontSize: 12,
+            fontWeight: 600,
+            color: T.fg,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {label}
+        </div>
+        <div
+          style={{
+            fontFamily: T.fontMono,
+            fontSize: 9.5,
+            color: T.muted,
+            letterSpacing: "0.03em",
+            marginTop: 2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {detail}
+        </div>
+      </div>
+      <span
+        style={{
+          padding: "3px 7px",
+          borderRadius: 5,
+          border: `1px solid ${color}`,
+          color,
+          fontFamily: T.fontMono,
+          fontSize: 8.5,
+          fontWeight: 700,
+          letterSpacing: "0.07em",
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {startupStateLabel(state)}
+      </span>
+    </div>
+  );
+}
+
+function segmentStateColor(state: PipelineSegmentState) {
+  switch (state) {
+    case "active":
+      return "#8CE7D2";
+    case "ready":
+      return "#4ade80";
+    case "waiting":
+      return "#FACC15";
+    case "aborted":
+      return "#FACC15";
     case "error":
       return "#f87171";
     default:
@@ -357,11 +609,557 @@ function phaseColor(phase: VoicePhase, voiceModeActive: boolean) {
   }
 }
 
+function segmentStateLabel(state: PipelineSegmentState) {
+  switch (state) {
+    case "active":
+      return "Live";
+    case "ready":
+      return "Done";
+    case "waiting":
+      return "Waiting";
+    case "aborted":
+      return "Aborted";
+    case "error":
+      return "Error";
+    default:
+      return "Idle";
+  }
+}
+
+function MetricCell({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        padding: "8px 9px",
+        borderRadius: 7,
+        border: `1px solid ${T.border}`,
+        background: "color-mix(in srgb, var(--background) 38%, transparent)",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: T.fontMono,
+          fontSize: 8.5,
+          color: T.muted,
+          letterSpacing: "0.07em",
+          textTransform: "uppercase",
+          marginBottom: 4,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: T.fontMono,
+          fontSize: 11,
+          fontWeight: 700,
+          color: T.fg,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function SegmentPanel({
+  title,
+  state,
+  subtitle,
+  metrics,
+  detail,
+  collapsed,
+  onToggle,
+}: {
+  title: string;
+  state: PipelineSegmentState;
+  subtitle: string;
+  metrics: Array<{ label: string; value: string }>;
+  detail: string;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const color = segmentStateColor(state);
+  return (
+    <section
+      style={{
+        border: `1px solid ${T.border}`,
+        borderRadius: 12,
+        background: "color-mix(in srgb, var(--panel) 88%, transparent)",
+        padding: 0,
+        minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          width: "100%",
+          padding: "13px 14px",
+          border: "none",
+          borderBottom: collapsed ? "none" : `1px solid ${T.border}`,
+          background: "transparent",
+          color: "inherit",
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <span
+            aria-hidden
+            style={{
+              color: T.muted,
+              fontFamily: T.fontMono,
+              fontSize: 12,
+              transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)",
+              transition: "transform 120ms ease",
+              flexShrink: 0,
+            }}
+          >
+            ▾
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: T.fontMono,
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: T.fg,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {title}
+            </div>
+            <div
+              style={{
+                fontFamily: T.fontMono,
+                fontSize: 9,
+                color: T.muted,
+                letterSpacing: "0.04em",
+                marginTop: 3,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {subtitle}
+            </div>
+          </div>
+        </div>
+        <span
+          style={{
+            padding: "3px 7px",
+            borderRadius: 5,
+            border: `1px solid ${color}`,
+            color,
+            fontFamily: T.fontMono,
+            fontSize: 8.5,
+            fontWeight: 800,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {segmentStateLabel(state)}
+        </span>
+      </button>
+      {!collapsed ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            padding: 12,
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 7,
+            }}
+          >
+            {metrics.map((metric) => (
+              <MetricCell key={metric.label} label={metric.label} value={metric.value} />
+            ))}
+          </div>
+          <div
+            style={{
+              minHeight: 34,
+              padding: "8px 9px",
+              borderRadius: 7,
+              background: "color-mix(in srgb, var(--background) 30%, transparent)",
+              color: T.muted,
+              fontFamily: T.fontBody,
+              fontSize: 11.5,
+              lineHeight: "16px",
+              overflow: "hidden",
+            }}
+          >
+            {detail}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function VoiceDataFlowPanels({
+  startupStatus,
+  pipelineStatus,
+  now,
+  micPercent,
+  vadPercent,
+  collapsedSections,
+  onToggleSection,
+}: {
+  startupStatus: VoiceStartupStatus;
+  pipelineStatus: VoicePipelineStatus;
+  now: number;
+  micPercent: number;
+  vadPercent: number;
+  collapsedSections: Record<PipelineSectionId, boolean>;
+  onToggleSection: (section: PipelineSectionId) => void;
+}) {
+  const transcript = pipelineStatus.currentTranscript || pipelineStatus.finalizedTranscript;
+  const hearingAudio = startupStatus.lastFrameRms > 0.018 || startupStatus.lastFramePeak > 0.06;
+  const sttAliveNoWords =
+    startupStatus.framesSent > 20 &&
+    startupStatus.sttStepCount > 0 &&
+    startupStatus.sttWordCount === 0 &&
+    hearingAudio;
+  const sttState: PipelineSegmentState =
+    startupStatus.sttSocket === "error" || startupStatus.micPermission === "error"
+      ? "error"
+      : sttAliveNoWords
+        ? "waiting"
+        : startupStatus.sttLastMessageAt !== null || startupStatus.framesSent > 0
+          ? "active"
+          : startupStatus.sttSocket === "ready"
+            ? "waiting"
+            : "idle";
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        display: "grid",
+        gridTemplateColumns: "1fr",
+        gap: 10,
+      }}
+    >
+      <SegmentPanel
+        title="STT input"
+        state={sttState}
+        subtitle="Mic -> AudioWorklet -> Kyutai STT"
+        collapsed={collapsedSections.stt}
+        onToggle={() => onToggleSection("stt")}
+        metrics={[
+          { label: "Mic", value: `${micPercent}%` },
+          { label: "Frames", value: `${startupStatus.framesSent}` },
+          { label: "Steps", value: `${startupStatus.sttStepCount}` },
+          { label: "Recognized words", value: `${startupStatus.sttWordCount}` },
+          { label: "RMS", value: startupStatus.lastFrameRms.toFixed(4) },
+          { label: "Peak", value: startupStatus.lastFramePeak.toFixed(3) },
+          { label: "Input gain", value: `${startupStatus.lastFrameGain.toFixed(1)}x` },
+          { label: "Clipped", value: `${startupStatus.lastFrameClippedSamples}` },
+          { label: "Pause", value: `${vadPercent}%` },
+          { label: "Signal", value: hearingAudio ? "speech/noise" : "quiet" },
+          { label: "Last frame", value: ageLabel(startupStatus.lastFrameSentAt, now) },
+          { label: "Last STT", value: ageLabel(startupStatus.sttLastMessageAt, now) },
+        ]}
+        detail={
+          transcript
+            ? `Transcript flow: ${transcript}`
+	            : startupStatus.micPermission === "error"
+	              ? "Mic permission is blocked, so no audio is reaching STT."
+	              : sttAliveNoWords
+	                ? "Audio and Step events are live, but Kyutai has not emitted Word events yet. The client is now sending float32 PCM and applying input gain; if this persists, the STT model is hearing the stream but not decoding speech."
+	              : "Waiting for speech. Audio frames show whether capture is actually reaching STT."
+	        }
+      />
+      <SegmentPanel
+        title="LLM provider"
+        state={pipelineStatus.llm.state}
+        subtitle={`${pipelineStatus.llm.provider || "provider"} -> ${pipelineStatus.llm.model || "model"}`}
+        collapsed={collapsedSections.llm}
+        onToggle={() => onToggleSection("llm")}
+        metrics={[
+          { label: "Speculation", value: pipelineStatus.speculation },
+          { label: "Tokens", value: `${pipelineStatus.llm.tokenEvents}` },
+          { label: "Chars", value: `${pipelineStatus.llm.chars}` },
+          { label: "First token", value: ageLabel(pipelineStatus.llm.firstTokenAt, now) },
+          { label: "Input tok", value: pipelineStatus.llm.inputTokens === null ? "—" : `${pipelineStatus.llm.inputTokens}` },
+          { label: "Output tok", value: pipelineStatus.llm.outputTokens === null ? "—" : `${pipelineStatus.llm.outputTokens}` },
+        ]}
+        detail={
+          pipelineStatus.llm.error ??
+          (pipelineStatus.llm.preview
+            ? `Reply stream: ${pipelineStatus.llm.preview}`
+            : pipelineStatus.finalizedTranscript
+              ? `Finalized input: ${pipelineStatus.finalizedTranscript}`
+              : "No finalized utterance yet. This panel becomes live when /voice-stream starts.")
+        }
+      />
+      <SegmentPanel
+        title="TTS output"
+        state={pipelineStatus.tts.state}
+        subtitle="LLM words -> Kyutai TTS -> Web Audio"
+        collapsed={collapsedSections.tts}
+        onToggle={() => onToggleSection("tts")}
+        metrics={[
+          { label: "Audio frames", value: `${pipelineStatus.tts.audioFrames}` },
+          { label: "Samples", value: `${pipelineStatus.tts.audioSamples}` },
+          { label: "First audio", value: pipelineStatus.tts.firstAudioMs === null ? "—" : `${pipelineStatus.tts.firstAudioMs}ms` },
+          { label: "Last audio", value: ageLabel(pipelineStatus.tts.lastAudioAt, now) },
+          { label: "Duration", value: pipelineStatus.tts.durationMs === null ? "—" : `${pipelineStatus.tts.durationMs}ms` },
+          { label: "Queue", value: pipelineStatus.tts.audioSamples > 0 ? `${Math.round((pipelineStatus.tts.audioSamples / TTS_SAMPLE_RATE) * 1000)}ms` : "—" },
+        ]}
+        detail={
+          pipelineStatus.tts.error ??
+          (pipelineStatus.tts.audioFrames > 0
+            ? "PCM frames are arriving from /voice-stream and being scheduled in Web Audio."
+            : "Waiting for first audio frame. TTS starts once the LLM produces complete words.")
+        }
+      />
+    </div>
+  );
+}
+
+function VoiceReadinessPanel({
+  status,
+  now,
+  voiceModeActive,
+  phase,
+  micPercent,
+  vadPercent,
+  isListening,
+}: {
+  status: VoiceStartupStatus;
+  now: number;
+  voiceModeActive: boolean;
+  phase: VoicePhase;
+  micPercent: number;
+  vadPercent: number;
+  isListening: boolean;
+}) {
+  if (!voiceModeActive && phase === "idle") return null;
+
+  const framesState: StartupStepState =
+    status.framesSent > 0
+      ? "active"
+      : status.sttSocket === "ready"
+        ? "pending"
+        : "idle";
+  const serverState: StartupStepState =
+    status.sttLastMessageAt !== null
+      ? "active"
+      : status.sttSocket === "ready"
+        ? "pending"
+        : "idle";
+  const ready =
+    status.micCapture === "active" &&
+    status.worklet === "ready" &&
+    status.sttSocket === "ready" &&
+    status.framesSent > 0 &&
+    status.sttLastMessageAt !== null &&
+    status.context === "ready" &&
+    status.ttsPrewarm === "ready";
+  const readyState: StartupStepState = ready
+    ? "ready"
+    : status.error
+      ? "error"
+      : "pending";
+
+  return (
+    <div
+      style={{
+        width: "min(100%, 420px)",
+        border: `1px solid ${T.border}`,
+        borderRadius: 12,
+        background: "color-mix(in srgb, var(--panel) 88%, transparent)",
+        padding: "12px 14px 10px",
+        boxShadow: "0 12px 34px rgba(0,0,0,0.18)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          marginBottom: 6,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: T.fontMono,
+            fontSize: 10,
+            fontWeight: 700,
+            color: T.fg,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}
+        >
+          Startup pipeline
+        </span>
+        <span
+          style={{
+            fontFamily: T.fontMono,
+            fontSize: 9.5,
+            color: ready ? "#4ade80" : T.muted,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          {ready ? "ready for speech" : "checking subsystems"}
+        </span>
+      </div>
+
+      <StatusRow
+        label="Microphone permission"
+        state={status.micPermission}
+        detail={
+          status.micPermission === "error"
+            ? status.error ?? "Browser denied mic access"
+            : status.micPermission === "ready"
+              ? "Browser accepted mic access"
+              : status.micPermission === "pending"
+                ? "Waiting for browser permission prompt"
+                : "Not requested yet"
+        }
+      />
+      <StatusRow
+        label="Local audio capture"
+        state={status.micCapture}
+        detail={
+          status.micCapture === "active"
+            ? `Mic level ${micPercent}%`
+            : status.micPermission === "error"
+              ? "Blocked until microphone permission is granted"
+              : "Waiting for mic stream"
+        }
+      />
+      <StatusRow
+        label="AudioWorklet loaded"
+        state={status.worklet}
+        detail={
+          status.worklet === "ready"
+            ? "PCM capture processor installed"
+            : status.micPermission === "error"
+              ? "Not loaded because mic setup failed"
+              : "Waiting to load PCM capture processor"
+        }
+      />
+      <StatusRow
+        label="STT websocket"
+        state={status.sttSocket}
+        detail={
+          status.sttSocket === "ready"
+            ? "Kyutai streaming STT connection open"
+            : status.sttSocket === "pending"
+              ? "Connecting to Kyutai streaming STT"
+              : status.micPermission === "error"
+                ? "Not opened because mic setup failed"
+                : "Waiting to connect"
+        }
+      />
+      <StatusRow
+        label="Audio frames sent to STT"
+        state={framesState}
+        detail={`${status.framesSent} frames · last ${ageLabel(status.lastFrameSentAt, now)} · rms ${status.lastFrameRms.toFixed(4)} · peak ${status.lastFramePeak.toFixed(3)} · gain ${status.lastFrameGain.toFixed(1)}x`}
+      />
+      <StatusRow
+        label="STT server responding"
+        state={serverState}
+        detail={`${status.sttStepCount} steps · ${status.sttWordCount} recognized words · last ${ageLabel(status.sttLastMessageAt, now)}`}
+      />
+      <StatusRow
+        label="Character context cached"
+        state={status.context}
+        detail={
+          status.contextTokens !== null
+            ? `${status.contextTokens} tokens · curator ${status.contextElapsedMs ?? "?"}ms`
+            : "Baseline promptChunk from /voice-context"
+        }
+      />
+      <StatusRow
+        label="TTS server warmed"
+        state={status.ttsPrewarm}
+        detail={
+          status.ttsPrewarmMs !== null
+            ? `Modal prewarm responded in ${status.ttsPrewarmMs}ms`
+            : "HTTP prewarm for Kyutai TTS"
+        }
+      />
+      <StatusRow
+        label="Conversation readiness"
+        state={readyState}
+        detail={
+          ready
+            ? isListening
+              ? `Listening · pause prediction ${vadPercent}%`
+              : `Ready · current phase ${phase}`
+            : status.micPermission === "error"
+              ? "Grant microphone access, then retry voice mode"
+              : status.error ?? "Waiting for all required signals"
+        }
+        activeColor="#4ade80"
+      />
+      {status.micPermission === "error" ? (
+        <div
+          style={{
+            marginTop: 10,
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: "1px solid rgba(248,113,113,0.3)",
+            background: "rgba(248,113,113,0.08)",
+            color: "#fecaca",
+            fontFamily: T.fontBody,
+            fontSize: 12,
+            lineHeight: "17px",
+          }}
+        >
+          Microphone access is blocked for this browser session. Use the
+          browser permission control for this site to allow the mic, then tap
+          the voice button again.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export const CharacterVoicePanel = forwardRef<CharacterVoicePanelHandle, Props>(function CharacterVoicePanel(
 {
   character,
   moment,
   scene,
+  provider,
   model,
   tokenBudget,
   waveformSource = "mic-and-tts",
@@ -381,10 +1179,30 @@ ref,
   const [ttsFirstAudioMs, setTtsFirstAudioMs] = useState<number | null>(null);
   const [voiceTurns, setVoiceTurns] = useState<VoiceTurn[]>([]);
   const [transcriptPanelHidden, setTranscriptPanelHidden] = useState(false);
+  const [startupStatus, setStartupStatus] = useState<VoiceStartupStatus>(() =>
+    createInitialStartupStatus(),
+  );
+  const [pipelineStatus, setPipelineStatus] = useState<VoicePipelineStatus>(() =>
+    createInitialPipelineStatus(),
+  );
+  const [collapsedPipelineSections, setCollapsedPipelineSections] = useState<
+    Record<PipelineSectionId, boolean>
+  >({
+    stt: false,
+    llm: false,
+    tts: false,
+  });
+  const [statusNow, setStatusNow] = useState<number>(() =>
+    typeof performance !== "undefined" ? performance.now() : Date.now(),
+  );
 
   // Long-lived for the duration of voice mode.
   const sttSessionRef = useRef<MoshiStreamingSttSession | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  // Per-turn telemetry. Reset when a new turn starts (first non-residual Word
+  // arrives), populated through the speculation/finalize/SSE flow, and printed
+  // on `sse.done`. Lives in a ref so it survives re-renders without rebuilding.
+  const turnTraceRef = useRef<Trace | null>(null);
 
   // Per-turn — recreated for each user utterance. The gainNode lets the
   // interrupt handler fade scheduled audio to silence in 60ms (clean
@@ -457,6 +1275,39 @@ ref,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Catch tab close / hard refresh / mobile background. The React unmount
+  // path doesn't fire on these, so without this the WS stays open against
+  // the browser's TCP timeout and Modal holds the concurrency slot. We fire
+  // a synchronous best-effort cleanup: WS close (with explicit 1000) and
+  // mic-stream stop, both of which `session.stop()` does up-front.
+  useEffect(() => {
+    function onPageHide() {
+      // Abort any in-flight reply so its SSE/WS to /voice-stream also closes.
+      if (activeAudioRef.current) {
+        try { activeAudioRef.current.abortActiveTurn(); } catch { /* ignore */ }
+      }
+      if (speculationRef.current) {
+        try { speculationRef.current.abort(); } catch { /* ignore */ }
+      }
+      // Fire-and-forget — pagehide can't await, but stop() does the WS close
+      // synchronously up front before any awaits.
+      const session = sttSessionRef.current;
+      if (session) {
+        void session.stop();
+      }
+    }
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+
+  useEffect(() => {
+    if (!voiceModeActive) return;
+    const id = window.setInterval(() => {
+      setStatusNow(performance.now());
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [voiceModeActive]);
+
   useEffect(() => {
     onVoiceStateChange?.({ active: voiceModeActive, phase });
   }, [onVoiceStateChange, phase, voiceModeActive]);
@@ -480,6 +1331,7 @@ ref,
 
   async function enterVoiceMode() {
     if (voiceModeActiveRef.current) return;
+    applyPhase("idle");
     setError(null);
     setCurrentTurnTranscript("");
     setLiveReply("");
@@ -492,6 +1344,13 @@ ref,
     lastFinalizeAtRef.current = null;
     lastMicLevelRef.current = 0;
     voiceContextRef.current = { promise: null, cached: null };
+    setStartupStatus({
+      ...createInitialStartupStatus(),
+      context: "pending",
+      ttsPrewarm: "pending",
+    });
+    setPipelineStatus(createInitialPipelineStatus());
+    setStatusNow(performance.now());
 
     // Fire-and-forget context prefetch. Runs the curator once for this
     // session in parallel with mic + STT setup, so by the time the user
@@ -520,6 +1379,12 @@ ref,
       console.log(
         `[voice] context cached in ${Math.round(performance.now() - startedAt)}ms (curator ${data.elapsedMs}ms, ${data.tokensUsed} tokens)`,
       );
+      setStartupStatus((current) => ({
+        ...current,
+        context: "ready",
+        contextTokens: data.tokensUsed,
+        contextElapsedMs: data.elapsedMs,
+      }));
       voiceContextRef.current.cached = {
         promptChunk: data.promptChunk,
         characterTitle: data.characterTitle,
@@ -527,6 +1392,11 @@ ref,
       return voiceContextRef.current.cached;
     })().catch((err) => {
       console.error("[voice] context prefetch failed", err);
+      setStartupStatus((current) => ({
+        ...current,
+        context: "error",
+        error: err instanceof Error ? err.message : String(err),
+      }));
       throw err;
     });
 
@@ -543,12 +1413,23 @@ ref,
       cache: "no-store",
     })
       .then(() => {
+        const elapsedMs = Math.round(performance.now() - ttsPrewarmStartedAt);
         console.log(
-          `[voice] TTS prewarm responded in ${Math.round(performance.now() - ttsPrewarmStartedAt)}ms`,
+          `[voice] TTS prewarm responded in ${elapsedMs}ms`,
         );
+        setStartupStatus((current) => ({
+          ...current,
+          ttsPrewarm: "ready",
+          ttsPrewarmMs: elapsedMs,
+        }));
       })
       .catch((err) => {
         console.warn("[voice] TTS prewarm failed (continuing)", err);
+        setStartupStatus((current) => ({
+          ...current,
+          ttsPrewarm: "error",
+          error: err instanceof Error ? err.message : String(err),
+        }));
       });
 
     // Create AudioContext under the user-gesture so playback can resume later
@@ -570,9 +1451,63 @@ ref,
 
     try {
       await session.start({
+        onMicPermissionPending: () => {
+          setStartupStatus((current) => ({
+            ...current,
+            micPermission: "pending",
+          }));
+        },
+        onMicCapture: () => {
+          setStartupStatus((current) => ({
+            ...current,
+            micPermission: "ready",
+            micCapture: "active",
+          }));
+        },
+        onWorkletLoading: () => {
+          setStartupStatus((current) => ({
+            ...current,
+            worklet: "pending",
+          }));
+        },
+        onWorkletReady: () => {
+          setStartupStatus((current) => ({
+            ...current,
+            worklet: "ready",
+          }));
+        },
+        onSocketConnecting: () => {
+          setStartupStatus((current) => ({
+            ...current,
+            sttSocket: "pending",
+          }));
+        },
         onOpen: () => {
           console.log("[voice] STT WS open — STT ready");
+          setStartupStatus((current) => ({
+            ...current,
+            sttSocket: "ready",
+          }));
           sttReadyResolve();
+        },
+        onFrameSent: ({ framesSent, rms, peak, gain, clippedSamples }) => {
+          setStartupStatus((current) => ({
+            ...current,
+            framesSent,
+            lastFrameSentAt: performance.now(),
+            lastFrameRms: rms,
+            lastFramePeak: peak,
+            lastFrameGain: gain,
+            lastFrameClippedSamples: clippedSamples,
+          }));
+        },
+        onServerMessage: (type) => {
+          setStartupStatus((current) => ({
+            ...current,
+            sttLastMessageAt: performance.now(),
+            sttStepCount: current.sttStepCount + (type === "Step" ? 1 : 0),
+            sttWordCount: current.sttWordCount + (type === "Word" ? 1 : 0),
+          }));
         },
         onWord: (text) => {
           const now = performance.now();
@@ -603,9 +1538,22 @@ ref,
 
           if (currentTurnWordsRef.current.length === 0) {
             turnFirstWordAtRef.current = now;
+            // Open a fresh per-turn telemetry trace at first Word.
+            turnTraceRef.current = new Trace();
+            turnTraceRef.current.mark("turn.user-start", { word: text });
+            setPipelineStatus((current) => ({
+              ...createInitialPipelineStatus(),
+              speculation: current.speculation === "buffering" ? "buffering" : "idle",
+              currentTranscript: text,
+            }));
           }
           currentTurnWordsRef.current.push(text);
-          setCurrentTurnTranscript(currentTurnWordsRef.current.join(" "));
+          const nextTranscript = currentTurnWordsRef.current.join(" ");
+          setCurrentTurnTranscript(nextTranscript);
+          setPipelineStatus((current) => ({
+            ...current,
+            currentTranscript: nextTranscript,
+          }));
           speechStartedRef.current = true;
           scheduleIdleFinalize();
 
@@ -629,6 +1577,20 @@ ref,
             );
             speculationRef.current.abort();
             speculationRef.current = null;
+            setPipelineStatus((current) => ({
+              ...current,
+              speculation: "aborted",
+              llm: {
+                ...current.llm,
+                state: current.llm.state === "idle" ? "idle" : "aborted",
+                error: "Speculation aborted because the user resumed speaking.",
+              },
+              tts: {
+                ...current.tts,
+                state: current.tts.state === "idle" ? "idle" : "aborted",
+                error: "Pending TTS stream was aborted before commit.",
+              },
+            }));
           }
 
           // Barge-in: a Word during speaking phase means the user is talking
@@ -690,8 +1652,19 @@ ref,
           }
         },
         onError: (message) => {
+          setStartupStatus((current) => ({
+            ...current,
+            sttSocket: "error",
+            error: message,
+          }));
           setError(message);
           applyPhase("error");
+        },
+        onClose: () => {
+          setStartupStatus((current) => ({
+            ...current,
+            sttSocket: voiceModeActiveRef.current ? "closed" : current.sttSocket,
+          }));
         },
       });
 
@@ -718,6 +1691,14 @@ ref,
     } catch (startError) {
       const message =
         startError instanceof Error ? startError.message : "Failed to start mic.";
+      setStartupStatus((current) => ({
+        ...current,
+        micPermission:
+          current.micPermission === "pending" || current.micPermission === "idle"
+            ? "error"
+            : current.micPermission,
+        error: message,
+      }));
       setError(message);
       applyPhase("error");
       voiceModeActiveRef.current = false;
@@ -745,6 +1726,20 @@ ref,
       activeAudioRef.current.abortActiveTurn();
       activeAudioRef.current = null;
     }
+    setPipelineStatus((current) => ({
+      ...current,
+      speculation: "aborted",
+      llm: {
+        ...current.llm,
+        state: current.llm.state === "idle" ? "idle" : "aborted",
+        error: "Interrupted by user barge-in.",
+      },
+      tts: {
+        ...current.tts,
+        state: current.tts.state === "idle" ? "idle" : "aborted",
+        error: "Audio faded out because the user barged in.",
+      },
+    }));
     // Discard any pending speculation.
     if (speculationRef.current) {
       speculationRef.current.abort();
@@ -775,6 +1770,9 @@ ref,
     lastMicLevelRef.current = 0;
     voiceContextRef.current = { promise: null, cached: null };
     speechStartedRef.current = false;
+    setStartupStatus(createInitialStartupStatus());
+    setPipelineStatus(createInitialPipelineStatus());
+    setStatusNow(performance.now());
     setCurrentTurnTranscript("");
     setLiveReply("");
     setMicLevel(0);
@@ -821,13 +1819,33 @@ ref,
       `[voice] speculation fired: "${transcript}" (waiting for debounce)`,
     );
 
+    turnTraceRef.current?.mark("vad.threshold-crossed");
+    turnTraceRef.current?.mark("voice-stream.posted", { provider, model });
+    setPipelineStatus((current) => ({
+      ...current,
+      speculation: "buffering",
+      llm: {
+        ...current.llm,
+        state: "waiting",
+        provider,
+        model,
+        error: null,
+      },
+      tts: {
+        ...current.tts,
+        state: "waiting",
+        error: null,
+      },
+    }));
+
     speculationRef.current = startSpeculation({
       url: `/api/characters/${character.id}/voice-stream`,
       body: {
         promptChunk: cachedContext.promptChunk,
         message: transcript,
         history,
-        provider: VOICE_MODE_PROVIDER,
+        provider,
+        model,
       },
       transcript,
     });
@@ -848,12 +1866,34 @@ ref,
       if (speculationRef.current) {
         speculationRef.current.abort();
         speculationRef.current = null;
+        setPipelineStatus((current) => ({
+          ...current,
+          speculation: "aborted",
+        }));
       }
       return;
     }
     const listenMs = turnFirstWordAtRef.current
       ? Math.round(performance.now() - turnFirstWordAtRef.current)
       : null;
+    turnTraceRef.current?.mark("turn.finalized", { listenMs });
+    setPipelineStatus((current) => ({
+      ...current,
+      finalizedTranscript: transcript,
+      currentTranscript: "",
+      llm: {
+        ...current.llm,
+        state: current.llm.state === "idle" ? "waiting" : current.llm.state,
+        provider,
+        model,
+        error: null,
+      },
+      tts: {
+        ...current.tts,
+        state: current.tts.state === "idle" ? "waiting" : current.tts.state,
+        error: null,
+      },
+    }));
 
     // Snapshot, clear buffer for the next turn (which may start mid-reply
     // via barge-in, or after the reply completes).
@@ -885,6 +1925,10 @@ ref,
         `[voice] discarding stale speculation (spec="${spec.transcript}", final="${transcript}")`,
       );
       spec.abort();
+      setPipelineStatus((current) => ({
+        ...current,
+        speculation: "aborted",
+      }));
     }
     void runReplyAndSpeak(transcript, listenMs);
   }
@@ -973,6 +2017,52 @@ ref,
     analyserNode.connect(audioContext.destination);
     let nextStartTime = audioContext.currentTime;
     let analyserRaf = 0;
+    let scheduledSourceCount = 0;
+    let endedSourceCount = 0;
+    let playbackAborted = false;
+    let playbackDrainResolve: (() => void) | null = null;
+    let firstPlaybackStartMarked = false;
+    const playbackStartTimers = new Set<number>();
+
+    const clearPlaybackStartTimers = () => {
+      for (const timer of playbackStartTimers) {
+        window.clearTimeout(timer);
+      }
+      playbackStartTimers.clear();
+    };
+
+    const resolvePlaybackDrainIfReady = () => {
+      if (!playbackDrainResolve) return;
+      if (playbackAborted || endedSourceCount >= scheduledSourceCount) {
+        playbackDrainResolve();
+        playbackDrainResolve = null;
+      }
+    };
+
+    const waitForQueuedPlayback = async () => {
+      if (playbackAborted || scheduledSourceCount === 0) return;
+      if (endedSourceCount >= scheduledSourceCount) return;
+
+      await new Promise<void>((resolve) => {
+        let fallbackTimer = 0;
+        const finish = () => {
+          if (fallbackTimer !== 0) {
+            window.clearTimeout(fallbackTimer);
+            fallbackTimer = 0;
+          }
+          if (playbackDrainResolve === finish) playbackDrainResolve = null;
+          resolve();
+        };
+
+        playbackDrainResolve = finish;
+        const remainingMs = Math.max(
+          0,
+          Math.ceil((nextStartTime - audioContext.currentTime) * 1000),
+        );
+        fallbackTimer = window.setTimeout(finish, remainingMs + 300);
+        resolvePlaybackDrainIfReady();
+      });
+    };
 
     const emitTtsMetrics = () => {
       if (!onWaveformAudio || phaseRef.current !== "speaking") return;
@@ -1019,6 +2109,7 @@ ref,
     };
 
     const fadeOutToZero = () => {
+      playbackAborted = true;
       const now = audioContext.currentTime;
       try {
         gainNode.gain.cancelScheduledValues(now);
@@ -1027,6 +2118,7 @@ ref,
       } catch {
         /* ignore */
       }
+      resolvePlaybackDrainIfReady();
     };
 
     const scheduleAudio = (samples: Float32Array) => {
@@ -1048,8 +2140,30 @@ ref,
         source.connect(gainNode);
         const now = audioContext.currentTime;
         const startAt = Math.max(now, nextStartTime);
+        const durationSeconds = samples.length / TTS_SAMPLE_RATE;
+        const endAt = startAt + durationSeconds;
+        source.onended = () => {
+          endedSourceCount += 1;
+          resolvePlaybackDrainIfReady();
+        };
         source.start(startAt);
-        nextStartTime = startAt + samples.length / TTS_SAMPLE_RATE;
+        scheduledSourceCount += 1;
+        nextStartTime = endAt;
+
+        if (!firstPlaybackStartMarked) {
+          firstPlaybackStartMarked = true;
+          const delayMs = Math.max(
+            0,
+            Math.ceil((startAt - audioContext.currentTime) * 1000),
+          );
+          const timer = window.setTimeout(() => {
+            playbackStartTimers.delete(timer);
+            turnTraceRef.current?.mark("audio.first-played", {
+              scheduledDelayMs: delayMs,
+            });
+          }, delayMs);
+          playbackStartTimers.add(timer);
+        }
       } catch (err) {
         console.error("[voice] failed to schedule audio frame", err);
       }
@@ -1298,10 +2412,28 @@ ref,
           promptChunk: cachedContext?.promptChunk ?? "",
           message: userTranscript,
           history,
-          provider: VOICE_MODE_PROVIDER,
+          provider,
+          model,
         },
         transcript: userTranscript,
       });
+      turnTraceRef.current?.mark("voice-stream.posted", { provider, model });
+      setPipelineStatus((current) => ({
+        ...current,
+        speculation: "buffering",
+        llm: {
+          ...current.llm,
+          state: "waiting",
+          provider,
+          model,
+          error: null,
+        },
+        tts: {
+          ...current.tts,
+          state: "waiting",
+          error: null,
+        },
+      }));
     }
 
     activeAudioRef.current = {
@@ -1311,10 +2443,38 @@ ref,
     };
 
     try {
+      // Telemetry: capture the first occurrence of each milestone, then print
+      // a unified per-turn timeline on `done`.
+      let firstTokenSeen = false;
+      let firstAudioFrameSeen = false;
+
       await new Promise<void>((resolve, reject) => {
+        setPipelineStatus((current) => ({
+          ...current,
+          speculation: "committed",
+          llm: { ...current.llm, state: "active", provider, model, error: null },
+          tts: { ...current.tts, state: "waiting", error: null },
+        }));
         speculation.commit({
           onToken: (delta) => {
+            if (!firstTokenSeen) {
+              firstTokenSeen = true;
+              turnTraceRef.current?.mark("sse.first-token");
+            }
             assistant += delta;
+            setPipelineStatus((current) => ({
+              ...current,
+              llm: {
+                ...current.llm,
+                state: "active",
+                tokenEvents: current.llm.tokenEvents + 1,
+                chars: current.llm.chars + delta.length,
+                firstTokenAt: current.llm.firstTokenAt ?? performance.now(),
+                lastTokenAt: performance.now(),
+                preview: (current.llm.preview + delta).slice(-160),
+                error: null,
+              },
+            }));
             if (currentReplyContextRef.current?.turnId === turnId) {
               currentReplyContextRef.current.assistant = assistant;
             }
@@ -1324,6 +2484,17 @@ ref,
             streamedAnyAudio = true;
             ttsFirstAudio = latencyMs;
             setTtsFirstAudioMs(latencyMs);
+            setPipelineStatus((current) => ({
+              ...current,
+              tts: {
+                ...current.tts,
+                state: "active",
+                firstAudioMs: latencyMs,
+                lastAudioAt: performance.now(),
+                error: null,
+              },
+            }));
+            turnTraceRef.current?.mark("sse.first-audio", { latencyMs });
             if (currentReplyContextRef.current?.turnId === turnId) {
               currentReplyContextRef.current.ttsFirstAudioMs = latencyMs;
             }
@@ -1337,7 +2508,26 @@ ref,
               `[voice] tts first audio ${latencyMs}ms after stream start`,
             );
           },
-          onAudioFrame: scheduleAudio,
+          onAudioFrame: (samples) => {
+            if (!firstAudioFrameSeen) {
+              firstAudioFrameSeen = true;
+              turnTraceRef.current?.mark("audio.first-frame-received", {
+                samples: samples.length,
+              });
+            }
+            setPipelineStatus((current) => ({
+              ...current,
+              tts: {
+                ...current.tts,
+                state: "active",
+                audioFrames: current.tts.audioFrames + 1,
+                audioSamples: current.tts.audioSamples + samples.length,
+                lastAudioAt: performance.now(),
+                error: null,
+              },
+            }));
+            scheduleAudio(samples);
+          },
           onDone: (info) => {
             replyMs = Math.round(performance.now() - replyStartedAt);
             ttsDurationMs = info.durationMs ?? null;
@@ -1348,13 +2538,71 @@ ref,
             console.log(
               `[voice] tts complete: ${info.audioSamples ?? "?"} samples (${info.durationMs ?? "?"}ms audio, total ${info.totalMs ?? "?"}ms)`,
             );
+            setPipelineStatus((current) => ({
+              ...current,
+              llm: {
+                ...current.llm,
+                state: "ready",
+                inputTokens: info.inputTokens ?? current.llm.inputTokens,
+                outputTokens: info.outputTokens ?? current.llm.outputTokens,
+              },
+              tts: {
+                ...current.tts,
+                state: "ready",
+                audioSamples: info.audioSamples ?? current.tts.audioSamples,
+                durationMs: info.durationMs ?? current.tts.durationMs,
+                firstAudioMs: info.firstAudioMs ?? current.tts.firstAudioMs,
+              },
+            }));
+            // Mark + merge server trace + print full timeline.
+            const trace = turnTraceRef.current;
+            if (trace) {
+              trace.mark("sse.done", {
+                inputTokens: info.inputTokens,
+                outputTokens: info.outputTokens,
+              });
+              const serverTrace = info.serverTrace;
+              if (serverTrace) {
+                const offset = trace.at("voice-stream.posted") ?? 0;
+                trace.merge(serverTrace, offset);
+              }
+            }
             resolve();
           },
           onError: (message) => {
+            setPipelineStatus((current) => ({
+              ...current,
+              llm: {
+                ...current.llm,
+                state: current.llm.tokenEvents > 0 ? current.llm.state : "error",
+                error: message,
+              },
+              tts: {
+                ...current.tts,
+                state: current.tts.audioFrames > 0 ? current.tts.state : "error",
+                error: message,
+              },
+            }));
             reject(new Error(message));
           },
         });
       });
+
+      await waitForQueuedPlayback();
+      if (currentReplyContextRef.current?.turnId !== turnId) {
+        return;
+      }
+      const trace = turnTraceRef.current;
+      if (trace) {
+        if (streamedAnyAudio) {
+          trace.mark("audio.playback-drained", {
+            scheduledSources: scheduledSourceCount,
+          });
+        }
+        console.log(trace.print(`turn ${turnId.slice(0, 8)}`));
+        console.log(`[voice] turn summary`, trace.summary());
+        turnTraceRef.current = null;
+      }
 
       assistant = assistant.trim();
       if (!assistant) {
@@ -1371,12 +2619,29 @@ ref,
         console.log(
           "[voice] streamed turn had no audio frames; trying /api/audio/speak fallback",
         );
+        setPipelineStatus((current) => ({
+          ...current,
+          tts: {
+            ...current.tts,
+            state: "waiting",
+            error: "No streamed audio frames arrived; trying fallback TTS.",
+          },
+        }));
         const fallback = await playFallbackTts(assistant);
         if (!fallback.ok) {
           throw new Error(
             `Voice reply text arrived, but no TTS audio was available. ${fallback.error ?? ""}`.trim(),
           );
         }
+        setPipelineStatus((current) => ({
+          ...current,
+          tts: {
+            ...current.tts,
+            state: "ready",
+            durationMs: fallback.durationMs ?? current.tts.durationMs,
+            error: null,
+          },
+        }));
         if (ttsDurationMs === null && typeof fallback.durationMs === "number") {
           ttsDurationMs = fallback.durationMs;
         }
@@ -1437,6 +2702,19 @@ ref,
       fadeOutToZero();
       const message =
         turnError instanceof Error ? turnError.message : "Voice turn failed.";
+      setPipelineStatus((current) => ({
+        ...current,
+        llm: {
+          ...current.llm,
+          state: current.llm.state === "ready" ? "ready" : "error",
+          error: message,
+        },
+        tts: {
+          ...current.tts,
+          state: current.tts.state === "ready" ? "ready" : "error",
+          error: message,
+        },
+      }));
       setVoiceTurns((current) => [
         ...current,
         {
@@ -1463,6 +2741,7 @@ ref,
         active: voiceModeActiveRef.current,
       });
     } finally {
+      clearPlaybackStartTimers();
       if (analyserRaf !== 0) {
         window.cancelAnimationFrame(analyserRaf);
         analyserRaf = 0;
@@ -1487,6 +2766,13 @@ ref,
     } else {
       void enterVoiceMode();
     }
+  }
+
+  function togglePipelineSection(section: PipelineSectionId) {
+    setCollapsedPipelineSections((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
   }
 
   useImperativeHandle(
@@ -1638,12 +2924,48 @@ ref,
               : null}
           </div>
 
-          {voiceModeActive ? (
-            <div style={{ width: 240, display: "flex", flexDirection: "column", gap: 4 }}>
-              <div
+          <VoiceReadinessPanel
+            status={startupStatus}
+            now={statusNow}
+            voiceModeActive={voiceModeActive}
+            phase={phase}
+            micPercent={micPercent}
+            vadPercent={vadPercent}
+            isListening={isListening}
+          />
+
+        </div>
+
+        {voiceModeActive || phase === "error" ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+              }}
+            >
+              <span
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
+                  fontFamily: T.fontMono,
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: T.muted,
+                }}
+              >
+                Live pipeline segments
+              </span>
+              <span
+                style={{
                   fontFamily: T.fontMono,
                   fontSize: 9,
                   color: T.muted,
@@ -1651,68 +2973,20 @@ ref,
                   textTransform: "uppercase",
                 }}
               >
-                <span>Mic</span>
-                <span>{micPercent}%</span>
-              </div>
-              <div
-                style={{
-                  height: 3,
-                  width: "100%",
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.06)",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${micPercent}%`,
-                    background: T.accent,
-                    transition: "width 0.05s linear",
-                  }}
-                />
-              </div>
-              {isListening ? (
-                <>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontFamily: T.fontMono,
-                      fontSize: 9,
-                      color: T.muted,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      marginTop: 4,
-                    }}
-                  >
-                    <span>Pause prediction</span>
-                    <span>{vadPercent}%</span>
-                  </div>
-                  <div
-                    style={{
-                      height: 3,
-                      width: "100%",
-                      borderRadius: 999,
-                      background: "rgba(255,255,255,0.06)",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${vadPercent}%`,
-                        background:
-                          vadPause > VAD_PAUSE_THRESHOLD ? "#4ade80" : T.muted,
-                        transition: "width 0.1s linear",
-                      }}
-                    />
-                  </div>
-                </>
-              ) : null}
+                STT · LLM · TTS
+              </span>
             </div>
-          ) : null}
-        </div>
+            <VoiceDataFlowPanels
+              startupStatus={startupStatus}
+              pipelineStatus={pipelineStatus}
+              now={statusNow}
+              micPercent={micPercent}
+              vadPercent={vadPercent}
+              collapsedSections={collapsedPipelineSections}
+              onToggleSection={togglePipelineSection}
+            />
+          </div>
+        ) : null}
 
         <div
           style={{

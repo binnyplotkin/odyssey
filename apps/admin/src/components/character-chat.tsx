@@ -4,10 +4,18 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EraConfig, WikiEdgeRecord, WikiPageRecord } from "@odyssey/db";
 import { ChatGraph } from "@/components/chat-graph";
-import { CharacterVoicePanel } from "@/components/character-voice-panel";
 import { useHeaderContent } from "@/components/header-context";
+import { Menu, type MenuItem } from "@/components/menu";
+import { EntityPicker, type EntityOption, type EntityKind } from "@/components/entity-picker";
+import { prewarmMoshiServers } from "@/lib/moshi-client";
+import { CharacterVoiceWavefield } from "@/components/character-voice-wavefield";
+import {
+  MODEL_REGISTRY,
+  DEFAULT_CHAT_MODEL,
+  type ModelOption,
+} from "@/lib/model-registry";
 
-type ChatMode = "chat" | "voice";
+type ChatView = "chat" | "voice" | "context";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -62,6 +70,17 @@ type CuratorEvent = {
   tokensUsed: number;
   tokensBudget: number;
   elapsedMs: number;
+  /** Final system prompt actually sent to the LLM for this turn. */
+  systemPrompt: string;
+  /** True if the user supplied an override and the curator was skipped. */
+  overridden: boolean;
+  routingMode?: string;
+  promptKind?: "chat" | "voice";
+  timingTrace?: {
+    startedAt: string;
+    elapsedMs: number;
+    events: Array<{ name: string; elapsedMs: number; meta?: Record<string, unknown> }>;
+  };
 };
 
 type Turn = {
@@ -86,20 +105,21 @@ type Props = {
 
 /* ── Component ─────────────────────────────────────────────────── */
 
-const MODEL_OPTIONS = [
-  { id: "claude-opus-4-5", label: "Opus 4.5" },
-  { id: "claude-sonnet-4-5", label: "Sonnet 4.5" },
-  { id: "claude-haiku-4-5", label: "Haiku 4.5" },
-] as const;
+const ENTITY_KINDS = ["person", "place", "object", "group"] as const;
+function isEntityKind(value: unknown): value is EntityKind {
+  return typeof value === "string" && (ENTITY_KINDS as readonly string[]).includes(value);
+}
 
 export function CharacterChat({ character, pages, edges }: Props) {
   const { setContent, setFlush } = useHeaderContent();
-  const [model, setModel] = useState<string>("claude-sonnet-4-5");
+  // Chat-only model slot; the Voice tab's wavefield manages its own model
+  // state independently.
+  const [chatModel, setChatModel] = useState<string>(DEFAULT_CHAT_MODEL);
   const [budget, setBudget] = useState<number>(3000);
 
   const [activeEntities, setActiveEntities] = useState<string[]>([]);
   const [location, setLocation] = useState<string | null>(null);
-  const [mode, setMode] = useState<ChatMode>("chat");
+  const [view, setView] = useState<ChatView>("chat");
 
   const defaultMoment = useMemo<Moment | null>(() => {
     const sortedEras = [...character.eras].sort((a, b) => b.order - a.order);
@@ -112,6 +132,61 @@ export function CharacterChat({ character, pages, edges }: Props) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // System-prompt override (the "prompt" tab). When `overrideEnabled` and the
+  // draft is non-empty, every turn sends the draft as the full system prompt
+  // and the server skips the curator.
+  const [overrideEnabled, setOverrideEnabled] = useState(false);
+  const [overrideDraft, setOverrideDraft] = useState("");
+
+  // Latest actually-sent system prompt — read from the most recent completed
+  // turn's curator event. The system-prompt tab uses this as a reference.
+  const latestSentPrompt = useMemo(() => {
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+      const cur = turns[i].curator;
+      if (cur?.systemPrompt) return cur.systemPrompt;
+    }
+    return null;
+  }, [turns]);
+
+  // Live preview of the assembled system prompt for the current scene/moment.
+  // Populated lazily — only when the user opens the prompt tab and there's no
+  // actually-sent prompt to show. Refreshes on demand from the panel.
+  const [previewedPrompt, setPreviewedPrompt] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  const fetchPromptPreview = useCallback(async () => {
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      const res = await fetch(`/api/characters/${character.id}/system-prompt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          moment,
+          scene: { activeEntities, location: location ?? undefined },
+          tokenBudget: budget,
+        }),
+      });
+      const data = (await res.json()) as { systemPrompt?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setPreviewedPrompt(data.systemPrompt ?? "");
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [character.id, moment, activeEntities, location, budget]);
+
+  // Auto-fetch the first time the context view is shown without a turn yet.
+  useEffect(() => {
+    if (view !== "context") return;
+    if (latestSentPrompt) return;
+    if (previewedPrompt !== null) return;
+    if (previewLoading) return;
+    fetchPromptPreview();
+  }, [view, latestSentPrompt, previewedPrompt, previewLoading, fetchPromptPreview]);
 
   // Auto-scroll to bottom when new content arrives.
   useEffect(() => {
@@ -127,31 +202,46 @@ export function CharacterChat({ character, pages, edges }: Props) {
     return () => setFlush(false);
   }, [setFlush]);
 
+  // Fire HTTP probes at the Modal STT/TTS containers as soon as the chat
+  // mounts. If the user toggles to voice mode later, the containers are
+  // already warm — first turn dodges the 30-60s cold-start. We don't surface
+  // the result here (chat doesn't have a "warming…" gate); the panel itself
+  // still gates listening on its own prewarm checks.
+  useEffect(() => {
+    void prewarmMoshiServers();
+  }, []);
+
+  const overrideActive = overrideEnabled && overrideDraft.trim().length > 0;
+
   useEffect(() => {
     setContent(
       <ChatHeaderInner
         character={character}
-        model={model}
-        setModel={setModel}
-        moment={moment}
-        setMoment={setMoment}
-        eras={character.eras}
+        view={view}
+        setView={setView}
+        overrideActive={overrideActive}
       />,
     );
     return () => setContent(null);
-  }, [setContent, character, model, moment]);
+  }, [setContent, character, view, overrideActive]);
 
   const pageBySlug = useMemo(
     () => new Map(pages.map((p) => [p.slug, p] as const)),
     [pages],
   );
-  // Surface only entity + place slugs for scene selectors.
-  const entityOptions = useMemo(
+  // Surface entity records (slug + title + kind) for scene selectors.
+  // `kind` lives in EntityFrontmatter ("person" | "place" | "object" | "group");
+  // it's a soft tag — entities without a kind still appear in the "All" bucket.
+  const entityOptions = useMemo<EntityOption[]>(
     () =>
       pages
         .filter((p) => p.type === "entity")
-        .map((p) => p.slug)
-        .sort(),
+        .map((p) => {
+          const fm = (p.frontmatter ?? {}) as { kind?: string };
+          const kind = isEntityKind(fm.kind) ? fm.kind : undefined;
+          return { slug: p.slug, title: p.title, summary: p.summary, kind };
+        })
+        .sort((a, b) => a.title.localeCompare(b.title)),
     [pages],
   );
 
@@ -201,8 +291,10 @@ export function CharacterChat({ character, pages, edges }: Props) {
               activeEntities,
               location: location ?? undefined,
             },
-            model,
+            model: chatModel,
             tokenBudget: budget,
+            systemPromptOverride:
+              overrideEnabled && overrideDraft.trim() ? overrideDraft : undefined,
           }),
           signal: controller.signal,
         });
@@ -249,7 +341,7 @@ export function CharacterChat({ character, pages, edges }: Props) {
         );
       }
     },
-    [character.id, turns, moment, activeEntities, location, model, budget],
+    [character.id, turns, moment, activeEntities, location, chatModel, budget, overrideEnabled, overrideDraft],
   );
 
   function applyEvent(turnId: string, name: string, data: unknown) {
@@ -303,72 +395,96 @@ export function CharacterChat({ character, pages, edges }: Props) {
     send(last.userMessage);
   }
 
+  // Chat tab is text-only; the picker shows chat-compatible models.
+  const availableModels = useMemo(
+    () => MODEL_REGISTRY.filter((m) => m.modes.includes("chat")),
+    [],
+  );
+
   /* ── Render ────────────────────────────────────────────────────── */
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--background)" }}>
-      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        {/* Left: chat or voice */}
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, borderRight: `1px solid ${T.border}` }}>
-          <SceneBar
-            activeEntities={activeEntities}
-            setActiveEntities={setActiveEntities}
-            location={location}
-            setLocation={setLocation}
-            entityOptions={entityOptions}
-            budget={budget}
-            setBudget={setBudget}
-            mode={mode}
-            setMode={setMode}
-            characterSlug={character.slug}
-          />
-          {mode === "chat" ? (
-            <>
-              <div
-                ref={scrollRef}
-                style={{
-                  flex: 1, minHeight: 0, overflow: "auto",
-                  display: "flex", flexDirection: "column", gap: 22,
-                  padding: "24px 32px 24px 32px",
-                }}
-              >
-                {turns.length === 0 ? (
-                  <EmptyState character={character} />
-                ) : (
-                  turns.map((turn) => <TurnView key={turn.id} turn={turn} />)
-                )}
-              </div>
-              <Composer
-                input={input}
-                setInput={setInput}
-                onSend={() => send(input)}
-                onCancel={cancel}
-                onClear={clearChat}
-                onRerun={reRunLast}
-                busy={busy}
-                hasTurns={turns.length > 0}
-              />
-            </>
-          ) : (
-            <CharacterVoicePanel
-              character={character}
-              moment={moment}
-              scene={{ activeEntities, location }}
-              model={model}
-              tokenBudget={budget}
-            />
-          )}
+      {/* Voice tab takes over the workspace — wavefield is self-contained. */}
+      {view === "voice" ? (
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <CharacterVoiceWavefield character={character} />
         </div>
+      ) : (
+        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, borderRight: `1px solid ${T.border}` }}>
+            <SceneBar
+              activeEntities={activeEntities}
+              setActiveEntities={setActiveEntities}
+              location={location}
+              setLocation={setLocation}
+              entityOptions={entityOptions}
+              budget={budget}
+              setBudget={setBudget}
+              moment={moment}
+              setMoment={setMoment}
+              eras={character.eras}
+              model={chatModel}
+              setModel={setChatModel}
+              availableModels={availableModels}
+            />
+            {view === "chat" && (
+              <>
+                <div
+                  ref={scrollRef}
+                  style={{
+                    flex: 1, minHeight: 0, overflow: "auto",
+                    display: "flex", flexDirection: "column", gap: 22,
+                    padding: "24px 32px 24px 32px",
+                  }}
+                >
+                  {turns.length === 0 ? (
+                    <EmptyState character={character} />
+                  ) : (
+                    turns.map((turn) => <TurnView key={turn.id} turn={turn} />)
+                  )}
+                </div>
+                <Composer
+                  input={input}
+                  setInput={setInput}
+                  onSend={() => send(input)}
+                  onCancel={cancel}
+                  onClear={clearChat}
+                  onRerun={reRunLast}
+                  busy={busy}
+                  hasTurns={turns.length > 0}
+                />
+              </>
+            )}
+            {view === "context" && (
+              <SystemPromptPanel
+                characterTitle={character.title}
+                latestSentPrompt={latestSentPrompt}
+                previewedPrompt={previewedPrompt}
+                previewLoading={previewLoading}
+                previewError={previewError}
+                onRefreshPreview={fetchPromptPreview}
+                overrideEnabled={overrideEnabled}
+                setOverrideEnabled={setOverrideEnabled}
+                overrideDraft={overrideDraft}
+                setOverrideDraft={setOverrideDraft}
+                onResetChat={clearChat}
+                hasTurns={turns.length > 0}
+                busy={busy}
+              />
+            )}
+          </div>
 
-        {/* Right: graph + trace panel */}
-        <TracePanel
-          turns={turns}
-          character={character}
-          pages={pages}
-          edges={edges}
-          pageBySlug={pageBySlug}
-        />
-      </div>
+          {/* Right: graph + trace panel */}
+          <TracePanel
+            turns={turns}
+            character={character}
+            pages={pages}
+            edges={edges}
+            pageBySlug={pageBySlug}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -376,12 +492,12 @@ export function CharacterChat({ character, pages, edges }: Props) {
 /* ── Chat header (rendered into the global header bar) ──────────── */
 
 function ChatHeaderInner({
-  character, model, setModel, moment, setMoment, eras,
+  character, view, setView, overrideActive,
 }: {
   character: CharacterProp;
-  model: string; setModel: (m: string) => void;
-  moment: Moment | null; setMoment: (m: Moment | null) => void;
-  eras: EraConfig[];
+  view: ChatView;
+  setView: (v: ChatView) => void;
+  overrideActive: boolean;
 }) {
   return (
     <>
@@ -398,35 +514,71 @@ function ChatHeaderInner({
         <span style={{ fontFamily: T.fontHeading, fontSize: 16, fontWeight: 700, color: T.fg, whiteSpace: "nowrap" }}>
           {character.title}
         </span>
-        <span style={{ width: 1, height: 20, background: T.border }} />
-        <span style={{ fontFamily: T.fontMono, fontSize: 11, fontWeight: 600, color: "#8CE7D2", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Test Chat
-        </span>
         <span style={{ padding: "2px 8px", borderRadius: 4, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.25)", fontFamily: T.fontMono, fontSize: 9, fontWeight: 600, color: "#FACC15", letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Sandbox
         </span>
       </div>
       <div style={{ flex: 1 }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-        <MomentPicker moment={moment} setMoment={setMoment} eras={eras} />
-        <select
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          style={{
-            padding: "6px 10px", borderRadius: 8,
-            border: `1px solid ${T.border}`, background: "transparent",
-            color: T.fg, fontFamily: T.fontBody, fontSize: 11, outline: "none",
-            cursor: "pointer",
-          }}
-        >
-          {MODEL_OPTIONS.map((m) => (
-            <option key={m.id} value={m.id} style={{ background: "var(--background)", color: T.fg }}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <ViewTabs view={view} setView={setView} overrideActive={overrideActive} />
     </>
+  );
+}
+
+function ViewTabs({
+  view, setView, overrideActive,
+}: {
+  view: ChatView;
+  setView: (v: ChatView) => void;
+  overrideActive: boolean;
+}) {
+  const TABS: { value: ChatView; label: string }[] = [
+    { value: "chat", label: "Chat" },
+    { value: "voice", label: "Voice" },
+    { value: "context", label: "Context" },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Sandbox view"
+      style={{
+        display: "inline-flex", padding: 2, borderRadius: 8, marginLeft: 4,
+        border: `1px solid ${T.border}`,
+        background: "color-mix(in srgb, var(--background) 25%, transparent)",
+      }}
+    >
+      {TABS.map((t) => {
+        const active = view === t.value;
+        return (
+          <button
+            key={t.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => setView(t.value)}
+            style={{
+              padding: "4px 12px", borderRadius: 6, border: "none",
+              background: active
+                ? "color-mix(in srgb, var(--accent-strong) 12%, transparent)"
+                : "transparent",
+              color: active ? T.fg : T.muted,
+              fontFamily: T.fontMono, fontSize: 10, fontWeight: 600,
+              letterSpacing: "0.1em", textTransform: "uppercase",
+              cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: 6,
+            }}
+          >
+            {t.label}
+            {t.value === "context" && overrideActive && (
+              <span
+                aria-hidden
+                title="Override active"
+                style={{ width: 6, height: 6, borderRadius: "50%", background: "#FACC15" }}
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -441,25 +593,22 @@ function MomentPicker({
     <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", border: `1px solid ${T.border}`, borderRadius: 8 }}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>Moment</span>
-      <select
+      <Menu
         value={moment?.era ?? ""}
-        onChange={(e) => {
-          const key = e.target.value;
+        onChange={(key) => {
           if (!key) { setMoment(null); return; }
           setMoment({ era: key, index: moment?.era === key ? moment.index : 0 });
         }}
-        style={{
-          border: "none", outline: "none", background: "transparent",
-          color: "#8CE7D2", fontFamily: T.fontMono, fontSize: 11, fontWeight: 500, cursor: "pointer",
+        ariaLabel="Era"
+        items={[
+          { value: "", label: "all" },
+          ...sortedEras.map((e): MenuItem<string> => ({ value: e.key, label: e.key })),
+        ]}
+        triggerStyle={{
+          border: "none", padding: 0, background: "transparent",
+          color: "#8CE7D2", fontFamily: T.fontMono, fontSize: 11, fontWeight: 500,
         }}
-      >
-        <option value="" style={{ background: "var(--background)", color: T.fg }}>all</option>
-        {sortedEras.map((e) => (
-          <option key={e.key} value={e.key} style={{ background: "var(--background)", color: T.fg }}>
-            {e.key}
-          </option>
-        ))}
-      </select>
+      />
       {moment && (
         <>
           <span style={{ fontFamily: T.fontMono, fontSize: 11, color: "#8CE7D2" }}>·</span>
@@ -485,28 +634,29 @@ function MomentPicker({
 
 function SceneBar({
   activeEntities, setActiveEntities, location, setLocation,
-  entityOptions, budget, setBudget, mode, setMode, characterSlug,
+  entityOptions, budget, setBudget,
+  moment, setMoment, eras, model, setModel, availableModels,
 }: {
   activeEntities: string[]; setActiveEntities: (s: string[]) => void;
   location: string | null; setLocation: (s: string | null) => void;
-  entityOptions: string[];
+  entityOptions: EntityOption[];
   budget: number; setBudget: (n: number) => void;
-  mode: ChatMode; setMode: (m: ChatMode) => void;
-  characterSlug: string;
+  moment: Moment | null; setMoment: (m: Moment | null) => void;
+  eras: EraConfig[];
+  model: string; setModel: (m: string) => void;
+  availableModels: ModelOption[];
 }) {
-  const [draft, setDraft] = useState("");
-  const suggestions = useMemo(() => {
-    if (!draft.trim()) return [];
-    const q = draft.trim().toLowerCase();
-    return entityOptions
-      .filter((s) => s.toLowerCase().includes(q) && !activeEntities.includes(s))
-      .slice(0, 6);
-  }, [draft, entityOptions, activeEntities]);
+  const titleBySlug = useMemo(
+    () => new Map(entityOptions.map((e) => [e.slug, e.title] as const)),
+    [entityOptions],
+  );
 
-  function addEntity(slug: string) {
-    if (!slug.trim() || activeEntities.includes(slug)) return;
-    setActiveEntities([...activeEntities, slug]);
-    setDraft("");
+  function toggleEntity(slug: string) {
+    setActiveEntities(
+      activeEntities.includes(slug)
+        ? activeEntities.filter((s) => s !== slug)
+        : [...activeEntities, slug],
+    );
   }
   function removeEntity(slug: string) {
     setActiveEntities(activeEntities.filter((s) => s !== slug));
@@ -518,90 +668,81 @@ function SceneBar({
       padding: "14px 32px", borderBottom: `1px solid ${T.border}`,
       background: "rgba(255,255,255,0.02)",
     }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
           Scene
         </span>
-        <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
-          what's present in this moment
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <MomentPicker moment={moment} setMoment={setMoment} eras={eras} />
+          <Menu
+            value={model}
+            onChange={setModel}
+            ariaLabel="Model"
+            items={availableModels.map((m): MenuItem<string> => ({
+              value: m.id,
+              label: m.label,
+              meta: m.provider,
+            }))}
+            triggerStyle={{ fontFamily: T.fontMono, fontSize: 11 }}
+          />
+        </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         {/* Active entities */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M5 21v-1c0-3.87 3.13-7 7-7s7 3.13 7 7v1"/></svg>
           <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>Active</span>
           {activeEntities.map((slug) => (
-            <span key={slug} style={{
+            <span key={slug} title={slug} style={{
               display: "inline-flex", alignItems: "center", gap: 5,
               padding: "2px 8px 2px 10px", borderRadius: 999,
               background: "rgba(251,167,192,0.1)", border: "1px solid rgba(251,167,192,0.25)",
               fontFamily: T.fontBody, fontSize: 11, color: "#FBA7C0",
             }}>
-              {slug}
-              <button type="button" onClick={() => removeEntity(slug)} style={{ border: "none", background: "transparent", color: "#FBA7C0", cursor: "pointer", padding: 0, display: "flex" }}>
+              {titleBySlug.get(slug) ?? slug}
+              <button type="button" onClick={() => removeEntity(slug)} style={{ border: "none", background: "transparent", color: "#FBA7C0", cursor: "pointer", padding: 0, display: "flex" }} aria-label={`Remove ${titleBySlug.get(slug) ?? slug}`}>
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </span>
           ))}
-          <div style={{ position: "relative" }}>
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && draft.trim()) {
-                  e.preventDefault();
-                  addEntity(draft.trim().toLowerCase());
-                } else if (e.key === "Backspace" && !draft && activeEntities.length > 0) {
-                  removeEntity(activeEntities[activeEntities.length - 1]);
-                }
-              }}
-              placeholder="+ add"
-              style={{
-                border: "none", outline: "none", background: "transparent",
-                color: T.fg, fontFamily: T.fontBody, fontSize: 11,
-                width: 80, padding: "2px 4px",
-              }}
-            />
-            {suggestions.length > 0 && (
-              <div style={{
-                position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: 180,
-                background: "var(--panel-strong, #1E2230)", border: `1px solid ${T.border}`,
-                borderRadius: 8, padding: "4px 0", zIndex: 20,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-              }}>
-                {suggestions.map((s) => (
-                  <button key={s} onClick={() => addEntity(s)} style={{
-                    display: "block", width: "100%", textAlign: "left",
-                    padding: "5px 10px", border: "none", background: "transparent",
-                    fontFamily: T.fontBody, fontSize: 11, color: T.fg, cursor: "pointer",
-                  }}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <EntityPicker
+            active={activeEntities}
+            onToggle={toggleEntity}
+            entities={entityOptions}
+          />
         </div>
 
         <span style={{ width: 1, height: 18, background: T.border }} />
 
         {/* Location */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
           <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>Location</span>
-          <input
-            type="text"
-            value={location ?? ""}
-            onChange={(e) => setLocation(e.target.value || null)}
-            placeholder="(none)"
-            style={{
-              border: "none", outline: "none", background: "transparent",
-              color: location ? "#7AB0E8" : T.muted,
-              fontFamily: T.fontBody, fontSize: 11,
-              width: 120, padding: "2px 4px",
-            }}
+          {location && (
+            <span title={location} style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "2px 8px 2px 10px", borderRadius: 999,
+              background: "rgba(122,176,232,0.1)", border: "1px solid rgba(122,176,232,0.25)",
+              fontFamily: T.fontBody, fontSize: 11, color: "#7AB0E8",
+            }}>
+              {titleBySlug.get(location) ?? location}
+              <button
+                type="button"
+                onClick={() => setLocation(null)}
+                style={{ border: "none", background: "transparent", color: "#7AB0E8", cursor: "pointer", padding: 0, display: "flex" }}
+                aria-label={`Clear location ${titleBySlug.get(location) ?? location}`}
+              >
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </span>
+          )}
+          <EntityPicker
+            active={location ? [location] : []}
+            onToggle={(slug) => setLocation(slug === location ? null : slug)}
+            entities={entityOptions}
+            kindFilter="place"
+            closeOnSelect
+            triggerLabel={location ? "change" : "+ set"}
           />
         </div>
 
@@ -624,94 +765,6 @@ function SceneBar({
           </span>
         </div>
 
-        <span style={{ flex: 1 }} />
-
-        {/* Mode toggle: Chat ↔ Voice */}
-        <div
-          role="tablist"
-          aria-label="Conversation mode"
-          style={{
-            display: "inline-flex",
-            padding: 2,
-            borderRadius: 8,
-            border: `1px solid ${T.border}`,
-            background: "rgba(0,0,0,0.25)",
-          }}
-        >
-          {(["chat", "voice"] as const).map((m) => {
-            const active = mode === m;
-            if (m === "voice") {
-              return (
-                <Link
-                  key={m}
-                  href={`/characters/${characterSlug}/voice`}
-                  style={{
-                    padding: "5px 12px",
-                    fontFamily: T.fontMono,
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    color: T.muted,
-                    background: "transparent",
-                    border: "none",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    textDecoration: "none",
-                  }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                    <line x1="12" y1="19" x2="12" y2="23" />
-                  </svg>
-                  {m}
-                </Link>
-              );
-            }
-            return (
-              <button
-                key={m}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setMode(m)}
-                style={{
-                  padding: "5px 12px",
-                  fontFamily: T.fontMono,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: active ? T.fg : T.muted,
-                  background: active ? "rgba(140, 231, 210, 0.12)" : "transparent",
-                  border: "none",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                {m === "chat" ? (
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                ) : (
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                    <line x1="12" y1="19" x2="12" y2="23" />
-                  </svg>
-                )}
-                {m}
-              </button>
-            );
-          })}
-        </div>
       </div>
     </div>
   );
@@ -932,6 +985,270 @@ const ghostBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
+/* ── System prompt panel (mode === "prompt") ──────────────────── */
+
+function SystemPromptPanel({
+  characterTitle,
+  latestSentPrompt,
+  previewedPrompt,
+  previewLoading,
+  previewError,
+  onRefreshPreview,
+  overrideEnabled,
+  setOverrideEnabled,
+  overrideDraft,
+  setOverrideDraft,
+  onResetChat,
+  hasTurns,
+  busy,
+}: {
+  characterTitle: string;
+  latestSentPrompt: string | null;
+  previewedPrompt: string | null;
+  previewLoading: boolean;
+  previewError: string | null;
+  onRefreshPreview: () => void;
+  overrideEnabled: boolean;
+  setOverrideEnabled: (b: boolean) => void;
+  overrideDraft: string;
+  setOverrideDraft: (s: string) => void;
+  onResetChat: () => void;
+  hasTurns: boolean;
+  busy: boolean;
+}) {
+  const draftActive = overrideEnabled && overrideDraft.trim().length > 0;
+  const charCount = overrideDraft.length;
+  const tokenEst = Math.ceil(overrideDraft.length / 4);
+
+  // Prefer the actually-sent prompt; fall back to the live preview.
+  const displayedPrompt = latestSentPrompt ?? previewedPrompt;
+  const displayedSource: "sent" | "preview" | null =
+    latestSentPrompt ? "sent" : previewedPrompt ? "preview" : null;
+
+  return (
+    <div
+      style={{
+        flex: 1, minHeight: 0, overflow: "auto",
+        display: "flex", flexDirection: "column", gap: 16,
+        padding: "20px 32px 24px 32px",
+      }}
+    >
+      {/* Top row: status + reset chat */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+            System Prompt
+          </span>
+          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+            What {characterTitle} sees before each turn. Override to test pure model behavior — the curator is skipped while override is active.
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onResetChat}
+          disabled={!hasTurns || busy}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "6px 14px", borderRadius: 8,
+            border: `1px solid ${T.border}`,
+            background: "transparent",
+            color: hasTurns && !busy ? T.fg : T.muted,
+            fontFamily: T.fontBody, fontSize: 11, fontWeight: 500,
+            cursor: hasTurns && !busy ? "pointer" : "not-allowed",
+            opacity: hasTurns && !busy ? 1 : 0.5,
+            flexShrink: 0,
+          }}
+          title="Clear all turns and start a fresh conversation"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="1 4 1 10 7 10" />
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+          </svg>
+          Reset chat
+        </button>
+      </div>
+
+      {/* Override editor */}
+      <div
+        style={{
+          display: "flex", flexDirection: "column",
+          background: T.panel, border: `1px solid ${T.border}`,
+          borderRadius: 12, overflow: "clip",
+        }}
+      >
+        <div
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: 12, padding: "12px 16px",
+            borderBottom: `1px solid ${T.border}`,
+            background: draftActive ? "rgba(250,204,21,0.06)" : "transparent",
+          }}
+        >
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
+            <input
+              type="checkbox"
+              checked={overrideEnabled}
+              onChange={(e) => setOverrideEnabled(e.target.checked)}
+              style={{ accentColor: "#FACC15" }}
+            />
+            <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 600, color: draftActive ? "#FACC15" : T.fg, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Use this override
+            </span>
+            {draftActive && (
+              <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
+                · curator skipped
+              </span>
+            )}
+          </label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => displayedPrompt && setOverrideDraft(displayedPrompt)}
+              disabled={!displayedPrompt}
+              style={{
+                ...ghostBtn,
+                opacity: displayedPrompt ? 1 : 0.4,
+                cursor: displayedPrompt ? "pointer" : "not-allowed",
+              }}
+              title={
+                displayedSource === "sent"
+                  ? "Copy the last actually-sent system prompt into the override"
+                  : "Copy the previewed system prompt into the override"
+              }
+            >
+              Load current
+            </button>
+            <button
+              type="button"
+              onClick={() => setOverrideDraft("")}
+              disabled={!overrideDraft}
+              style={{
+                ...ghostBtn,
+                opacity: overrideDraft ? 1 : 0.4,
+                cursor: overrideDraft ? "pointer" : "not-allowed",
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <textarea
+          value={overrideDraft}
+          onChange={(e) => setOverrideDraft(e.target.value)}
+          rows={18}
+          placeholder={`Write a complete system prompt for ${characterTitle}.\n\nWhen "Use this override" is on, this exact text is sent as the system prompt and the curator is bypassed — useful for isolating model behavior from retrieved context.`}
+          style={{
+            width: "100%", border: "none", outline: "none", resize: "vertical",
+            padding: "16px 20px", background: "var(--background)",
+            fontFamily: T.fontMono, fontSize: 12, color: T.fg, lineHeight: "20px",
+            minHeight: 320, boxSizing: "border-box",
+          }}
+        />
+
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "10px 16px", borderTop: `1px solid ${T.border}`,
+        }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, letterSpacing: "0.05em" }}>
+            {charCount.toLocaleString()} chars · ~{tokenEst.toLocaleString()} tokens
+          </span>
+          {overrideEnabled && !overrideDraft.trim() && (
+            <span style={{ fontFamily: T.fontBody, fontSize: 11, color: "#E89090" }}>
+              Override is on but the draft is empty — turns will fall back to the curator.
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Resolved system prompt — actually-sent if available, else live preview. */}
+      <div
+        style={{
+          display: "flex", flexDirection: "column",
+          background: T.panel, border: `1px solid ${T.border}`,
+          borderRadius: 12, overflow: "clip",
+        }}
+      >
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 12, padding: "12px 16px", borderBottom: `1px solid ${T.border}`,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              {displayedSource === "sent" ? "Latest sent prompt" : "Resolved prompt · preview"}
+            </span>
+            {displayedSource === "preview" && (
+              <span
+                title="Curator runs with a placeholder query so you can see the prompt before sending a turn."
+                style={{
+                  padding: "1px 7px", borderRadius: 999,
+                  background: "rgba(140,231,210,0.1)", border: "1px solid rgba(140,231,210,0.25)",
+                  fontFamily: T.fontMono, fontSize: 9, fontWeight: 600, color: "#8CE7D2",
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                }}
+              >
+                Live
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {displayedPrompt && (
+              <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+                {displayedPrompt.length.toLocaleString()} chars
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={onRefreshPreview}
+              disabled={previewLoading}
+              style={{
+                ...ghostBtn,
+                opacity: previewLoading ? 0.6 : 1,
+                cursor: previewLoading ? "wait" : "pointer",
+              }}
+              title="Re-run the curator with the current scene/moment/budget"
+            >
+              {previewLoading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+        </div>
+        {previewError && !displayedPrompt && (
+          <div style={{
+            padding: "12px 20px", borderBottom: `1px solid ${T.border}`,
+            background: "rgba(232,144,144,0.08)",
+            fontFamily: T.fontBody, fontSize: 12, color: "#E89090",
+          }}>
+            {previewError}
+          </div>
+        )}
+        {displayedPrompt ? (
+          <pre
+            style={{
+              margin: 0,
+              padding: "16px 20px",
+              background: "var(--background)",
+              fontFamily: T.fontMono, fontSize: 11.5, color: T.fg, lineHeight: "19px",
+              whiteSpace: "pre-wrap", wordBreak: "break-word",
+              maxHeight: 480, overflow: "auto",
+            }}
+          >
+            {displayedPrompt}
+          </pre>
+        ) : (
+          <div style={{
+            padding: "16px 20px",
+            fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "18px",
+          }}>
+            {previewLoading
+              ? "Assembling preview…"
+              : "Click Refresh to assemble a preview of the system prompt for the current scene."}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Trace panel (right column) ────────────────────────────────── */
 
 function TracePanel({
@@ -1044,7 +1361,7 @@ function TracePanel({
             fontFamily: T.fontMono, fontSize: 11, color: T.fg, lineHeight: "18px",
             whiteSpace: "pre-wrap", wordBreak: "break-word",
           }}>
-            {c.promptChunk}
+            {c.systemPrompt}
           </pre>
         ) : (
           <TraceContent curator={c} pageBySlug={pageBySlug} />
@@ -1180,6 +1497,41 @@ function TraceContent({ curator, pageBySlug }: { curator: CuratorEvent; pageBySl
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      {curator.timingTrace && (
+        <section>
+          <SectionHeader
+            label={`Context Harness · ${curator.routingMode ?? "chat-turn"}`}
+            hint={`${curator.promptKind ?? "chat"} prompt · ${curator.timingTrace.elapsedMs}ms`}
+          />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+            {curator.timingTrace.events.map((event) => (
+              <div key={`${event.name}-${event.elapsedMs}`} style={{
+                padding: "8px 10px",
+                borderRadius: 8,
+                background: "var(--panel)",
+                border: `1px solid ${T.border}`,
+                minWidth: 0,
+              }}>
+                <div style={{
+                  fontFamily: T.fontMono,
+                  fontSize: 10,
+                  color: T.muted,
+                  textTransform: "uppercase",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}>
+                  {event.name}
+                </div>
+                <div style={{ marginTop: 5, fontFamily: T.fontHeading, fontSize: 14, color: T.fg }}>
+                  {event.elapsedMs}ms
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Seeds */}
       <section>
         <SectionHeader label={`Seeds · ${curator.trace.seeds.length}`} hint="why these pages were picked first" />

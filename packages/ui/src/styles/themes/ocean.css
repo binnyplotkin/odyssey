@@ -101,10 +101,10 @@
     --border: rgba(0, 0, 0, 0.12);
     --shadow: rgba(0, 0, 0, 0.10);
 
-    /* Accent */
-    --accent: #105A59;
-    --accent-strong: #05473F;
-    --accent-soft: rgba(16, 90, 89, 0.10);
+    /* Accent — darker + less vibrant in light mode so it doesn't shout. */
+    --accent: #0a3f3e;
+    --accent-strong: #02302a;
+    --accent-soft: rgba(10, 63, 62, 0.10);
 
     /* Text */
     --muted: rgba(0, 0, 0, 0.5);
@@ -156,10 +156,10 @@
   --border: rgba(0, 0, 0, 0.12);
   --shadow: rgba(0, 0, 0, 0.10);
 
-  /* Accent */
-  --accent: #105A59;
-  --accent-strong: #05473F;
-  --accent-soft: rgba(16, 90, 89, 0.10);
+  /* Accent — darker + less vibrant in light mode so it doesn't shout. */
+  --accent: #0a3f3e;
+  --accent-strong: #02302a;
+  --accent-soft: rgba(10, 63, 62, 0.10);
 
   /* Text */
   --muted: rgba(0, 0, 0, 0.5);

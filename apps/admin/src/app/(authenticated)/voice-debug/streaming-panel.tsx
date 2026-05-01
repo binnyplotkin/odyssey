@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MOSHI_WS_URL, msgpackDecode, msgpackEncode } from "@/lib/moshi-client";
+import {
+  MOSHI_WS_URL,
+  msgpackDecode,
+  msgpackEncode,
+  msgpackEncodeAudioFrame,
+} from "@/lib/moshi-client";
 
 type ConnState = "idle" | "connecting" | "streaming" | "closing" | "error";
 
@@ -175,12 +180,7 @@ export default function StreamingPanel() {
         // 1 second of leading silence — required by some Kyutai STT models
         // and harmless for the 1B en_fr default.
         const silence = new Float32Array(TARGET_SAMPLE_RATE);
-        ws.send(
-          msgpackEncode({
-            type: "Audio",
-            pcm: Array.from(silence),
-          }),
-        );
+        ws.send(msgpackEncodeAudioFrame(silence));
 
         node.port.onmessage = (event) => {
           const data = event.data as
@@ -188,12 +188,7 @@ export default function StreamingPanel() {
             | { type: "level"; rms: number };
           if (data.type === "frame") {
             if (ws.readyState !== WebSocket.OPEN) return;
-            ws.send(
-              msgpackEncode({
-                type: "Audio",
-                pcm: Array.from(data.samples),
-              }),
-            );
+            ws.send(msgpackEncodeAudioFrame(data.samples));
             setFramesSent((current) => current + 1);
           } else if (data.type === "level") {
             setMicLevel(data.rms);
