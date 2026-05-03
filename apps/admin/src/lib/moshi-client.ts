@@ -804,7 +804,7 @@ export async function synthesizeBatchViaKyutai(
 export type MoshiStreamingSttHandlers = {
   /** Startup/capture lifecycle hooks used by the voice UI readiness checklist. */
   onMicPermissionPending?: () => void;
-  onMicCapture?: () => void;
+  onMicCapture?: (stream: MediaStream) => void;
   onWorkletLoading?: () => void;
   onWorkletReady?: (sampleRate: number) => void;
   onSocketConnecting?: (url: string) => void;
@@ -895,7 +895,7 @@ export class MoshiStreamingSttSession {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     }
     this.stream = stream;
-    handlers.onMicCapture?.();
+    handlers.onMicCapture?.(stream);
     console.log("[MoshiStreamingSttSession] mic stream acquired");
 
     const audioContext = new AudioContext();

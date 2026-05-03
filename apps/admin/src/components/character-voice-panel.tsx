@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
+  encodeFloat32ToWav,
   MOSHI_TTS_BASE_URL_HTTP,
   MoshiStreamingSttSession,
 } from "@/lib/moshi-client";
@@ -39,6 +40,20 @@ type WorldSessionEventDraft = {
   source: string;
   payload: Record<string, unknown>;
   createdAt: string;
+};
+
+type InputAudioCapture = {
+  turnId: string;
+  recorder: MediaRecorder;
+  chunks: BlobPart[];
+  startedAt: number;
+  mimeType: string;
+};
+
+type OutputAudioCapture = {
+  turnId: string;
+  chunks: Float32Array[];
+  startedAt: number;
 };
 
 type Speculation = {
@@ -1261,6 +1276,9 @@ ref,
   const currentInputTurnIdRef = useRef<string | null>(null);
   const worldEventQueueRef = useRef<WorldSessionEventDraft[]>([]);
   const worldEventFlushTimerRef = useRef<number | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const inputAudioCaptureRef = useRef<InputAudioCapture | null>(null);
+  const outputAudioCaptureRef = useRef<OutputAudioCapture | null>(null);
 
   // Mirror of `phase` for synchronous reads inside async callbacks (avoids
   // stale-closure issues when WS events fire across renders).
@@ -1455,6 +1473,146 @@ ref,
     }
   }
 
+  function preferredRecorderMimeType() {
+    if (typeof MediaRecorder === "undefined") return "";
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+    ];
+    return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
+  }
+
+  function uploadAudioArtifact(args: {
+    turnId: string;
+    direction: "input" | "output";
+    blob: Blob;
+    durationMs: number | null;
+    sampleRate?: number | null;
+  }) {
+    const sessionId = worldSessionIdRef.current;
+    if (!sessionId || args.blob.size === 0) return;
+    const form = new FormData();
+    form.set("file", args.blob, `${args.direction}-${args.turnId}.${args.direction === "output" ? "wav" : "webm"}`);
+    form.set("direction", args.direction);
+    form.set("turnId", args.turnId);
+    if (args.durationMs !== null) form.set("durationMs", String(Math.round(args.durationMs)));
+    if (args.sampleRate) form.set("sampleRate", String(args.sampleRate));
+    void fetch(`/api/world-sessions/${sessionId}/audio`, {
+      method: "POST",
+      body: form,
+    }).catch((err) => {
+      console.warn(`[voice] ${args.direction} audio artifact upload failed`, err);
+    });
+  }
+
+  function startInputAudioCapture(turnId: string) {
+    if (inputAudioCaptureRef.current) return;
+    const stream = micStreamRef.current;
+    if (!stream || typeof MediaRecorder === "undefined") return;
+    try {
+      const mimeType = preferredRecorderMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const chunks: BlobPart[] = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onerror = (event) => {
+        console.warn("[voice] input MediaRecorder error", event);
+      };
+      inputAudioCaptureRef.current = {
+        turnId,
+        recorder,
+        chunks,
+        startedAt: performance.now(),
+        mimeType: recorder.mimeType || mimeType || "audio/webm",
+      };
+      recorder.start(250);
+      queueWorldEvent("audio.input.capture-started", "user", {
+        mimeType: inputAudioCaptureRef.current.mimeType,
+      }, { turnId });
+    } catch (err) {
+      console.warn("[voice] failed to start input audio capture", err);
+    }
+  }
+
+  function stopInputAudioCapture(turnId: string, durationMs: number | null) {
+    const capture = inputAudioCaptureRef.current;
+    if (!capture || capture.turnId !== turnId) return;
+    inputAudioCaptureRef.current = null;
+    const finish = () => {
+      const blob = new Blob(capture.chunks, { type: capture.mimeType });
+      uploadAudioArtifact({
+        turnId,
+        direction: "input",
+        blob,
+        durationMs: durationMs ?? Math.round(performance.now() - capture.startedAt),
+      });
+      queueWorldEvent("audio.input.capture-stopped", "user", {
+        mimeType: capture.mimeType,
+        byteSize: blob.size,
+        durationMs: durationMs ?? Math.round(performance.now() - capture.startedAt),
+      }, { turnId, flushNow: true });
+    };
+    try {
+      capture.recorder.onstop = finish;
+      if (capture.recorder.state !== "inactive") capture.recorder.stop();
+      else finish();
+    } catch (err) {
+      console.warn("[voice] failed to stop input audio capture", err);
+      finish();
+    }
+  }
+
+  function startOutputAudioCapture(turnId: string) {
+    outputAudioCaptureRef.current = {
+      turnId,
+      chunks: [],
+      startedAt: performance.now(),
+    };
+  }
+
+  function appendOutputAudioFrame(turnId: string, samples: Float32Array) {
+    const capture = outputAudioCaptureRef.current;
+    if (!capture || capture.turnId !== turnId || samples.length === 0) return;
+    capture.chunks.push(new Float32Array(samples));
+  }
+
+  function finishOutputAudioCapture(turnId: string, durationMs: number | null) {
+    const capture = outputAudioCaptureRef.current;
+    if (!capture || capture.turnId !== turnId) return;
+    outputAudioCaptureRef.current = null;
+    const sampleCount = capture.chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    if (sampleCount === 0) return;
+    const merged = new Float32Array(sampleCount);
+    let offset = 0;
+    for (const chunk of capture.chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    const wav = encodeFloat32ToWav(merged, TTS_SAMPLE_RATE);
+    const wavBuffer = wav.buffer.slice(
+      wav.byteOffset,
+      wav.byteOffset + wav.byteLength,
+    ) as ArrayBuffer;
+    const blob = new Blob([wavBuffer], { type: "audio/wav" });
+    const computedDurationMs = Math.round((sampleCount / TTS_SAMPLE_RATE) * 1000);
+    uploadAudioArtifact({
+      turnId,
+      direction: "output",
+      blob,
+      durationMs: durationMs ?? computedDurationMs,
+      sampleRate: TTS_SAMPLE_RATE,
+    });
+    queueWorldEvent("audio.output.capture-complete", "assistant", {
+      mimeType: "audio/wav",
+      sampleRate: TTS_SAMPLE_RATE,
+      samples: sampleCount,
+      byteSize: blob.size,
+      durationMs: durationMs ?? computedDurationMs,
+    }, { turnId, flushNow: true });
+  }
+
   function endWorldSession(status = "ended") {
     flushWorldEvents();
     const sessionId = worldSessionIdRef.current;
@@ -1525,6 +1683,12 @@ ref,
     setTtsFirstAudioMs(null);
     speechStartedRef.current = false;
     currentTurnWordsRef.current = [];
+    if (currentInputTurnIdRef.current) {
+      stopInputAudioCapture(currentInputTurnIdRef.current, null);
+    }
+    inputAudioCaptureRef.current = null;
+    outputAudioCaptureRef.current = null;
+    micStreamRef.current = null;
     turnFirstWordAtRef.current = null;
     lastFinalizeAtRef.current = null;
     lastMicLevelRef.current = 0;
@@ -1646,7 +1810,8 @@ ref,
             micPermission: "pending",
           }));
         },
-        onMicCapture: () => {
+        onMicCapture: (stream) => {
+          micStreamRef.current = stream;
           setStartupStatus((current) => ({
             ...current,
             micPermission: "ready",
@@ -1764,6 +1929,7 @@ ref,
               word: text,
               turnId: currentInputTurnIdRef.current,
             });
+            startInputAudioCapture(currentInputTurnIdRef.current);
             setPipelineStatus((current) => ({
               ...createInitialPipelineStatus(),
               speculation: current.speculation === "buffering" ? "buffering" : "idle",
@@ -2134,6 +2300,9 @@ ref,
     const transcript = currentTurnWordsRef.current.join(" ").trim();
     if (!transcript) {
       speechStartedRef.current = false;
+      if (currentInputTurnIdRef.current) {
+        stopInputAudioCapture(currentInputTurnIdRef.current, null);
+      }
       // No transcript at finalize → can't be a real turn. Discard any
       // speculation that may have fired on a transient pause-prediction.
       if (speculationRef.current) {
@@ -2150,6 +2319,10 @@ ref,
     const listenMs = turnFirstWordAtRef.current
       ? Math.round(performance.now() - turnFirstWordAtRef.current)
       : null;
+    const finalizedTurnId = currentInputTurnIdRef.current;
+    if (finalizedTurnId) {
+      stopInputAudioCapture(finalizedTurnId, listenMs);
+    }
     turnTraceRef.current?.mark("turn.finalized", { listenMs });
     setPipelineStatus((current) => ({
       ...current,
@@ -2230,6 +2403,7 @@ ref,
     if (ctx) {
       const trace = turnTraceRef.current;
       trace?.mark("turn.interrupted");
+      finishOutputAudioCapture(ctx.turnId, null);
       persistWorldTurn({
         turnId: ctx.turnId,
         status: "interrupted",
@@ -2276,6 +2450,7 @@ ref,
 
     const turnId = currentInputTurnIdRef.current ?? crypto.randomUUID();
     currentInputTurnIdRef.current = null;
+    startOutputAudioCapture(turnId);
     let assistant = "";
     let replyMs: number | null = null;
     let ttsFirstAudio: number | null = null;
@@ -2638,6 +2813,7 @@ ref,
       if (decoded.length === 0) {
         return await speakWithBrowserTts();
       }
+      appendOutputAudioFrame(turnId, new Float32Array(decoded.getChannelData(0)));
 
       if (phaseRef.current === "thinking") {
         applyPhase("speaking");
@@ -2802,6 +2978,7 @@ ref,
             );
           },
           onAudioFrame: (samples) => {
+            appendOutputAudioFrame(turnId, samples);
             if (!firstAudioFrameSeen) {
               firstAudioFrameSeen = true;
               turnTraceRef.current?.mark("audio.first-frame-received", {
@@ -2956,6 +3133,8 @@ ref,
         return;
       }
 
+      finishOutputAudioCapture(turnId, ttsDurationMs);
+
       setVoiceTurns((current) => [
         ...current,
         {
@@ -3035,6 +3214,7 @@ ref,
       ]);
       const trace = turnTraceRef.current;
       trace?.mark("turn.error", { message });
+      finishOutputAudioCapture(turnId, ttsDurationMs);
       persistWorldTurn({
         turnId,
         status: "error",

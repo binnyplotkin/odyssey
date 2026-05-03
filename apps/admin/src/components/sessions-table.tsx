@@ -2,11 +2,18 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { useHeaderContent } from "@/components/header-context";
 
 export type SessionRow = {
   id: string;
   userId?: string | null;
+  user?: {
+    id: string;
+    name?: string | null;
+    email: string;
+    image?: string | null;
+  } | null;
   worldId?: string | null;
   characterId?: string | null;
   mode: string;
@@ -102,6 +109,15 @@ function shortId(id: string | null | undefined) {
 function titleCase(value: string) {
   if (!value) return "Unknown";
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function userLabel(session: SessionRow) {
+  return session.user?.name?.trim() || session.user?.email || shortId(session.userId);
+}
+
+function userSubLabel(session: SessionRow) {
+  if (session.user?.name?.trim() && session.user.email) return session.user.email;
+  return session.userId ? shortId(session.userId) : "none";
 }
 
 function formatDate(iso: string): string {
@@ -213,6 +229,9 @@ export function SessionsTable({ sessions }: Props) {
       const q = search.trim().toLowerCase();
       result = result.filter((session) =>
         session.id.toLowerCase().includes(q) ||
+        (session.userId ?? "").toLowerCase().includes(q) ||
+        (session.user?.name ?? "").toLowerCase().includes(q) ||
+        (session.user?.email ?? "").toLowerCase().includes(q) ||
         (session.characterId ?? "").toLowerCase().includes(q) ||
         (session.worldId ?? "").toLowerCase().includes(q) ||
         session.mode.toLowerCase().includes(q) ||
@@ -297,7 +316,7 @@ export function SessionsTable({ sessions }: Props) {
           Sessions
         </h1>
 
-        <div ref={filterRef} style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
+        <div ref={filterRef} className="admin-table-header-filters" style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
           {FILTER_PILLS.map((pill) => {
             const activeValue = filters[pill.key];
             const isActive = !!activeValue;
@@ -371,9 +390,9 @@ export function SessionsTable({ sessions }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{
+      <div className="admin-table-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div className="admin-table-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div className="admin-table-search" style={{
             display: "flex", alignItems: "center", gap: 8,
             padding: "0.5rem 0.75rem", borderRadius: 10,
             background: T.panel, border: `1px solid ${T.border}`,
@@ -402,7 +421,7 @@ export function SessionsTable({ sessions }: Props) {
           </span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="admin-table-toolbar-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
             display: "flex", alignItems: "center", gap: 6,
             padding: "0.4rem 0.75rem", borderRadius: 9999,
@@ -446,28 +465,31 @@ export function SessionsTable({ sessions }: Props) {
         </div>
       </div>
 
-      <div style={{
-        display: "flex",
-        flexDirection: "column",
-        background: T.panel,
-        border: `1px solid ${T.border}`,
-        borderRadius: 14,
-        overflow: "hidden",
-      }}>
-        <HeaderRow />
-        {filtered.map((session) => (
-          <SessionDataRow key={session.id} session={session} />
-        ))}
-        {filtered.length === 0 && (
-          <div style={{
-            padding: "3rem 1rem", textAlign: "center",
-            color: T.muted, fontSize: "0.8125rem", fontFamily: T.fontBody,
-          }}>
-            {sessions.length === 0
-              ? "No sessions yet. Start a voice session from a character page to populate this view."
-              : "No sessions match your filters."}
-          </div>
-        )}
+      <div className="admin-table-scroll">
+        <div className="admin-table-grid" style={{
+          display: "flex",
+          flexDirection: "column",
+          minWidth: 1340,
+          background: T.panel,
+          border: `1px solid ${T.border}`,
+          borderRadius: 14,
+          overflow: "hidden",
+        }}>
+          <HeaderRow />
+          {filtered.map((session) => (
+            <SessionDataRow key={session.id} session={session} />
+          ))}
+          {filtered.length === 0 && (
+            <div style={{
+              padding: "3rem 1rem", textAlign: "center",
+              color: T.muted, fontSize: "0.8125rem", fontFamily: T.fontBody,
+            }}>
+              {sessions.length === 0
+                ? "No sessions yet. Start a voice session from a character page to populate this view."
+                : "No sessions match your filters."}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -536,16 +558,17 @@ function HeaderRow() {
   };
 
   return (
-    <div style={{
+    <div className="admin-table-header-row" style={{
       display: "flex", alignItems: "center", gap: 20,
       padding: "12px 20px",
       borderBottom: `1px solid ${T.border}`,
       background: T.cardHover,
     }}>
-      <div style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
+      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
       <span style={{ ...headerStyle, flex: 1, minWidth: 0 }}>Session</span>
       <span style={{ ...headerStyle, width: 100 }}>Mode</span>
       <span style={{ ...headerStyle, width: 110 }}>Status</span>
+      <span style={{ ...headerStyle, width: 170 }}>User</span>
       <span style={{ ...headerStyle, width: 130 }}>Character</span>
       <span style={{ ...headerStyle, width: 80, textAlign: "right" }}>Context</span>
       <span style={{ ...headerStyle, width: 70, textAlign: "right" }}>Turns</span>
@@ -561,6 +584,7 @@ function SessionDataRow({ session }: { session: SessionRow }) {
 
   return (
     <Link
+      className="admin-table-data-row"
       href={`/sessions/${session.id}`}
       style={{
         display: "flex", alignItems: "center", gap: 20,
@@ -573,9 +597,9 @@ function SessionDataRow({ session }: { session: SessionRow }) {
       onMouseEnter={(event) => { event.currentTarget.style.background = T.cardHover; }}
       onMouseLeave={(event) => { event.currentTarget.style.background = "transparent"; }}
     >
-      <div style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
+      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+      <div className="admin-table-primary-cell" style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
         <SessionIcon mode={session.mode} />
         <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -621,15 +645,58 @@ function SessionDataRow({ session }: { session: SessionRow }) {
         </div>
       </div>
 
-      <div style={{ width: 100, flexShrink: 0 }}>
+      <div className="admin-table-mobile-fields">
+        <MobileField label="Mode"><ModeBadge mode={session.mode} /></MobileField>
+        <MobileField label="Status"><StatusBadge status={session.status} /></MobileField>
+        <MobileField label="User">{userLabel(session)}</MobileField>
+        <MobileField label="Character">{shortId(session.characterId)}</MobileField>
+        <MobileField label="Context">{session.contextBuildCount}</MobileField>
+        <MobileField label="Turns">{session.turnCount}</MobileField>
+        <MobileField label="Events">{session.eventCount}</MobileField>
+        <MobileField label="Last active">
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {active.dotColor && (
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: active.dotColor, display: "block" }} />
+            )}
+            {active.label}
+          </span>
+        </MobileField>
+        <MobileField label="Started">{formatDate(session.startedAt)}</MobileField>
+      </div>
+
+      <div className="admin-table-desktop-cell" style={{ width: 100, flexShrink: 0 }}>
         <ModeBadge mode={session.mode} />
       </div>
 
-      <div style={{ width: 110, flexShrink: 0 }}>
+      <div className="admin-table-desktop-cell" style={{ width: 110, flexShrink: 0 }}>
         <StatusBadge status={session.status} />
       </div>
 
-      <span style={{
+      <div className="admin-table-desktop-cell" style={{ width: 170, flexShrink: 0, minWidth: 0 }}>
+        <div style={{
+          fontFamily: T.fontBody,
+          fontSize: "0.75rem",
+          color: session.user || session.userId ? "var(--foreground)" : T.muted,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}>
+          {userLabel(session)}
+        </div>
+        <div style={{
+          marginTop: 2,
+          fontFamily: T.fontMono,
+          fontSize: "0.625rem",
+          color: T.muted,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}>
+          {userSubLabel(session)}
+        </div>
+      </div>
+
+      <span className="admin-table-desktop-cell" style={{
         width: 130,
         flexShrink: 0,
         fontFamily: T.fontMono,
@@ -642,11 +709,11 @@ function SessionDataRow({ session }: { session: SessionRow }) {
         {shortId(session.characterId)}
       </span>
 
-      <MetricCell value={session.contextBuildCount} width={80} mutedWhenZero />
-      <MetricCell value={session.turnCount} width={70} mutedWhenZero />
-      <MetricCell value={session.eventCount} width={80} mutedWhenZero />
+      <MetricCell className="admin-table-desktop-cell" value={session.contextBuildCount} width={80} mutedWhenZero />
+      <MetricCell className="admin-table-desktop-cell" value={session.turnCount} width={70} mutedWhenZero />
+      <MetricCell className="admin-table-desktop-cell" value={session.eventCount} width={80} mutedWhenZero />
 
-      <div style={{ width: 130, flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+      <div className="admin-table-desktop-cell" style={{ width: 130, flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
         {active.dotColor && (
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: active.dotColor, display: "block" }} />
         )}
@@ -655,7 +722,7 @@ function SessionDataRow({ session }: { session: SessionRow }) {
         </span>
       </div>
 
-      <span style={{
+      <span className="admin-table-desktop-cell" style={{
         width: 110,
         flexShrink: 0,
         fontFamily: T.fontBody,
@@ -665,6 +732,15 @@ function SessionDataRow({ session }: { session: SessionRow }) {
         {formatDate(session.startedAt)}
       </span>
     </Link>
+  );
+}
+
+function MobileField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="admin-table-mobile-field">
+      <span className="admin-table-mobile-label">{label}</span>
+      <span className="admin-table-mobile-value">{children}</span>
+    </div>
   );
 }
 
@@ -751,9 +827,19 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function MetricCell({ value, width, mutedWhenZero }: { value: number; width: number; mutedWhenZero?: boolean }) {
+function MetricCell({
+  value,
+  width,
+  mutedWhenZero,
+  className,
+}: {
+  value: number;
+  width: number;
+  mutedWhenZero?: boolean;
+  className?: string;
+}) {
   return (
-    <span style={{
+    <span className={className} style={{
       width,
       flexShrink: 0,
       textAlign: "right",

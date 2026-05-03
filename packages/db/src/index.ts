@@ -10,6 +10,7 @@ export {
   worldSessionContextBuildsTable,
   worldSessionTurnsTable,
   worldSessionEventsTable,
+  worldSessionAudioArtifactsTable,
   versionsTable,
   featuresTable,
   worldsTable,
@@ -34,6 +35,8 @@ export type {
   WorldSessionRecord,
   WorldSessionSummaryRecord,
   WorldSessionDetailRecord,
+  WorldSessionUserRecord,
+  WorldSessionAudioArtifactRecord,
   WorldSessionContextBuildRecord,
   WorldSessionTurnRecord,
   WorldSessionEventRecord,
@@ -41,6 +44,7 @@ export type {
   RecordContextBuildInput,
   UpsertWorldSessionTurnInput,
   AppendWorldSessionEventInput,
+  AddWorldSessionAudioArtifactInput,
 } from "./world-session-store";
 export { getWorldRepository } from "./repository";
 export type { WorldRepository, WorldDetail, WorldSource } from "./repository";

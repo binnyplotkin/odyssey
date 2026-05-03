@@ -118,6 +118,7 @@ export const worldSessionsTable = pgTable(
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    index("world_sessions_user_idx").on(table.userId),
     index("world_sessions_character_idx").on(table.characterId),
     index("world_sessions_world_idx").on(table.worldId),
     index("world_sessions_last_active_idx").on(table.lastActiveAt),
@@ -195,6 +196,29 @@ export const worldSessionEventsTable = pgTable(
     index("world_session_events_session_idx").on(table.sessionId),
     index("world_session_events_turn_idx").on(table.turnId),
     index("world_session_events_type_idx").on(table.type),
+  ],
+);
+
+export const worldSessionAudioArtifactsTable = pgTable(
+  "world_session_audio_artifacts",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id").notNull().references(() => worldSessionsTable.id, { onDelete: "cascade" }),
+    turnId: text("turn_id"),
+    direction: text("direction").notNull(), // input | output
+    mimeType: text("mime_type").notNull(),
+    durationMs: integer("duration_ms"),
+    sampleRate: integer("sample_rate"),
+    byteSize: integer("byte_size").notNull(),
+    storageKey: text("storage_key").notNull(),
+    waveformSummary: jsonb("waveform_summary").notNull().default({}),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("world_session_audio_session_idx").on(table.sessionId),
+    index("world_session_audio_turn_idx").on(table.turnId),
+    index("world_session_audio_direction_idx").on(table.direction),
   ],
 );
 

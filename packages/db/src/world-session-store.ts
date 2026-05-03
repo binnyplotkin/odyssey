@@ -1,6 +1,8 @@
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "./client";
 import {
+  usersTable,
+  worldSessionAudioArtifactsTable,
   worldSessionContextBuildsTable,
   worldSessionEventsTable,
   worldSessionsTable,
@@ -78,7 +80,30 @@ export type WorldSessionEventRecord = {
   createdAt: string;
 };
 
+export type WorldSessionUserRecord = {
+  id: string;
+  name?: string | null;
+  email: string;
+  image?: string | null;
+};
+
+export type WorldSessionAudioArtifactRecord = {
+  id: string;
+  sessionId: string;
+  turnId?: string | null;
+  direction: "input" | "output" | string;
+  mimeType: string;
+  durationMs?: number | null;
+  sampleRate?: number | null;
+  byteSize: number;
+  storageKey: string;
+  waveformSummary: unknown;
+  metadata: JsonRecord;
+  createdAt: string;
+};
+
 export type WorldSessionSummaryRecord = WorldSessionRecord & {
+  user: WorldSessionUserRecord | null;
   contextBuildCount: number;
   turnCount: number;
   eventCount: number;
@@ -86,9 +111,11 @@ export type WorldSessionSummaryRecord = WorldSessionRecord & {
 
 export type WorldSessionDetailRecord = {
   session: WorldSessionRecord;
+  user: WorldSessionUserRecord | null;
   contextBuilds: WorldSessionContextBuildRecord[];
   turns: WorldSessionTurnRecord[];
   events: WorldSessionEventRecord[];
+  audioArtifacts: WorldSessionAudioArtifactRecord[];
 };
 
 export type CreateWorldSessionInput = {
@@ -154,6 +181,20 @@ export type AppendWorldSessionEventInput = {
   createdAt?: string;
 };
 
+export type AddWorldSessionAudioArtifactInput = {
+  id?: string;
+  sessionId: string;
+  turnId?: string | null;
+  direction: string;
+  mimeType: string;
+  durationMs?: number | null;
+  sampleRate?: number | null;
+  byteSize: number;
+  storageKey: string;
+  waveformSummary?: unknown;
+  metadata?: JsonRecord;
+};
+
 export interface WorldSessionStore {
   createSession(input: CreateWorldSessionInput): Promise<WorldSessionRecord>;
   endSession(id: string, status?: string, metadata?: JsonRecord): Promise<void>;
@@ -164,6 +205,9 @@ export interface WorldSessionStore {
   recordContextBuild(input: RecordContextBuildInput): Promise<void>;
   upsertTurn(input: UpsertWorldSessionTurnInput): Promise<void>;
   appendEvent(input: AppendWorldSessionEventInput): Promise<void>;
+  addAudioArtifact(input: AddWorldSessionAudioArtifactInput): Promise<WorldSessionAudioArtifactRecord>;
+  listAudioArtifacts(sessionId: string): Promise<WorldSessionAudioArtifactRecord[]>;
+  getAudioArtifact(sessionId: string, artifactId: string): Promise<WorldSessionAudioArtifactRecord | null>;
 }
 
 type MemoryState = {
@@ -171,6 +215,7 @@ type MemoryState = {
   contexts: RecordContextBuildInput[];
   turns: Map<string, UpsertWorldSessionTurnInput>;
   events: AppendWorldSessionEventInput[];
+  audioArtifacts: WorldSessionAudioArtifactRecord[];
 };
 
 const globalStore = globalThis as typeof globalThis & {
@@ -184,6 +229,7 @@ const memory =
     contexts: [] as RecordContextBuildInput[],
     turns: new Map(),
     events: [] as AppendWorldSessionEventInput[],
+    audioArtifacts: [] as WorldSessionAudioArtifactRecord[],
   });
 
 function toIso(value: Date | string | null | undefined): string | null {
@@ -282,6 +328,36 @@ function normalizeEvent(row: typeof worldSessionEventsTable.$inferSelect): World
   };
 }
 
+function normalizeAudioArtifact(
+  row: typeof worldSessionAudioArtifactsTable.$inferSelect,
+): WorldSessionAudioArtifactRecord {
+  return {
+    id: row.id,
+    sessionId: row.sessionId,
+    turnId: row.turnId,
+    direction: row.direction,
+    mimeType: row.mimeType,
+    durationMs: row.durationMs,
+    sampleRate: row.sampleRate,
+    byteSize: row.byteSize,
+    storageKey: row.storageKey,
+    waveformSummary: row.waveformSummary,
+    metadata: (row.metadata as JsonRecord | null) ?? {},
+    createdAt: toIso(row.createdAt)!,
+  };
+}
+
+function normalizeUser(
+  row: Pick<typeof usersTable.$inferSelect, "id" | "name" | "email" | "image">,
+): WorldSessionUserRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    image: row.image,
+  };
+}
+
 function memoryStore(): WorldSessionStore {
   return {
     async createSession(input) {
@@ -330,6 +406,7 @@ function memoryStore(): WorldSessionStore {
       const turns = Array.from(memory.turns.values());
       return sessions.map((session) => ({
         ...session,
+        user: null,
         contextBuildCount: memory.contexts.filter((row) => row.sessionId === session.id).length,
         turnCount: turns.filter((row) => row.sessionId === session.id).length,
         eventCount: memory.events.filter((row) => row.sessionId === session.id).length,
@@ -341,6 +418,7 @@ function memoryStore(): WorldSessionStore {
       const now = new Date().toISOString();
       return {
         session,
+        user: null,
         contextBuilds: memory.contexts
           .filter((row) => row.sessionId === id)
           .map((row) => ({
@@ -396,6 +474,7 @@ function memoryStore(): WorldSessionStore {
             payload: row.payload ?? {},
             createdAt: row.createdAt ?? now,
           })),
+        audioArtifacts: memory.audioArtifacts.filter((row) => row.sessionId === id),
       };
     },
     async recordContextBuild(input) {
@@ -406,6 +485,32 @@ function memoryStore(): WorldSessionStore {
     },
     async appendEvent(input) {
       memory.events.push(input);
+    },
+    async addAudioArtifact(input) {
+      const record: WorldSessionAudioArtifactRecord = {
+        id: input.id ?? crypto.randomUUID(),
+        sessionId: input.sessionId,
+        turnId: input.turnId ?? null,
+        direction: input.direction,
+        mimeType: input.mimeType,
+        durationMs: input.durationMs ?? null,
+        sampleRate: input.sampleRate ?? null,
+        byteSize: input.byteSize,
+        storageKey: input.storageKey,
+        waveformSummary: input.waveformSummary ?? {},
+        metadata: input.metadata ?? {},
+        createdAt: new Date().toISOString(),
+      };
+      memory.audioArtifacts.push(record);
+      return record;
+    },
+    async listAudioArtifacts(sessionId) {
+      return memory.audioArtifacts
+        .filter((row) => row.sessionId === sessionId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+    async getAudioArtifact(sessionId, artifactId) {
+      return memory.audioArtifacts.find((row) => row.sessionId === sessionId && row.id === artifactId) ?? null;
     },
   };
 }
@@ -501,6 +606,22 @@ function neonStore(): WorldSessionStore {
     async listSessionSummaries(limit = 50) {
       try {
         const sessions = await this.listSessions(limit);
+        const userIds = Array.from(
+          new Set(sessions.map((session) => session.userId).filter((userId): userId is string => !!userId)),
+        );
+        const users = userIds.length > 0
+          ? await db
+              .select({
+                id: usersTable.id,
+                name: usersTable.name,
+                email: usersTable.email,
+                image: usersTable.image,
+              })
+              .from(usersTable)
+              .where(inArray(usersTable.id, userIds))
+          : [];
+        const usersById = new Map(users.map((user) => [user.id, normalizeUser(user)]));
+
         return Promise.all(
           sessions.map(async (session) => {
             const [contextRow] = await db
@@ -517,6 +638,7 @@ function neonStore(): WorldSessionStore {
               .where(eq(worldSessionEventsTable.sessionId, session.id));
             return {
               ...session,
+              user: session.userId ? usersById.get(session.userId) ?? null : null,
               contextBuildCount: contextRow?.count ?? 0,
               turnCount: turnRow?.count ?? 0,
               eventCount: eventRow?.count ?? 0,
@@ -533,7 +655,7 @@ function neonStore(): WorldSessionStore {
       try {
         const session = await this.getSession(id);
         if (!session) return null;
-        const [contexts, turns, events] = await Promise.all([
+        const [contexts, turns, events, audioArtifacts, users] = await Promise.all([
           db
             .select()
             .from(worldSessionContextBuildsTable)
@@ -549,12 +671,31 @@ function neonStore(): WorldSessionStore {
             .from(worldSessionEventsTable)
             .where(eq(worldSessionEventsTable.sessionId, id))
             .orderBy(asc(worldSessionEventsTable.createdAt)),
+          db
+            .select()
+            .from(worldSessionAudioArtifactsTable)
+            .where(eq(worldSessionAudioArtifactsTable.sessionId, id))
+            .orderBy(asc(worldSessionAudioArtifactsTable.createdAt)),
+          session.userId
+            ? db
+                .select({
+                  id: usersTable.id,
+                  name: usersTable.name,
+                  email: usersTable.email,
+                  image: usersTable.image,
+                })
+                .from(usersTable)
+                .where(eq(usersTable.id, session.userId))
+                .limit(1)
+            : Promise.resolve([]),
         ]);
         return {
           session,
+          user: users[0] ? normalizeUser(users[0]) : null,
           contextBuilds: contexts.map(normalizeContextBuild),
           turns: turns.map(normalizeTurn),
           events: events.map(normalizeEvent),
+          audioArtifacts: audioArtifacts.map(normalizeAudioArtifact),
         };
       } catch (error) {
         if (isMissingTableError(error)) return null;
@@ -647,6 +788,61 @@ function neonStore(): WorldSessionStore {
         });
       } catch (error) {
         if (!isMissingTableError(error)) throw error;
+      }
+    },
+
+    async addAudioArtifact(input) {
+      const id = input.id ?? crypto.randomUUID();
+      try {
+        const [row] = await db
+          .insert(worldSessionAudioArtifactsTable)
+          .values({
+            id,
+            sessionId: input.sessionId,
+            turnId: input.turnId ?? null,
+            direction: input.direction,
+            mimeType: input.mimeType,
+            durationMs: input.durationMs ?? null,
+            sampleRate: input.sampleRate ?? null,
+            byteSize: input.byteSize,
+            storageKey: input.storageKey,
+            waveformSummary: input.waveformSummary ?? {},
+            metadata: input.metadata ?? {},
+          })
+          .returning();
+        return normalizeAudioArtifact(row);
+      } catch (error) {
+        if (isMissingTableError(error)) return memoryStore().addAudioArtifact({ ...input, id });
+        throw error;
+      }
+    },
+
+    async listAudioArtifacts(sessionId) {
+      try {
+        const rows = await db
+          .select()
+          .from(worldSessionAudioArtifactsTable)
+          .where(eq(worldSessionAudioArtifactsTable.sessionId, sessionId))
+          .orderBy(asc(worldSessionAudioArtifactsTable.createdAt));
+        return rows.map(normalizeAudioArtifact);
+      } catch (error) {
+        if (isMissingTableError(error)) return [];
+        throw error;
+      }
+    },
+
+    async getAudioArtifact(sessionId, artifactId) {
+      try {
+        const [row] = await db
+          .select()
+          .from(worldSessionAudioArtifactsTable)
+          .where(eq(worldSessionAudioArtifactsTable.id, artifactId))
+          .limit(1);
+        if (!row || row.sessionId !== sessionId) return null;
+        return normalizeAudioArtifact(row);
+      } catch (error) {
+        if (isMissingTableError(error)) return null;
+        throw error;
       }
     },
   };

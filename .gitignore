@@ -28,6 +28,7 @@
 *.pem
 .local/
 tmp-app/
+.world-session-audio/
 
 # debug
 npm-debug.log*

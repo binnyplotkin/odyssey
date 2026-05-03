@@ -8,6 +8,7 @@ export default async function SessionsPage() {
   const sessions: SessionRow[] = worldSessions.map((session) => ({
     id: session.id,
     userId: session.userId,
+    user: session.user,
     worldId: session.worldId,
     characterId: session.characterId,
     mode: session.mode,

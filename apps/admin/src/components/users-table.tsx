@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import type { ReactNode } from "react";
 import { useHeaderContent } from "@/components/header-context";
 import { UserRowMenu, type UserRowMenuAction } from "@/components/user-row-menu";
 import { EditProfileModal } from "@/components/edit-profile-modal";
@@ -336,7 +337,7 @@ export function UsersTable({ users, currentUserId }: Props) {
         </h1>
 
         {/* Filter pills */}
-        <div ref={filterRef} style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
+        <div ref={filterRef} className="admin-table-header-filters" style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
           {FILTER_PILLS.map((pill) => {
             const activeValue = filters[pill.key];
             const isActive = !!activeValue;
@@ -432,9 +433,9 @@ export function UsersTable({ users, currentUserId }: Props) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Toolbar */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{
+      <div className="admin-table-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div className="admin-table-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div className="admin-table-search" style={{
             display: "flex", alignItems: "center", gap: 8,
             padding: "0.5rem 0.75rem", borderRadius: 10,
             background: T.panel, border: `1px solid ${T.border}`,
@@ -463,7 +464,7 @@ export function UsersTable({ users, currentUserId }: Props) {
           </span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="admin-table-toolbar-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
             display: "flex", alignItems: "center", gap: 6,
             padding: "0.4rem 0.75rem", borderRadius: 9999,
@@ -507,31 +508,34 @@ export function UsersTable({ users, currentUserId }: Props) {
       </div>
 
       {/* Table */}
-      <div style={{
-        display: "flex", flexDirection: "column",
-        background: T.panel,
-        border: `1px solid ${T.border}`,
-        borderRadius: 14,
-        overflow: "hidden",
-      }}>
-        <HeaderRow />
-        {filtered.map((u) => (
-          <UserDataRow
-            key={u.id}
-            user={u}
-            isCurrent={u.id === currentUserId}
-            busy={busyUserId === u.id}
-            onOpenMenu={openMenu}
-          />
-        ))}
-        {filtered.length === 0 && (
-          <div style={{
-            padding: "3rem 1rem", textAlign: "center",
-            color: T.muted, fontSize: "0.8125rem", fontFamily: T.fontBody,
-          }}>
-            No users match your filters.
-          </div>
-        )}
+      <div className="admin-table-scroll">
+        <div className="admin-table-grid" style={{
+          display: "flex", flexDirection: "column",
+          minWidth: 920,
+          background: T.panel,
+          border: `1px solid ${T.border}`,
+          borderRadius: 14,
+          overflow: "hidden",
+        }}>
+          <HeaderRow />
+          {filtered.map((u) => (
+            <UserDataRow
+              key={u.id}
+              user={u}
+              isCurrent={u.id === currentUserId}
+              busy={busyUserId === u.id}
+              onOpenMenu={openMenu}
+            />
+          ))}
+          {filtered.length === 0 && (
+            <div style={{
+              padding: "3rem 1rem", textAlign: "center",
+              color: T.muted, fontSize: "0.8125rem", fontFamily: T.fontBody,
+            }}>
+              No users match your filters.
+            </div>
+          )}
+        </div>
       </div>
 
       {actionError && (
@@ -675,13 +679,13 @@ function HeaderRow() {
     flexShrink: 0,
   };
   return (
-    <div style={{
+    <div className="admin-table-header-row" style={{
       display: "flex", alignItems: "center", gap: 20,
       padding: "12px 20px",
       borderBottom: `1px solid ${T.border}`,
       background: T.cardHover,
     }}>
-      <div style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
+      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
       <span style={{ ...headerStyle, flex: 1, minWidth: 0 }}>User</span>
       <span style={{ ...headerStyle, width: 110 }}>Role</span>
       <span style={{ ...headerStyle, width: 170 }}>Auth</span>
@@ -710,6 +714,7 @@ function UserDataRow({
 
   return (
     <div
+      className="admin-table-data-row"
       style={{
         display: "flex", alignItems: "center", gap: 20,
         padding: "14px 20px",
@@ -720,9 +725,9 @@ function UserDataRow({
       onMouseEnter={(e) => { e.currentTarget.style.background = T.cardHover; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
-      <div style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
+      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+      <div className="admin-table-primary-cell" style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
         <Avatar user={user} isCurrent={isCurrent} />
         <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -754,18 +759,40 @@ function UserDataRow({
         </div>
       </div>
 
-      <div style={{ width: 110, flexShrink: 0 }}>
+      <div className="admin-table-mobile-fields">
+        <MobileField label="Role"><RoleBadge role={user.role} /></MobileField>
+        <MobileField label="Auth">
+          <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <AuthIcons methods={user.authMethods} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {user.authMethods.length === 0 ? "None" : user.authMethods.map(authLabel).join(" / ")}
+            </span>
+          </span>
+        </MobileField>
+        <MobileField label="Sessions">{user.sessionCount}</MobileField>
+        <MobileField label="Last active">
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {active.dotColor && (
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: active.dotColor, display: "block" }} />
+            )}
+            {active.label}
+          </span>
+        </MobileField>
+        <MobileField label="Joined">{formatJoinDate(user.createdAt)}</MobileField>
+      </div>
+
+      <div className="admin-table-desktop-cell" style={{ width: 110, flexShrink: 0 }}>
         <RoleBadge role={user.role} />
       </div>
 
-      <div style={{ width: 170, flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+      <div className="admin-table-desktop-cell" style={{ width: 170, flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
         <AuthIcons methods={user.authMethods} />
         <span style={{ fontFamily: T.fontBody, fontSize: "0.75rem", color: "var(--foreground)", lineHeight: "15px" }}>
           {user.authMethods.length === 0 ? "None" : user.authMethods.map(authLabel).join(" · ")}
         </span>
       </div>
 
-      <span style={{
+      <span className="admin-table-desktop-cell" style={{
         width: 80, flexShrink: 0, textAlign: "right",
         fontFamily: T.fontMono, fontSize: "0.8125rem", fontWeight: 500,
         color: user.sessionCount > 0 ? "var(--foreground)" : T.muted,
@@ -773,7 +800,7 @@ function UserDataRow({
         {user.sessionCount}
       </span>
 
-      <div style={{ width: 130, flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+      <div className="admin-table-desktop-cell" style={{ width: 130, flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
         {active.dotColor && (
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: active.dotColor, display: "block" }} />
         )}
@@ -782,7 +809,7 @@ function UserDataRow({
         </span>
       </div>
 
-      <span style={{
+      <span className="admin-table-desktop-cell" style={{
         width: 110, flexShrink: 0,
         fontFamily: T.fontBody, fontSize: "0.75rem", color: T.muted,
       }}>
@@ -790,6 +817,7 @@ function UserDataRow({
       </span>
 
       <button
+        className="admin-table-row-menu"
         type="button"
         onClick={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
@@ -811,6 +839,15 @@ function UserDataRow({
           <circle cx="19" cy="12" r="1.75" />
         </svg>
       </button>
+    </div>
+  );
+}
+
+function MobileField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="admin-table-mobile-field">
+      <span className="admin-table-mobile-label">{label}</span>
+      <span className="admin-table-mobile-value">{children}</span>
     </div>
   );
 }
