@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const requestedProvider = body.provider;
     const primaryAttempts = resolveTtsAttemptOrder(requestedProvider);
     const attempts = Array.from(
-      new Set([...primaryAttempts, "kyutai", "elevenlabs", "openai"]),
+      new Set([...primaryAttempts, "elevenlabs", "openai"]),
     );
     const primaryProvider = primaryAttempts[0];
     const attemptErrors: string[] = [];
@@ -28,15 +28,11 @@ export async function POST(request: NextRequest) {
         const defaultVoice =
           provider === "elevenlabs"
             ? (process.env.ELEVENLABS_VOICE_ID ?? "")
-            : provider === "kyutai"
-              ? ""
-              : "alloy";
+            : "alloy";
         const requestedVoice =
           provider === "elevenlabs"
             ? (body.voice ?? defaultVoice)
-            : provider === "kyutai"
-              ? (body.voice ?? defaultVoice)
-              : "alloy";
+            : "alloy";
 
         const audio = await adapter.synthesize({
           text: body.text,
@@ -47,9 +43,7 @@ export async function POST(request: NextRequest) {
           attemptErrors.push(
             provider === "elevenlabs"
               ? "ElevenLabs unavailable (missing key or voice ID)."
-              : provider === "kyutai"
-                ? "Kyutai TTS unavailable."
-                : "OpenAI TTS unavailable (missing API key).",
+              : "OpenAI TTS unavailable (missing API key).",
           );
           continue;
         }
