@@ -5,6 +5,7 @@ import math
 import os
 import subprocess
 import tempfile
+import threading
 from threading import Lock
 from typing import Iterator
 
@@ -248,19 +249,25 @@ tts_runtime = PocketTtsRuntime()
 
 @app.on_event("startup")
 def _warm_tts_on_startup() -> None:
-    """Block container startup on TTS readiness so Railway's healthcheck only
-    flips green once /speak can serve a request immediately. Toggle off with
-    POCKET_TTS_WARM_ON_STARTUP=0 (e.g. for fast iteration in local dev)."""
+    """Warm Pocket TTS in a background thread so the container binds the port
+    immediately and Railway's healthcheck passes. The first /speak call will
+    block on the same lock if the warmup is still in flight. /healthz reports
+    the live load state. Toggle off with POCKET_TTS_WARM_ON_STARTUP=0."""
     if os.getenv("POCKET_TTS_WARM_ON_STARTUP", "1") != "1":
         return
     voice_id = os.getenv("POCKET_TTS_DEFAULT_VOICE", DEFAULT_VOICE_ID)
-    try:
-        tts_runtime._load()
-        tts_runtime._get_voice_state(voice_id)
-    except Exception as error:  # noqa: BLE001
-        # Log and continue — /healthz will surface the error and /speak will
-        # retry the load on the next request rather than killing the container.
-        print(f"[startup] Pocket TTS warm-up failed: {error}", flush=True)
+
+    def _warm():
+        print(f"[startup] Pocket TTS warm-up starting (voice={voice_id})...", flush=True)
+        try:
+            tts_runtime._load()
+            tts_runtime._get_voice_state(voice_id)
+            print("[startup] Pocket TTS warm-up complete.", flush=True)
+        except Exception as error:  # noqa: BLE001
+            # /healthz will surface the error; /speak will retry on next call.
+            print(f"[startup] Pocket TTS warm-up failed: {error}", flush=True)
+
+    threading.Thread(target=_warm, name="pocket-tts-warmup", daemon=True).start()
 
 
 def _extension_from_mime(mime_type: str) -> str:
