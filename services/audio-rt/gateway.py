@@ -385,29 +385,37 @@ def _warm_tts_on_startup() -> None:
     if not warm_tts and not warm_stt:
         return
 
-    def _warm():
-        if warm_tts:
-            print(f"[startup] Pocket TTS warm-up starting (voice={voice_id})...", flush=True)
-            try:
-                tts_runtime._load()
-                tts_runtime._get_voice_state(voice_id)
-                print("[startup] Pocket TTS warm-up complete.", flush=True)
-            except Exception as error:  # noqa: BLE001
-                print(f"[startup] Pocket TTS warm-up failed: {error}", flush=True)
+    # Warm TTS and STT in independent daemon threads so a stalled HF download
+    # in one path can't block the other. Whichever finishes first becomes
+    # available; /healthz reports each runtime's load state independently.
 
-        if warm_stt:
-            print("[startup] faster-whisper + silero warm-up starting...", flush=True)
-            try:
-                whisper_runtime._load()
-                vad_runtime._prime()
-                # Drive one tiny inference so CTranslate2 finishes any
-                # JIT-style setup and the first real request is faster.
-                whisper_runtime.transcribe_utterance(np.zeros(16000, dtype=np.float32))
-                print("[startup] faster-whisper + silero warm-up complete.", flush=True)
-            except Exception as error:  # noqa: BLE001
-                print(f"[startup] STT warm-up failed: {error}", flush=True)
+    def _warm_tts():
+        print(f"[startup] Pocket TTS warm-up starting (voice={voice_id})...", flush=True)
+        t0 = time.time()
+        try:
+            tts_runtime._load()
+            tts_runtime._get_voice_state(voice_id)
+            print(f"[startup] Pocket TTS warm-up complete in {time.time()-t0:.1f}s.", flush=True)
+        except Exception as error:  # noqa: BLE001
+            print(f"[startup] Pocket TTS warm-up failed after {time.time()-t0:.1f}s: {error}", flush=True)
 
-    threading.Thread(target=_warm, name="audio-rt-warmup", daemon=True).start()
+    def _warm_stt():
+        print("[startup] faster-whisper + silero warm-up starting...", flush=True)
+        t0 = time.time()
+        try:
+            whisper_runtime._load()
+            vad_runtime._prime()
+            # Drive one tiny inference so CTranslate2 finishes any JIT-style
+            # setup and the first real request is faster.
+            whisper_runtime.transcribe_utterance(np.zeros(16000, dtype=np.float32))
+            print(f"[startup] faster-whisper + silero warm-up complete in {time.time()-t0:.1f}s.", flush=True)
+        except Exception as error:  # noqa: BLE001
+            print(f"[startup] STT warm-up failed after {time.time()-t0:.1f}s: {error}", flush=True)
+
+    if warm_tts:
+        threading.Thread(target=_warm_tts, name="audio-rt-warmup-tts", daemon=True).start()
+    if warm_stt:
+        threading.Thread(target=_warm_stt, name="audio-rt-warmup-stt", daemon=True).start()
 
 
 def _extension_from_mime(mime_type: str) -> str:
