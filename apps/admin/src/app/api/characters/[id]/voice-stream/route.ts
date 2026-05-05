@@ -176,6 +176,13 @@ export async function POST(
         const skipDecision = shouldSkipRetrieval(message);
         let augmentedChunk = "";
         let semanticHitCount = 0;
+        // Hoisted so we can persist these on the contextBuild record below
+        // (the workbench's KnowledgeGraphPanel reads `selectedPages` to render
+        // which wiki pages were pulled in for this turn).
+        let curatorSelectedPages: unknown = null;
+        let curatorTrace: unknown = null;
+        let curatorTokensUsed: number | null = null;
+        let curatorTokensBudget: number | null = null;
 
         // Run summary-fetch in parallel with retrieval — both read-only,
         // independent. Promise.all keeps the latency floor at max(both).
@@ -220,6 +227,10 @@ export async function POST(
                     tokenBudget: 1500,
                   });
                   augmentedChunk = augmented.promptChunk;
+                  curatorSelectedPages = augmented.pages;
+                  curatorTrace = augmented.trace;
+                  curatorTokensUsed = augmented.tokensUsed;
+                  curatorTokensBudget = augmented.tokensBudget ?? 1500;
                   serverTrace.mark("server.retrieval.done", {
                     hits: semanticHitCount,
                     selectedPages: augmented.pages.length,
@@ -266,6 +277,52 @@ export async function POST(
           messageChars: message.length,
         });
         sendEvent("trace", serverTrace.toJSON());
+
+        // Persist the assembled context + turn-start record so the session
+        // workbench can render exactly what the LLM saw on this turn. Both
+        // calls are gated on sessionId + turnId — without them there's no
+        // place to attach the records. Failures here are non-fatal: the
+        // turn still proceeds, the workbench just won't have data for it.
+        if (body.sessionId && body.turnId) {
+          const sessionStore = getWorldSessionStore();
+          try {
+            await sessionStore.upsertTurn({
+              id: body.turnId,
+              sessionId: body.sessionId,
+              inputMode: "voice",
+              userText: message,
+              status: "in_progress",
+              startedAt: new Date(startedAt).toISOString(),
+            });
+          } catch (turnErr) {
+            console.error("[voice-stream] upsertTurn (start) failed", turnErr);
+          }
+          try {
+            await sessionStore.recordContextBuild({
+              sessionId: body.sessionId,
+              turnId: body.turnId,
+              mode: "voice",
+              promptKind: "voice",
+              query: message,
+              tokenBudget: curatorTokensBudget,
+              tokensUsed: curatorTokensUsed,
+              tokensBudget: curatorTokensBudget,
+              selectedPages: curatorSelectedPages,
+              curatorTrace,
+              promptChunk: composedPromptChunk,
+              systemPrompt,
+              metadata: {
+                semanticHits: semanticHitCount,
+                retrievalSkipped: skipDecision.skip,
+                retrievalSkipReason: skipDecision.skip ? skipDecision.reason : null,
+                recentSummaries: recentSummaries.length,
+                augmentedChunkChars: augmentedChunk.length,
+              },
+            });
+          } catch (ctxErr) {
+            console.error("[voice-stream] recordContextBuild failed", ctxErr);
+          }
+        }
 
         const history: Array<{ role: "user" | "assistant"; content: string }> =
           (body.history ?? []).filter(
@@ -463,6 +520,41 @@ export async function POST(
               serverTrace: serverTrace.toJSON(),
             },
           });
+
+          // Mark the turn complete with the assistant's reply + headline
+          // metrics. This is what the workbench's turn timeline reads.
+          if (body.turnId) {
+            try {
+              await getWorldSessionStore().upsertTurn({
+                id: body.turnId,
+                sessionId: body.sessionId,
+                inputMode: "voice",
+                userText: message,
+                assistantText: replyText,
+                provider: chosenProvider,
+                model: modelId,
+                status: "completed",
+                startedAt: new Date(startedAt).toISOString(),
+                completedAt: new Date().toISOString(),
+                tokenUsage: {
+                  inputTokens,
+                  outputTokens,
+                  totalTokens: inputTokens + outputTokens,
+                },
+                audioMetrics: {
+                  audioSamples: totalSamples,
+                  durationMs: Math.round((totalSamples / TTS_SAMPLE_RATE) * 1000),
+                },
+                latencySummary: {
+                  firstAudioMs: firstAudioAt !== null ? Math.round(firstAudioAt - startedAt) : -1,
+                  totalMs: Math.round(performance.now() - startedAt),
+                },
+                trace: serverTrace.toJSON(),
+              });
+            } catch (turnErr) {
+              console.error("[voice-stream] upsertTurn (complete) failed", turnErr);
+            }
+          }
 
           // Background: summarize this turn into ≤30 words and persist as a
           // voice.summary event for the next turn's "Recent conversation"
