@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAudioRuntimeConfig } from "@odyssey/engine";
+import { VOICE_PIPELINE_CONFIG } from "@/lib/voice-pipeline-config";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export async function GET() {
           configured: Boolean(kyutaiBaseUrl),
           baseUrl: kyutaiBaseUrl || null,
         },
+        voicePipeline: VOICE_PIPELINE_CONFIG,
       },
     });
   } catch (error) {

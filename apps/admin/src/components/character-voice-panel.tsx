@@ -7,6 +7,10 @@ import {
   MoshiStreamingSttSession,
 } from "@/lib/moshi-client";
 import { Trace, type TracePayload } from "@/lib/voice-trace";
+import {
+  VOICE_PIPELINE_CONFIG,
+  type VoicePipelineConfig,
+} from "@/lib/voice-pipeline-config";
 
 const TTS_SAMPLE_RATE = 24000;
 
@@ -903,7 +907,7 @@ function VoiceDataFlowPanels({
       <SegmentPanel
         title="STT input"
         state={sttState}
-        subtitle="Mic -> AudioWorklet -> Kyutai STT"
+        subtitle={`Mic -> AudioWorklet -> ${voicePipeline.stt.label}`}
         collapsed={collapsedSections.stt}
         onToggle={() => onToggleSection("stt")}
         metrics={[
@@ -926,7 +930,7 @@ function VoiceDataFlowPanels({
 	            : startupStatus.micPermission === "error"
 	              ? "Mic permission is blocked, so no audio is reaching STT."
 	              : sttAliveNoWords
-	                ? "Audio and Step events are live, but Kyutai has not emitted Word events yet. The client is now sending float32 PCM and applying input gain; if this persists, the STT model is hearing the stream but not decoding speech."
+	                ? `Audio and Step events are live, but ${voicePipeline.stt.short} has not emitted Word events yet. The client is now sending float32 PCM and applying input gain; if this persists, the STT model is hearing the stream but not decoding speech.`
 	              : "Waiting for speech. Audio frames show whether capture is actually reaching STT."
 	        }
       />
@@ -956,7 +960,7 @@ function VoiceDataFlowPanels({
       <SegmentPanel
         title="TTS output"
         state={pipelineStatus.tts.state}
-        subtitle="LLM words -> Kyutai TTS -> Web Audio"
+        subtitle={`LLM words -> ${voicePipeline.tts.label} -> Web Audio`}
         collapsed={collapsedSections.tts}
         onToggle={() => onToggleSection("tts")}
         metrics={[
@@ -1108,9 +1112,9 @@ function VoiceReadinessPanel({
         state={status.sttSocket}
         detail={
           status.sttSocket === "ready"
-            ? "Kyutai streaming STT connection open"
+            ? `${VOICE_PIPELINE_CONFIG.stt.label} connection open`
             : status.sttSocket === "pending"
-              ? "Connecting to Kyutai streaming STT"
+              ? `Connecting to ${VOICE_PIPELINE_CONFIG.stt.label}`
               : status.micPermission === "error"
                 ? "Not opened because mic setup failed"
                 : "Waiting to connect"
@@ -1140,8 +1144,8 @@ function VoiceReadinessPanel({
         state={status.ttsPrewarm}
         detail={
           status.ttsPrewarmMs !== null
-            ? `Modal prewarm responded in ${status.ttsPrewarmMs}ms`
-            : "HTTP prewarm for Kyutai TTS"
+            ? `Prewarm responded in ${status.ttsPrewarmMs}ms`
+            : `HTTP prewarm for ${VOICE_PIPELINE_CONFIG.tts.label}`
         }
       />
       <StatusRow
@@ -1196,6 +1200,28 @@ export const CharacterVoicePanel = forwardRef<CharacterVoicePanelHandle, Props>(
 ref,
 ) {
   const allowMicWaveform = waveformSource === "mic-and-tts";
+  // Provider labels surfaced in the panel UI. Seeded from the build-time
+  // constant so first paint is correct, then reconciled with /api/audio/config
+  // so a runtime change in the config endpoint shows up without a redeploy.
+  const [voicePipeline, setVoicePipeline] =
+    useState<VoicePipelineConfig>(VOICE_PIPELINE_CONFIG);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/audio/config", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const next = data?.config?.voicePipeline as VoicePipelineConfig | undefined;
+        if (!cancelled && next?.stt?.label && next?.tts?.label) {
+          setVoicePipeline(next);
+        }
+      })
+      .catch(() => {
+        /* keep build-time fallback */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [voiceModeActive, setVoiceModeActive] = useState(false);
   const [phase, setPhase] = useState<VoicePhase>("idle");
   const [error, setError] = useState<string | null>(null);
