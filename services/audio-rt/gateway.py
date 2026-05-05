@@ -395,7 +395,17 @@ def _warm_tts_on_startup() -> None:
         try:
             tts_runtime._load()
             tts_runtime._get_voice_state(voice_id)
-            print(f"[startup] Pocket TTS warm-up complete in {time.time()-t0:.1f}s.", flush=True)
+            # Drive a tiny synthesis through the inference path so the first
+            # real user request doesn't pay for graph init / mimi codec
+            # setup / first-call CT2 compile. Warmup output is discarded.
+            t_synth = time.time()
+            for _ in tts_runtime.stream_pcm_chunks("hello.", voice_id):
+                pass
+            print(
+                f"[startup] Pocket TTS warm-up complete in {time.time()-t0:.1f}s "
+                f"(synth pass {time.time()-t_synth:.2f}s).",
+                flush=True,
+            )
         except Exception as error:  # noqa: BLE001
             print(f"[startup] Pocket TTS warm-up failed after {time.time()-t0:.1f}s: {error}", flush=True)
 
@@ -554,11 +564,14 @@ def speak(payload: SpeakRequest):
     """Stream synthesized speech as Server-Sent Events.
 
     Event types:
-      - "meta"  → {"sampleRate": 24000, "channels": 1, "encoding": "pcm_s16le"}
+      - "meta"  → {"sampleRate": 24000, "channels": 1, "encoding": "pcm_s16le",
+                   "voice": <id>, "elapsedMs": <handler entry → first yield>}
       - "audio" → {"chunk": <base64-encoded int16-LE PCM>, "index": <int>}
-      - "done"  → {"chunks": <int>}
+      - "done"  → {"chunks": <int>, "totalMs": <handler entry → done>,
+                   "firstAudioMs": <handler entry → first audio chunk>}
       - "error" → {"message": <str>}
     """
+    handler_entered_at = time.time()
     text = (payload.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
@@ -574,25 +587,43 @@ def speak(payload: SpeakRequest):
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Pocket TTS init failed: {error}") from error
 
+    setup_done_at = time.time()
+
     def sse_event(event: str, data: dict) -> bytes:
         return f"event: {event}\ndata: {json.dumps(data)}\n\n".encode("utf-8")
 
     def event_stream():
+        first_chunk_at: float | None = None
         try:
             yield sse_event("meta", {
                 "sampleRate": tts_runtime._sample_rate,
                 "channels": 1,
                 "encoding": "pcm_s16le",
                 "voice": voice_id,
+                "elapsedMs": int((setup_done_at - handler_entered_at) * 1000),
             })
             index = 0
             for pcm in tts_runtime.stream_pcm_chunks(text, voice_id):
+                if first_chunk_at is None:
+                    first_chunk_at = time.time()
                 yield sse_event("audio", {
                     "index": index,
                     "chunk": base64.b64encode(pcm).decode("ascii"),
                 })
                 index += 1
-            yield sse_event("done", {"chunks": index})
+            done_at = time.time()
+            print(
+                f"[/speak] voice={voice_id} chars={len(text)} chunks={index} "
+                f"setup_ms={int((setup_done_at - handler_entered_at) * 1000)} "
+                f"first_audio_ms={int(((first_chunk_at or done_at) - handler_entered_at) * 1000)} "
+                f"total_ms={int((done_at - handler_entered_at) * 1000)}",
+                flush=True,
+            )
+            yield sse_event("done", {
+                "chunks": index,
+                "totalMs": int((done_at - handler_entered_at) * 1000),
+                "firstAudioMs": int(((first_chunk_at or done_at) - handler_entered_at) * 1000),
+            })
         except Exception as error:  # noqa: BLE001
             yield sse_event("error", {"message": str(error)})
 
