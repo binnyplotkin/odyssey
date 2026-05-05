@@ -52,10 +52,11 @@ type VoiceChatBody = {
 // DEFAULT_VOICE_MODEL in apps/admin/src/lib/model-registry.ts.
 const CEREBRAS_DEFAULT_MODEL = "qwen-3-235b-a22b-instruct-2507";
 const ANTHROPIC_DEFAULT_MODEL = "claude-haiku-4-5";
-// 200 tokens is roughly 130-150 words of speech, ~10s of audio at typical
-// TTS pace. The prompt nudges the model toward 1-2 sentences; this is a
-// hard ceiling that stops runaway replies.
-const DEFAULT_MAX_TOKENS = 200;
+// Effectively uncapped for any natural reply (1024 tokens ≈ 750 words, ~50s
+// of audio). The voice system prompt no longer pins replies to 1-2 sentences
+// — Abraham can give substantive answers when warranted, and the user can
+// always interrupt to barge in.
+const DEFAULT_MAX_TOKENS = 1024;
 
 export async function POST(
   req: NextRequest,

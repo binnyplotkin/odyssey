@@ -56,7 +56,7 @@ type VoiceStreamBody = {
 
 const CEREBRAS_DEFAULT_MODEL = "qwen-3-235b-a22b-instruct-2507";
 const ANTHROPIC_DEFAULT_MODEL = "claude-haiku-4-5";
-const DEFAULT_MAX_TOKENS = 200;
+const DEFAULT_MAX_TOKENS = 1024;
 const TTS_DEFAULT_VOICE = "abraham";
 const TTS_SAMPLE_RATE = 24000;
 const TTS_PUBLIC_BASE_URL = "https://audio-rt-production.up.railway.app";
