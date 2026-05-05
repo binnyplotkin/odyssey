@@ -30,6 +30,12 @@
 tmp-app/
 .world-session-audio/
 
+# Voice-actor source clips. The deployable artifact is the .safetensors
+# embedding committed under services/audio-rt/voices/; the raw mp3/wav
+# source stays local-only to avoid distributing actor audio without an
+# explicit consent paper trail.
+apps/admin/public/voice/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
