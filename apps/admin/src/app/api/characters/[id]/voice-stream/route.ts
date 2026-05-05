@@ -246,18 +246,33 @@ export async function POST(
           sendEvent("token", { delta });
         };
 
-        const providerOrder: LlmProvider[] =
-          provider === "cerebras" ? ["cerebras", "anthropic"] : ["anthropic", "cerebras"];
-        const canUse = (p: LlmProvider) => (p === "cerebras" ? hasCerebras : hasAnthropic);
+        // Cerebras-only with retry-once on rate-limit / queue-exceeded.
+        // No Anthropic fallback — voice latency budget makes Anthropic Haiku
+        // (~600ms TTFT) slower than just surfacing a clean error to the UI.
         let chosenProvider: LlmProvider | null = null;
-        let lastProviderError: unknown = null;
-
-        for (const attemptProvider of providerOrder) {
-          if (!canUse(attemptProvider)) continue;
-          try {
-            serverTrace.mark("server.llm.attempt", { provider: attemptProvider });
-            if (attemptProvider === "cerebras") {
-              modelId = body.model ?? CEREBRAS_DEFAULT_MODEL;
+        if (provider === "cerebras" && !hasCerebras) {
+          throw new Error("CEREBRAS_API_KEY is not configured.");
+        }
+        if (provider === "anthropic") {
+          // Explicit override — keep Anthropic available when caller asks for it.
+          modelId = body.model ?? ANTHROPIC_DEFAULT_MODEL;
+          serverTrace.mark("server.llm.attempt", { provider: "anthropic" });
+          ({ inputTokens, outputTokens } = await streamFromAnthropic({
+            apiKey: process.env.ANTHROPIC_API_KEY!.trim(),
+            model: modelId,
+            systemPrompt,
+            history,
+            message,
+            maxTokens,
+            onToken,
+          }));
+          chosenProvider = "anthropic";
+          serverTrace.mark("server.llm.succeeded", { provider: "anthropic", model: modelId });
+        } else {
+          modelId = body.model ?? CEREBRAS_DEFAULT_MODEL;
+          for (let attempt = 1; attempt <= 2; attempt += 1) {
+            serverTrace.mark("server.llm.attempt", { provider: "cerebras", attempt });
+            try {
               ({ inputTokens, outputTokens } = await streamFromCerebras({
                 apiKey: process.env.CEREBRAS_API_KEY!.trim(),
                 model: modelId,
@@ -268,47 +283,37 @@ export async function POST(
                 onToken,
                 abortSignal: req.signal,
               }));
-            } else {
-              modelId = body.model ?? ANTHROPIC_DEFAULT_MODEL;
-              ({ inputTokens, outputTokens } = await streamFromAnthropic({
-                apiKey: process.env.ANTHROPIC_API_KEY!.trim(),
-                model: modelId,
-                systemPrompt,
-                history,
-                message,
-                maxTokens,
-                onToken,
-              }));
-            }
-            chosenProvider = attemptProvider;
-            serverTrace.mark("server.llm.succeeded", {
-              provider: attemptProvider,
-              model: modelId,
-            });
-            break;
-          } catch (providerErr) {
-            lastProviderError = providerErr;
-            serverTrace.mark("server.llm.failed", {
-              provider: attemptProvider,
-              message: providerErr instanceof Error ? providerErr.message : String(providerErr),
-            });
-            const messageText =
-              providerErr instanceof Error ? providerErr.message.toLowerCase() : String(providerErr).toLowerCase();
-            const authLike =
-              messageText.includes("401") ||
-              messageText.includes("403") ||
-              messageText.includes("unauthorized") ||
-              messageText.includes("invalid api key") ||
-              messageText.includes("authentication") ||
-              messageText.includes("permission");
-            if (emittedAnyToken || !authLike) {
+              chosenProvider = "cerebras";
+              serverTrace.mark("server.llm.succeeded", { provider: "cerebras", model: modelId, attempt });
+              break;
+            } catch (providerErr) {
+              serverTrace.mark("server.llm.failed", {
+                provider: "cerebras",
+                attempt,
+                message: providerErr instanceof Error ? providerErr.message : String(providerErr),
+              });
+              const text =
+                providerErr instanceof Error ? providerErr.message.toLowerCase() : String(providerErr).toLowerCase();
+              const rateLimited =
+                text.includes("429") ||
+                text.includes("queue_exceeded") ||
+                text.includes("too_many_requests") ||
+                text.includes("rate limit") ||
+                text.includes("rate_limit");
+              // Retry once on rate-limit-like errors, only if no tokens have
+              // been emitted yet (otherwise the user already sees a partial
+              // reply and a retry would duplicate it).
+              if (rateLimited && attempt < 2 && !emittedAnyToken && !req.signal.aborted) {
+                await new Promise((resolve) => setTimeout(resolve, 200));
+                continue;
+              }
               throw providerErr;
             }
           }
         }
 
         if (!chosenProvider) {
-          throw (lastProviderError ?? new Error("No LLM provider attempt succeeded."));
+          throw new Error("LLM call did not complete.");
         }
 
         serverTrace.mark("server.llm.done", {
