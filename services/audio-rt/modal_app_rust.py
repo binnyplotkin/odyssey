@@ -8,12 +8,10 @@ This is the production-grade STT path:
 Deploy:
     modal deploy services/audio-rt/modal_app_rust.py
 
-Test from local Mac:
-    pip install msgpack numpy sounddevice websockets
-    python services/audio-rt/scripts/stt_from_file_rust_server.py \\
-        --url wss://<workspace>--audio-rt-moshi-server-serve.modal.run \\
-        --api-key public_token \\
-        path/to/audio.wav
+Connected to from the browser via apps/admin/src/lib/moshi-client.ts
+(MOSHI_WS_URL → wss://<workspace>--audio-rt-moshi-server-serve.modal.run/api/asr-streaming).
+Migrating this onto the Railway audio-rt FastAPI gateway is a separate
+effort; until then this Modal deploy must stay live for live STT.
 
 The moshi-server is published in the kyutai-labs/moshi repo's `rust/`
 workspace, not on crates.io as a standalone install. We clone the repo and

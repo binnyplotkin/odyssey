@@ -49,7 +49,6 @@ export {
   OpenAITextToSpeechAdapter,
   ElevenLabsTextToSpeechAdapter,
   KyutaiSpeechToTextAdapter,
-  KyutaiTextToSpeechAdapter,
   createSpeechToTextAdapter,
   createTextToSpeechAdapter,
   resolveSttProvider,

@@ -1,29 +1,13 @@
-import { decode as msgpackDecode, encode as msgpackEncode } from "./msgpack-lite";
-import { WebSocket } from "ws";
 import { getOpenAIClient } from "./openai-client";
 import { SpeechToTextAdapter, TextToSpeechAdapter } from "./interfaces";
 
 export type SttProvider = "openai" | "kyutai";
-export type TtsProvider = "openai" | "elevenlabs" | "kyutai";
+export type TtsProvider = "openai" | "elevenlabs";
 export const ELEVENLABS_DEFAULT_MODEL_ID = "eleven_flash_v2_5";
-
-const KYUTAI_TTS_DEFAULT_VOICE = "expresso/ex03-ex01_happy_001_channel1_334s.wav";
-const KYUTAI_TTS_TARGET_SAMPLE_RATE = 24000;
-const KYUTAI_PUBLIC_TTS_BASE_URL = "https://binnyplotkin--audio-rt-moshi-tts-serve.modal.run";
 
 function getKyutaiSttBaseUrl(): string | null {
   const raw = (process.env.KYUTAI_BASE_URL ?? "").trim().replace(/\/+$/, "");
   return raw || null;
-}
-
-function getKyutaiTtsBaseUrl(): string | null {
-  const raw = (process.env.KYUTAI_TTS_BASE_URL ?? "").trim().replace(/\/+$/, "");
-  return raw || KYUTAI_PUBLIC_TTS_BASE_URL;
-}
-
-function getKyutaiApiKey(): string {
-  const raw = (process.env.KYUTAI_API_KEY ?? "").trim();
-  return raw || "public_token";
 }
 const NORMAL_RATE_MODEL_IDS = new Set([
   "eleven_flash_v2_5",
@@ -188,141 +172,6 @@ export class KyutaiSpeechToTextAdapter implements SpeechToTextAdapter {
   }
 }
 
-/** Encode mono Float32 PCM as a 16-bit PCM WAV file. */
-function encodeFloat32ToWav(samples: Float32Array, sampleRate: number): Buffer {
-  const pcmLength = samples.length * 2;
-  const buffer = Buffer.alloc(44 + pcmLength);
-  buffer.write("RIFF", 0);
-  buffer.writeUInt32LE(36 + pcmLength, 4);
-  buffer.write("WAVE", 8);
-  buffer.write("fmt ", 12);
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20); // PCM
-  buffer.writeUInt16LE(1, 22); // mono
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(sampleRate * 2, 28); // byte rate
-  buffer.writeUInt16LE(2, 32); // block align
-  buffer.writeUInt16LE(16, 34); // bits per sample
-  buffer.write("data", 36);
-  buffer.writeUInt32LE(pcmLength, 40);
-
-  let offset = 44;
-  for (let i = 0; i < samples.length; i += 1) {
-    const clamped = Math.max(-1, Math.min(1, samples[i]));
-    const int16 = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
-    buffer.writeInt16LE(int16, offset);
-    offset += 2;
-  }
-
-  return buffer;
-}
-
-export class KyutaiTextToSpeechAdapter implements TextToSpeechAdapter {
-  async synthesize({ text, voice }: { text: string; voice: string }) {
-    const baseUrl = getKyutaiTtsBaseUrl();
-    if (!baseUrl) {
-      return null;
-    }
-    const trimmed = text.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const wsUrl = baseUrl.replace(/^https?:/, "wss:") + "/api/tts_streaming";
-    const params = new URLSearchParams({
-      voice: voice || KYUTAI_TTS_DEFAULT_VOICE,
-      format: "PcmMessagePack",
-      auth_id: getKyutaiApiKey(),
-    });
-
-    return await new Promise<{ audioBase64: string; mimeType: string } | null>(
-      (resolve, reject) => {
-        const ws = new WebSocket(`${wsUrl}?${params.toString()}`);
-        let resolved = false;
-        const chunks: Float32Array[] = [];
-        let totalSamples = 0;
-
-        const finish = (
-          result: { audioBase64: string; mimeType: string } | null,
-          error: Error | null,
-        ) => {
-          if (resolved) return;
-          resolved = true;
-          try {
-            ws.close();
-          } catch {
-            /* ignore */
-          }
-          if (error) reject(error);
-          else resolve(result);
-        };
-
-        const timeout = setTimeout(() => {
-          finish(null, new Error("Kyutai TTS WS timed out after 120s"));
-        }, 120000);
-
-        ws.on("open", () => {
-          const words = trimmed.split(/\s+/).filter(Boolean);
-          for (const word of words) {
-            ws.send(msgpackEncode({ type: "Text", text: word }));
-          }
-          ws.send(msgpackEncode({ type: "Eos" }));
-        });
-
-        ws.on("message", (raw: Buffer) => {
-          try {
-            const data = msgpackDecode(new Uint8Array(raw)) as
-              | { type: "Audio"; pcm: number[] }
-              | { type: "Text"; text: string }
-              | { type: "Ready" }
-              | { type: "Error"; message?: string };
-
-            if (data.type === "Audio") {
-              const samples = new Float32Array(data.pcm);
-              chunks.push(samples);
-              totalSamples += samples.length;
-            } else if (data.type === "Error") {
-              clearTimeout(timeout);
-              finish(null, new Error(data.message ?? "Kyutai TTS reported error"));
-            }
-          } catch (decodeError) {
-            // Don't fail the whole synth on a single malformed frame.
-            console.error("KyutaiTextToSpeechAdapter: decode error", decodeError);
-          }
-        });
-
-        ws.on("error", (err: Error) => {
-          clearTimeout(timeout);
-          finish(null, new Error(`Kyutai TTS WebSocket error: ${err.message}`));
-        });
-
-        ws.on("close", () => {
-          clearTimeout(timeout);
-          if (resolved) return;
-          if (totalSamples === 0) {
-            finish(null, new Error("Kyutai TTS WS closed before any audio"));
-            return;
-          }
-          const merged = new Float32Array(totalSamples);
-          let offset = 0;
-          for (const chunk of chunks) {
-            merged.set(chunk, offset);
-            offset += chunk.length;
-          }
-          const wav = encodeFloat32ToWav(merged, KYUTAI_TTS_TARGET_SAMPLE_RATE);
-          finish(
-            {
-              audioBase64: wav.toString("base64"),
-              mimeType: "audio/wav",
-            },
-            null,
-          );
-        });
-      },
-    );
-  }
-}
-
 export function resolveSttProvider(provider?: string): SttProvider {
   const normalized = (provider ?? process.env.STT_PROVIDER ?? "openai").trim().toLowerCase();
   return normalized === "kyutai" ? "kyutai" : "openai";
@@ -344,9 +193,6 @@ export function resolveTtsProvider(provider?: string): TtsProvider {
 
   if (normalized === "elevenlabs" || normalized === "eleven") {
     return "elevenlabs";
-  }
-  if (normalized === "kyutai") {
-    return "kyutai";
   }
 
   return "openai";
@@ -380,9 +226,6 @@ export function createTextToSpeechAdapter(provider?: string): {
   if (resolved === "elevenlabs") {
     return { provider: resolved, adapter: new ElevenLabsTextToSpeechAdapter() };
   }
-  if (resolved === "kyutai") {
-    return { provider: resolved, adapter: new KyutaiTextToSpeechAdapter() };
-  }
 
   return { provider: resolved, adapter: new OpenAITextToSpeechAdapter() };
 }
@@ -394,7 +237,6 @@ export function getAudioRuntimeConfig(requestedProvider?: string) {
   const hasElevenLabsKey = Boolean(process.env.ELEVENLABS_API_KEY);
   const hasElevenLabsVoice = Boolean(process.env.ELEVENLABS_VOICE_ID);
   const kyutaiSttBaseUrl = getKyutaiSttBaseUrl();
-  const kyutaiTtsBaseUrl = getKyutaiTtsBaseUrl();
   const sttProvider = resolveSttProvider();
 
   return {
@@ -425,10 +267,6 @@ export function getAudioRuntimeConfig(requestedProvider?: string) {
           hasVoiceId: hasElevenLabsVoice,
           model: elevenLabsModelConfig.effectiveModelId,
           pricingGuard: elevenLabsModelConfig,
-        },
-        kyutai: {
-          configured: Boolean(kyutaiTtsBaseUrl),
-          baseUrl: kyutaiTtsBaseUrl,
         },
       },
     },
