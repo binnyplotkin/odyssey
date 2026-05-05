@@ -8,3 +8,7 @@ pocket-tts==2.1.0
 faster-whisper==1.2.0
 silero-vad==6.0.0
 msgpack==1.1.2
+# Pin CPU-only onnxruntime — silero-vad / its transitive deps otherwise
+# resolve to onnxruntime-gpu on Linux x86, which then crashes at import
+# trying to dlopen libcudart.so.13 on a CPU container.
+onnxruntime==1.20.1
