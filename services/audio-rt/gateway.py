@@ -1,19 +1,26 @@
 import base64
 import itertools
+import json
 import math
 import os
 import subprocess
 import tempfile
 from threading import Lock
+from typing import Iterator
 
 import julius
 import moshi.models
+import numpy as np
 import sphn
 import torch
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 app = FastAPI(title="odyssey-audio-rt")
+
+VOICES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voices")
+DEFAULT_VOICE_ID = "abraham"
 
 
 class TranscribeRequest(BaseModel):
@@ -137,6 +144,125 @@ class KyutaiSttRuntime:
 stt_runtime = KyutaiSttRuntime()
 
 
+class PocketTtsRuntime:
+    """Wraps Pocket TTS (Kyutai 100M, CPU-only) with lazy load + per-voice cache.
+
+    Pinned to language="english_2026-01" because english_2026-04 has a known
+    voice-cloning regression (kyutai-labs/pocket-tts#175). Voices live as
+    .safetensors files in services/audio-rt/voices/ and are baked into the
+    image at build time.
+    """
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._generate_lock = Lock()
+        self._loaded = False
+        self._error: str | None = None
+        self._model = None
+        self._sample_rate: int | None = None
+        self._voice_states: dict[str, object] = {}
+
+    def _load(self) -> None:
+        if self._loaded:
+            return
+        with self._lock:
+            if self._loaded:
+                return
+            try:
+                from pocket_tts import TTSModel
+
+                language = os.getenv("POCKET_TTS_LANGUAGE", "english_2026-01")
+                steps = int(os.getenv("POCKET_TTS_LSD_DECODE_STEPS", "5"))
+                temp = float(os.getenv("POCKET_TTS_TEMP", "0.5"))
+                self._model = TTSModel.load_model(
+                    language=language,
+                    lsd_decode_steps=steps,
+                    temp=temp,
+                )
+                self._sample_rate = self._model.sample_rate
+                self._loaded = True
+                self._error = None
+            except Exception as error:
+                self._error = str(error)
+                raise
+
+    def _voice_path(self, voice_id: str) -> str:
+        # Voice IDs are simple slugs like "abraham"; reject anything that could
+        # escape the voices/ dir.
+        if not voice_id or "/" in voice_id or ".." in voice_id:
+            raise HTTPException(status_code=400, detail=f"Invalid voice id: {voice_id!r}")
+        path = os.path.join(VOICES_DIR, f"{voice_id}.safetensors")
+        if not os.path.isfile(path):
+            raise HTTPException(status_code=404, detail=f"Voice not found: {voice_id}")
+        return path
+
+    def _get_voice_state(self, voice_id: str):
+        if voice_id in self._voice_states:
+            return self._voice_states[voice_id]
+        with self._lock:
+            if voice_id in self._voice_states:
+                return self._voice_states[voice_id]
+            self._load()
+            assert self._model is not None
+            state = self._model.get_state_for_audio_prompt(self._voice_path(voice_id))
+            self._voice_states[voice_id] = state
+            return state
+
+    def status(self) -> dict[str, object]:
+        return {
+            "loaded": self._loaded,
+            "sampleRate": self._sample_rate,
+            "voicesCached": list(self._voice_states.keys()),
+            "voicesAvailable": sorted(
+                f.removesuffix(".safetensors")
+                for f in os.listdir(VOICES_DIR)
+                if f.endswith(".safetensors")
+            )
+            if os.path.isdir(VOICES_DIR)
+            else [],
+            "error": self._error,
+        }
+
+    def stream_pcm_chunks(self, text: str, voice_id: str) -> Iterator[bytes]:
+        """Yield raw int16-LE PCM bytes per generated frame.
+
+        Pocket TTS yields one ~80ms torch tensor per step; we convert each to
+        24kHz mono int16 little-endian (matches the existing Moshi TTS wire
+        format consumed by apps/admin/src/lib/moshi-client.ts).
+        """
+        # Single-stream guard: pocket-tts streaming state isn't documented as
+        # safe across concurrent calls on the same model instance, so serialize.
+        with self._generate_lock:
+            self._load()
+            assert self._model is not None
+            voice_state = self._get_voice_state(voice_id)
+            for chunk in self._model.generate_audio_stream(voice_state, text):
+                arr = chunk.detach().cpu().numpy() if hasattr(chunk, "detach") else np.asarray(chunk)
+                arr = np.clip(arr, -1.0, 1.0)
+                pcm = (arr * 32767.0).astype(np.int16).tobytes()
+                yield pcm
+
+
+tts_runtime = PocketTtsRuntime()
+
+
+@app.on_event("startup")
+def _warm_tts_on_startup() -> None:
+    """Block container startup on TTS readiness so Railway's healthcheck only
+    flips green once /speak can serve a request immediately. Toggle off with
+    POCKET_TTS_WARM_ON_STARTUP=0 (e.g. for fast iteration in local dev)."""
+    if os.getenv("POCKET_TTS_WARM_ON_STARTUP", "1") != "1":
+        return
+    voice_id = os.getenv("POCKET_TTS_DEFAULT_VOICE", DEFAULT_VOICE_ID)
+    try:
+        tts_runtime._load()
+        tts_runtime._get_voice_state(voice_id)
+    except Exception as error:  # noqa: BLE001
+        # Log and continue — /healthz will surface the error and /speak will
+        # retry the load on the next request rather than killing the container.
+        print(f"[startup] Pocket TTS warm-up failed: {error}", flush=True)
+
+
 def _extension_from_mime(mime_type: str) -> str:
     normalized = (mime_type or "").split(";")[0].strip().lower()
     mapping = {
@@ -230,8 +356,9 @@ def healthz():
         "ok": True,
         "service": "audio-rt",
         "provider": "kyutai",
-        "mode": "stt-ready",
+        "mode": "stt+tts",
         "sttRuntime": stt_runtime.status(),
+        "ttsRuntime": tts_runtime.status(),
     }
 
 
@@ -264,8 +391,57 @@ def transcribe(payload: TranscribeRequest):
 
 
 @app.post("/speak")
-def speak(_: SpeakRequest):
-    raise HTTPException(
-        status_code=501,
-        detail="Kyutai runtime not wired yet. Service is deployed and reachable.",
+def speak(payload: SpeakRequest):
+    """Stream synthesized speech as Server-Sent Events.
+
+    Event types:
+      - "meta"  → {"sampleRate": 24000, "channels": 1, "encoding": "pcm_s16le"}
+      - "audio" → {"chunk": <base64-encoded int16-LE PCM>, "index": <int>}
+      - "done"  → {"chunks": <int>}
+      - "error" → {"message": <str>}
+    """
+    text = (payload.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+    voice_id = payload.voice or DEFAULT_VOICE_ID
+
+    # Trigger lazy load up front so we can return a synchronous 5xx if model
+    # download / voice load fails, instead of a half-streamed response.
+    try:
+        tts_runtime._load()
+        tts_runtime._get_voice_state(voice_id)
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Pocket TTS init failed: {error}") from error
+
+    def sse_event(event: str, data: dict) -> bytes:
+        return f"event: {event}\ndata: {json.dumps(data)}\n\n".encode("utf-8")
+
+    def event_stream():
+        try:
+            yield sse_event("meta", {
+                "sampleRate": tts_runtime._sample_rate,
+                "channels": 1,
+                "encoding": "pcm_s16le",
+                "voice": voice_id,
+            })
+            index = 0
+            for pcm in tts_runtime.stream_pcm_chunks(text, voice_id):
+                yield sse_event("audio", {
+                    "index": index,
+                    "chunk": base64.b64encode(pcm).decode("ascii"),
+                })
+                index += 1
+            yield sse_event("done", {"chunks": index})
+        except Exception as error:  # noqa: BLE001
+            yield sse_event("error", {"message": str(error)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
     )

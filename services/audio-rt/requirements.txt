@@ -4,3 +4,4 @@ moshi==0.2.11
 julius==0.2.7
 soundfile==0.13.1
 librosa==0.11.0
+pocket-tts==2.1.0

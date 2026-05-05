@@ -13,6 +13,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
+# Pocket TTS downloads weights from HuggingFace at startup.
+# Pin HF cache to a known path so it's stable across Railway's filesystem.
+# HF_TOKEN must be set as a Railway env var (gated repo: kyutai/pocket-tts).
+ENV HF_HOME=/app/.cache/huggingface
 ENV PORT=8080
 EXPOSE 8080
 
