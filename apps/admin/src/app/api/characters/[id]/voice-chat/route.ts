@@ -47,12 +47,10 @@ type VoiceChatBody = {
   maxTokens?: number;
 };
 
-// Cerebras model IDs are inconsistent across families: `llama3.1-8b` (no
-// dash between `llama3` and `.1`) vs `llama-3.3-70b` (dashes everywhere).
-// 8B is universally available on the free tier and still ~3000 tok/s with
-// sub-100ms TTFT — fine for voice replies. Bump to `llama-3.3-70b` if your
-// account has access (paid tier).
-const CEREBRAS_DEFAULT_MODEL = "llama3.1-8b";
+// Cerebras model IDs vary across families. Keep this in sync with the
+// streaming sibling route's CEREBRAS_DEFAULT_MODEL and with
+// DEFAULT_VOICE_MODEL in apps/admin/src/lib/model-registry.ts.
+const CEREBRAS_DEFAULT_MODEL = "qwen-3-235b-a22b-instruct-2507";
 const ANTHROPIC_DEFAULT_MODEL = "claude-haiku-4-5";
 // 200 tokens is roughly 130-150 words of speech, ~10s of audio at typical
 // TTS pace. The prompt nudges the model toward 1-2 sentences; this is a

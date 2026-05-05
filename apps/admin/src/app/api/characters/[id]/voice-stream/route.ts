@@ -54,7 +54,7 @@ type VoiceStreamBody = {
   voice?: string;
 };
 
-const CEREBRAS_DEFAULT_MODEL = "llama3.1-8b";
+const CEREBRAS_DEFAULT_MODEL = "qwen-3-235b-a22b-instruct-2507";
 const ANTHROPIC_DEFAULT_MODEL = "claude-haiku-4-5";
 const DEFAULT_MAX_TOKENS = 200;
 const TTS_DEFAULT_VOICE = "abraham";

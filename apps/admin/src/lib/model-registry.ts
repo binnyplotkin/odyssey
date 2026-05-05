@@ -39,11 +39,12 @@ export const MODEL_REGISTRY: ModelOption[] = [
 export const DEFAULT_CHAT_MODEL = "claude-sonnet-4-5";
 
 /**
- * Default model for *voice* contexts. Llama 8B is the cheapest + fastest; the
- * dedicated wavefield page overrides this in its own state if it wants to
- * preserve the higher-quality Sonnet default.
+ * Default model for *voice* contexts. Qwen 3 235B (MoE, 22B active) gives
+ * noticeably better in-character dialogue than smaller Cerebras models with
+ * similar TTFT (~200–300ms). Note: Cerebras lists this as Preview tier — if
+ * it ever 404s for an account, fall back to gpt-oss-120b (Production).
  */
-export const DEFAULT_VOICE_MODEL = "llama3.1-8b";
+export const DEFAULT_VOICE_MODEL = "qwen-3-235b-a22b-instruct-2507";
 
 export function modelMetaFor(id: string): ModelOption | undefined {
   return MODEL_REGISTRY.find((m) => m.id === id);
