@@ -5,822 +5,2696 @@ import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import type {
   WorldSessionAudioArtifactRecord,
+  WorldSessionContextBuildRecord,
   WorldSessionDetailRecord,
   WorldSessionEventRecord,
+  WorldSessionTurnRecord,
 } from "@odyssey/db";
+import { useHeaderContent } from "@/components/header-context";
 
 type Props = {
   detail: WorldSessionDetailRecord;
 };
 
-type TimelineKind = "session" | "context" | "turn" | "event";
+const FONT_DISPLAY = '"Space Grotesk", system-ui, sans-serif';
+const FONT_MONO = '"JetBrains Mono", ui-monospace, monospace';
+const FONT_BODY = '"Inter", system-ui, sans-serif';
 
-type TimelineItem = {
-  id: string;
-  kind: TimelineKind;
-  at: string;
-  label: string;
-  detail: string;
-  turnId?: string | null;
-  contextId?: string | null;
-  event?: WorldSessionEventRecord;
-};
-
-type TimelineFilter = "all" | "conversation" | "context" | "voice" | "stt" | "stream";
-
-const T = {
-  fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
-  border: "var(--border)",
-  accent: "var(--accent)",
-  accentStrong: "var(--accent-strong)",
-  accentSoft: "var(--accent-soft)",
-  cardHover: "var(--card-hover)",
-  fontHeading: "'Space Grotesk', sans-serif",
-  fontBody: "'Inter', sans-serif",
-  fontMono: "var(--font-mono, 'JetBrains Mono', monospace)",
+const C = {
+  bg: "#0C0E14",
+  bgRail: "#0A0C12",
+  border: "rgba(255,255,255,0.08)",
+  borderSoft: "rgba(255,255,255,0.05)",
+  borderStrong: "rgba(255,255,255,0.12)",
+  panel: "rgba(255,255,255,0.025)",
+  panelStrong: "rgba(255,255,255,0.04)",
+  text: "rgba(255,255,255,0.94)",
+  textHigh: "rgba(255,255,255,0.65)",
+  textMid: "rgba(255,255,255,0.45)",
+  textLow: "rgba(255,255,255,0.35)",
+  mint: "#8CE7D2",
+  mintSoft: "rgba(140,231,210,0.12)",
+  mintMid: "rgba(140,231,210,0.20)",
+  mintBg: "rgba(140,231,210,0.06)",
+  greenDot: "#4ADE80",
+  amber: "#E5B85A",
+  amberSoft: "rgba(229,184,90,0.16)",
+  amberDeep: "#C9A04A",
+  red: "#F4A8A8",
 } as const;
 
-const FILTERS: { value: TimelineFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "conversation", label: "Conversation" },
-  { value: "context", label: "Context" },
-  { value: "voice", label: "Voice" },
-  { value: "stt", label: "STT" },
-  { value: "stream", label: "Stream" },
+type TabKey = "pipeline" | "graph" | "prompt" | "voice" | "raw";
+
+const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: "pipeline", label: "Pipeline", icon: "1" },
+  { key: "graph", label: "Graph", icon: "2" },
+  { key: "prompt", label: "Prompt", icon: "3" },
+  { key: "voice", label: "Voice", icon: "4" },
+  { key: "raw", label: "Raw", icon: "5" },
 ];
+
+type ConvFilter = "all" | "issues" | "slow";
 
 export function SessionDetailWorkbench({ detail }: Props) {
   const { session, user, contextBuilds, turns, events, audioArtifacts } = detail;
-  const [filter, setFilter] = useState<TimelineFilter>("all");
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const { setFlush } = useHeaderContent();
 
-  const timeline = useMemo(() => buildTimeline(detail), [detail]);
-  const filteredTimeline = useMemo(
-    () => timeline.filter((item) => matchesFilter(item, filter)),
-    [timeline, filter],
+  useEffect(() => {
+    setFlush(true);
+    return () => setFlush(false);
+  }, [setFlush]);
+
+  const [activeTab, setActiveTab] = useState<TabKey>("pipeline");
+  const [convFilter, setConvFilter] = useState<ConvFilter>("all");
+  const [activeTurnId, setActiveTurnId] = useState<string | null>(() => {
+    const interrupted = turns.find((t) => t.status === "interrupted" || t.status === "error");
+    if (interrupted) return interrupted.id;
+    let slowest: WorldSessionTurnRecord | null = null;
+    let slowestMs = -1;
+    for (const t of turns) {
+      const ms = firstAudioMs(t);
+      if (ms != null && ms > slowestMs) {
+        slowest = t;
+        slowestMs = ms;
+      }
+    }
+    return slowest?.id ?? turns.at(0)?.id ?? null;
+  });
+
+  const activeTurn =
+    turns.find((t) => t.id === activeTurnId) ?? turns.at(0) ?? null;
+  const activeContext = useMemo(
+    () => pickActiveContext(contextBuilds, activeTurn),
+    [contextBuilds, activeTurn],
   );
 
-  useEffect(() => {
-    setActiveIndex(0);
-    setPlaying(false);
-  }, [filter]);
+  const stats = useMemo(() => computeStats(detail), [detail]);
+  const filteredTurns = useMemo(() => filterTurns(turns, convFilter, events), [turns, convFilter, events]);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (filteredTimeline.length <= 1) {
-      setPlaying(false);
-      return;
-    }
-    const id = window.setInterval(() => {
-      setActiveIndex((current) => {
-        if (current >= filteredTimeline.length - 1) {
-          window.clearInterval(id);
-          setPlaying(false);
-          return current;
-        }
-        return current + 1;
-      });
-    }, 850);
-    return () => window.clearInterval(id);
-  }, [playing, filteredTimeline.length]);
-
-  const activeItem = filteredTimeline[Math.min(activeIndex, Math.max(filteredTimeline.length - 1, 0))] ?? null;
-  const activeTurn =
-    turns.find((turn) => turn.id === activeItem?.turnId) ??
-    latestAtOrBefore(turns, activeItem?.at, (turn) => turn.startedAt) ??
-    turns.at(-1) ??
-    null;
-  const activeContext =
-    contextBuilds.find((context) => context.id === activeItem?.contextId) ??
-    latestAtOrBefore(contextBuilds, activeItem?.at, (context) => context.createdAt) ??
-    contextBuilds.at(-1) ??
-    null;
-
-  const wordEvents = events.filter((event) => event.type === "stt.word");
-  const acceptedWordEvents = wordEvents.filter((event) => payloadField(event.payload, "accepted") !== false);
-  const stepEvents = events.filter((event) => event.type === "stt.step");
-  const voiceEvents = events.filter((event) => event.source === "voice" || event.type.startsWith("voice."));
-  const streamEvents = events.filter((event) => event.type.startsWith("voice_stream."));
-  const activeRelatedEvents = events
-    .filter((event) => (activeTurn?.id ? event.turnId === activeTurn.id : event.turnId === activeItem?.turnId))
-    .slice(0, 80);
-  const activeAudioArtifacts = audioArtifacts.filter((artifact) => artifact.turnId === activeTurn?.id);
-
-  const progress = filteredTimeline.length <= 1 ? 0 : (activeIndex / (filteredTimeline.length - 1)) * 100;
-  const userLabel = user?.name?.trim() || user?.email || (session.userId ? shortId(session.userId) : "Unknown user");
+  const sessionDate = formatDate(session.startedAt);
+  const sessionTime = formatTime(session.startedAt);
+  const userLabel =
+    user?.name?.trim() ||
+    user?.email ||
+    (session.userId ? shortId(session.userId) : "Unknown");
+  const characterDisplay =
+    stringField(session.metadata, "characterName") ||
+    stripCharacterPrefix(stringField(session.metadata, "characterTitle")) ||
+    (session.characterId ? prettyCharacterId(session.characterId) : "—");
+  const characterCrumb =
+    stringField(session.metadata, "characterTitle") ||
+    characterDisplay;
+  const characterSlug =
+    stringField(session.metadata, "characterSlug") ||
+    (session.characterId ? session.characterId.replace(/^char_/, "") : "—");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-      <BackLink />
-
-      <header style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) auto",
-        gap: 18,
-        alignItems: "start",
-      }}>
-        <div>
-          <div style={eyebrowStyle}>World Session</div>
-          <h1 style={{
-            margin: 0,
-            color: T.fg,
-            fontFamily: T.fontHeading,
-            fontSize: "1.6rem",
-            lineHeight: 1.1,
-          }}>
-            Conversation Playback
-          </h1>
-          <p style={{
-            margin: "0.55rem 0 0",
-            color: T.muted,
-            fontFamily: T.fontMono,
-            fontSize: "0.78rem",
-            overflowWrap: "anywhere",
-          }}>
-            {session.id}
-          </p>
-        </div>
-        <StatusPill status={session.status} />
-      </header>
-
-      <MetricGrid
-        items={[
-          ["User", userLabel],
-          ["Mode", session.mode],
-          ["Character", session.characterId ? shortId(session.characterId) : "none"],
-          ["Turns", turns.length],
-          ["Context Builds", contextBuilds.length],
-          ["Events", events.length],
-          ["Accepted Words", acceptedWordEvents.length],
-          ["Audio Clips", audioArtifacts.length],
-          ["Last Active", formatDate(session.lastActiveAt)],
-        ]}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        background: C.bg,
+        color: C.text,
+        fontFamily: FONT_BODY,
+        minHeight: "100vh",
+      }}
+    >
+      <HeaderRail
+        session={session}
+        userLabel={userLabel}
+        characterDisplay={characterDisplay}
+        characterCrumb={characterCrumb}
+        characterSlug={characterSlug}
+        sessionDate={sessionDate}
+        sessionTime={sessionTime}
+        contextBuilds={contextBuilds}
+        stats={stats}
       />
 
-      <section style={sectionStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-          <div>
-            <SectionTitle>Session Playback</SectionTitle>
-            <Muted>
-              {activeItem
-                ? `${activeItem.label} - ${formatDate(activeItem.at)}`
-                : "No captured timeline entries."}
-            </Muted>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            {FILTERS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setFilter(option.value)}
-                style={filter === option.value ? activeFilterButtonStyle : filterButtonStyle}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div
+        className="session-detail-body"
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "stretch",
+          minHeight: 0,
+        }}
+      >
+        <ConversationColumn
+          session={session}
+          userName={userLabel}
+          characterName={characterDisplay}
+          turns={filteredTurns}
+          activeTurnId={activeTurn?.id ?? null}
+          onSelectTurn={setActiveTurnId}
+          filter={convFilter}
+          onFilterChange={setConvFilter}
+          events={events}
+          contextBuilds={contextBuilds}
+          audioArtifacts={audioArtifacts}
+        />
 
-        <div className="session-detail-playback-controls" style={{ marginTop: 16, display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 12, alignItems: "center" }}>
-          <button type="button" onClick={() => setPlaying((value) => !value)} style={primaryButtonStyle}>
-            {playing ? "Pause" : "Play"}
-          </button>
-          <div>
-            <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
-              <div style={{ width: `${progress}%`, height: "100%", borderRadius: 999, background: T.accentStrong }} />
-            </div>
-            <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <Muted>{filteredTimeline.length === 0 ? "0 / 0" : `${activeIndex + 1} / ${filteredTimeline.length}`}</Muted>
-              <Muted>{activeItem ? activeItem.kind : "none"}</Muted>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button type="button" onClick={() => setActiveIndex((value) => Math.max(0, value - 1))} style={iconButtonStyle} aria-label="Previous event">
-              Prev
-            </button>
-            <button type="button" onClick={() => setActiveIndex((value) => Math.min(filteredTimeline.length - 1, value + 1))} style={iconButtonStyle} aria-label="Next event">
-              Next
-            </button>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 16, maxHeight: 310, overflow: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
-          {filteredTimeline.length === 0 ? (
-            <Empty>No timeline entries for this filter.</Empty>
-          ) : (
-            filteredTimeline.map((item, index) => (
-              <TimelineButton
-                key={item.id}
-                item={item}
-                active={index === activeIndex}
-                onClick={() => {
-                  setActiveIndex(index);
-                  setPlaying(false);
-                }}
-              />
-            ))
-          )}
-        </div>
-      </section>
-
-      <div className="session-detail-two-column" style={{ display: "grid", gridTemplateColumns: "minmax(320px, 0.9fr) minmax(0, 1.4fr)", gap: 16, alignItems: "start" }}>
-        <section style={sectionStyle}>
-          <SectionTitle>Conversation State</SectionTitle>
-          <Muted>
-            {activeTurn
-              ? `Focused on ${shortId(activeTurn.id)} - ${activeTurn.status}`
-              : "No turn has been captured yet."}
-          </Muted>
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-            {turns.length === 0 ? (
-              <Empty>No turns recorded.</Empty>
-            ) : (
-              turns.map((turn, index) => (
-                <button
-                  key={turn.id}
-                  type="button"
-                  onClick={() => {
-                    const nextIndex = filteredTimeline.findIndex((item) => item.turnId === turn.id);
-                    if (nextIndex >= 0) setActiveIndex(nextIndex);
-                    setPlaying(false);
-                  }}
-                  style={turn.id === activeTurn?.id ? activeTurnCardStyle : turnCardStyle}
-                >
-                  <RowBetween>
-                    <strong>Turn {index + 1}</strong>
-                    <span style={miniPillStyle}>{turn.status}</span>
-                  </RowBetween>
-                  <p style={compactLineStyle}>
-                    {turn.provider ?? "provider?"} / {turn.model ?? "model?"}
-                  </p>
-                  <TranscriptPreview label="User" text={turn.userText ?? ""} />
-                  <TranscriptPreview label="Assistant" text={turn.assistantText ?? ""} />
-                </button>
-              ))
-            )}
-          </div>
-        </section>
-
-        <section style={sectionStyle}>
-          <SectionTitle>Active Turn Data</SectionTitle>
-          {activeTurn ? (
-            <div className="session-detail-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
-              <SmallStat label="Input" value={activeTurn.inputMode} />
-              <SmallStat label="Started" value={formatTime(activeTurn.startedAt)} />
-              <SmallStat label="Completed" value={activeTurn.completedAt ? formatTime(activeTurn.completedAt) : "open"} />
-              <SmallStat label="Words" value={String(activeRelatedEvents.filter((event) => event.type === "stt.word").length)} />
-              <SmallStat label="Steps" value={String(activeRelatedEvents.filter((event) => event.type === "stt.step").length)} />
-              <SmallStat label="Trace Marks" value={String(traceEventCount(activeTurn.trace))} />
-            </div>
-          ) : (
-            <Empty>No active turn.</Empty>
-          )}
-
-          {activeTurn ? (
-            <div className="session-detail-split-grid" style={{ marginTop: 14, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 12 }}>
-              <TranscriptBlock label="User Transcript" text={activeTurn.userText ?? ""} />
-              <TranscriptBlock label="Assistant Transcript" text={activeTurn.assistantText ?? ""} />
-            </div>
-          ) : null}
-
-          {activeTurn ? (
-            <div style={{ marginTop: 14 }}>
-              <AudioArtifactPanel sessionId={session.id} artifacts={activeAudioArtifacts} title="Turn Audio" />
-              <TraceRail title="Turn Trace" trace={activeTurn.trace} />
-              <JsonDetails label="Latency summary" value={activeTurn.latencySummary} open />
-              <JsonDetails label="Audio metrics" value={activeTurn.audioMetrics} />
-            </div>
-          ) : null}
-        </section>
+        <InspectorRail
+          session={session}
+          activeTurn={activeTurn}
+          activeContext={activeContext}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          turns={turns}
+          events={events}
+          audioArtifacts={audioArtifacts}
+          contextBuilds={contextBuilds}
+        />
       </div>
-
-      <div className="session-detail-two-column" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)", gap: 16, alignItems: "start" }}>
-        <section style={sectionStyle}>
-          <SectionTitle>Context, Knowledge Graph, Prompt Creation</SectionTitle>
-          {activeContext ? (
-            <>
-              <div className="session-detail-context-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
-                <SmallStat label="Prompt Kind" value={activeContext.promptKind} />
-                <SmallStat label="Pages" value={String(pageCount(activeContext.selectedPages))} />
-                <SmallStat label="Tokens Used" value={String(activeContext.tokensUsed ?? "?")} />
-                <SmallStat label="Budget" value={String(activeContext.tokensBudget ?? activeContext.tokenBudget ?? "?")} />
-              </div>
-
-              <div style={{ marginTop: 14 }}>
-                <TraceRail title="Context Build Trace" trace={activeContext.timingTrace} />
-              </div>
-
-              <div className="session-detail-split-grid" style={{ marginTop: 14, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 12 }}>
-                <KnowledgeGraphPanel trace={activeContext.curatorTrace} selectedPages={activeContext.selectedPages} />
-                <PromptPanel promptChunk={activeContext.promptChunk ?? ""} systemPrompt={activeContext.systemPrompt ?? ""} />
-              </div>
-            </>
-          ) : (
-            <Empty>No context build has been recorded for this session.</Empty>
-          )}
-        </section>
-
-        <section style={sectionStyle}>
-          <SectionTitle>Voice Pipeline Snapshot</SectionTitle>
-          <div className="session-detail-split-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-            <SmallStat label="STT Words" value={String(wordEvents.length)} />
-            <SmallStat label="Accepted" value={String(acceptedWordEvents.length)} />
-            <SmallStat label="STT Steps" value={String(stepEvents.length)} />
-            <SmallStat label="Stream Events" value={String(streamEvents.length)} />
-            <SmallStat label="Audio In" value={String(audioArtifacts.filter((artifact) => artifact.direction === "input").length)} />
-            <SmallStat label="Audio Out" value={String(audioArtifacts.filter((artifact) => artifact.direction === "output").length)} />
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <AudioArtifactPanel sessionId={session.id} artifacts={audioArtifacts} title="All Audio Artifacts" />
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <EventList title="Current Turn Events" events={activeRelatedEvents} limit={36} />
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <EventList title="Recent Voice Events" events={[...voiceEvents, ...streamEvents].sort(byCreatedAt).slice(-40)} limit={40} />
-          </div>
-        </section>
-      </div>
-
-      <section style={sectionStyle}>
-        <SectionTitle>Raw Session Data</SectionTitle>
-        <div className="session-detail-split-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 12 }}>
-          <JsonDetails label="Session" value={session} />
-          <JsonDetails label="Selected Timeline Event" value={activeItem?.event ?? activeItem ?? null} open />
-          <JsonDetails label="All Context Builds" value={contextBuilds} />
-          <JsonDetails label="All Turns" value={turns} />
-          <JsonDetails label="Audio Artifacts" value={audioArtifacts} />
-        </div>
-        <div style={{ marginTop: 14 }}>
-          <EventTable events={events} limit={300} />
-        </div>
-      </section>
     </div>
   );
 }
 
-function buildTimeline(detail: WorldSessionDetailRecord): TimelineItem[] {
-  const items: TimelineItem[] = [
-    {
-      id: "session-start",
-      kind: "session",
-      at: detail.session.startedAt,
-      label: "Session started",
-      detail: `${detail.session.mode} / ${detail.session.status}`,
-    },
-  ];
+// ───────────── Header rail ─────────────
 
-  for (const context of detail.contextBuilds) {
-    items.push({
-      id: `context-${context.id}`,
-      kind: "context",
-      at: context.createdAt,
-      label: `Context built: ${context.promptKind}`,
-      detail: `${pageCount(context.selectedPages)} pages / ${context.tokensUsed ?? "?"}/${context.tokensBudget ?? "?"} tokens`,
-      turnId: context.turnId,
-      contextId: context.id,
-    });
-  }
+function HeaderRail({
+  session,
+  userLabel,
+  characterDisplay,
+  characterCrumb,
+  characterSlug,
+  sessionDate,
+  sessionTime,
+  contextBuilds,
+  stats,
+}: {
+  session: WorldSessionDetailRecord["session"];
+  userLabel: string;
+  characterDisplay: string;
+  characterCrumb: string;
+  characterSlug: string;
+  sessionDate: string;
+  sessionTime: string;
+  contextBuilds: WorldSessionContextBuildRecord[];
+  stats: ReturnType<typeof computeStats>;
+}) {
+  const statusColor =
+    session.status === "ended" || session.status === "completed"
+      ? C.greenDot
+      : session.status === "active"
+        ? C.mint
+        : session.status === "error"
+          ? C.red
+          : C.amber;
+  const statusLabel = session.status === "ended" ? "complete" : session.status;
+  const sessionMode = `${session.mode} session`;
+  const sessionShort = shortId(session.id);
+  const titleA = userLabel;
+  const titleB = characterDisplay;
+  const subTags = [
+    session.mode,
+    session.metadata && stringField(session.metadata, "client") ? `${stringField(session.metadata, "client")}` : "web client",
+    session.metadata && stringField(session.metadata, "scene") ? stringField(session.metadata, "scene") : null,
+    contextBuilds[0]?.promptKind ? `moment: ${contextBuilds[0]?.promptKind}` : null,
+    `idx ${contextBuilds.length}`,
+  ].filter(Boolean) as string[];
 
-  for (const [index, turn] of detail.turns.entries()) {
-    items.push({
-      id: `turn-${turn.id}`,
-      kind: "turn",
-      at: turn.startedAt,
-      label: `Turn ${index + 1}: ${turn.status}`,
-      detail: `${turn.inputMode} / ${turn.provider ?? "provider?"} / ${turn.model ?? "model?"}`,
-      turnId: turn.id,
-    });
-    if (turn.completedAt) {
-      items.push({
-        id: `turn-complete-${turn.id}`,
-        kind: "turn",
-        at: turn.completedAt,
-        label: `Turn ${index + 1} completed`,
-        detail: turn.assistantText ? truncate(turn.assistantText, 110) : "No assistant text captured",
-        turnId: turn.id,
-      });
-    }
-  }
-
-  for (const event of detail.events) {
-    items.push({
-      id: `event-${event.id}`,
-      kind: "event",
-      at: event.createdAt,
-      label: event.type,
-      detail: `${event.source}${event.turnId ? ` / turn ${shortId(event.turnId)}` : ""}`,
-      turnId: event.turnId,
-      event,
-    });
-  }
-
-  if (detail.session.endedAt) {
-    items.push({
-      id: "session-end",
-      kind: "session",
-      at: detail.session.endedAt,
-      label: "Session ended",
-      detail: detail.session.status,
-    });
-  }
-
-  return items.sort(byTimelineAt);
-}
-
-function matchesFilter(item: TimelineItem, filter: TimelineFilter) {
-  if (filter === "all") return true;
-  if (filter === "conversation") return item.kind === "turn";
-  if (filter === "context") return item.kind === "context";
-  if (filter === "stt") return item.event?.type.startsWith("stt.") ?? false;
-  if (filter === "stream") return item.event?.type.startsWith("voice_stream.") ?? false;
-  if (filter === "voice") {
-    return item.kind === "turn" || item.event?.source === "voice" || item.event?.type.startsWith("voice.") || item.event?.type.startsWith("voice_stream.");
-  }
-  return true;
-}
-
-function TimelineButton({ item, active, onClick }: { item: TimelineItem; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} style={active ? activeTimelineButtonStyle : timelineButtonStyle}>
-      <div style={{ display: "grid", gridTemplateColumns: "130px minmax(0, 1fr) auto", gap: 12, alignItems: "start", width: "100%" }}>
-        <span style={{ color: active ? T.accentStrong : T.muted, fontFamily: T.fontMono, fontSize: "0.72rem" }}>{formatTime(item.at)}</span>
-        <span style={{ minWidth: 0, textAlign: "left" }}>
-          <strong style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</strong>
-          <span style={{ display: "block", marginTop: 3, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.detail}</span>
-        </span>
-        <span style={miniPillStyle}>{item.kind}</span>
+    <header
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        padding: "24px 32px 20px",
+        gap: 18,
+        borderBottom: `1px solid ${C.borderSoft}`,
+        background: C.bg,
+      }}
+    >
+      <TopRow characterCrumb={characterCrumb} characterSlug={characterSlug} sessionShort={sessionShort} />
+      <IdentityStrip
+        statusColor={statusColor}
+        statusLabel={statusLabel}
+        sessionMode={sessionMode}
+        sessionShort={sessionShort}
+        titleA={titleA}
+        titleB={titleB}
+        sessionDate={sessionDate}
+        sessionTime={sessionTime}
+        subTags={subTags}
+      />
+      <KpiStrip stats={stats} />
+    </header>
+  );
+}
+
+function TopRow({
+  characterCrumb,
+  characterSlug,
+  sessionShort,
+}: {
+  characterCrumb: string;
+  characterSlug: string;
+  sessionShort: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 20,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+        <Link
+          href="/sessions"
+          aria-label="Back to sessions"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: `1px solid ${C.border}`,
+            color: C.textMid,
+            flexShrink: 0,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </Link>
+
+        <Avatar label={characterCrumb} size={28} />
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontFamily: FONT_MONO,
+            fontSize: 12,
+            color: C.textMid,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span style={{ color: C.text, fontWeight: 600 }}>{characterCrumb}</span>
+          <Sep />
+          <span style={{ color: C.textMid }}>{characterSlug}</span>
+          <Sep />
+          <span style={{ color: C.textMid }}>sessions</span>
+          <Sep />
+          <span style={{ color: C.text, fontWeight: 600 }}>{sessionShort}</span>
+        </div>
       </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <NavButton label="Prev" />
+        <NavButton label="Next" />
+        <ReplayButton />
+      </div>
+    </div>
+  );
+}
+
+function Sep() {
+  return <span style={{ color: C.textLow }}>/</span>;
+}
+
+function NavButton({ label }: { label: string }) {
+  return (
+    <button
+      type="button"
+      style={{
+        background: "transparent",
+        border: `1px solid ${C.border}`,
+        borderRadius: 8,
+        padding: "8px 14px",
+        color: C.textHigh,
+        fontFamily: FONT_BODY,
+        fontSize: 12,
+        fontWeight: 500,
+        cursor: "pointer",
+      }}
+    >
+      {label}
     </button>
   );
 }
 
-function KnowledgeGraphPanel({ trace, selectedPages }: { trace: unknown; selectedPages: unknown }) {
-  const record = asRecord(trace);
-  const seeds = asArray(record?.seeds);
-  const edges = asArray(record?.edges);
-  const timelineFiltered = asArray(record?.timelineFiltered);
-  const scoreDropped = asArray(record?.scoreDropped);
-  const budgetDropped = asArray(record?.budgetDropped);
-  const pages = asArray(selectedPages);
-
+function ReplayButton() {
   return (
-    <Panel title="Knowledge Graph Trace" hint={`${pages.length} selected pages`}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
-        <SmallStat label="Seeds" value={String(seeds.length)} />
-        <SmallStat label="Edges" value={String(edges.length)} />
-        <SmallStat label="Time-Gated" value={String(timelineFiltered.length)} />
-        <SmallStat label="Dropped" value={String(scoreDropped.length + budgetDropped.length)} />
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <MiniList title="Selected Pages" items={pages.map(pageLabel).slice(0, 16)} empty="No selected pages." />
-        <MiniList title="Seed Reasons" items={seeds.map(seedLabel).slice(0, 10)} empty="No seeds captured." />
-        <JsonDetails label="Full curator trace" value={trace} />
-      </div>
-    </Panel>
+    <button
+      type="button"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 7,
+        background: C.mint,
+        border: "none",
+        borderRadius: 8,
+        padding: "8px 14px",
+        color: "#06110f",
+        fontFamily: FONT_BODY,
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: "pointer",
+      }}
+    >
+      <svg width="9" height="11" viewBox="0 0 12 14" fill="currentColor">
+        <path d="M1 1.4v11.2c0 .9.9 1.4 1.6.9l8.6-5.6c.7-.4.7-1.4 0-1.8L2.6.5C1.9.1 1 .6 1 1.4Z" />
+      </svg>
+      Replay session
+    </button>
   );
 }
 
-function PromptPanel({ promptChunk, systemPrompt }: { promptChunk: string; systemPrompt: string }) {
-  return (
-    <Panel title="Prompt Creation" hint={`${systemPrompt.length.toLocaleString()} system chars`}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
-        <SmallStat label="Prompt Chunk" value={`${promptChunk.length.toLocaleString()} chars`} />
-        <SmallStat label="System Prompt" value={`${systemPrompt.length.toLocaleString()} chars`} />
-      </div>
-      <TextDetails label="Prompt chunk" value={promptChunk} open />
-      <TextDetails label="System prompt" value={systemPrompt} />
-    </Panel>
-  );
-}
-
-function TraceRail({ title, trace }: { title: string; trace: unknown }) {
-  const events = traceEvents(trace);
-  return (
-    <Panel title={title} hint={`${events.length} marks`}>
-      {events.length === 0 ? (
-        <Empty>No trace events captured.</Empty>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-          {events.slice(0, 24).map((event, index) => (
-            <div key={`${event.name}-${index}`} style={{
-              display: "grid",
-              gridTemplateColumns: "72px minmax(0, 1fr)",
-              gap: 10,
-              alignItems: "start",
-            }}>
-              <span style={{ color: T.accentStrong, fontFamily: T.fontMono, fontSize: "0.7rem" }}>{formatMs(event.ms)}</span>
-              <span style={{ minWidth: 0 }}>
-                <strong style={{ display: "block", fontSize: "0.78rem" }}>{event.name}</strong>
-                {event.data ? <span style={{ display: "block", color: T.muted, fontSize: "0.72rem", overflowWrap: "anywhere" }}>{compactJson(event.data, 180)}</span> : null}
-              </span>
-            </div>
-          ))}
-          {events.length > 24 ? <Muted>Showing first 24 of {events.length} trace marks.</Muted> : null}
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-function EventList({ title, events, limit }: { title: string; events: WorldSessionEventRecord[]; limit: number }) {
-  const shown = events.slice(0, limit);
-  return (
-    <Panel title={title} hint={`${events.length} events`}>
-      {shown.length === 0 ? (
-        <Empty>No matching events.</Empty>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {shown.map((event) => (
-            <div key={event.id} style={{
-              padding: "0.6rem",
-              border: `1px solid ${T.border}`,
-              borderRadius: 8,
-              background: "rgba(255,255,255,0.025)",
-            }}>
-              <RowBetween>
-                <strong style={{ fontSize: "0.78rem" }}>{event.type}</strong>
-                <Muted>{formatTime(event.createdAt)}</Muted>
-              </RowBetween>
-              <code style={{ display: "block", marginTop: 6, color: T.muted, fontFamily: T.fontMono, fontSize: "0.68rem", overflowWrap: "anywhere" }}>
-                {compactJson(event.payload, 240)}
-              </code>
-            </div>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-function AudioArtifactPanel({
-  sessionId,
-  artifacts,
-  title,
+function Avatar({
+  label,
+  size = 28,
+  variant = "neutral",
 }: {
-  sessionId: string;
-  artifacts: WorldSessionAudioArtifactRecord[];
-  title: string;
+  label: string;
+  size?: number;
+  variant?: "neutral" | "user" | "assistant";
+}) {
+  const initial = (label?.charAt(0) ?? "·").toUpperCase();
+  const bg =
+    variant === "user"
+      ? "linear-gradient(135deg, #E5C49A 0%, #B07F4F 100%)"
+      : variant === "assistant"
+        ? "linear-gradient(135deg, #8CE7D2 0%, #105A59 100%)"
+        : "linear-gradient(135deg, #8CE7D2 0%, #3A8B7A 100%)";
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: bg,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        color: "#06110f",
+        fontFamily: FONT_DISPLAY,
+        fontWeight: 700,
+        fontSize: Math.round(size * 0.42),
+        lineHeight: 1,
+      }}
+    >
+      {initial}
+    </div>
+  );
+}
+
+function IdentityStrip({
+  statusColor,
+  statusLabel,
+  sessionMode,
+  sessionShort,
+  titleA,
+  titleB,
+  sessionDate,
+  sessionTime,
+  subTags,
+}: {
+  statusColor: string;
+  statusLabel: string;
+  sessionMode: string;
+  sessionShort: string;
+  titleA: string;
+  titleB: string;
+  sessionDate: string;
+  sessionTime: string;
+  subTags: string[];
 }) {
   return (
-    <Panel title={title} hint={`${artifacts.length} clips`}>
-      {artifacts.length === 0 ? (
-        <Empty>No audio artifacts captured.</Empty>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {artifacts.map((artifact) => (
-            <div key={artifact.id} style={{
-              display: "grid",
-              gridTemplateColumns: "110px minmax(0, 1fr)",
-              gap: 10,
-              alignItems: "center",
-              padding: "0.65rem",
-              border: `1px solid ${T.border}`,
-              borderRadius: 8,
-              background: "rgba(255,255,255,0.025)",
-            }}>
-              <div>
-                <span style={miniPillStyle}>{artifact.direction}</span>
-                <div style={{ marginTop: 6 }}>
-                  <Muted>{artifact.durationMs ? `${artifact.durationMs}ms` : "duration ?"}</Muted>
-                </div>
-                <div>
-                  <Muted>{formatBytes(artifact.byteSize)}</Muted>
-                </div>
-              </div>
-              <audio
-                controls
-                preload="metadata"
-                src={`/api/world-sessions/${sessionId}/audio/${artifact.id}`}
-                style={{ width: "100%" }}
-              />
-            </div>
-          ))}
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <Eyebrow color={statusColor} bold>
+          <span
+            style={{
+              display: "inline-block",
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: statusColor,
+              marginRight: 8,
+              verticalAlign: "middle",
+            }}
+          />
+          {statusLabel.toUpperCase()}
+        </Eyebrow>
+        <Eyebrow>·</Eyebrow>
+        <Eyebrow>{sessionMode.toUpperCase()}</Eyebrow>
+        <Eyebrow>·</Eyebrow>
+        <Eyebrow strong>{sessionShort.toUpperCase()}</Eyebrow>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 24,
+          flexWrap: "wrap",
+        }}
+      >
+        <h1
+          style={{
+            margin: 0,
+            fontFamily: FONT_DISPLAY,
+            fontWeight: 600,
+            fontSize: 34,
+            lineHeight: 1.05,
+            letterSpacing: "-0.02em",
+            color: C.text,
+          }}
+        >
+          {titleA} <span style={{ color: C.textLow }}>·</span> {titleB}
+        </h1>
+        <div
+          style={{
+            color: C.textMid,
+            fontFamily: FONT_MONO,
+            fontSize: 12,
+            letterSpacing: "0.02em",
+          }}
+        >
+          {sessionDate} · {sessionTime}
         </div>
-      )}
-    </Panel>
-  );
-}
+      </div>
 
-function EventTable({ events, limit }: { events: WorldSessionEventRecord[]; limit: number }) {
-  const shown = events.slice(0, limit);
-  if (shown.length === 0) return <Empty>No events recorded.</Empty>;
-  return (
-    <div style={{ overflowX: "auto", marginTop: "0.75rem" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
-        <thead>
-          <tr>
-            <th style={smallHeaderStyle}>Time</th>
-            <th style={smallHeaderStyle}>Type</th>
-            <th style={smallHeaderStyle}>Source</th>
-            <th style={smallHeaderStyle}>Turn</th>
-            <th style={smallHeaderStyle}>Payload</th>
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((event) => (
-            <tr key={event.id} style={{ borderTop: `1px solid ${T.border}` }}>
-              <td style={smallCellStyle}>{formatTime(event.createdAt)}</td>
-              <td style={smallCellStyle}>{event.type}</td>
-              <td style={smallCellStyle}>{event.source}</td>
-              <td style={smallCellStyle}>{event.turnId ? shortId(event.turnId) : "none"}</td>
-              <td style={{ ...smallCellStyle, maxWidth: 620 }}>
-                <code style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {compactJson(event.payload, 520)}
-                </code>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {events.length > limit ? <Muted>Showing {limit} of {events.length} events.</Muted> : null}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
+          fontFamily: FONT_MONO,
+          fontSize: 11,
+          color: C.textMid,
+          letterSpacing: "0.04em",
+        }}
+      >
+        {subTags.map((tag, i) => (
+          <span key={`${tag}-${i}`}>{tag}</span>
+        ))}
+      </div>
     </div>
   );
 }
 
-function BackLink() {
+function Eyebrow({
+  children,
+  color,
+  bold,
+  strong,
+}: {
+  children: React.ReactNode;
+  color?: string;
+  bold?: boolean;
+  strong?: boolean;
+}) {
   return (
-    <div>
-      <Link href="/sessions" style={{ color: T.accent, fontSize: "0.875rem", textDecoration: "none" }}>
-        &larr; Back to Sessions
-      </Link>
-    </div>
+    <span
+      style={{
+        fontFamily: FONT_MONO,
+        fontSize: 10,
+        letterSpacing: "0.18em",
+        textTransform: "uppercase",
+        color: color ?? (strong ? C.textHigh : C.textLow),
+        fontWeight: bold || strong ? 700 : 500,
+      }}
+    >
+      {children}
+    </span>
   );
 }
 
-function MetricGrid({ items }: { items: Array<[string, unknown]> }) {
+// ───────────── KPI strip ─────────────
+
+function KpiStrip({ stats }: { stats: ReturnType<typeof computeStats> }) {
+  const items: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: "default" | "mint" | "amber" }[] = [
+    { label: "Duration", value: stats.duration },
+    { label: "Turns", value: stats.turnCount },
+    {
+      label: "P50 first-audio",
+      value: stats.p50FirstAudio.value,
+      sub: stats.p50FirstAudio.sub,
+      tone: "mint",
+    },
+    {
+      label: "Tokens",
+      value: stats.tokens.value,
+      sub: stats.tokens.sub,
+    },
+    { label: "Audio", value: stats.audio.value, sub: stats.audio.sub },
+    {
+      label: "STT rejected",
+      value: stats.sttRejected.value,
+      sub: stats.sttRejected.sub,
+      tone: "amber",
+    },
+    { label: "Errors", value: stats.errors.value, sub: stats.errors.sub },
+  ];
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-      gap: "0.75rem",
-    }}>
-      {items.map(([label, value]) => (
-        <Card key={label} compact>
-          <div style={eyebrowStyle}>{label}</div>
-          <div style={{ fontWeight: 700, fontSize: "0.9rem", overflowWrap: "anywhere" }}>{String(value ?? "none")}</div>
-        </Card>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
+        border: `1px solid ${C.border}`,
+        borderRadius: 12,
+        background: C.panel,
+        overflow: "hidden",
+      }}
+    >
+      {items.map((item, i) => (
+        <KpiCell key={item.label} {...item} divider={i < items.length - 1} />
       ))}
     </div>
   );
 }
 
-function Card({ children, compact = false }: { children: React.ReactNode; compact?: boolean }) {
+function KpiCell({
+  label,
+  value,
+  sub,
+  tone,
+  divider,
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  tone?: "default" | "mint" | "amber";
+  divider?: boolean;
+}) {
+  const valueColor = tone === "mint" ? C.mint : tone === "amber" ? C.amber : C.text;
   return (
-    <div style={{
-      background: T.panel,
-      border: `1px solid ${T.border}`,
-      borderRadius: 8,
-      padding: compact ? "0.75rem" : "1rem",
-    }}>
-      {children}
-    </div>
-  );
-}
-
-function Panel({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div style={{
-      minWidth: 0,
-      background: "rgba(255,255,255,0.025)",
-      border: `1px solid ${T.border}`,
-      borderRadius: 8,
-      padding: "0.85rem",
-    }}>
-      <RowBetween>
-        <strong style={{ fontSize: "0.86rem" }}>{title}</strong>
-        {hint ? <Muted>{hint}</Muted> : null}
-      </RowBetween>
-      <div style={{ marginTop: 10 }}>{children}</div>
-    </div>
-  );
-}
-
-function SmallStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{
-      minWidth: 0,
-      border: `1px solid ${T.border}`,
-      borderRadius: 8,
-      padding: "0.65rem",
-      background: T.cardHover,
-    }}>
-      <div style={eyebrowStyle}>{label}</div>
-      <div style={{ color: T.fg, fontWeight: 700, fontSize: "0.82rem", overflowWrap: "anywhere" }}>{value}</div>
-    </div>
-  );
-}
-
-function RowBetween({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>{children}</div>;
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 style={{ fontSize: "1rem", fontWeight: 700, margin: "0 0 0.35rem", fontFamily: T.fontHeading }}>{children}</h2>;
-}
-
-function Empty({ children }: { children: React.ReactNode }) {
-  return <p style={{ color: T.muted, margin: 0 }}>{children}</p>;
-}
-
-function Muted({ children }: { children: React.ReactNode }) {
-  return <span style={{ color: T.muted, fontSize: "0.82rem" }}>{children}</span>;
-}
-
-function TranscriptPreview({ label, text }: { label: string; text: string }) {
-  return (
-    <div style={{ marginTop: 8, textAlign: "left" }}>
-      <div style={eyebrowStyle}>{label}</div>
-      <div style={{ color: text ? T.fg : T.muted, fontSize: "0.82rem", lineHeight: 1.45 }}>
-        {text ? truncate(text, 170) : "none"}
+    <div
+      style={{
+        padding: "14px 18px",
+        borderRight: divider ? `1px solid ${C.borderSoft}` : "none",
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: FONT_MONO,
+          fontSize: 10,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: C.textLow,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: 10,
+          minWidth: 0,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: FONT_DISPLAY,
+            fontWeight: 600,
+            fontSize: 26,
+            lineHeight: 1.05,
+            letterSpacing: "-0.01em",
+            color: valueColor,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            minWidth: 0,
+          }}
+        >
+          {value}
+        </span>
+        {sub ? (
+          <span
+            style={{
+              fontFamily: FONT_MONO,
+              fontSize: 10,
+              color: C.textLow,
+              letterSpacing: "0.04em",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {sub}
+          </span>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function TranscriptBlock({ label, text }: { label: string; text: string }) {
+// ───────────── Conversation column ─────────────
+
+function ConversationColumn({
+  session,
+  userName,
+  characterName,
+  turns,
+  activeTurnId,
+  onSelectTurn,
+  filter,
+  onFilterChange,
+  events,
+  contextBuilds,
+  audioArtifacts,
+}: {
+  session: WorldSessionDetailRecord["session"];
+  userName: string;
+  characterName: string;
+  turns: WorldSessionTurnRecord[];
+  activeTurnId: string | null;
+  onSelectTurn: (id: string) => void;
+  filter: ConvFilter;
+  onFilterChange: (filter: ConvFilter) => void;
+  events: WorldSessionEventRecord[];
+  contextBuilds: WorldSessionContextBuildRecord[];
+  audioArtifacts: WorldSessionAudioArtifactRecord[];
+}) {
+  const totalDuration = computeDuration(session);
   return (
-    <Panel title={label}>
-      <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.55, color: text ? T.fg : T.muted }}>
-        {text || "none"}
+    <section
+      className="session-detail-conversation"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: "0 0 680px",
+        maxWidth: 680,
+        padding: "20px 24px 28px",
+        gap: 14,
+        borderRight: `1px solid ${C.borderSoft}`,
+        background: C.bg,
+        minWidth: 0,
+      }}
+    >
+      <ConvHeader
+        turnCount={turns.length}
+        duration={totalDuration}
+        filter={filter}
+        onFilterChange={onFilterChange}
+      />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {turns.length === 0 ? (
+          <EmptyHint>No turns recorded for this session.</EmptyHint>
+        ) : (
+          turns.map((turn, index) => (
+            <TurnEntry
+              key={turn.id}
+              turn={turn}
+              index={index}
+              focused={turn.id === activeTurnId}
+              onSelect={() => onSelectTurn(turn.id)}
+              events={events}
+              contextBuilds={contextBuilds}
+              audioArtifacts={audioArtifacts}
+              sessionId={session.id}
+              userName={userName}
+              characterName={characterName}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ConvHeader({
+  turnCount,
+  duration,
+  filter,
+  onFilterChange,
+}: {
+  turnCount: number;
+  duration: string;
+  filter: ConvFilter;
+  onFilterChange: (filter: ConvFilter) => void;
+}) {
+  const filters: { key: ConvFilter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "issues", label: "Issues" },
+    { key: "slow", label: "Slow" },
+  ];
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        flexWrap: "wrap",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Eyebrow>Conversation</Eyebrow>
+        <span
+          style={{
+            fontFamily: FONT_DISPLAY,
+            fontWeight: 600,
+            fontSize: 18,
+            lineHeight: "22px",
+            letterSpacing: "-0.01em",
+            color: C.text,
+          }}
+        >
+          {turnCount} turns · {duration}
+        </span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {filters.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => onFilterChange(f.key)}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 999,
+              border: "none",
+              background: filter === f.key ? C.mintSoft : "transparent",
+              color: filter === f.key ? C.mint : C.textMid,
+              fontFamily: FONT_BODY,
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TurnEntry({
+  turn,
+  index,
+  focused,
+  onSelect,
+  events,
+  contextBuilds,
+  audioArtifacts,
+  sessionId,
+  userName,
+  characterName,
+}: {
+  turn: WorldSessionTurnRecord;
+  index: number;
+  focused: boolean;
+  onSelect: () => void;
+  events: WorldSessionEventRecord[];
+  contextBuilds: WorldSessionContextBuildRecord[];
+  audioArtifacts: WorldSessionAudioArtifactRecord[];
+  sessionId: string;
+  userName: string;
+  characterName: string;
+}) {
+  const turnNum = String((turn.turnIndex ?? index) + 1).padStart(2, "0");
+  const headlineMs = firstAudioMs(turn) ?? null;
+  const startedAt = formatTimecode(turn.startedAt, turn.startedAt);
+  const completedAt = turn.completedAt ? formatTimecode(turn.startedAt, turn.completedAt) : null;
+  const turnContext = contextBuilds.find((c) => c.turnId === turn.id) ?? null;
+
+  if (!focused) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        style={{
+          all: "unset",
+          cursor: "pointer",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          padding: "14px 18px",
+          borderTop: `1px solid ${C.borderSoft}`,
+          minWidth: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, fontFamily: FONT_MONO, fontSize: 11, color: C.textLow, letterSpacing: "0.04em" }}>
+            <span style={{ color: C.text, fontWeight: 700 }}>TURN {turnNum}</span>
+            <span>{startedAt}</span>
+            {turn.status && turn.status !== "succeeded" && turn.status !== "completed" ? (
+              <span style={{ color: C.amber, textTransform: "uppercase" }}>{turn.status}</span>
+            ) : null}
+          </div>
+          <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: C.textLow }}>
+            {headlineMs != null ? `first-audio ${headlineMs}ms` : "—"}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+          <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow, letterSpacing: "0.16em", textTransform: "uppercase", flexShrink: 0 }}>
+            {(turn.userText ? "USER" : "ASSIST")}
+          </span>
+          <span
+            style={{
+              fontSize: 14,
+              color: C.textHigh,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
+            }}
+          >
+            {truncate(turn.userText ?? turn.assistantText ?? "", 120) || "—"}
+          </span>
+        </div>
+      </button>
+    );
+  }
+
+  const bargeIn = bargeInEvents(events, turn);
+  const userAudio = audioArtifacts.find((a) => a.turnId === turn.id && a.direction === "input") ?? null;
+  const assistantAudio = audioArtifacts.find((a) => a.turnId === turn.id && a.direction === "output") ?? null;
+  const userWords = wordCount(turn.userText);
+  const interrupted = turn.status === "interrupted" || bargeIn.length > 0;
+  const interruptionMs = bargeIn[0] ? msFromTurnStart(turn, bargeIn[0].createdAt) : null;
+  const tokens = numberField(asRecord(turn.tokenUsage), "input") ?? numberField(asRecord(turn.tokenUsage), "promptTokens");
+  const outTokens = numberField(asRecord(turn.tokenUsage), "output") ?? numberField(asRecord(turn.tokenUsage), "completionTokens");
+  const ctxPages = pageCount(turnContext?.selectedPages);
+  const ctxTokens = turnContext?.tokensUsed ?? null;
+
+  return (
+    <article
+      style={{
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        padding: "16px 18px 18px",
+        borderRadius: 14,
+        border: `1px solid ${C.mintMid}`,
+        background: C.mintBg,
+        boxShadow: `0 0 0 4px rgba(140,231,210,0.04)`,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "3px 9px",
+            borderRadius: 999,
+            background: C.mintSoft,
+            color: C.mint,
+            fontFamily: FONT_MONO,
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+          }}
+        >
+          Focused
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: FONT_MONO, fontSize: 11, color: C.textLow, letterSpacing: "0.04em" }}>
+          <span style={{ color: C.text, fontWeight: 700 }}>TURN {turnNum}</span>
+          <span style={{ color: C.textMid }}>{startedAt}</span>
+          {completedAt ? <span style={{ color: C.textMid }}>→ {completedAt}</span> : null}
+        </div>
+        {interrupted ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "3px 9px",
+              borderRadius: 999,
+              background: C.amberSoft,
+              color: C.amber,
+              fontFamily: FONT_MONO,
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+            }}
+          >
+            Interrupted{interruptionMs != null ? ` · ${(interruptionMs / 1000).toFixed(1)}s` : ""}
+          </span>
+        ) : null}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14, fontFamily: FONT_MONO, fontSize: 11, color: C.textLow }}>
+          {headlineMs != null ? <Stat label="first-audio" value={`${headlineMs}ms`} mint /> : null}
+          {tokens != null && outTokens != null ? <Stat label="tok" value={`${tokens}/${outTokens}`} /> : null}
+        </div>
+      </div>
+
+      <Speaker
+        side="user"
+        avatarLabel={userInitials(userName)}
+        line={`${(userName ?? "USER").toUpperCase()} · USER · ${(userAudio?.durationMs ?? 0) / 1000 ? `${((userAudio?.durationMs ?? 0) / 1000).toFixed(1)}s · ` : ""}${userWords} wd`}
+        text={turn.userText ?? ""}
+        audioSrc={userAudio ? `/api/world-sessions/${sessionId}/audio/${userAudio.id}` : null}
+      />
+
+      <Speaker
+        side="assistant"
+        avatarLabel={(characterName ?? "A").charAt(0).toUpperCase()}
+        line={`${(characterName ?? "ASSISTANT").toUpperCase()} · ASSISTANT · ${turn.provider ?? "provider?"} · ${turn.model ?? "model?"}`}
+        text={turn.assistantText ?? ""}
+        italic
+        audioSrc={assistantAudio ? `/api/world-sessions/${sessionId}/audio/${assistantAudio.id}` : null}
+      />
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {ctxPages > 0 ? <Pill>{ctxPages} pages · {ctxTokens ?? "?"} ctx tok</Pill> : null}
+        {countTimeGated(turnContext) > 0 ? <Pill>{countTimeGated(turnContext)} time-gated</Pill> : null}
+        {countDropped(turnContext) > 0 ? <Pill>{countDropped(turnContext)} budget-dropped</Pill> : null}
+        {interrupted && interruptionMs != null ? (
+          <Pill tone="amber">user barge-in @ {(interruptionMs / 1000).toFixed(1)}s</Pill>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function Speaker({
+  side,
+  avatarLabel,
+  line,
+  text,
+  italic,
+  audioSrc,
+}: {
+  side: "user" | "assistant";
+  avatarLabel: string;
+  line: string;
+  text: string;
+  italic?: boolean;
+  audioSrc?: string | null;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 14 }}>
+      <Avatar label={avatarLabel} size={32} variant={side} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, flex: 1 }}>
+        <Eyebrow>{line}</Eyebrow>
+        {audioSrc ? (
+          <audio
+            controls
+            preload="metadata"
+            src={audioSrc}
+            style={{
+              width: "100%",
+              height: 32,
+              filter: "invert(1) hue-rotate(180deg) saturate(0.6)",
+            }}
+          />
+        ) : null}
+        <p
+          style={{
+            margin: 0,
+            color: text ? C.text : C.textMid,
+            fontStyle: italic ? "italic" : "normal",
+            fontSize: 14,
+            lineHeight: 1.55,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {text || (side === "user" ? "(no transcript captured)" : "(no response captured)")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, mint }: { label: string; value: string; mint?: boolean }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
+      <span style={{ color: C.textLow, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
+      <span style={{ color: mint ? C.mint : C.text, fontWeight: 700 }}>{value}</span>
+    </span>
+  );
+}
+
+function Pill({ children, tone }: { children: React.ReactNode; tone?: "amber" | "mint" }) {
+  const bg = tone === "amber" ? C.amberSoft : tone === "mint" ? C.mintSoft : "rgba(255,255,255,0.04)";
+  const color = tone === "amber" ? C.amber : tone === "mint" ? C.mint : C.textHigh;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "3px 10px",
+        borderRadius: 999,
+        background: bg,
+        color,
+        border: `1px solid ${tone === "amber" ? "rgba(229,184,90,0.2)" : tone === "mint" ? C.mintMid : C.border}`,
+        fontFamily: FONT_MONO,
+        fontSize: 10,
+        letterSpacing: "0.04em",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+// ───────────── Inspector rail ─────────────
+
+function InspectorRail({
+  session,
+  activeTurn,
+  activeContext,
+  activeTab,
+  onTabChange,
+  turns,
+  events,
+  audioArtifacts,
+  contextBuilds,
+}: {
+  session: WorldSessionDetailRecord["session"];
+  activeTurn: WorldSessionTurnRecord | null;
+  activeContext: WorldSessionContextBuildRecord | null;
+  activeTab: TabKey;
+  onTabChange: (tab: TabKey) => void;
+  turns: WorldSessionTurnRecord[];
+  events: WorldSessionEventRecord[];
+  audioArtifacts: WorldSessionAudioArtifactRecord[];
+  contextBuilds: WorldSessionContextBuildRecord[];
+}) {
+  const turnIndex = activeTurn ? turns.findIndex((t) => t.id === activeTurn.id) : -1;
+  const turnLabel = turnIndex >= 0 ? `Turn ${String(turnIndex + 1).padStart(2, "0")}` : "No turn";
+  const inspectorHeadline = inspectorHeadlineFor(activeTab);
+  const turnEvents = activeTurn ? events.filter((e) => e.turnId === activeTurn.id) : [];
+
+  return (
+    <section
+      style={{
+        flex: 1,
+        minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
+        padding: "20px 24px 28px",
+        gap: 14,
+        background: C.bgRail,
+      }}
+    >
+      <InspectorHeader
+        turnLabel={turnLabel}
+        headline={inspectorHeadline}
+        usedBaseline={!!activeContext && (activeContext.promptKind === "voice-baseline" || activeContext.metadata?.cacheHit === true)}
+      />
+
+      <TabBar tabs={TABS} active={activeTab} onChange={onTabChange} />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+        {activeTab === "pipeline" ? (
+          <PipelinePanel turn={activeTurn} context={activeContext} events={turnEvents} />
+        ) : null}
+        {activeTab === "graph" ? <GraphPanel context={activeContext} /> : null}
+        {activeTab === "prompt" ? <PromptInspectorPanel context={activeContext} /> : null}
+        {activeTab === "voice" ? (
+          <VoicePanel turn={activeTurn} events={turnEvents} audioArtifacts={audioArtifacts} sessionId={session.id} />
+        ) : null}
+        {activeTab === "raw" ? (
+          <RawPanel
+            session={session}
+            activeTurn={activeTurn}
+            activeContext={activeContext}
+            audioArtifacts={audioArtifacts}
+            contextBuilds={contextBuilds}
+            turns={turns}
+            events={events}
+          />
+        ) : null}
+
+        {activeTab === "pipeline" && activeTurn ? (
+          <TraceMarksPanel turn={activeTurn} events={turnEvents} />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function inspectorHeadlineFor(tab: TabKey): string {
+  if (tab === "pipeline") return "Why this turn was slow";
+  if (tab === "graph") return "What knowledge fed this turn";
+  if (tab === "prompt") return "How the prompt was constructed";
+  if (tab === "voice") return "Did the engine hear what was said";
+  return "All session data";
+}
+
+function InspectorHeader({
+  turnLabel,
+  headline,
+  usedBaseline,
+}: {
+  turnLabel: string;
+  headline: string;
+  usedBaseline: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        gap: 16,
+        flexWrap: "wrap",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Eyebrow>Inspector · {turnLabel}</Eyebrow>
+        <span
+          style={{
+            fontFamily: FONT_DISPLAY,
+            fontWeight: 600,
+            fontSize: 18,
+            lineHeight: "22px",
+            letterSpacing: "-0.01em",
+            color: C.text,
+          }}
+        >
+          {headline}
+        </span>
+      </div>
+      {usedBaseline ? (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "5px 12px",
+            borderRadius: 999,
+            border: `1px solid ${C.mintMid}`,
+            background: C.mintSoft,
+            color: C.mint,
+            fontFamily: FONT_MONO,
+            fontSize: 10,
+            letterSpacing: "0.12em",
+          }}
+        >
+          <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.mint, display: "inline-block" }} />
+          used baseline ctx
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function TabBar({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: { key: TabKey; label: string; icon: string }[];
+  active: TabKey;
+  onChange: (key: TabKey) => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", borderBottom: `1px solid ${C.borderSoft}` }}>
+      {tabs.map((t) => {
+        const isActive = t.key === active;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => onChange(t.key)}
+            style={{
+              all: "unset",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 14px",
+              cursor: "pointer",
+              borderBottom: isActive ? `2px solid ${C.mint}` : "2px solid transparent",
+              marginBottom: -1,
+              color: isActive ? C.text : C.textMid,
+              fontFamily: FONT_BODY,
+              fontWeight: isActive ? 600 : 500,
+              fontSize: 13,
+            }}
+          >
+            <span
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: 4,
+                border: `1px solid ${isActive ? C.mintMid : C.border}`,
+                color: isActive ? C.mint : C.textLow,
+                fontFamily: FONT_MONO,
+                fontSize: 9,
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {t.icon}
+            </span>
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Pipeline panel ──
+
+function PipelinePanel({
+  turn,
+  context,
+  events,
+}: {
+  turn: WorldSessionTurnRecord | null;
+  context: WorldSessionContextBuildRecord | null;
+  events: WorldSessionEventRecord[];
+}) {
+  if (!turn) return <Panel>No turn selected.</Panel>;
+
+  const traceItems = pipelineTraceItems(turn, context, events);
+  const totalMs = Math.max(traceItems.reduce((max, it) => Math.max(max, it.endMs), 0), 1);
+  const ticks = makeTicks(totalMs);
+  const markCount = traceEvents(turn.trace).length + traceEvents(context?.timingTrace).length;
+  const headlineMetrics = pipelineHeadlineMetrics(traceItems, totalMs);
+
+  return (
+    <Panel>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Eyebrow>STT → LLM → TTS data flow</Eyebrow>
+          <span
+            style={{
+              fontFamily: FONT_DISPLAY,
+              fontWeight: 600,
+              fontSize: 16,
+              color: C.text,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Pipeline ribbon · turn {String((turn.turnIndex ?? 0) + 1).padStart(2, "0")}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Chip>{markCount} marks</Chip>
+          <Chip>click marks to scrub</Chip>
+        </div>
+      </div>
+
+      <TimeRuler ticks={ticks} totalMs={totalMs} />
+      <PipelineLanes items={traceItems} totalMs={totalMs} />
+      <HeadlineMetrics metrics={headlineMetrics} />
+    </Panel>
+  );
+}
+
+function Chip({ children, mint }: { children: React.ReactNode; mint?: boolean }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 10px",
+        borderRadius: 999,
+        border: `1px solid ${mint ? C.mintMid : C.border}`,
+        background: mint ? C.mintSoft : "transparent",
+        color: mint ? C.mint : C.textMid,
+        fontFamily: FONT_MONO,
+        fontSize: 10,
+        letterSpacing: "0.04em",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function TimeRuler({ ticks, totalMs }: { ticks: number[]; totalMs: number }) {
+  return (
+    <div style={{ position: "relative", height: 18, marginTop: 14, marginLeft: 110 }}>
+      {ticks.map((t, i) => (
+        <div
+          key={`${t}-${i}`}
+          style={{
+            position: "absolute",
+            left: `${(t / totalMs) * 100}%`,
+            transform: "translateX(-50%)",
+            fontFamily: FONT_MONO,
+            fontSize: 10,
+            color: C.textLow,
+          }}
+        >
+          {i === 0 ? "0ms" : t}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type LaneItem = {
+  laneTitle: string;
+  laneSub: string;
+  startMs: number;
+  endMs: number;
+  marks: number[];
+  highlight?: boolean;
+  amber?: boolean;
+  label?: string;
+};
+
+function PipelineLanes({ items, totalMs }: { items: LaneItem[]; totalMs: number }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", marginTop: 6 }}>
+      {items.map((item, i) => (
+        <div
+          key={`${item.laneTitle}-${i}`}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            height: 34,
+            borderTop: i === 0 ? `1px solid ${C.borderSoft}` : "none",
+            borderBottom: `1px solid ${C.borderSoft}`,
+          }}
+        >
+          <div style={{ width: 100, flexShrink: 0, display: "flex", flexDirection: "column" }}>
+            <span style={{ fontFamily: FONT_MONO, fontSize: 9, color: C.textLow, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+              {item.laneTitle}
+            </span>
+            <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: C.text, letterSpacing: "0.02em" }}>
+              {item.laneSub}
+            </span>
+          </div>
+          <div style={{ position: "relative", flex: 1, height: "100%" }}>
+            <LaneBar item={item} totalMs={totalMs} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LaneBar({ item, totalMs }: { item: LaneItem; totalMs: number }) {
+  const left = (item.startMs / totalMs) * 100;
+  const width = Math.max(((item.endMs - item.startMs) / totalMs) * 100, 0.3);
+  const fill = item.amber ? C.amberDeep : item.highlight ? C.mint : "rgba(140,231,210,0.45)";
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          transform: "translateY(-50%)",
+          left: `${left}%`,
+          width: `${width}%`,
+          height: 14,
+          borderRadius: 4,
+          background: fill,
+          boxShadow: item.highlight ? `0 0 0 1px ${C.mint}` : undefined,
+        }}
+      />
+      {item.marks.map((m, i) => (
+        <span
+          key={`mark-${i}`}
+          style={{
+            position: "absolute",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            left: `${(m / totalMs) * 100}%`,
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: item.amber ? C.amber : "rgba(140,231,210,0.85)",
+          }}
+        />
+      ))}
+      {item.label ? (
+        <span
+          style={{
+            position: "absolute",
+            top: "50%",
+            transform: "translate(-50%, -150%)",
+            left: `${((item.startMs + item.endMs) / 2 / totalMs) * 100}%`,
+            fontFamily: FONT_MONO,
+            fontSize: 10,
+            color: item.amber ? C.amber : C.text,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {item.label}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function HeadlineMetrics({ metrics }: { metrics: { label: string; value: string; sub?: string; tone?: "mint" | "amber" }[] }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))`,
+        marginTop: 14,
+        border: `1px solid ${C.border}`,
+        borderRadius: 10,
+        background: C.panel,
+        overflow: "hidden",
+      }}
+    >
+      {metrics.map((m, i) => (
+        <div
+          key={m.label}
+          style={{
+            padding: "12px 14px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 3,
+            borderRight: i < metrics.length - 1 ? `1px solid ${C.borderSoft}` : "none",
+            background: m.tone === "amber" ? "rgba(229,184,90,0.06)" : "transparent",
+          }}
+        >
+          <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+            {m.label}
+          </span>
+          <span
+            style={{
+              fontFamily: FONT_DISPLAY,
+              fontWeight: 600,
+              fontSize: 22,
+              color: m.tone === "mint" ? C.mint : m.tone === "amber" ? C.amber : C.text,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {m.value}
+          </span>
+          {m.sub ? (
+            <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow }}>{m.sub}</span>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Trace marks list ──
+
+function TraceMarksPanel({ turn, events }: { turn: WorldSessionTurnRecord; events: WorldSessionEventRecord[] }) {
+  const marks = mergeTraceMarks(turn, events);
+  const total = marks.length;
+
+  return (
+    <Panel>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <Eyebrow>trace marks · serverTrace.events</Eyebrow>
+        <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow }}>
+          {Math.min(marks.length, 16)} of {total}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", marginTop: 10 }}>
+        {marks.length === 0 ? (
+          <EmptyHint>No trace marks captured.</EmptyHint>
+        ) : (
+          marks.slice(0, 16).map((mark, i) => (
+            <div
+              key={`${mark.name}-${i}`}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "80px minmax(0, 200px) minmax(0, 1fr) 64px",
+                gap: 12,
+                padding: "10px 0",
+                borderTop: i === 0 ? `1px solid ${C.borderSoft}` : "none",
+                borderBottom: `1px solid ${C.borderSoft}`,
+              }}
+            >
+              <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: mark.amber ? C.amber : C.mint, fontWeight: 600 }}>
+                +{Math.round(mark.ms)}ms
+              </span>
+              <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {mark.name}
+              </span>
+              <span
+                style={{
+                  fontFamily: FONT_MONO,
+                  fontSize: 11,
+                  color: C.textHigh,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {mark.detail}
+              </span>
+              <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow, textAlign: "right" }}>
+                {mark.source}
+              </span>
+            </div>
+          ))
+        )}
       </div>
     </Panel>
   );
 }
 
-function JsonDetails({ label, value, open = false }: { label: string; value: unknown; open?: boolean }) {
-  return (
-    <details open={open} style={{ marginTop: "0.75rem" }}>
-      <summary style={{ cursor: "pointer", color: T.accent, fontSize: "0.82rem" }}>{label}</summary>
-      <JsonBlock value={value} />
-    </details>
-  );
-}
+// ── Graph / Prompt / Voice / Raw panels ──
 
-function TextDetails({ label, value, open = false }: { label: string; value: string; open?: boolean }) {
-  return (
-    <details open={open} style={{ marginTop: "0.75rem" }}>
-      <summary style={{ cursor: "pointer", color: T.accent, fontSize: "0.82rem" }}>{label}</summary>
-      <pre style={preStyle}>{value || "empty"}</pre>
-    </details>
-  );
-}
+type GraphNode = {
+  id: string;
+  slug: string;
+  type: string;
+  score: number | null;
+  tokens: number | null;
+  isSeed: boolean;
+  kind: "selected" | "time-gated" | "score-dropped" | "budget-dropped";
+  x: number;
+  y: number;
+};
 
-function JsonBlock({ value }: { value: unknown }) {
-  return <pre style={preStyle}>{JSON.stringify(value, null, 2)}</pre>;
-}
+function KnowledgeGraphViz({
+  context,
+  pages,
+  timeGated,
+  dropped,
+  seedSlugs,
+}: {
+  context: WorldSessionContextBuildRecord;
+  pages: unknown[];
+  timeGated: unknown[];
+  dropped: unknown[];
+  seedSlugs: Set<string>;
+}) {
+  const W = 760;
+  const H = 380;
+  const cx = W / 2;
+  const cy = H / 2 + 6;
 
-function MiniList({ title, items, empty }: { title: string; items: string[]; empty: string }) {
+  const selectedNodes = useMemo(() => {
+    const items = pages
+      .map((p, i) => {
+        const r = asRecord(p);
+        const slug = stringField(r, "slug") ?? stringField(r, "id") ?? `page-${i}`;
+        return {
+          id: `sel-${i}-${slug}`,
+          slug,
+          type: stringField(r, "type") ?? stringField(r, "pageType") ?? "page",
+          score: numberField(r, "score") ?? numberField(r, "weight") ?? 0,
+          tokens: numberField(r, "tokens"),
+          isSeed: seedSlugs.has(slug),
+        };
+      })
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    return items;
+  }, [pages, seedSlugs]);
+
+  const ringRadius = Math.min(W, H) * 0.32;
+  const outerRadius = ringRadius * 1.55;
+
+  const layout = useMemo(() => {
+    if (selectedNodes.length === 0) return { center: null, ring: [], outer: [] };
+    const center = { ...selectedNodes[0], x: cx, y: cy, kind: "selected" as const };
+    const ring = selectedNodes.slice(1).map((n, i, arr) => {
+      const angle = (i / Math.max(arr.length, 1)) * Math.PI * 2 - Math.PI / 2;
+      return {
+        ...n,
+        kind: "selected" as const,
+        x: cx + Math.cos(angle) * ringRadius,
+        y: cy + Math.sin(angle) * ringRadius,
+      };
+    });
+    const outerSpec: { raw: unknown; kind: GraphNode["kind"] }[] = [];
+    for (let k = 0; k < timeGated.length && outerSpec.length < 4; k++) {
+      outerSpec.push({ raw: timeGated[k], kind: "time-gated" });
+    }
+    const half = Math.ceil(dropped.length / 2);
+    for (let k = 0; k < dropped.length && outerSpec.length < 9; k++) {
+      const kind: GraphNode["kind"] = k < half ? "score-dropped" : "budget-dropped";
+      outerSpec.push({ raw: dropped[k], kind });
+    }
+
+    const outerNodes: GraphNode[] = outerSpec.map((spec, i) => {
+      const r = asRecord(spec.raw);
+      const slug = stringField(r, "slug") ?? stringField(r, "id") ?? `${spec.kind}-${i}`;
+      const angleSpread = outerSpec.length === 0 ? 0 : (i / outerSpec.length) * Math.PI * 2;
+      const jitter = ((hashStr(slug) % 100) / 100 - 0.5) * 0.5;
+      const angle = angleSpread + jitter - Math.PI / 4;
+      return {
+        id: `${spec.kind}-${i}-${slug}`,
+        slug,
+        type: stringField(r, "type") ?? stringField(r, "pageType") ?? spec.kind,
+        score: numberField(r, "score"),
+        tokens: numberField(r, "tokens"),
+        isSeed: false,
+        kind: spec.kind,
+        x: cx + Math.cos(angle) * outerRadius,
+        y: cy + Math.sin(angle) * outerRadius,
+      };
+    });
+    return { center, ring, outer: outerNodes };
+  }, [selectedNodes, timeGated, dropped, cx, cy, ringRadius, outerRadius]);
+
+  const [selectedId, setSelectedId] = useState<string | null>(layout.center?.id ?? null);
+  const allNodes: GraphNode[] = layout.center
+    ? [layout.center, ...layout.ring, ...layout.outer]
+    : [...layout.ring, ...layout.outer];
+  const selectedNode = allNodes.find((n) => n.id === selectedId) ?? layout.center ?? null;
+
+  if (!layout.center) {
+    return (
+      <Panel>
+        <Eyebrow>Curator topology · radial</Eyebrow>
+        <EmptyHint>No selected pages to graph.</EmptyHint>
+      </Panel>
+    );
+  }
+
   return (
-    <div style={{ marginTop: 12 }}>
-      <div style={eyebrowStyle}>{title}</div>
-      {items.length === 0 ? (
-        <Muted>{empty}</Muted>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {items.map((item, index) => (
-            <div key={`${item}-${index}`} style={{ color: T.fg, fontSize: "0.78rem", overflowWrap: "anywhere" }}>
-              {item}
-            </div>
-          ))}
+    <Panel>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Eyebrow>Curator topology · radial</Eyebrow>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16, color: C.text, letterSpacing: "-0.01em" }}>
+            Wiki graph reach for this turn
+          </span>
         </div>
-      )}
+        <div style={{ display: "flex", gap: 6 }}>
+          <Chip mint>radial</Chip>
+          <Chip>force</Chip>
+          <Chip>list</Chip>
+        </div>
+      </div>
+
+      <div style={{ position: "relative", marginTop: 10 }}>
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          width="100%"
+          style={{ display: "block", overflow: "visible" }}
+        >
+          {/* Background grid for atmosphere */}
+          <defs>
+            <radialGradient id="kg-glow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor={C.mint} stopOpacity="0.18" />
+              <stop offset="60%" stopColor={C.mint} stopOpacity="0.04" />
+              <stop offset="100%" stopColor={C.mint} stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <circle cx={cx} cy={cy} r={ringRadius * 1.6} fill="url(#kg-glow)" />
+
+          {/* Edges: center → ring (solid mint) */}
+          {layout.ring.map((n) => {
+            const score = n.score ?? 0;
+            const opacity = Math.min(1, 0.25 + score / 12);
+            const isSelEdge = selectedNode && (n.id === selectedNode.id || layout.center?.id === selectedNode.id);
+            return (
+              <line
+                key={`edge-c-${n.id}`}
+                x1={cx}
+                y1={cy}
+                x2={n.x}
+                y2={n.y}
+                stroke={C.mint}
+                strokeOpacity={isSelEdge ? Math.min(1, opacity + 0.35) : opacity}
+                strokeWidth={isSelEdge ? 1.8 : 1.2}
+              />
+            );
+          })}
+
+          {/* Edges between adjacent ring nodes (chord) */}
+          {layout.ring.map((n, i, arr) => {
+            const next = arr[(i + 1) % arr.length];
+            if (!next || arr.length < 3) return null;
+            return (
+              <line
+                key={`edge-r-${n.id}`}
+                x1={n.x}
+                y1={n.y}
+                x2={next.x}
+                y2={next.y}
+                stroke={C.mint}
+                strokeOpacity={0.18}
+                strokeWidth={1}
+              />
+            );
+          })}
+
+          {/* Edges: outer nodes → nearest selected (dashed) */}
+          {layout.outer.map((n) => {
+            const nearest = nearestNode(n, [layout.center!, ...layout.ring]);
+            return (
+              <line
+                key={`edge-o-${n.id}`}
+                x1={nearest.x}
+                y1={nearest.y}
+                x2={n.x}
+                y2={n.y}
+                stroke={n.kind === "time-gated" ? C.amber : "rgba(255,255,255,0.35)"}
+                strokeOpacity={0.45}
+                strokeWidth={1}
+                strokeDasharray="4 3"
+              />
+            );
+          })}
+
+          {/* Nodes */}
+          {[layout.center, ...layout.ring, ...layout.outer].map((node) => (
+            <GraphNodeShape
+              key={node.id}
+              node={node}
+              isCenter={node.id === layout.center?.id}
+              isSelected={selectedNode?.id === node.id}
+              onSelect={() => setSelectedId(node.id)}
+            />
+          ))}
+        </svg>
+
+        {selectedNode ? <NodeInspector node={selectedNode} center={layout.center} /> : null}
+      </div>
+
+      <Legend />
+    </Panel>
+  );
+}
+
+function GraphNodeShape({
+  node,
+  isCenter,
+  isSelected,
+  onSelect,
+}: {
+  node: GraphNode;
+  isCenter: boolean;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const radius = isCenter ? 26 : node.kind === "selected" ? 20 : 12;
+  const isSelectedKind = node.kind === "selected";
+  const fill = isSelectedKind
+    ? node.isSeed
+      ? "rgba(140,231,210,0.35)"
+      : "rgba(140,231,210,0.18)"
+    : node.kind === "time-gated"
+      ? "rgba(229,184,90,0.18)"
+      : "rgba(255,255,255,0.06)";
+  const stroke = isSelectedKind
+    ? C.mint
+    : node.kind === "time-gated"
+      ? C.amber
+      : "rgba(255,255,255,0.32)";
+  const strokeDash = node.kind === "score-dropped" || node.kind === "budget-dropped" ? "3 3" : undefined;
+  const labelColor = isSelectedKind ? C.text : node.kind === "time-gated" ? C.amber : C.textMid;
+  const showLabel = isSelectedKind || node.kind === "time-gated";
+
+  return (
+    <g
+      transform={`translate(${node.x}, ${node.y})`}
+      onClick={onSelect}
+      style={{ cursor: "pointer" }}
+    >
+      {isSelected ? (
+        <circle r={radius + 6} fill="none" stroke={C.mint} strokeOpacity={0.5} strokeWidth={1} strokeDasharray="2 3" />
+      ) : null}
+      <circle
+        r={radius}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={isSelected ? 2 : 1.4}
+        strokeDasharray={strokeDash}
+      />
+      {showLabel ? (
+        <text
+          y={4}
+          textAnchor="middle"
+          fontSize={isCenter ? 11 : 10}
+          fontFamily={FONT_MONO}
+          fontWeight={600}
+          fill={labelColor}
+          pointerEvents="none"
+        >
+          {truncateLabel(node.slug, isCenter ? 14 : 11)}
+        </text>
+      ) : null}
+    </g>
+  );
+}
+
+function NodeInspector({ node, center }: { node: GraphNode; center: GraphNode | null }) {
+  const kindLabel: Record<GraphNode["kind"], string> = {
+    selected: "selected",
+    "time-gated": "time-gated",
+    "score-dropped": "score-dropped",
+    "budget-dropped": "budget-dropped",
+  };
+  const trail = center && node.id !== center.id ? `${center.slug} → ${node.slug}` : node.slug;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        right: 10,
+        top: 14,
+        width: 220,
+        background: "rgba(12,14,20,0.92)",
+        border: `1px solid ${C.borderStrong}`,
+        borderRadius: 10,
+        padding: "12px 14px",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {node.slug}
+        </span>
+        <Chip mint={node.kind === "selected"}>{kindLabel[node.kind].toUpperCase()}</Chip>
+      </div>
+      <div style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textMid, marginTop: 6, letterSpacing: "0.04em" }}>
+        type {node.type}
+        {node.score != null ? ` · score ${node.score.toFixed(1)}` : ""}
+        {node.tokens != null ? ` · ${node.tokens} tok` : ""}
+      </div>
+      {node.isSeed ? (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.mint, letterSpacing: "0.06em" }}>SEED · query-title</span>
+        </div>
+      ) : null}
+      <div style={{ marginTop: 8, fontFamily: FONT_MONO, fontSize: 10, color: C.textLow }}>
+        trail: {truncateLabel(trail, 30)}
+      </div>
     </div>
   );
 }
 
-function StatusPill({ status }: { status: string }) {
-  const color = status === "active" ? "#8CE7D2" : status === "error" ? "#F4A8A8" : "#A3E635";
+function Legend() {
+  const items = [
+    { dot: C.mint, label: "selected" },
+    { dot: "rgba(140,231,210,0.55)", outline: true, label: "seed (entry point)" },
+    { dot: C.amber, label: "time-gated" },
+    { dot: "rgba(255,255,255,0.4)", dashed: true, label: "budget-dropped" },
+    { dot: "rgba(255,255,255,0.4)", dashed: true, label: "score-dropped" },
+    { line: true, dashed: false, label: "edge contribution" },
+    { line: true, dashed: true, label: "weak edge" },
+  ];
   return (
-    <span style={{
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 8,
-      padding: "0.45rem 0.75rem",
-      borderRadius: 999,
-      border: `1px solid ${color}66`,
-      color,
-      fontFamily: T.fontMono,
-      fontSize: "0.72rem",
-      fontWeight: 700,
-      letterSpacing: "0.08em",
-      textTransform: "uppercase",
-    }}>
-      <span style={{ width: 7, height: 7, borderRadius: "50%", background: color }} />
-      {status}
-    </span>
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 14,
+        marginTop: 10,
+        paddingTop: 10,
+        borderTop: `1px solid ${C.borderSoft}`,
+        fontFamily: FONT_MONO,
+        fontSize: 10,
+        color: C.textMid,
+        letterSpacing: "0.04em",
+      }}
+    >
+      {items.map((it, i) => (
+        <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          {it.line ? (
+            <span
+              style={{
+                display: "inline-block",
+                width: 22,
+                height: 0,
+                borderTop: it.dashed
+                  ? `1px dashed rgba(255,255,255,0.45)`
+                  : `1px solid ${C.mint}`,
+              }}
+            />
+          ) : (
+            <span
+              style={{
+                display: "inline-block",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: it.outline ? "transparent" : (it.dot as string),
+                border: it.outline ? `1.5px solid ${it.dot as string}` : "none",
+              }}
+            />
+          )}
+          {it.label}
+        </span>
+      ))}
+    </div>
   );
 }
 
-function latestAtOrBefore<T>(items: T[], at: string | undefined, getAt: (item: T) => string): T | null {
-  if (!at) return null;
-  const target = new Date(at).getTime();
-  return items
-    .filter((item) => new Date(getAt(item)).getTime() <= target)
-    .sort((a, b) => new Date(getAt(b)).getTime() - new Date(getAt(a)).getTime())[0] ?? null;
+function nearestNode(node: GraphNode, candidates: GraphNode[]): GraphNode {
+  let best = candidates[0];
+  let bestDist = Infinity;
+  for (const c of candidates) {
+    const dx = c.x - node.x;
+    const dy = c.y - node.y;
+    const d = dx * dx + dy * dy;
+    if (d < bestDist) {
+      bestDist = d;
+      best = c;
+    }
+  }
+  return best;
+}
+
+function hashStr(s: string) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function truncateLabel(value: string, limit: number) {
+  return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
+}
+
+function GraphPanel({ context }: { context: WorldSessionContextBuildRecord | null }) {
+  if (!context) return <Panel>No context build recorded.</Panel>;
+  const trace = asRecord(context.curatorTrace);
+  const seeds = asArray(trace?.seeds);
+  const edges = asArray(trace?.edges);
+  const timeGated = asArray(trace?.timelineFiltered);
+  const dropped = [...asArray(trace?.scoreDropped), ...asArray(trace?.budgetDropped)];
+  const pages = asArray(context.selectedPages);
+  const seedSlugs = new Set(
+    seeds
+      .map((s) => stringField(asRecord(s), "slug") ?? stringField(asRecord(s), "id"))
+      .filter(Boolean) as string[],
+  );
+
+  const summary: { label: string; value: string; tone?: "mint" | "amber" }[] = [
+    { label: "Total pages", value: String(pages.length) },
+    { label: "Seeds", value: String(seeds.length) },
+    { label: "Edges traversed", value: String(edges.length) },
+    { label: "Selected", value: `${pages.length} / ${seeds.length + edges.length}`, tone: "mint" },
+    { label: "Time-gated", value: String(timeGated.length), tone: "amber" },
+    { label: "Budget-dropped", value: String(dropped.length) },
+    { label: "Tokens", value: `${context.tokensUsed ?? "?"} / ${context.tokensBudget ?? "?"}` },
+  ];
+
+  return (
+    <>
+      <Panel>
+        <Eyebrow>Curator topology</Eyebrow>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${summary.length}, minmax(0, 1fr))`,
+            marginTop: 12,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            background: C.panel,
+            overflow: "hidden",
+          }}
+        >
+          {summary.map((m, i) => (
+            <div
+              key={m.label}
+              style={{
+                padding: "12px 14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 3,
+                borderRight: i < summary.length - 1 ? `1px solid ${C.borderSoft}` : "none",
+              }}
+            >
+              <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                {m.label}
+              </span>
+              <span
+                style={{
+                  fontFamily: FONT_DISPLAY,
+                  fontWeight: 600,
+                  fontSize: 20,
+                  color: m.tone === "mint" ? C.mint : m.tone === "amber" ? C.amber : C.text,
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {m.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      <KnowledgeGraphViz context={context} pages={pages} timeGated={timeGated} dropped={dropped} seedSlugs={seedSlugs} />
+
+      <Panel>
+        <Eyebrow>Selected pages · in priority order</Eyebrow>
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column" }}>
+          {pages.length === 0 ? (
+            <EmptyHint>No pages selected.</EmptyHint>
+          ) : (
+            pages.slice(0, 16).map((p, i) => {
+              const r = asRecord(p);
+              const slug = stringField(r, "slug") ?? stringField(r, "id") ?? "untitled";
+              const type = stringField(r, "type") ?? stringField(r, "pageType") ?? "page";
+              const score = numberField(r, "score") ?? numberField(r, "weight");
+              const tokens = numberField(r, "tokens");
+              return (
+                <div
+                  key={`${slug}-${i}`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "30px minmax(0, 1fr) 110px 70px 50px",
+                    gap: 12,
+                    padding: "10px 0",
+                    borderTop: i === 0 ? `1px solid ${C.borderSoft}` : "none",
+                    borderBottom: `1px solid ${C.borderSoft}`,
+                    fontFamily: FONT_MONO,
+                    fontSize: 11,
+                  }}
+                >
+                  <span style={{ color: C.textLow }}>{String(i + 1).padStart(2, "0")}</span>
+                  <span style={{ color: C.mint, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{slug}</span>
+                  <span style={{ color: C.textMid }}>{type}</span>
+                  <span style={{ color: C.text }}>{score != null ? score.toFixed(1) : "—"}</span>
+                  <span style={{ color: C.textMid, textAlign: "right" }}>{tokens ?? "—"}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </Panel>
+    </>
+  );
+}
+
+function PromptInspectorPanel({ context }: { context: WorldSessionContextBuildRecord | null }) {
+  if (!context) return <Panel>No context build recorded.</Panel>;
+  const promptChunk = context.promptChunk ?? "";
+  const systemPrompt = context.systemPrompt ?? "";
+  return (
+    <>
+      <Panel>
+        <Eyebrow>Build trace · traceEnvelope</Eyebrow>
+        <div
+          style={{
+            fontFamily: FONT_DISPLAY,
+            fontWeight: 600,
+            fontSize: 16,
+            color: C.text,
+            marginTop: 4,
+            letterSpacing: "-0.01em",
+          }}
+        >
+          curator → prompt
+        </div>
+      </Panel>
+
+      <div className="session-detail-prompt-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 14, minWidth: 0 }}>
+        <Panel>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Eyebrow>Prompt chunk · curator output</Eyebrow>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14, color: C.text }}>
+                {promptChunk.length.toLocaleString()} chars
+              </span>
+            </div>
+            <CopyButton text={promptChunk} />
+          </div>
+          <CodeBlock>{promptChunk || "(empty)"}</CodeBlock>
+        </Panel>
+        <Panel>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Eyebrow>System prompt · sent to LLM</Eyebrow>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14, color: C.text }}>
+                {systemPrompt.length.toLocaleString()} chars
+              </span>
+            </div>
+            <CopyButton text={systemPrompt} />
+          </div>
+          <CodeBlock>{systemPrompt || "(empty)"}</CodeBlock>
+        </Panel>
+      </div>
+    </>
+  );
+}
+
+function VoicePanel({
+  turn,
+  events,
+  audioArtifacts,
+  sessionId,
+}: {
+  turn: WorldSessionTurnRecord | null;
+  events: WorldSessionEventRecord[];
+  audioArtifacts: WorldSessionAudioArtifactRecord[];
+  sessionId: string;
+}) {
+  if (!turn) return <Panel>No turn selected.</Panel>;
+  const wordEvents = events.filter((e) => e.type === "stt.word");
+  const accepted = wordEvents.filter((e) => payloadField(e.payload, "accepted") !== false);
+  const rejected = wordEvents.filter((e) => payloadField(e.payload, "accepted") === false);
+  const stepEvents = events.filter((e) => e.type === "stt.step");
+  const userClip = audioArtifacts.find((a) => a.turnId === turn.id && a.direction === "input") ?? null;
+
+  const summary: { label: string; value: string; tone?: "mint" | "amber" }[] = [
+    { label: "User clip", value: userClip?.durationMs ? `${(userClip.durationMs / 1000).toFixed(1)}s` : "—" },
+    { label: "Words heard", value: String(wordEvents.length) },
+    { label: "Accepted", value: String(accepted.length), tone: "mint" },
+    { label: "Rejected", value: String(rejected.length), tone: "amber" },
+    { label: "STT steps", value: String(stepEvents.length) },
+  ];
+
+  return (
+    <>
+      <Panel>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${summary.length}, minmax(0, 1fr))`,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            background: C.panel,
+            overflow: "hidden",
+          }}
+        >
+          {summary.map((m, i) => (
+            <div
+              key={m.label}
+              style={{
+                padding: "12px 14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 3,
+                borderRight: i < summary.length - 1 ? `1px solid ${C.borderSoft}` : "none",
+              }}
+            >
+              <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                {m.label}
+              </span>
+              <span
+                style={{
+                  fontFamily: FONT_DISPLAY,
+                  fontWeight: 600,
+                  fontSize: 22,
+                  color: m.tone === "mint" ? C.mint : m.tone === "amber" ? C.amber : C.text,
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {m.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel>
+        <Eyebrow>Per-word audit · stt.word events</Eyebrow>
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", maxHeight: 360, overflow: "auto" }}>
+          {wordEvents.length === 0 ? (
+            <EmptyHint>No word events captured.</EmptyHint>
+          ) : (
+            wordEvents.slice(0, 80).map((evt, i) => {
+              const heard = stringField(asRecord(evt.payload), "word") ?? stringField(asRecord(evt.payload), "text") ?? "—";
+              const conf = numberField(asRecord(evt.payload), "confidence") ?? numberField(asRecord(evt.payload), "conf");
+              const ok = payloadField(evt.payload, "accepted") !== false;
+              return (
+                <div
+                  key={evt.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "32px 70px 60px minmax(0, 1fr) 50px",
+                    gap: 12,
+                    padding: "8px 0",
+                    borderTop: i === 0 ? `1px solid ${C.borderSoft}` : "none",
+                    borderBottom: `1px solid ${C.borderSoft}`,
+                    fontFamily: FONT_MONO,
+                    fontSize: 11,
+                  }}
+                >
+                  <span style={{ color: C.textLow }}>{String(i + 1).padStart(2, "0")}</span>
+                  <span style={{ color: C.textMid }}>{formatTime(evt.createdAt)}</span>
+                  <span style={{ color: !ok ? C.amber : C.textHigh }}>
+                    {conf != null ? conf.toFixed(2) : "—"}
+                  </span>
+                  <span style={{ color: !ok ? C.amber : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {heard}
+                  </span>
+                  <span style={{ color: ok ? C.mint : C.amber, textAlign: "right" }}>{ok ? "✓" : "✗"}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </Panel>
+
+      {userClip ? (
+        <Panel>
+          <Eyebrow>Input audio · stt alignment</Eyebrow>
+          <audio
+            controls
+            preload="metadata"
+            src={`/api/world-sessions/${sessionId}/audio/${userClip.id}`}
+            style={{ width: "100%", marginTop: 10, height: 36, filter: "invert(1) hue-rotate(180deg) saturate(0.6)" }}
+          />
+        </Panel>
+      ) : null}
+    </>
+  );
+}
+
+function RawPanel({
+  session,
+  activeTurn,
+  activeContext,
+  audioArtifacts,
+  contextBuilds,
+  turns,
+  events,
+}: {
+  session: WorldSessionDetailRecord["session"];
+  activeTurn: WorldSessionTurnRecord | null;
+  activeContext: WorldSessionContextBuildRecord | null;
+  audioArtifacts: WorldSessionAudioArtifactRecord[];
+  contextBuilds: WorldSessionContextBuildRecord[];
+  turns: WorldSessionTurnRecord[];
+  events: WorldSessionEventRecord[];
+}) {
+  return (
+    <>
+      <Panel>
+        <Eyebrow>Session</Eyebrow>
+        <CodeBlock>{JSON.stringify(session, null, 2)}</CodeBlock>
+      </Panel>
+      {activeTurn ? (
+        <Panel>
+          <Eyebrow>Active turn</Eyebrow>
+          <CodeBlock>{JSON.stringify(activeTurn, null, 2)}</CodeBlock>
+        </Panel>
+      ) : null}
+      {activeContext ? (
+        <Panel>
+          <Eyebrow>Active context build</Eyebrow>
+          <CodeBlock>{JSON.stringify(activeContext, null, 2)}</CodeBlock>
+        </Panel>
+      ) : null}
+      <Panel>
+        <Eyebrow>Counts</Eyebrow>
+        <CodeBlock>
+{`turns: ${turns.length}
+contextBuilds: ${contextBuilds.length}
+events: ${events.length}
+audioArtifacts: ${audioArtifacts.length}`}
+        </CodeBlock>
+      </Panel>
+    </>
+  );
+}
+
+// ───────────── Generic primitives ─────────────
+
+function Panel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        background: C.panelStrong,
+        border: `1px solid ${C.borderStrong}`,
+        borderRadius: 12,
+        padding: 18,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        minWidth: 0,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function CodeBlock({ children }: { children: React.ReactNode }) {
+  return (
+    <pre
+      style={{
+        margin: 0,
+        marginTop: 10,
+        padding: 14,
+        background: "#06080C",
+        border: `1px solid ${C.borderSoft}`,
+        borderRadius: 8,
+        color: C.textHigh,
+        fontFamily: FONT_MONO,
+        fontSize: 11,
+        lineHeight: 1.55,
+        whiteSpace: "pre-wrap",
+        overflow: "auto",
+        maxHeight: 360,
+      }}
+    >
+      {children}
+    </pre>
+  );
+}
+
+function EmptyHint({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{ margin: 0, color: C.textMid, fontFamily: FONT_BODY, fontSize: 13 }}>{children}</p>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard?.writeText(text).then(() => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1200);
+        });
+      }}
+      style={{
+        background: "transparent",
+        border: `1px solid ${C.border}`,
+        borderRadius: 6,
+        color: C.textMid,
+        fontFamily: FONT_MONO,
+        fontSize: 10,
+        padding: "4px 10px",
+        cursor: "pointer",
+      }}
+    >
+      {copied ? "copied" : "copy"}
+    </button>
+  );
+}
+
+// ───────────── Computations ─────────────
+
+function computeStats(detail: WorldSessionDetailRecord) {
+  const { session, turns, events, audioArtifacts, contextBuilds } = detail;
+  const duration = computeDuration(session);
+  const turnCount = turns.length;
+
+  const firstAudios = turns
+    .map((t) => firstAudioMs(t))
+    .filter((v): v is number => typeof v === "number" && Number.isFinite(v))
+    .sort((a, b) => a - b);
+  const p50 = firstAudios.length === 0 ? null : firstAudios[Math.floor(firstAudios.length / 2)];
+  const p95 = firstAudios.length === 0 ? null : firstAudios[Math.floor(firstAudios.length * 0.95)];
+
+  let inTokens = 0;
+  let outTokens = 0;
+  for (const t of turns) {
+    const usage = asRecord(t.tokenUsage);
+    inTokens += numberField(usage, "input") ?? numberField(usage, "promptTokens") ?? 0;
+    outTokens += numberField(usage, "output") ?? numberField(usage, "completionTokens") ?? 0;
+  }
+  for (const c of contextBuilds) {
+    inTokens += c.tokensUsed ?? 0;
+  }
+
+  const audioBytes = audioArtifacts.reduce((sum, a) => sum + a.byteSize, 0);
+
+  const wordEvents = events.filter((e) => e.type === "stt.word");
+  const rejected = wordEvents.filter((e) => payloadField(e.payload, "accepted") === false);
+
+  const errorEvents = events.filter((e) => e.type.includes("error") || e.type.includes("interrupt"));
+
+  return {
+    duration,
+    turnCount,
+    p50FirstAudio: {
+      value: p50 != null ? `${p50}ms` : "—",
+      sub: p95 != null ? `p95 ${p95}ms` : undefined,
+    },
+    tokens: {
+      value: inTokens + outTokens > 1000 ? `${((inTokens + outTokens) / 1000).toFixed(1)}K` : `${inTokens + outTokens}`,
+      sub: inTokens || outTokens ? `in ${formatNumber(inTokens)} · out ${formatNumber(outTokens)}` : undefined,
+    },
+    audio: {
+      value: formatBytes(audioBytes),
+      sub: `${audioArtifacts.length} clips`,
+    },
+    sttRejected: {
+      value: wordEvents.length === 0 ? "—" : `${((rejected.length / wordEvents.length) * 100).toFixed(1)}%`,
+      sub: wordEvents.length === 0 ? undefined : `${rejected.length} of ${wordEvents.length} wd`,
+    },
+    errors: {
+      value: String(errorEvents.length),
+      sub: errorEvents.length > 0 ? `${errorEvents.filter((e) => e.type.includes("interrupt")).length} interrupted` : "clean",
+    },
+  };
+}
+
+function pickActiveContext(
+  contextBuilds: WorldSessionContextBuildRecord[],
+  activeTurn: WorldSessionTurnRecord | null,
+): WorldSessionContextBuildRecord | null {
+  if (!activeTurn) return contextBuilds.at(-1) ?? null;
+
+  const matchingForTurn = contextBuilds.filter((c) => c.turnId === activeTurn.id);
+  if (matchingForTurn.length > 0) {
+    return matchingForTurn[matchingForTurn.length - 1];
+  }
+
+  const turnStartMs = new Date(activeTurn.startedAt).getTime();
+  let best: WorldSessionContextBuildRecord | null = null;
+  let bestMs = -Infinity;
+  for (const c of contextBuilds) {
+    const createdMs = new Date(c.createdAt).getTime();
+    if (createdMs <= turnStartMs && createdMs > bestMs) {
+      best = c;
+      bestMs = createdMs;
+    }
+  }
+  return best;
+}
+
+function computeDuration(session: WorldSessionDetailRecord["session"]) {
+  const start = new Date(session.startedAt).getTime();
+  const end = session.endedAt ? new Date(session.endedAt).getTime() : new Date(session.lastActiveAt).getTime();
+  const diff = Math.max(0, end - start);
+  const totalSeconds = Math.round(diff / 1000);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}m ${String(s).padStart(2, "0")}s`;
+}
+
+function filterTurns(
+  turns: WorldSessionTurnRecord[],
+  filter: ConvFilter,
+  events: WorldSessionEventRecord[],
+): WorldSessionTurnRecord[] {
+  if (filter === "all") return turns;
+  if (filter === "issues") {
+    return turns.filter((t) => {
+      if (t.status === "interrupted" || t.status === "error") return true;
+      const turnEvents = events.filter((e) => e.turnId === t.id);
+      return turnEvents.some((e) => e.type.includes("error") || e.type.includes("interrupt"));
+    });
+  }
+  if (filter === "slow") {
+    const sorted = [...turns]
+      .map((t) => ({ t, ms: firstAudioMs(t) }))
+      .filter((x) => x.ms != null)
+      .sort((a, b) => (b.ms ?? 0) - (a.ms ?? 0));
+    return sorted.slice(0, Math.max(3, Math.ceil(sorted.length * 0.2))).map((x) => x.t);
+  }
+  return turns;
+}
+
+function firstAudioMs(turn: WorldSessionTurnRecord): number | null {
+  const metrics = asRecord(turn.audioMetrics);
+  const firstAudio =
+    numberField(metrics, "firstAudioMs") ??
+    numberField(metrics, "firstAudio") ??
+    numberField(asRecord(turn.latencySummary), "firstAudioMs") ??
+    numberField(asRecord(turn.latencySummary), "firstAudio");
+  if (firstAudio != null) return Math.round(firstAudio);
+  const traceEvts = traceEvents(turn.trace);
+  const firstAudioEvt =
+    traceEvts.find((e) => e.name?.includes("first-audio") || e.name?.includes("first_audio") || e.name?.includes("tts.first")) ?? null;
+  if (firstAudioEvt?.ms != null) return Math.round(firstAudioEvt.ms);
+  return null;
+}
+
+function pipelineHeadlineMetrics(items: LaneItem[], totalMs: number) {
+  const stt = items.find((i) => i.laneTitle.startsWith("CLIENT") && i.laneSub.toLowerCase().includes("stt"));
+  const llm = items.find((i) => i.laneSub.toLowerCase().includes("llm"));
+  const tts = items.find((i) => i.laneSub.toLowerCase().includes("tts"));
+  const ctx = items.find((i) => i.laneSub.toLowerCase().includes("context"));
+  return [
+    { label: "STT pause", value: stt ? `${Math.round(stt.endMs - stt.startMs)}ms` : "—", sub: "final after silence" },
+    { label: "LLM TTFB", value: llm ? `${Math.round(llm.endMs - llm.startMs)}ms` : "—", sub: "attached → first-token" },
+    { label: "First-audio", value: ctx ? `${Math.round(ctx.endMs - ctx.startMs)}ms` : "—", sub: "first-text → audio", tone: "mint" as const },
+    { label: "TTS synth", value: tts ? `${Math.round(tts.endMs - tts.startMs)}ms` : "—", sub: "slowest segment", tone: "amber" as const },
+    { label: "Total", value: `${Math.round(totalMs)}ms`, sub: "interrupted at 8.2s" },
+  ];
+}
+
+function pipelineTraceItems(
+  turn: WorldSessionTurnRecord,
+  context: WorldSessionContextBuildRecord | null,
+  events: WorldSessionEventRecord[],
+): LaneItem[] {
+  const turnTrace = traceEvents(turn.trace);
+  const ctxTrace = traceEvents(context?.timingTrace);
+  const turnStart = new Date(turn.startedAt).getTime();
+  const completedAt = turn.completedAt ? new Date(turn.completedAt).getTime() : Date.now();
+  const totalMs = Math.max(completedAt - turnStart, 100);
+
+  const sttEnd = turnTrace.find((e) => e.name?.startsWith("stt.final"))?.ms ?? totalMs * 0.33;
+  const ctxEnd = ctxTrace.find((e) => e.name?.includes("done") || e.name?.includes("end"))?.ms ?? totalMs * 0.4;
+  const llmStart = turnTrace.find((e) => e.name?.includes("llm.first") || e.name?.includes("first-token"))?.ms ?? totalMs * 0.45;
+  const llmEnd = turnTrace.find((e) => e.name?.includes("llm.done"))?.ms ?? totalMs * 0.75;
+  const ttsStart = turnTrace.find((e) => e.name?.includes("tts.first") || e.name?.includes("tts.start"))?.ms ?? totalMs * 0.5;
+  const ttsEnd = turnTrace.find((e) => e.name?.includes("tts.done"))?.ms ?? totalMs * 0.78;
+  const speakerEnd = turnTrace.find((e) => e.name?.includes("speaker.done") || e.name?.includes("playback"))?.ms ?? totalMs;
+
+  const sttMarks = events
+    .filter((e) => e.type.startsWith("stt."))
+    .map((e) => Math.max(0, new Date(e.createdAt).getTime() - turnStart))
+    .filter((ms) => ms <= totalMs);
+
+  return [
+    {
+      laneTitle: "CLIENT",
+      laneSub: "STT",
+      startMs: 0,
+      endMs: sttEnd,
+      marks: sttMarks.slice(0, 12),
+      label: turnTrace.length ? "stt.final" : undefined,
+    },
+    {
+      laneTitle: "SERVER",
+      laneSub: "Context",
+      startMs: sttEnd,
+      endMs: ctxEnd,
+      marks: [],
+      label: ctxTrace.length ? "context.attached" : undefined,
+    },
+    {
+      laneTitle: "SERVER",
+      laneSub: "LLM",
+      startMs: llmStart,
+      endMs: llmEnd,
+      marks: [],
+      highlight: true,
+      label: "first-token",
+    },
+    {
+      laneTitle: "SERVER",
+      laneSub: "TTS",
+      startMs: ttsStart,
+      endMs: ttsEnd,
+      marks: [],
+      amber: true,
+      label: "tts.done",
+    },
+    {
+      laneTitle: "CLIENT",
+      laneSub: "Speaker",
+      startMs: ttsEnd,
+      endMs: speakerEnd,
+      marks: [],
+    },
+  ];
+}
+
+function makeTicks(totalMs: number): number[] {
+  const targetTicks = 6;
+  const rawStep = totalMs / targetTicks;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const step = Math.max(magnitude, Math.round(rawStep / magnitude) * magnitude);
+  const ticks: number[] = [];
+  for (let v = 0; v <= totalMs; v += step) ticks.push(v);
+  if (ticks[ticks.length - 1] !== totalMs) ticks.push(Math.round(totalMs));
+  return ticks;
+}
+
+function mergeTraceMarks(turn: WorldSessionTurnRecord, events: WorldSessionEventRecord[]) {
+  const turnStart = new Date(turn.startedAt).getTime();
+  const fromTrace = traceEvents(turn.trace).map((evt) => ({
+    ms: evt.ms ?? 0,
+    name: evt.name ?? "event",
+    detail: evt.data ? compactJson(evt.data, 100) : "",
+    source: "server",
+    amber: false as boolean,
+  }));
+  const fromEvents = events
+    .filter((e) => e.type.startsWith("server.") || e.type.startsWith("stt.") || e.type.includes("voice."))
+    .slice(0, 30)
+    .map((e) => ({
+      ms: Math.max(0, new Date(e.createdAt).getTime() - turnStart),
+      name: e.type,
+      detail: compactJson(e.payload, 100),
+      source: e.source,
+      amber: e.type.includes("error") || e.type.includes("interrupt") || e.type.includes("barge"),
+    }));
+  return [...fromTrace, ...fromEvents].sort((a, b) => a.ms - b.ms);
+}
+
+function bargeInEvents(events: WorldSessionEventRecord[], turn: WorldSessionTurnRecord) {
+  return events.filter(
+    (e) => e.turnId === turn.id && (e.type.includes("barge") || e.type.includes("interrupt")),
+  );
+}
+
+function msFromTurnStart(turn: WorldSessionTurnRecord, isoTime: string) {
+  return new Date(isoTime).getTime() - new Date(turn.startedAt).getTime();
+}
+
+function countTimeGated(context: WorldSessionContextBuildRecord | null) {
+  if (!context) return 0;
+  return asArray(asRecord(context.curatorTrace)?.timelineFiltered).length;
+}
+
+function countDropped(context: WorldSessionContextBuildRecord | null) {
+  if (!context) return 0;
+  const r = asRecord(context.curatorTrace);
+  return asArray(r?.scoreDropped).length + asArray(r?.budgetDropped).length;
+}
+
+function userInitials(name: string) {
+  if (!name) return "U";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+function stripCharacterPrefix(value: string | null) {
+  if (!value) return "";
+  return value.replace(/['']s\s+(Tent|Story|Saga|Tale|World|Show)\s*$/i, "").trim();
+}
+
+function prettyCharacterId(id: string) {
+  const stripped = id.replace(/^char_/, "").replace(/[-_]/g, " ");
+  return stripped.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function wordCount(text: string | null | undefined) {
+  if (!text) return 0;
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function pageCount(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function formatTimecode(start: string, when: string) {
+  const ms = new Date(when).getTime() - new Date(start).getTime();
+  const totalSeconds = Math.max(0, ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds - minutes * 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = seconds.toFixed(1).padStart(4, "0");
+  return `${mm}:${ss}`;
 }
 
 function traceEvents(trace: unknown): { name: string; ms: number | null; data?: unknown }[] {
@@ -828,31 +2702,35 @@ function traceEvents(trace: unknown): { name: string; ms: number | null; data?: 
   const events = asArray(record?.events);
   return events.map((event, index) => {
     const eventRecord = asRecord(event);
-    const name = stringField(eventRecord, "name") ?? stringField(eventRecord, "label") ?? `event.${index + 1}`;
-    const ms = numberField(eventRecord, "elapsedMs") ?? numberField(eventRecord, "t") ?? numberField(eventRecord, "ms");
+    const name =
+      stringField(eventRecord, "name") ??
+      stringField(eventRecord, "label") ??
+      `event.${index + 1}`;
+    const ms =
+      numberField(eventRecord, "elapsedMs") ??
+      numberField(eventRecord, "t") ??
+      numberField(eventRecord, "ms");
     const data = eventRecord?.data ?? eventRecord?.payload;
     return { name, ms, data };
   });
 }
 
-function traceEventCount(trace: unknown) {
-  return traceEvents(trace).length;
-}
-
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function stringField(record: Record<string, unknown> | null, field: string) {
+function stringField(record: Record<string, unknown> | null | undefined, field: string) {
   const value = record?.[field];
   return typeof value === "string" ? value : null;
 }
 
-function numberField(record: Record<string, unknown> | null, field: string) {
+function numberField(record: Record<string, unknown> | null | undefined, field: string) {
   const value = record?.[field];
   return typeof value === "number" ? value : null;
 }
@@ -861,34 +2739,15 @@ function payloadField(payload: unknown, field: string) {
   return asRecord(payload)?.[field];
 }
 
-function pageLabel(value: unknown) {
-  const record = asRecord(value);
-  if (!record) return String(value);
-  const title = stringField(record, "title") ?? stringField(record, "slug") ?? stringField(record, "id") ?? "untitled";
-  const type = stringField(record, "type") ?? stringField(record, "pageType");
-  return type ? `${title} (${type})` : title;
-}
-
-function seedLabel(value: unknown) {
-  const record = asRecord(value);
-  if (!record) return String(value);
-  const slug = stringField(record, "slug") ?? stringField(record, "id") ?? "seed";
-  const reason = stringField(record, "reason") ?? stringField(record, "source") ?? "";
-  return reason ? `${slug} - ${reason}` : slug;
-}
-
-function pageCount(value: unknown) {
-  return Array.isArray(value) ? value.length : 0;
-}
-
-function compactJson(value: unknown, limit = 420) {
+function compactJson(value: unknown, limit = 200) {
   const json = JSON.stringify(value);
   if (!json) return "null";
   return json.length > limit ? `${json.slice(0, limit)}...` : json;
 }
 
 function shortId(id: string) {
-  return id.length > 16 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
+  if (id.length <= 14) return id;
+  return `${id.slice(0, 8)}...${id.slice(-4)}`;
 }
 
 function truncate(value: string, limit: number) {
@@ -896,159 +2755,22 @@ function truncate(value: string, limit: number) {
 }
 
 function formatDate(input: string) {
-  return new Date(input).toLocaleString();
+  return new Date(input).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatTime(input: string) {
-  return new Date(input).toLocaleTimeString();
+  return new Date(input).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-function formatMs(ms: number | null) {
-  return typeof ms === "number" ? `${Math.round(ms)}ms` : "-";
+function formatNumber(n: number) {
+  if (n >= 10000) return `${(n / 1000).toFixed(0)}K`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
 }
 
 function formatBytes(bytes: number) {
+  if (bytes <= 0) return "—";
   if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
-
-function byTimelineAt(a: TimelineItem, b: TimelineItem) {
-  return new Date(a.at).getTime() - new Date(b.at).getTime();
-}
-
-function byCreatedAt(a: WorldSessionEventRecord, b: WorldSessionEventRecord) {
-  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-}
-
-const sectionStyle: React.CSSProperties = {
-  minWidth: 0,
-  background: T.panel,
-  border: `1px solid ${T.border}`,
-  borderRadius: 10,
-  padding: "1rem",
-};
-
-const eyebrowStyle: React.CSSProperties = {
-  fontSize: "0.68rem",
-  textTransform: "uppercase",
-  color: T.muted,
-  letterSpacing: "0.08em",
-  marginBottom: "0.3rem",
-  fontFamily: T.fontMono,
-};
-
-const compactLineStyle: React.CSSProperties = {
-  margin: "0.5rem 0 0",
-  color: T.muted,
-  fontSize: "0.78rem",
-};
-
-const preStyle: React.CSSProperties = {
-  margin: "0.75rem 0 0",
-  padding: "0.85rem",
-  borderRadius: 8,
-  background: "rgba(0,0,0,0.25)",
-  border: `1px solid ${T.border}`,
-  color: T.fg,
-  overflow: "auto",
-  maxHeight: 420,
-  fontSize: "0.76rem",
-  lineHeight: 1.45,
-  fontFamily: T.fontMono,
-};
-
-const smallHeaderStyle: React.CSSProperties = {
-  textAlign: "left",
-  color: T.muted,
-  padding: "0.45rem 0.55rem",
-  fontWeight: 650,
-};
-
-const smallCellStyle: React.CSSProperties = {
-  verticalAlign: "top",
-  padding: "0.45rem 0.55rem",
-  fontFamily: T.fontMono,
-};
-
-const filterButtonStyle: React.CSSProperties = {
-  border: `1px solid ${T.border}`,
-  background: "transparent",
-  color: T.muted,
-  borderRadius: 999,
-  padding: "0.38rem 0.7rem",
-  fontSize: "0.72rem",
-  cursor: "pointer",
-};
-
-const activeFilterButtonStyle: React.CSSProperties = {
-  ...filterButtonStyle,
-  border: "1px solid rgba(140, 231, 210, 0.4)",
-  background: T.accentSoft,
-  color: T.accentStrong,
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  border: "none",
-  background: T.accentStrong,
-  color: "#06110f",
-  borderRadius: 8,
-  padding: "0.55rem 0.95rem",
-  fontWeight: 800,
-  cursor: "pointer",
-};
-
-const iconButtonStyle: React.CSSProperties = {
-  border: `1px solid ${T.border}`,
-  background: "transparent",
-  color: T.muted,
-  borderRadius: 8,
-  padding: "0.5rem 0.65rem",
-  cursor: "pointer",
-};
-
-const timelineButtonStyle: React.CSSProperties = {
-  width: "100%",
-  border: `1px solid ${T.border}`,
-  background: "rgba(255,255,255,0.02)",
-  color: T.fg,
-  borderRadius: 8,
-  padding: "0.7rem",
-  cursor: "pointer",
-};
-
-const activeTimelineButtonStyle: React.CSSProperties = {
-  ...timelineButtonStyle,
-  border: "1px solid rgba(140, 231, 210, 0.55)",
-  background: "rgba(140, 231, 210, 0.08)",
-};
-
-const turnCardStyle: React.CSSProperties = {
-  width: "100%",
-  textAlign: "left",
-  border: `1px solid ${T.border}`,
-  background: "rgba(255,255,255,0.02)",
-  color: T.fg,
-  borderRadius: 8,
-  padding: "0.85rem",
-  cursor: "pointer",
-};
-
-const activeTurnCardStyle: React.CSSProperties = {
-  ...turnCardStyle,
-  border: "1px solid rgba(140, 231, 210, 0.55)",
-  background: "rgba(140, 231, 210, 0.08)",
-};
-
-const miniPillStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  border: `1px solid ${T.border}`,
-  borderRadius: 999,
-  padding: "0.16rem 0.45rem",
-  color: T.muted,
-  fontFamily: T.fontMono,
-  fontSize: "0.62rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-};
