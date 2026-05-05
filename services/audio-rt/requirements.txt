@@ -5,3 +5,6 @@ julius==0.2.7
 soundfile==0.13.1
 librosa==0.11.0
 pocket-tts==2.1.0
+faster-whisper==1.2.0
+silero-vad==6.0.0
+msgpack==1.1.2
