@@ -3,7 +3,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   encodeFloat32ToWav,
-  MOSHI_TTS_BASE_URL_HTTP,
   MoshiStreamingSttSession,
 } from "@/lib/moshi-client";
 import { Trace, type TracePayload } from "@/lib/voice-trace";
@@ -296,7 +295,6 @@ type VoiceStartupStatus = {
   worklet: StartupStepState;
   sttSocket: StartupStepState;
   context: StartupStepState;
-  ttsPrewarm: StartupStepState;
   framesSent: number;
   lastFrameSentAt: number | null;
   lastFrameRms: number;
@@ -308,7 +306,6 @@ type VoiceStartupStatus = {
   sttWordCount: number;
   contextTokens: number | null;
   contextElapsedMs: number | null;
-  ttsPrewarmMs: number | null;
   error: string | null;
 };
 
@@ -415,7 +412,6 @@ function createInitialStartupStatus(): VoiceStartupStatus {
     worklet: "idle",
     sttSocket: "idle",
     context: "idle",
-    ttsPrewarm: "idle",
     framesSent: 0,
     lastFrameSentAt: null,
     lastFrameRms: 0,
@@ -427,7 +423,6 @@ function createInitialStartupStatus(): VoiceStartupStatus {
     sttWordCount: 0,
     contextTokens: null,
     contextElapsedMs: null,
-    ttsPrewarmMs: null,
     error: null,
   };
 }
@@ -1016,8 +1011,7 @@ function VoiceReadinessPanel({
     status.sttSocket === "ready" &&
     status.framesSent > 0 &&
     status.sttLastMessageAt !== null &&
-    status.context === "ready" &&
-    status.ttsPrewarm === "ready";
+    status.context === "ready";
   const readyState: StartupStepState = ready
     ? "ready"
     : status.error
@@ -1134,15 +1128,6 @@ function VoiceReadinessPanel({
           status.contextTokens !== null
             ? `${status.contextTokens} tokens · curator ${status.contextElapsedMs ?? "?"}ms`
             : "Baseline promptChunk from /voice-context"
-        }
-      />
-      <StatusRow
-        label="TTS server warmed"
-        state={status.ttsPrewarm}
-        detail={
-          status.ttsPrewarmMs !== null
-            ? `Prewarm responded in ${status.ttsPrewarmMs}ms`
-            : `HTTP prewarm for ${VOICE_PIPELINE_CONFIG.tts.label}`
         }
       />
       <StatusRow
@@ -1699,7 +1684,6 @@ ref,
     setStartupStatus({
       ...createInitialStartupStatus(),
       context: "pending",
-      ttsPrewarm: "pending",
     });
     setPipelineStatus(createInitialPipelineStatus());
     setStatusNow(performance.now());
@@ -1754,37 +1738,9 @@ ref,
       throw err;
     });
 
-    // Fire a fire-and-forget HTTP probe at the Modal TTS container's root
-    // URL. With `mode: "no-cors"` the response is opaque to JS, but the
-    // request still reaches Modal and triggers a container start. By the
-    // time the user finishes their first sentence the TTS container is
-    // typically warm — eliminates the worst cold-start case (30-60s).
-    const ttsBaseHttp = MOSHI_TTS_BASE_URL_HTTP;
-    const ttsPrewarmStartedAt = performance.now();
-    const ttsPrewarmPromise = fetch(ttsBaseHttp, {
-      method: "GET",
-      mode: "no-cors",
-      cache: "no-store",
-    })
-      .then(() => {
-        const elapsedMs = Math.round(performance.now() - ttsPrewarmStartedAt);
-        console.log(
-          `[voice] TTS prewarm responded in ${elapsedMs}ms`,
-        );
-        setStartupStatus((current) => ({
-          ...current,
-          ttsPrewarm: "ready",
-          ttsPrewarmMs: elapsedMs,
-        }));
-      })
-      .catch((err) => {
-        console.warn("[voice] TTS prewarm failed (continuing)", err);
-        setStartupStatus((current) => ({
-          ...current,
-          ttsPrewarm: "error",
-          error: err instanceof Error ? err.message : String(err),
-        }));
-      });
+    // (Modal TTS prewarm hack removed — Pocket TTS on Railway stays warm
+    // via the audio-rt service's startup hook, so a no-cors browser probe
+    // adds nothing.)
 
     // Create AudioContext under the user-gesture so playback can resume later
     // even after some idle time.
@@ -2096,7 +2052,7 @@ ref,
             .then(() => undefined)
             .catch(() => undefined)
         : Promise.resolve(undefined);
-      await Promise.all([sttReadyPromise, ttsPrewarmPromise, contextSettled]);
+      await Promise.all([sttReadyPromise, contextSettled]);
       console.log(
         `[voice] all prewarms complete in ${Math.round(performance.now() - warmStart)}ms`,
       );

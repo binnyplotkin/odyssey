@@ -51,15 +51,15 @@ pip install --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
 uvicorn gateway:app --port 8765
 ```
 
-`/healthz` will report `ttsRuntime.loaded: false` until the background
-warm-up finishes downloading weights from HuggingFace (~30–60s on a cold
-cache). Set `POCKET_TTS_WARM_ON_STARTUP=0` to skip the warm-up entirely.
+`/healthz` will report `ttsRuntime.loaded: false` and `whisper.loaded: false`
+until each background warm-up finishes downloading weights from HuggingFace
+(~30–60s on a cold cache). Set `POCKET_TTS_WARM_ON_STARTUP=0` or
+`WHISPER_WARM_ON_STARTUP=0` to skip the corresponding warm-up.
 
-## Live STT (legacy)
+## Streaming STT (`/api/asr-streaming`)
 
-Live streaming STT (WebSocket, msgpack, Rust moshi-server) currently
-still runs on Modal via `modal_app_rust.py`. The browser client connects
-to it directly through `MOSHI_WS_URL` in
+WebSocket endpoint that the browser connects to via `MOSHI_WS_URL` in
 [`apps/admin/src/lib/moshi-client.ts`](../../apps/admin/src/lib/moshi-client.ts).
-Migrating that into this gateway is a separate effort — until then the
-Modal deploy must stay alive.
+Stack: faster-whisper (`base.en`, int8) for transcription + silero-vad
+ONNX for end-of-speech detection. Protocol is msgpack — see the gateway's
+inline docs in [`gateway.py`](./gateway.py) for the message types.

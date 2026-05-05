@@ -7,7 +7,6 @@ import { ChatGraph } from "@/components/chat-graph";
 import { useHeaderContent } from "@/components/header-context";
 import { Menu, type MenuItem } from "@/components/menu";
 import { EntityPicker, type EntityOption, type EntityKind } from "@/components/entity-picker";
-import { prewarmMoshiServers } from "@/lib/moshi-client";
 import { CharacterVoiceWavefield } from "@/components/character-voice-wavefield";
 import {
   MODEL_REGISTRY,
@@ -201,15 +200,6 @@ export function CharacterChat({ character, pages, edges }: Props) {
     setFlush(true);
     return () => setFlush(false);
   }, [setFlush]);
-
-  // Fire HTTP probes at the Modal STT/TTS containers as soon as the chat
-  // mounts. If the user toggles to voice mode later, the containers are
-  // already warm — first turn dodges the 30-60s cold-start. We don't surface
-  // the result here (chat doesn't have a "warming…" gate); the panel itself
-  // still gates listening on its own prewarm checks.
-  useEffect(() => {
-    void prewarmMoshiServers();
-  }, []);
 
   const overrideActive = overrideEnabled && overrideDraft.trim().length > 0;
 

@@ -4,12 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import StreamingPanel from "./streaming-panel";
 import {
   decodeBlobToPCM24k,
-  synthesizeBatchViaKyutai,
   transcribeBatchViaRustServer,
 } from "@/lib/moshi-client";
 
 type SttProvider = "kyutai-rust" | "kyutai" | "openai";
-type TtsProvider = "kyutai-rust" | "elevenlabs" | "openai";
+type TtsProvider = "elevenlabs" | "openai";
 
 type GatewayHealth = {
   configured: boolean;
@@ -158,7 +157,7 @@ export default function VoiceDebugPage() {
   const [recordingError, setRecordingError] = useState<string | null>(null);
 
   const [sttProvider, setSttProvider] = useState<SttProvider>("kyutai-rust");
-  const [ttsProvider, setTtsProvider] = useState<TtsProvider>("kyutai-rust");
+  const [ttsProvider, setTtsProvider] = useState<TtsProvider>("openai");
   const [systemPrompt, setSystemPrompt] = useState(
     "You are a concise voice assistant. Respond naturally in 1-3 sentences.",
   );
@@ -536,52 +535,6 @@ export default function VoiceDebugPage() {
       raw: null,
     });
 
-    if (ttsProvider === "kyutai-rust") {
-      try {
-        const result = await synthesizeBatchViaKyutai(text);
-        const audioBlob = decodeBase64ToBlob(result.audioBase64, result.mimeType);
-        const blobUrl = URL.createObjectURL(audioBlob);
-        const finishedAt = performance.now();
-        const latencyMs = Math.round(finishedAt - startedAt);
-        setTtsStage((current) => {
-          if (current.result?.blobUrl) URL.revokeObjectURL(current.result.blobUrl);
-          return {
-            status: "ok",
-            startedAt,
-            finishedAt,
-            latencyMs,
-            result: {
-              audioBase64: result.audioBase64,
-              mimeType: result.mimeType,
-              provider: "kyutai-rust",
-              fallbackUsed: false,
-              blobUrl,
-            },
-            error: null,
-            raw: {
-              firstAudioMs: result.firstAudioMs,
-              durationMs: result.durationMs,
-              totalMs: result.totalMs,
-              sampleRate: result.sampleRate,
-              samples: result.pcm.length,
-            },
-          };
-        });
-      } catch (error) {
-        const finishedAt = performance.now();
-        setTtsStage({
-          status: "error",
-          startedAt,
-          finishedAt,
-          latencyMs: Math.round(finishedAt - startedAt),
-          result: null,
-          error: error instanceof Error ? error.message : "Kyutai TTS request failed.",
-          raw: null,
-        });
-      }
-      return;
-    }
-
     try {
       const response = await fetch("/api/audio/speak", {
         method: "POST",
@@ -921,7 +874,6 @@ export default function VoiceDebugPage() {
                 onChange={(event) => setTtsProvider(event.target.value as TtsProvider)}
                 className="rounded-md border border-[var(--border)] bg-[var(--panel)] px-2 py-1 text-xs"
               >
-                <option value="kyutai-rust">kyutai-rust (moshi-server, streaming)</option>
                 <option value="elevenlabs">elevenlabs</option>
                 <option value="openai">openai (gpt-4o-mini-tts)</option>
               </select>

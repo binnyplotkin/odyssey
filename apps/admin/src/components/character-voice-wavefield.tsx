@@ -19,7 +19,6 @@ import {
   modelsFor,
   providerFor,
 } from "@/lib/model-registry";
-import { prewarmMoshiServers } from "@/lib/moshi-client";
 
 /* ── Theme awareness ─────────────────────────────────────────────
  * Fully theme-adaptive. The wavefield 3D scene itself is hardcoded dark
@@ -65,26 +64,10 @@ export function CharacterVoiceWavefield(props: Props) {
     typeof performance !== "undefined" ? performance.now() : Date.now(),
   );
   const [warmElapsedMs, setWarmElapsedMs] = useState(0);
-  const [warmStatus, setWarmStatus] = useState<"warming" | "ready" | "error">(
-    "warming",
-  );
-
-  // Fire HTTP probes at the Modal STT + TTS containers on mount so they're
-  // already booting while the user reads the page and picks a model. The
-  // promise resolves when both endpoints have responded; we use that to
-  // flip the UI from "warming" to "ready" so the user sees positive
-  // confirmation before they click Start.
-  useEffect(() => {
-    let cancelled = false;
-    prewarmMoshiServers().then(({ sttMs, ttsMs }) => {
-      if (cancelled) return;
-      if (sttMs !== null && ttsMs !== null) setWarmStatus("ready");
-      else setWarmStatus("error");
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Railway audio-rt is always-on (Pocket TTS + faster-whisper warmed at
+  // service startup), so there's no prewarm step to gate the UI on. Keep
+  // warmStatus as state in case future changes want to surface real health.
+  const [warmStatus] = useState<"warming" | "ready" | "error">("ready");
 
   // Tick a clock while the user is on the pre-flight screen. We use the
   // elapsed time to surface a "still warming" hint if the user is fast and
