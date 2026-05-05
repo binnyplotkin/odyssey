@@ -15,7 +15,13 @@ import {
   type UpdateCharacterInput,
   type WikiPageType,
 } from "@odyssey/db";
+import { embedText, EMBEDDING_MODEL } from "@odyssey/engine";
 import { call, extractToolUse } from "@odyssey/wiki-ingest";
+
+/** Hooks passed to wiki.savePage so writes get a fresh embedding when the
+ * textual content materially changes. Single shared object so manual edits,
+ * imports, and ingestion-pipeline writes use the same model. */
+const wikiSaveHooks = { embed: embedText, embeddingModel: EMBEDDING_MODEL };
 
 /* ── Shared result shapes ──────────────────────────────────────── */
 
@@ -203,7 +209,7 @@ export async function updateWikiPage(
     contradictions: input.contradictions,
     authorKind: "human",
     note: "manual edit from admin UI",
-  });
+  }, wikiSaveHooks);
 
   const character = await getCharacterStore().getById(characterId);
   if (character) revalidatePath(`/characters/${character.slug}/wiki`);

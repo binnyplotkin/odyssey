@@ -54,6 +54,7 @@ export async function curate(request: CurateRequest): Promise<CurateResult> {
   const { scores: seedScores, trace: seedTrace } = seedPages(pages, {
     query: request.query,
     scene: request.scene,
+    semanticSeeds: request.semanticSeeds,
   });
 
   // ── 2. Traverse ────────────────────────────────────────────────
@@ -169,6 +170,7 @@ export type {
   Scene,
   SelectedPage,
   SeedTrace,
+  SemanticSeed,
   EdgeFollowed,
   PageRendering,
 } from "./types";

@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { getCharacterStore, getWorldSessionStore } from "@odyssey/db";
+import { getCharacterStore, getWikiStore, getWorldSessionStore } from "@odyssey/db";
+import { embedText } from "@odyssey/engine";
+import { curate } from "@odyssey/wiki-curator";
 import { TraceEnvelope } from "@/lib/voice-trace";
 import { buildVoiceSystemPrompt } from "@/lib/character-system-prompt";
 
@@ -153,12 +155,67 @@ export async function POST(
       try {
         if (req.signal.aborted) return;
 
-        const systemPrompt = buildVoiceSystemPrompt(character.title, promptChunk);
+        // Per-turn semantic retrieval. Embed the user's transcript, vector-
+        // search the character's wiki for the most similar pages, hand the
+        // hits to the curator as semantic seeds. The graph traversal,
+        // timeline filter, and budget logic in @odyssey/wiki-curator runs
+        // unchanged on top of the enriched seeds. Failures are non-fatal —
+        // we fall back to the cached baseline if either step throws.
+        let augmentedChunk = "";
+        let semanticHitCount = 0;
+        try {
+          if (process.env.VOICE_SEMANTIC_RETRIEVAL !== "0") {
+            serverTrace.mark("server.retrieval.start");
+            const queryEmbedding = await embedText(message);
+            if (queryEmbedding) {
+              const hits = await getWikiStore().searchPagesByEmbedding(
+                character.id,
+                queryEmbedding,
+                { topK: 5, minSimilarity: 0.5 },
+              );
+              semanticHitCount = hits.length;
+              if (hits.length > 0) {
+                const augmented = await curate({
+                  characterId: character.id,
+                  query: message,
+                  semanticSeeds: hits.map((h) => ({
+                    pageId: h.pageId,
+                    slug: h.slug,
+                    similarity: h.similarity,
+                  })),
+                  tokenBudget: 1500,
+                });
+                augmentedChunk = augmented.promptChunk;
+                serverTrace.mark("server.retrieval.done", {
+                  hits: semanticHitCount,
+                  selectedPages: augmented.pages.length,
+                  tokensUsed: augmented.tokensUsed,
+                  curatorMs: augmented.elapsedMs,
+                });
+              } else {
+                serverTrace.mark("server.retrieval.done", { hits: 0 });
+              }
+            } else {
+              serverTrace.mark("server.retrieval.skipped", { reason: "no-embedding" });
+            }
+          }
+        } catch (retrievalErr) {
+          serverTrace.mark("server.retrieval.error", {
+            message: retrievalErr instanceof Error ? retrievalErr.message : String(retrievalErr),
+          });
+        }
+
+        const composedPromptChunk = augmentedChunk
+          ? `${promptChunk}\n\n## Relevant context for this turn\n${augmentedChunk}`
+          : promptChunk;
+        const systemPrompt = buildVoiceSystemPrompt(character.title, composedPromptChunk);
         serverTrace.mark("server.context.attached", {
           characterId: character.id,
           sessionId: body.sessionId ?? null,
           turnId: body.turnId ?? null,
           promptChunkChars: promptChunk.length,
+          augmentedChunkChars: augmentedChunk.length,
+          semanticHits: semanticHitCount,
           systemPromptChars: systemPrompt.length,
           historyTurns: body.history?.length ?? 0,
           messageChars: message.length,

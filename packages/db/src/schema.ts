@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  vector,
 } from "drizzle-orm/pg-core";
 
 // ── Auth tables (Auth.js / NextAuth) ──────────────────────────────────
@@ -372,12 +373,23 @@ export const wikiPagesTable = pgTable(
     contradictions: jsonb("contradictions").notNull().default([]),   // [{ otherPageId, note }]
     version: integer("version").notNull().default(1),
     lastCompiledAt: timestamp("last_compiled_at", { withTimezone: true }),
+    // Semantic embedding of title+summary+body, populated on material change
+    // by savePage() and consumed by the wiki-curator's semantic-seed pass.
+    // Sized for OpenAI text-embedding-3-small.
+    embedding: vector("embedding", { dimensions: 1536 }),
+    embeddingModel: text("embedding_model"),
+    embeddedAt: timestamp("embedded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("wiki_pages_character_slug_idx").on(t.characterId, t.slug),
     index("wiki_pages_character_type_idx").on(t.characterId, t.type),
+    // HNSW index for fast cosine similarity. Partial index on rows that
+    // actually have an embedding so freshly-created pages don't slow it.
+    index("wiki_pages_embedding_idx")
+      .using("hnsw", t.embedding.op("vector_cosine_ops"))
+      .where(sql`${t.embedding} IS NOT NULL`),
   ],
 );
 

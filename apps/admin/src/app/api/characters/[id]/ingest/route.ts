@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getCharacterStore, getWikiStore, type WikiSourceKind } from "@odyssey/db";
 import { runIngestion, isKnownModel } from "@odyssey/wiki-ingest";
+import { embedText, EMBEDDING_MODEL } from "@odyssey/engine";
 
 /**
  * POST /api/characters/:id/ingest
@@ -90,6 +91,8 @@ export async function POST(
           characterId: character.id,
           sourceId: source.id,
           model: body.model,
+          embed: embedText,
+          embeddingModel: EMBEDDING_MODEL,
         })) {
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(ev)}\n\n`),

@@ -12,7 +12,7 @@
  * `rebuildEdges(characterId)` is the safety valve for when drift shows up.
  */
 
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { getDb } from "./client";
 import {
   wikiEdgesTable,
@@ -34,6 +34,7 @@ import type {
   IngestionStatus,
   Perspective,
   RelationshipFrontmatter,
+  SavePageHooks,
   SavePageInput,
   SavePageResult,
   StartIngestionInput,
@@ -169,9 +170,25 @@ function normalizePage(row: typeof wikiPagesTable.$inferSelect): WikiPageRecord 
     contradictions: (row.contradictions as Contradiction[] | null) ?? [],
     version: row.version,
     lastCompiledAt: toIso(row.lastCompiledAt),
+    embedding: (row.embedding as number[] | null) ?? null,
+    embeddingModel: row.embeddingModel ?? null,
+    embeddedAt: toIso(row.embeddedAt),
     createdAt: requireIso(row.createdAt),
     updatedAt: requireIso(row.updatedAt),
   };
+}
+
+/** Source text for embedding a page. Single function so backfill, savePage,
+ * and any future re-embed flow always agree on what gets vectorized. */
+function embeddingSource(input: {
+  title: string;
+  summary?: string | null;
+  body?: string;
+}): string {
+  return [input.title, input.summary ?? "", input.body ?? ""]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function normalizeVersion(
@@ -411,11 +428,22 @@ function isMaterialChange(existing: WikiPageRecord, input: Required<SavePageInpu
 
 export interface WikiStore {
   // Pages
-  savePage(input: SavePageInput): Promise<SavePageResult>;
+  savePage(input: SavePageInput, hooks?: SavePageHooks): Promise<SavePageResult>;
   getPage(id: string): Promise<WikiPageRecord | null>;
   getPageBySlug(characterId: string, slug: string): Promise<WikiPageRecord | null>;
   listPages(characterId: string, filter?: { type?: WikiPageType }): Promise<WikiPageRecord[]>;
   removePage(id: string): Promise<boolean>;
+  /**
+   * Vector-search pages by cosine similarity to the supplied query embedding.
+   * Returns the top hits above `minSimilarity` (default 0.5), capped by
+   * `topK` (default 5). The HNSW index on wiki_pages.embedding makes this
+   * sub-10ms for hundreds of pages.
+   */
+  searchPagesByEmbedding(
+    characterId: string,
+    queryEmbedding: number[],
+    options?: { topK?: number; minSimilarity?: number },
+  ): Promise<Array<{ pageId: string; slug: string; title: string; similarity: number }>>;
 
   // Versions
   listPageVersions(pageId: string): Promise<WikiPageVersionRecord[]>;
@@ -510,7 +538,7 @@ function neonStore(): WikiStore {
   return {
     /* ── Pages ───────────────────────────────────────────── */
 
-    async savePage(input) {
+    async savePage(input, hooks) {
       const db = requireDb();
 
       const normalized: Required<SavePageInput> = {
@@ -547,10 +575,34 @@ function neonStore(): WikiStore {
       let created = false;
       let versionCreated = false;
 
+      // If the caller wired an `embed` hook AND the textual content is about
+      // to materially change (or this is a new page), compute an embedding
+      // before the DB write so it lands in the same UPDATE/INSERT. Failures
+      // are swallowed — a page without an embedding is still functional, it
+      // just misses the wiki-curator's semantic-seed pass.
+      const computeEmbedding = async (
+        shouldEmbed: boolean,
+      ): Promise<{ embedding: number[]; embeddingModel: string; embeddedAt: Date } | null> => {
+        if (!shouldEmbed || !hooks?.embed) return null;
+        try {
+          const vec = await hooks.embed(embeddingSource(normalized));
+          if (!vec) return null;
+          return {
+            embedding: vec,
+            embeddingModel: hooks.embeddingModel ?? "unspecified",
+            embeddedAt: now,
+          };
+        } catch (error) {
+          console.error("[wiki-store] embed hook failed; saving page without embedding", error);
+          return null;
+        }
+      };
+
       if (existingRow) {
         const existing = normalizePage(existingRow);
         const material = isMaterialChange(existing, normalized);
         const nextVersion = material ? existing.version + 1 : existing.version;
+        const embeddingFields = await computeEmbedding(material);
 
         const [updated] = await db
           .update(wikiPagesTable)
@@ -568,6 +620,7 @@ function neonStore(): WikiStore {
             version: nextVersion,
             lastCompiledAt: now,
             updatedAt: now,
+            ...(embeddingFields ?? {}),
           })
           .where(eq(wikiPagesTable.id, existing.id))
           .returning();
@@ -592,6 +645,7 @@ function neonStore(): WikiStore {
           versionCreated = true;
         }
       } else {
+        const embeddingFields = await computeEmbedding(true);
         const [inserted] = await db
           .insert(wikiPagesTable)
           .values({
@@ -611,6 +665,7 @@ function neonStore(): WikiStore {
             lastCompiledAt: now,
             createdAt: now,
             updatedAt: now,
+            ...(embeddingFields ?? {}),
           })
           .returning();
         pageRow = inserted;
@@ -685,6 +740,39 @@ function neonStore(): WikiStore {
         : eq(wikiPagesTable.characterId, characterId);
       const rows = await db.select().from(wikiPagesTable).where(whereClause);
       return rows.map(normalizePage).sort((a, b) => a.title.localeCompare(b.title));
+    },
+
+    async searchPagesByEmbedding(characterId, queryEmbedding, options) {
+      const db = requireDb();
+      const topK = options?.topK ?? 5;
+      const minSimilarity = options?.minSimilarity ?? 0.5;
+      // pgvector cosine distance is `<=>` (range 0..2 for normalized vectors).
+      // similarity = 1 - distance. ORDER BY distance ASC + filter by similarity
+      // floor in JS so the optimizer can use the HNSW index for the sort.
+      const vectorLiteral = `[${queryEmbedding.join(",")}]`;
+      const rows = await db.execute<{ id: string; slug: string; title: string; similarity: number }>(
+        sql`
+          SELECT id, slug, title,
+                 1 - (embedding <=> ${vectorLiteral}::vector) AS similarity
+          FROM wiki_pages
+          WHERE character_id = ${characterId} AND embedding IS NOT NULL
+          ORDER BY embedding <=> ${vectorLiteral}::vector
+          LIMIT ${topK}
+        `,
+      );
+      // Drizzle's `execute` returns the driver-shaped rows (Neon: { rows: [...] }).
+      // Normalize across the two shapes we see in this codebase.
+      const list = (
+        Array.isArray(rows) ? rows : ((rows as { rows: unknown[] }).rows ?? [])
+      ) as Array<{ id: string; slug: string; title: string; similarity: number | string }>;
+      return list
+        .map((r) => ({
+          pageId: r.id,
+          slug: r.slug,
+          title: r.title,
+          similarity: typeof r.similarity === "string" ? Number(r.similarity) : r.similarity,
+        }))
+        .filter((r) => Number.isFinite(r.similarity) && r.similarity >= minSimilarity);
     },
 
     async removePage(id) {

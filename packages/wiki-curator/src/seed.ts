@@ -9,7 +9,7 @@
  */
 
 import type { WikiPageRecord } from "@odyssey/db";
-import type { Scene, SeedTrace } from "./types";
+import type { Scene, SeedTrace, SemanticSeed } from "./types";
 
 export type SeedOutput = {
   /** Map of pageId → initial score from seeding. */
@@ -24,6 +24,7 @@ const SEED_WEIGHT = {
   sceneLocation:  500,
   queryTitle:     300,
   queryAlias:     220,
+  querySemantic:  200,   // scaled by similarity score; sits between alias and summary at full strength
   querySummary:   140,
 } as const;
 
@@ -32,6 +33,7 @@ export function seedPages(
   args: {
     query?: string;
     scene?: Scene;
+    semanticSeeds?: SemanticSeed[];
   },
 ): SeedOutput {
   const scores = new Map<string, number>();
@@ -115,6 +117,22 @@ export function seedPages(
           page.slug,
           SEED_WEIGHT.querySummary * summaryHits,
         );
+      }
+    }
+  }
+
+  // 4. Semantic seeds — pages the caller pre-found via vector similarity.
+  //    Scaled by similarity so a 0.85-similar hit outscores a 0.65 hit, and
+  //    a perfect match (1.0) gets the full weight (200), which sits just
+  //    below alias matches (220) and well above summary matches (140).
+  if (args.semanticSeeds && args.semanticSeeds.length > 0) {
+    const validIds = new Set(pages.map((p) => p.id));
+    for (const hit of args.semanticSeeds) {
+      if (!validIds.has(hit.pageId)) continue;
+      const sim = Math.max(0, Math.min(1, hit.similarity));
+      const score = Math.round(SEED_WEIGHT.querySemantic * sim);
+      if (score > 0) {
+        recordSeed(hit.pageId, "query-semantic", hit.slug, score);
       }
     }
   }

@@ -85,6 +85,11 @@ export type IngestionInput = {
   model?: string;
   /** If true, run planner + writer but don't call savePage. */
   dryRun?: boolean;
+  /** Compute an embedding for materially-changed pages. Wired by the admin
+   * app; passed through to wiki.savePage's hooks so this package stays free
+   * of OpenAI dependencies. */
+  embed?: (text: string) => Promise<number[] | null>;
+  embeddingModel?: string;
 };
 
 export type IngestionResult = {

@@ -170,7 +170,7 @@ export async function* runIngestion(
           authorKind: "llm",
           authorId: logRow.id,
           note: `ingest: ${op.rationale.slice(0, 120)}`,
-        });
+        }, input.embed ? { embed: input.embed, embeddingModel: input.embeddingModel } : undefined);
 
         if (saveResult.created) pagesCreated++;
         else if (saveResult.versionCreated) pagesUpdated++;
@@ -298,6 +298,9 @@ function buildDryRunPage(
     contradictions: written.contradictions,
     version: (existing?.version ?? 0) + 1,
     lastCompiledAt: now,
+    embedding: existing?.embedding ?? null,
+    embeddingModel: existing?.embeddingModel ?? null,
+    embeddedAt: existing?.embeddedAt ?? null,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };

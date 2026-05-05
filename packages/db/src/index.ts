@@ -116,6 +116,7 @@ export type {
   WikiPageRecord,
   SavePageInput,
   SavePageResult,
+  SavePageHooks,
   WikiPageVersionRecord,
   EdgeKind,
   WikiEdgeRecord,

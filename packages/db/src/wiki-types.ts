@@ -158,6 +158,9 @@ export type WikiPageRecord = {
   contradictions: Contradiction[];
   version: number;
   lastCompiledAt: string | null;
+  embedding: number[] | null;
+  embeddingModel: string | null;
+  embeddedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -180,6 +183,21 @@ export type SavePageInput = {
   authorKind?: "llm" | "human" | "system";
   authorId?: string | null;
   note?: string | null;
+};
+
+/**
+ * Optional callbacks provided by the application layer. Inverted control
+ * keeps the db package free of OpenAI / embedding dependencies — savePage
+ * decides whether the page materially changed, and only then asks the
+ * caller's `embed` function for an embedding.
+ */
+export type SavePageHooks = {
+  /** Compute an embedding for the given text. Return null to skip storing
+   * one (e.g. no API key configured). Errors are caught by savePage and
+   * the page is saved without an embedding rather than failing the write. */
+  embed?: (text: string) => Promise<number[] | null>;
+  /** Optional model identifier to persist alongside the embedding. */
+  embeddingModel?: string;
 };
 
 export type SavePageResult = {

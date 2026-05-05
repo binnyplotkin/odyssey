@@ -25,11 +25,18 @@ export type Scene = {
 export type CurateRequest = {
   characterId: string;
   /**
-   * The user's utterance / conversation trigger. Used for seed text matching
-   * and will later feed a semantic retrieval path too. Optional — if absent
-   * the curator returns the character's baseline context (voice + core ideas).
+   * The user's utterance / conversation trigger. Used for seed text matching.
+   * Optional — if absent, the curator returns the character's baseline
+   * context (voice + core ideas).
    */
   query?: string;
+  /**
+   * Pre-computed semantic hits — pages that came back highly similar to
+   * `query` from a vector search. Optional. Caller (admin/voice-stream) is
+   * responsible for embedding the query and running the pgvector lookup;
+   * this package stays free of OpenAI/pgvector dependencies.
+   */
+  semanticSeeds?: SemanticSeed[];
   /**
    * Where the character currently "is" in their life. Pages with a
    * timeIndex after this moment are filtered unless knowsFuture is true.
@@ -89,9 +96,23 @@ export type SeedTrace = {
     | "query-title"
     | "query-summary"
     | "query-alias"
+    | "query-semantic"
     | "scene-entity"
     | "scene-location";
   score: number;
+};
+
+/**
+ * Semantic seed input. Caller computes the query embedding and runs the
+ * vector search against wiki_pages.embedding (kept out of this package so
+ * @odyssey/wiki-curator stays free of OpenAI / pgvector dependencies),
+ * then passes the resulting page hits in as seeds.
+ */
+export type SemanticSeed = {
+  pageId: string;
+  slug: string;
+  /** Cosine similarity 0..1. Used to scale the seed weight. */
+  similarity: number;
 };
 
 export type EdgeFollowed = {

@@ -26,6 +26,7 @@ export {
   buildEventContext,
 } from "./metric-helpers";
 export { getOpenAIClient } from "./openai-client";
+export { embedText, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS } from "./embedding";
 export { AudioCommunicationSimulationEngine } from "./communication";
 export {
   generateCommunicationScenario,
