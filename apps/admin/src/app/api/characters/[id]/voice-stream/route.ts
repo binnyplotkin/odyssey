@@ -5,6 +5,12 @@ import { embedText } from "@odyssey/engine";
 import { curate } from "@odyssey/wiki-curator";
 import { TraceEnvelope } from "@/lib/voice-trace";
 import { buildVoiceSystemPrompt } from "@/lib/character-system-prompt";
+import {
+  shouldSkipRetrieval,
+  getRecentTurnSummaries,
+  formatRecentConversation,
+  summarizeTurnInBackground,
+} from "@/lib/voice-context-helpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -155,59 +161,78 @@ export async function POST(
       try {
         if (req.signal.aborted) return;
 
-        // Per-turn semantic retrieval. Embed the user's transcript, vector-
-        // search the character's wiki for the most similar pages, hand the
-        // hits to the curator as semantic seeds. The graph traversal,
-        // timeline filter, and budget logic in @odyssey/wiki-curator runs
-        // unchanged on top of the enriched seeds. Failures are non-fatal —
-        // we fall back to the cached baseline if either step throws.
+        // ── Context augmentation ────────────────────────────────────
+        //
+        // Three additive layers stacked on top of the cached baseline:
+        //   1. Recent conversation summary — read in parallel, near-zero cost
+        //   2. Adaptive retrieval gate — skip embedding+search on greetings /
+        //      one-word fluff that would never benefit, saves ~500ms/turn
+        //   3. Per-turn semantic retrieval — embed → pgvector → curator
+        //
+        // Failures in any of these are non-fatal: the cached baseline alone
+        // is enough for a coherent reply, so we degrade gracefully instead
+        // of breaking the user's turn.
+
+        const skipDecision = shouldSkipRetrieval(message);
         let augmentedChunk = "";
         let semanticHitCount = 0;
-        try {
-          if (process.env.VOICE_SEMANTIC_RETRIEVAL !== "0") {
-            serverTrace.mark("server.retrieval.start");
-            const queryEmbedding = await embedText(message);
-            if (queryEmbedding) {
-              const hits = await getWikiStore().searchPagesByEmbedding(
-                character.id,
-                queryEmbedding,
-                { topK: 5, minSimilarity: 0.5 },
-              );
-              semanticHitCount = hits.length;
-              if (hits.length > 0) {
-                const augmented = await curate({
-                  characterId: character.id,
-                  query: message,
-                  semanticSeeds: hits.map((h) => ({
-                    pageId: h.pageId,
-                    slug: h.slug,
-                    similarity: h.similarity,
-                  })),
-                  tokenBudget: 1500,
-                });
-                augmentedChunk = augmented.promptChunk;
-                serverTrace.mark("server.retrieval.done", {
-                  hits: semanticHitCount,
-                  selectedPages: augmented.pages.length,
-                  tokensUsed: augmented.tokensUsed,
-                  curatorMs: augmented.elapsedMs,
-                });
+
+        // Run summary-fetch in parallel with retrieval — both read-only,
+        // independent. Promise.all keeps the latency floor at max(both).
+        const summariesPromise = getRecentTurnSummaries(body.sessionId, 3);
+
+        if (skipDecision.skip) {
+          serverTrace.mark("server.retrieval.skipped", { reason: skipDecision.reason });
+        } else {
+          try {
+            if (process.env.VOICE_SEMANTIC_RETRIEVAL !== "0") {
+              serverTrace.mark("server.retrieval.start");
+              const queryEmbedding = await embedText(message);
+              if (queryEmbedding) {
+                const hits = await getWikiStore().searchPagesByEmbedding(
+                  character.id,
+                  queryEmbedding,
+                  { topK: 5, minSimilarity: 0.5 },
+                );
+                semanticHitCount = hits.length;
+                if (hits.length > 0) {
+                  const augmented = await curate({
+                    characterId: character.id,
+                    query: message,
+                    semanticSeeds: hits.map((h) => ({
+                      pageId: h.pageId,
+                      slug: h.slug,
+                      similarity: h.similarity,
+                    })),
+                    tokenBudget: 1500,
+                  });
+                  augmentedChunk = augmented.promptChunk;
+                  serverTrace.mark("server.retrieval.done", {
+                    hits: semanticHitCount,
+                    selectedPages: augmented.pages.length,
+                    tokensUsed: augmented.tokensUsed,
+                    curatorMs: augmented.elapsedMs,
+                  });
+                } else {
+                  serverTrace.mark("server.retrieval.done", { hits: 0 });
+                }
               } else {
-                serverTrace.mark("server.retrieval.done", { hits: 0 });
+                serverTrace.mark("server.retrieval.skipped", { reason: "no-embedding" });
               }
-            } else {
-              serverTrace.mark("server.retrieval.skipped", { reason: "no-embedding" });
             }
+          } catch (retrievalErr) {
+            serverTrace.mark("server.retrieval.error", {
+              message: retrievalErr instanceof Error ? retrievalErr.message : String(retrievalErr),
+            });
           }
-        } catch (retrievalErr) {
-          serverTrace.mark("server.retrieval.error", {
-            message: retrievalErr instanceof Error ? retrievalErr.message : String(retrievalErr),
-          });
         }
 
-        const composedPromptChunk = augmentedChunk
-          ? `${promptChunk}\n\n## Relevant context for this turn\n${augmentedChunk}`
-          : promptChunk;
+        const recentSummaries = await summariesPromise;
+        const recentSection = formatRecentConversation(recentSummaries);
+        const augmentedSection = augmentedChunk
+          ? `\n\n## Relevant context for this turn\n${augmentedChunk}`
+          : "";
+        const composedPromptChunk = `${promptChunk}${recentSection}${augmentedSection}`;
         const systemPrompt = buildVoiceSystemPrompt(character.title, composedPromptChunk);
         serverTrace.mark("server.context.attached", {
           characterId: character.id,
@@ -216,6 +241,9 @@ export async function POST(
           promptChunkChars: promptChunk.length,
           augmentedChunkChars: augmentedChunk.length,
           semanticHits: semanticHitCount,
+          retrievalSkipped: skipDecision.skip,
+          retrievalSkipReason: skipDecision.skip ? skipDecision.reason : null,
+          recentSummaries: recentSummaries.length,
           systemPromptChars: systemPrompt.length,
           historyTurns: body.history?.length ?? 0,
           messageChars: message.length,
@@ -418,6 +446,21 @@ export async function POST(
               serverTrace: serverTrace.toJSON(),
             },
           });
+
+          // Background: summarize this turn into ≤30 words and persist as a
+          // voice.summary event for the next turn's "Recent conversation"
+          // section. Fire-and-forget — we don't block the SSE close.
+          if (process.env.CEREBRAS_API_KEY?.trim()) {
+            summarizeTurnInBackground({
+              sessionId: body.sessionId,
+              turnId: body.turnId ?? null,
+              characterTitle: character.title,
+              userMessage: message,
+              agentReply: replyText,
+              cerebrasApiKey: process.env.CEREBRAS_API_KEY.trim(),
+              cerebrasModel: CEREBRAS_DEFAULT_MODEL,
+            });
+          }
         }
 
         sendEvent("done", {
