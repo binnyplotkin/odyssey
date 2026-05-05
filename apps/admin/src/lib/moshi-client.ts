@@ -267,7 +267,7 @@ export function msgpackDecode(bytes: Uint8Array): unknown {
 }
 
 export const MOSHI_WS_URL =
-  "wss://binnyplotkin--audio-rt-moshi-server-serve.modal.run/api/asr-streaming?auth_id=public_token";
+  "wss://audio-rt-production.up.railway.app/api/asr-streaming";
 
 export const MOSHI_TTS_BASE_URL =
   "wss://binnyplotkin--audio-rt-moshi-tts-serve.modal.run/api/tts_streaming";
