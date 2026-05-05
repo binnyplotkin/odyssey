@@ -187,7 +187,20 @@ export async function POST(
           try {
             if (process.env.VOICE_SEMANTIC_RETRIEVAL !== "0") {
               serverTrace.mark("server.retrieval.start");
-              const queryEmbedding = await embedText(message);
+
+              // Fold the most recent turn summary into the embedding query
+              // so pronoun-y referential utterances ("tell me more about
+              // that", "what about her?") still hit relevant pages instead
+              // of embedding the bare 4-word fragment. The summary fetch
+              // was already kicked off in parallel above; awaiting it here
+              // is sub-50ms and adds nothing to the critical path beyond
+              // what the embedding API call already takes.
+              const summariesForQuery = await summariesPromise;
+              const lastSummary = summariesForQuery[summariesForQuery.length - 1];
+              const embedQuery = lastSummary
+                ? `Previous turn: ${lastSummary}\nUser now asks: ${message}`
+                : message;
+              const queryEmbedding = await embedText(embedQuery);
               if (queryEmbedding) {
                 const hits = await getWikiStore().searchPagesByEmbedding(
                   character.id,
@@ -212,9 +225,13 @@ export async function POST(
                     selectedPages: augmented.pages.length,
                     tokensUsed: augmented.tokensUsed,
                     curatorMs: augmented.elapsedMs,
+                    embedQueryAware: Boolean(lastSummary),
                   });
                 } else {
-                  serverTrace.mark("server.retrieval.done", { hits: 0 });
+                  serverTrace.mark("server.retrieval.done", {
+                    hits: 0,
+                    embedQueryAware: Boolean(lastSummary),
+                  });
                 }
               } else {
                 serverTrace.mark("server.retrieval.skipped", { reason: "no-embedding" });
