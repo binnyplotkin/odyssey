@@ -8,10 +8,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+# Install torch and torchaudio from the PyTorch CPU index — PyPI's default
+# wheels are CUDA-enabled and torchaudio in particular dlopens libcudart at
+# import, which crashes silero-vad on a CPU-only Railway container.
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+    torch==2.8.0 torchaudio==2.8.0
 RUN pip install --no-cache-dir -r /app/requirements.txt
-# Belt-and-suspenders: if any transitive dep pulled onnxruntime-gpu,
-# remove it. CPU-only onnxruntime is pinned in requirements.txt.
+# Belt-and-suspenders: if any transitive dep pulled GPU-only variants,
+# remove them. CPU equivalents stay pinned via requirements.txt.
 RUN pip uninstall -y onnxruntime-gpu 2>/dev/null || true
 
 COPY . /app
