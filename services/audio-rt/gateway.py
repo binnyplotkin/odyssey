@@ -771,10 +771,22 @@ def export_voice(payload: ExportVoiceRequest):
             ) from error
 
         if result.returncode != 0 or not os.path.isfile(out_path):
+            full_err = (result.stderr or result.stdout).strip()
+            # Print the full traceback to stdout so it's visible in Railway
+            # logs — the HTTP response body has length limits and Rich-format
+            # banners can blow past them without ever showing the actual
+            # exception line.
+            print(
+                f"[/export-voice] FAILED exit={result.returncode}\n{full_err}",
+                flush=True,
+            )
+            # Return the *tail* of stderr to the client (Rich tracebacks put
+            # the exception type and message at the bottom, which is what's
+            # actually load-bearing for debugging).
             raise HTTPException(
                 status_code=500,
                 detail=f"pocket-tts export-voice failed (exit {result.returncode}): "
-                f"{(result.stderr or result.stdout).strip()[:500]}",
+                f"{full_err[-2000:]}",
             )
 
         with open(out_path, "rb") as out_file:
