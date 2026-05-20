@@ -814,6 +814,11 @@ function ProcessingStepLog() {
 }
 
 function FailedPanel({ voice }: { voice: VoiceDetailData }) {
+  const raw = voice.statusError ?? "Extraction failed without a reported error message.";
+  const summary = extractExceptionSummary(raw);
+  const isMultiLine = raw.includes("\n");
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <div
       style={{
@@ -826,6 +831,9 @@ function FailedPanel({ voice }: { voice: VoiceDetailData }) {
         <SectionLabel style={{ color: "#E8A0A0" }}>— 02 / EXTRACTION FAILED</SectionLabel>
         <SectionTitle>Pocket TTS rejected the clip</SectionTitle>
       </div>
+
+      {/* Summary block — exception line plucked from the bottom of any
+       * traceback, or the full string if it's short. Always visible. */}
       <div
         style={{
           display: "flex",
@@ -842,12 +850,66 @@ function FailedPanel({ voice }: { voice: VoiceDetailData }) {
           <line x1="12" y1="8" x2="12" y2="12" />
           <line x1="12" y1="16" x2="12.01" y2="16" />
         </svg>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: FONT_MONO, fontSize: 13, lineHeight: "20px", color: "var(--text-primary)" }}>
-            {voice.statusError ?? "Extraction failed without a reported error message."}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontFamily: FONT_MONO,
+              fontSize: 13,
+              lineHeight: "20px",
+              color: "var(--text-primary)",
+              wordBreak: "break-word",
+            }}
+          >
+            {summary}
           </div>
+          {isMultiLine && (
+            <button
+              type="button"
+              onClick={() => setExpanded((e) => !e)}
+              style={{
+                alignSelf: "flex-start",
+                padding: 0,
+                background: "transparent",
+                border: "none",
+                color: "#E8A0A0",
+                fontFamily: FONT_MONO,
+                fontSize: 11,
+                letterSpacing: "0.06em",
+                cursor: "pointer",
+                textDecoration: "underline",
+                textDecorationColor: "rgba(232,160,160,0.40)",
+              }}
+            >
+              {expanded ? "hide full traceback" : "show full traceback"}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Full traceback — collapsible. Preserves whitespace + handles
+       * long lines via horizontal scroll. Monospace + tabular-ish layout
+       * lines up Rich's box-drawing characters cleanly. */}
+      {expanded && (
+        <pre
+          style={{
+            margin: 0,
+            padding: "16px 20px",
+            background: "rgba(0,0,0,0.40)",
+            border: "1px solid rgba(232,160,160,0.12)",
+            color: "var(--text-secondary)",
+            fontFamily: FONT_MONO,
+            fontSize: 11,
+            lineHeight: "16px",
+            whiteSpace: "pre",
+            overflowX: "auto",
+            maxHeight: 360,
+            overflowY: "auto",
+          }}
+        >
+          {raw}
+        </pre>
+      )}
+
       <div
         style={{
           display: "flex",
@@ -877,6 +939,30 @@ function FailedPanel({ voice }: { voice: VoiceDetailData }) {
       </div>
     </div>
   );
+}
+
+/** Pull the exception line out of a Python traceback. Rich-formatted
+ * tracebacks have box-drawing characters around each line; the actual
+ * exception is the last non-empty line that matches `<Type>: <message>`.
+ * Falls back to the first line of the input if no match. */
+function extractExceptionSummary(raw: string): string {
+  const lines = raw
+    .split("\n")
+    .map((l) => l.replace(/^[│╭╰─\s]+|[│╮╯─\s]+$/g, "").trim())
+    .filter((l) => l.length > 0);
+  // Walk from the bottom looking for an exception line. Common patterns:
+  //   RuntimeError: insufficient audio
+  //   ValueError: ...
+  //   subprocess.CalledProcessError: ...
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (/^[\w.]+(Error|Exception|Warning):/.test(lines[i])) {
+      return lines[i];
+    }
+  }
+  // Fall back: first meaningful line. Strip the audio-rt HTTP envelope if
+  // present so the user sees just the underlying message.
+  const first = lines[0] ?? raw.trim();
+  return first.replace(/^audio-rt \/export-voice \d+:\s*/, "");
 }
 
 /* ── Step row ─────────────────────────────────────────────────── */

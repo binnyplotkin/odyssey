@@ -82,9 +82,18 @@ export async function POST(
     });
     if (!upstream.ok) {
       const errText = await upstream.text().catch(() => "");
-      throw new Error(
-        `audio-rt /export-voice ${upstream.status}: ${errText.slice(0, 500)}`,
-      );
+      // Audio-rt's FastAPI 500 responses come back as
+      // {"detail": "<multi-line traceback>"}. Pull the detail string out
+      // so the stored statusError has real newlines (not JSON-escaped \n)
+      // and the Failed UI can render the traceback structurally.
+      let detail = errText;
+      try {
+        const parsed = JSON.parse(errText) as { detail?: unknown };
+        if (typeof parsed.detail === "string") detail = parsed.detail;
+      } catch {
+        // fall through with the raw text
+      }
+      throw new Error(`audio-rt /export-voice ${upstream.status}: ${detail}`);
     }
     const embeddingBytes = Buffer.from(await upstream.arrayBuffer());
     if (embeddingBytes.length === 0) {
