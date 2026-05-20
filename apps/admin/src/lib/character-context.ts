@@ -1,6 +1,9 @@
 import {
   getCharacterStore,
+  type CharacterDirective,
+  type CharacterIdentity,
   type CharacterRecord,
+  type CharacterVoiceStyle,
   type TimeIndex,
 } from "@odyssey/db";
 import {
@@ -10,9 +13,9 @@ import {
   type SelectedPage,
 } from "@odyssey/wiki-curator";
 import {
-  buildSystemPrompt,
-  buildVoiceSystemPrompt,
-} from "@/lib/character-system-prompt";
+  buildSystemPromptParts,
+  buildVoiceSystemPromptParts,
+} from "@odyssey/engine";
 import { TraceEnvelope, type TraceContract } from "@/lib/voice-trace";
 
 export type CharacterContextMode =
@@ -51,7 +54,22 @@ export type BuildCharacterContextInput = {
 
 export type BuiltCharacterContext = {
   character: CharacterRecord | LightweightCharacter;
+  /**
+   * The full assembled system prompt — `cached + "\n\n" + perTurn`. Use
+   * this when you need a single string (preview endpoints, debugging,
+   * voice paths that don't yet support multi-block system).
+   */
   systemPrompt: string;
+  /**
+   * The same prompt, split for Anthropic's `cache_control` API. Pass
+   * `cached` as a block with `cache_control: { type: "ephemeral" }` and
+   * `perTurn` as a separate un-cached block. See
+   * `buildSystemPromptParts` for the cache profile rationale.
+   *
+   * Always populated. When override mode is on, `cached` holds the
+   * override and `perTurn` is empty.
+   */
+  systemPromptParts: { cached: string; perTurn: string };
   promptChunk: string;
   trace: CuratorTrace;
   pages: CharacterContextPage[];
@@ -118,6 +136,11 @@ export async function buildCharacterContext(
     return {
       character,
       systemPrompt: override,
+      // In override mode the whole prompt is bespoke per-call — putting
+      // it in `cached` lets the chat route still pass it as a single
+      // cache-controlled block (cheap if the user re-runs the same
+      // override within the 5-min TTL).
+      systemPromptParts: { cached: override, perTurn: "" },
       promptChunk: "",
       trace: EMPTY_TRACE,
       pages: [],
@@ -145,16 +168,45 @@ export async function buildCharacterContext(
     curatorElapsedMs: curated.elapsedMs,
   });
 
-  const systemPrompt =
+  // Pull L01 Identity + L02 Directive + L03 Voice off the character
+  // record when available. The lightweight `LightweightCharacter` path
+  // (used by callers that only know id/slug/title) won't carry these —
+  // that's fine, those paths fall back to the legacy template +
+  // hardcoded identity line + no <voice> block.
+  const directive: CharacterDirective | null =
+    "directive" in character
+      ? (character as CharacterRecord).directive ?? null
+      : null;
+  const identity: CharacterIdentity | null =
+    "identity" in character
+      ? (character as CharacterRecord).identity ?? null
+      : null;
+  const voiceStyle: CharacterVoiceStyle | null =
+    "voiceStyle" in character
+      ? (character as CharacterRecord).voiceStyle ?? null
+      : null;
+
+  const systemPromptParts =
     promptKind === "voice"
-      ? buildVoiceSystemPrompt(character.title, curated.promptChunk)
-      : buildSystemPrompt(character.title, curated.promptChunk);
-  trace.mark("prompt.built", { chars: systemPrompt.length });
+      ? buildVoiceSystemPromptParts(character.title, curated.promptChunk, directive, identity, voiceStyle)
+      : buildSystemPromptParts(character.title, curated.promptChunk, directive, identity, voiceStyle);
+  const systemPrompt = [systemPromptParts.cached, systemPromptParts.perTurn]
+    .filter(Boolean)
+    .join("\n\n");
+  trace.mark("prompt.built", {
+    chars: systemPrompt.length,
+    cachedChars: systemPromptParts.cached.length,
+    perTurnChars: systemPromptParts.perTurn.length,
+    withDirective: directive !== null,
+    withIdentity: identity !== null,
+    withVoiceStyle: voiceStyle !== null,
+  });
 
   const timingTrace = trace.toJSON();
   return {
     character,
     systemPrompt,
+    systemPromptParts,
     promptChunk: curated.promptChunk,
     trace: curated.trace,
     pages: summarizePages(curated.pages),

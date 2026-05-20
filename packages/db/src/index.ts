@@ -18,14 +18,22 @@ export {
   platformVersionsTable,
   changelogEntriesTable,
   charactersTable,
+  voicesTable,
   worldNodesTable,
   worldEdgesTable,
+  wikisTable,
   wikiPagesTable,
   wikiPageVersionsTable,
   wikiEdgesTable,
   wikiSourcesTable,
   wikiSourceRefsTable,
   wikiIngestionLogTable,
+  characterKnowledgeBindingsTable,
+  characterVersionsTable,
+  evalSuitesTable,
+  evalRunsTable,
+  evalProbeResultsTable,
+  evalSweepsTable,
 } from "./schema";
 export { getPersistenceStore } from "./store";
 export type { PersistenceStore } from "./store";
@@ -62,8 +70,70 @@ export type { ChangelogStore, ChangelogEntryRecord, CreateChangelogEntryInput, U
 export { getCharacterStore } from "./character-store";
 export type { CharacterStore } from "./character-store";
 
+export { getVoiceStore } from "./voice-store";
+export type {
+  VoiceStore,
+  VoiceRecord,
+  VoiceStatus,
+  CreateVoiceInput,
+  UpdateVoiceInput,
+} from "./voice-store";
+
+export { getCharacterVersionStore } from "./character-version-store";
+export type {
+  CharacterVersionStore,
+  CharacterVersionRecord,
+  CharacterVersionSnapshot,
+  CharacterVersionBindingSnapshot,
+} from "./character-version-store";
+
+export { getEvalStore } from "./eval-store";
+export type {
+  EvalStore,
+  EvalSuiteRecord,
+  EvalRunRecord,
+  EvalRunStatus,
+  EvalRunSummary,
+  EvalRunWithProbes,
+  EvalProbeResultRecord,
+  EvalSweepRecord,
+  PassRatePoint,
+  CreateEvalSuiteInput,
+  SaveEvalRunInput,
+  SaveEvalSweepInput,
+  CreatePendingRunInput,
+  CompleteRunInput,
+  CreatePendingSweepInput,
+  CompleteSweepInput,
+  ListRunsOptions,
+  ForkDraftInput,
+  UpdateDraftInput,
+  PublishDraftInput,
+} from "./eval-store";
+
 export { getWikiStore } from "./wiki-store";
 export type { WikiStore } from "./wiki-store";
+
+export { getWikisStore } from "./wikis-store";
+export type {
+  WikisStore,
+  WikiSummary,
+  WikiPageSummary,
+  WikiSourceSummary,
+  WikiIngestionSummary,
+  KnowledgeGraphData,
+  KnowledgeGraphNode,
+} from "./wikis-store";
+export type {
+  Era,
+  WikiRecord,
+  CreateWikiInput,
+  UpdateWikiInput,
+  BindingPriority,
+  CharacterKnowledgeBindingRecord,
+  CreateBindingInput,
+  UpdateBindingInput,
+} from "./wiki-types";
 
 export {
   getWorldGraphStore,
@@ -92,12 +162,18 @@ export {
   extractReferencedSlugs,
   formatWikilink,
   resolveWikilinks,
+  flattenWikilinks,
   isValidSlug,
   slugifyTitle,
 } from "./wiki-links";
 
 export type {
   CharacterRecord,
+  CharacterIdentity,
+  IdentityTrait,
+  CharacterVoiceStyle,
+  CharacterBrainModel,
+  CharacterDirective,
   CreateCharacterInput,
   UpdateCharacterInput,
   EraConfig,

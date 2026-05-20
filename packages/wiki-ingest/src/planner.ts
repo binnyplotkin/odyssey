@@ -107,5 +107,7 @@ export async function plan(args: {
     contradictions: raw.contradictions ?? [],
     confidence: typeof raw.confidence === "number" ? raw.confidence : 0.75,
     tokens: result.tokens,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
   };
 }

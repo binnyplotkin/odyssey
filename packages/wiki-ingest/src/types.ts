@@ -44,8 +44,12 @@ export type OpPlan = {
   contradictions: Array<{ slugA: string; slugB: string; note: string }>;
   /** The planner's rough confidence in the plan. */
   confidence: number;
-  /** LLM tokens consumed by the planner call. */
+  /** LLM tokens consumed by the planner call (input + output). */
   tokens: number;
+  /** Input tokens consumed by the planner call. */
+  inputTokens: number;
+  /** Output tokens consumed by the planner call. */
+  outputTokens: number;
 };
 
 /* ── Writer output ─────────────────────────────────────────────── */
@@ -72,15 +76,23 @@ export type WrittenPage = {
     quote?: string;
     relevanceNote?: string;
   }>;
-  /** LLM tokens consumed by this writer call. */
+  /** LLM tokens consumed by this writer call (input + output). */
   tokens: number;
+  /** Input tokens consumed by this writer call. */
+  inputTokens: number;
+  /** Output tokens consumed by this writer call. */
+  outputTokens: number;
 };
 
 /* ── Pipeline input/output ─────────────────────────────────────── */
 
 export type IngestionInput = {
-  characterId: string;
+  wikiId: string;
   sourceId: string;
+  /** Existing durable ingestion-log row. Worker paths pass this so the run
+   * survives request/browser disconnects. If omitted, the pipeline creates a
+   * legacy request-bound log row for direct callers. */
+  runId?: string;
   /** LLM model slug. Defaults resolved in pipeline. */
   model?: string;
   /** If true, run planner + writer but don't call savePage. */
@@ -100,7 +112,12 @@ export type IngestionResult = {
   edgesAdded: number;
   edgesRemoved: number;
   contradictionsFound: number;
+  /** Total tokens (input + output) consumed by the run. */
   tokensUsed: number;
+  /** Input tokens consumed across all model calls in the run. */
+  inputTokens: number;
+  /** Output tokens consumed across all model calls in the run. */
+  outputTokens: number;
   model: string;
 };
 
@@ -112,6 +129,7 @@ export type IngestionResult = {
  * serialize (no deep nesting of page bodies).
  */
 export type IngestionEvent =
+  | { type: "queued"; runId: string; model: string | null }
   | { type: "started"; runId: string; model: string }
   | { type: "loaded-index"; pageCount: number; edgeCount: number }
   | { type: "planning" }
@@ -120,6 +138,12 @@ export type IngestionEvent =
       opCount: number;
       contradictionCount: number;
       tokens: number;
+      inputTokens: number;
+      outputTokens: number;
+      /** Full list of actionable ops (post skip-filter), in execution order.
+       *  Lets the UI render the queue up-front instead of waiting for each
+       *  op-start to learn what's coming. */
+      ops: PlanOp[];
     }
   | {
       type: "op-start";
@@ -134,6 +158,8 @@ export type IngestionEvent =
       edgesAdded: number;
       edgesRemoved: number;
       tokens: number;
+      inputTokens: number;
+      outputTokens: number;
     }
   | {
       type: "op-failed";
@@ -146,4 +172,10 @@ export type IngestionEvent =
       removed: number;
     }
   | { type: "succeeded"; result: IngestionResult }
-  | { type: "failed"; error: string; tokensUsed: number };
+  | {
+      type: "failed";
+      error: string;
+      tokensUsed: number;
+      inputTokens: number;
+      outputTokens: number;
+    };

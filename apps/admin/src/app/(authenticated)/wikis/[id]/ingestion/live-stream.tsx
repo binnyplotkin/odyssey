@@ -1,0 +1,556 @@
+"use client";
+
+import { type CSSProperties } from "react";
+import type { IngestionEvent, PlanOp } from "@odyssey/wiki-ingest";
+
+/**
+ * LiveStream — sidebar panel during the running phase. Forming-first
+ * direction (Paper V3): the active write is promoted to a hero card with
+ * its action/type eyebrow, slug, rationale, an indeterminate mint
+ * shimmer progress bar, and a per-op token counter. Below it sits a
+ * small tail of recent SSE events with timestamp · glyph · detail, fading
+ * by recency.
+ *
+ * Self-contained: only depends on theme CSS variables and the
+ * `IngestionEvent` / `PlanOp` types. All derivation (tail rows) happens
+ * inside, so the caller just passes `run.events` + `run.startedAt` plus
+ * the currently-writing op snapshot.
+ */
+
+const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
+const FONT_HEAD = "'Inter', system-ui, sans-serif";
+const ACCENT = "var(--accent-strong)";
+const AMBER = "#FACC15";
+const TAIL_BG = "rgba(0, 0, 0, 0.30)";
+
+export type ActiveWriteSnapshot = {
+  op: PlanOp;
+  /** 1-based index of this op within the plan. */
+  indexInPlan: number;
+  /** Total ops in the plan. */
+  totalOps: number;
+  /** Tokens streamed for this op so far. */
+  tokensStreamed: number;
+};
+
+export type LiveStreamProps = {
+  events: IngestionEvent[];
+  startedAt: number;
+  /** The op currently being written, if any. Null when no op is in flight. */
+  activeWrite: ActiveWriteSnapshot | null;
+};
+
+export function LiveStream({
+  events,
+  startedAt,
+  activeWrite,
+}: LiveStreamProps) {
+  const tailRows = deriveTailRows(events, startedAt);
+  const loadedIndex = events.find(
+    (e): e is Extract<IngestionEvent, { type: "loaded-index" }> =>
+      e.type === "loaded-index",
+  );
+  const planComplete = events.find((e) => e.type === "plan-complete");
+  const subPhase: IdleSubPhase = !loadedIndex
+    ? "loading-index"
+    : !planComplete
+      ? "planning"
+      : "between-ops";
+  const pageCount = loadedIndex?.pageCount ?? null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <style>{ANIM_CSS}</style>
+
+      <header
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <span
+            style={{
+              fontFamily: FONT_MONO,
+              fontSize: 11,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: ACCENT,
+            }}
+          >
+            {activeWrite
+              ? "writing"
+              : subPhase === "loading-index"
+                ? "context"
+                : subPhase === "planning"
+                  ? "planning"
+                  : "writing"}
+          </span>
+          {activeWrite && (
+            <span
+              style={{
+                fontFamily: FONT_MONO,
+                fontSize: 11,
+                color: "var(--text-tertiary)",
+              }}
+            >
+              {activeWrite.indexInPlan} of {activeWrite.totalOps}
+            </span>
+          )}
+        </div>
+        <LiveBadge />
+      </header>
+
+      {activeWrite ? (
+        <HeroCard write={activeWrite} />
+      ) : (
+        <IdleHero phase={subPhase} pageCount={pageCount} />
+      )}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          paddingTop: 4,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: FONT_MONO,
+            fontSize: 10,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "var(--text-tertiary)",
+          }}
+        >
+          tail · {events.length} events
+        </span>
+        <span
+          style={{
+            fontFamily: FONT_MONO,
+            fontSize: 10,
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            color: "var(--text-quaternary)",
+          }}
+        >
+          expand ↗
+        </span>
+      </div>
+
+      <TailLog rows={tailRows} />
+    </div>
+  );
+}
+
+/* ── Sub-components ──────────────────────────────────────────── */
+
+function LiveBadge() {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        fontFamily: FONT_MONO,
+        fontSize: 11,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        color: ACCENT,
+      }}
+    >
+      <span
+        style={{
+          display: "inline-block",
+          width: 6,
+          height: 6,
+          borderRadius: 999,
+          background: "var(--accent-strong)",
+          boxShadow: "0 0 8px var(--accent-strong)",
+          animation: "live-stream-pulse 1.1s ease-in-out infinite",
+        }}
+      />
+      LIVE
+    </span>
+  );
+}
+
+function HeroCard({ write }: { write: ActiveWriteSnapshot }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        padding: "20px 22px",
+        border:
+          "1px solid color-mix(in srgb, var(--accent-strong) 40%, transparent)",
+        background: "color-mix(in srgb, var(--accent-strong) 5%, transparent)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          fontFamily: FONT_MONO,
+          fontSize: 10,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+        }}
+      >
+        <span style={{ color: ACCENT }}>
+          {write.op.action} · {write.op.type}
+        </span>
+        <span style={{ color: "var(--text-tertiary)" }}>
+          op {String(write.indexInPlan).padStart(2, "0")}
+        </span>
+      </div>
+      <span
+        style={{
+          fontFamily: FONT_MONO,
+          fontSize: 16,
+          fontWeight: 600,
+          color: "var(--text-primary)",
+        }}
+      >
+        {write.op.slug}
+      </span>
+      {write.op.rationale && (
+        <p
+          style={{
+            fontFamily: FONT_HEAD,
+            fontSize: 13,
+            lineHeight: "20px",
+            color: "var(--text-secondary)",
+            margin: 0,
+          }}
+        >
+          {write.op.rationale}
+        </p>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <ShimmerBar />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontFamily: FONT_MONO,
+            fontSize: 10,
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            color: "var(--text-tertiary)",
+          }}
+        >
+          <span>{write.tokensStreamed.toLocaleString()} tok streamed</span>
+          <span style={{ color: ACCENT }}>
+            ▸{" "}
+            {write.op.action === "create"
+              ? "writing → pages"
+              : "updating → pages"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type IdleSubPhase = "loading-index" | "planning" | "between-ops";
+
+function IdleHero({
+  phase,
+  pageCount,
+}: {
+  phase: IdleSubPhase;
+  pageCount: number | null;
+}) {
+  const eyebrow =
+    phase === "loading-index"
+      ? "loading context"
+      : phase === "planning"
+        ? "planning"
+        : "between ops";
+  const body =
+    phase === "loading-index"
+      ? "reading existing wiki pages and edges…"
+      : phase === "planning"
+        ? pageCount !== null
+          ? `analyzing ${pageCount.toLocaleString()} pages · drafting plan…`
+          : "drafting plan…"
+        : "waiting for the next op to start…";
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        padding: "20px 22px",
+        border: "1px solid var(--border)",
+        background: "var(--card)",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: FONT_MONO,
+          fontSize: 10,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "var(--text-tertiary)",
+        }}
+      >
+        {eyebrow}
+      </span>
+      <span
+        style={{
+          fontFamily: FONT_MONO,
+          fontSize: 13,
+          color: "var(--text-secondary)",
+        }}
+      >
+        {body}
+      </span>
+    </div>
+  );
+}
+
+function ShimmerBar() {
+  return (
+    <div
+      style={{
+        position: "relative",
+        height: 3,
+        background: "rgba(255, 255, 255, 0.08)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          width: "40%",
+          background:
+            "linear-gradient(90deg, transparent 0%, var(--accent-strong) 50%, transparent 100%)",
+          animation: "live-stream-shimmer 1.8s linear infinite",
+        }}
+      />
+    </div>
+  );
+}
+
+function TailLog({ rows }: { rows: TailRow[] }) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        gap: 0,
+        border: "1px solid var(--border)",
+        background: TAIL_BG,
+        padding: "6px 0",
+        maxHeight: 200,
+        overflow: "hidden",
+      }}
+    >
+      {rows.length === 0 ? (
+        <div
+          style={{
+            padding: "8px 14px",
+            fontFamily: FONT_MONO,
+            fontSize: 11,
+            color: "var(--text-tertiary)",
+          }}
+        >
+          no events yet…
+        </div>
+      ) : (
+        rows.map((row, i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              gap: 10,
+              padding: "4px 14px",
+              fontFamily: FONT_MONO,
+              fontSize: 11,
+              lineHeight: "16px",
+              // Fade older entries (top is newest in our reversed list)
+              opacity: Math.max(0.35, 1 - i * 0.12),
+            }}
+          >
+            <span
+              style={{
+                width: 46,
+                flexShrink: 0,
+                color: "var(--text-tertiary)",
+              }}
+            >
+              {row.ts}
+            </span>
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                color:
+                  row.tone === "error"
+                    ? "var(--danger)"
+                    : "var(--text-secondary)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span style={{ color: glyphColor(row.tone), marginRight: 6 }}>
+                {row.glyph}
+              </span>
+              {row.detail}
+            </span>
+          </div>
+        ))
+      )}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 50,
+          background: `linear-gradient(180deg, transparent 0%, ${TAIL_BG} 100%)`,
+          pointerEvents: "none",
+        }}
+      />
+    </div>
+  );
+}
+
+function glyphColor(tone: TailRow["tone"]): string {
+  switch (tone) {
+    case "ok":
+      return ACCENT;
+    case "amber":
+      return AMBER;
+    case "error":
+      return "var(--danger)";
+    default:
+      return "var(--text-tertiary)";
+  }
+}
+
+const ANIM_CSS = `
+  @keyframes live-stream-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes live-stream-shimmer{0%{left:-40%}100%{left:100%}}
+`;
+
+/* ── Derivation ──────────────────────────────────────────────── */
+
+type TailRow = {
+  ts: string;
+  glyph: string;
+  detail: string;
+  tone: "ok" | "amber" | "error" | "muted" | "neutral";
+};
+
+function deriveTailRows(
+  events: IngestionEvent[],
+  startedAt: number,
+): TailRow[] {
+  return [...events]
+    .map<TailRow>((ev) => {
+      const ts = fmtClock(Date.now() - startedAt);
+      switch (ev.type) {
+        case "queued":
+          return {
+            ts,
+            glyph: "·",
+            detail: `queued${ev.model ? ` · ${ev.model}` : ""}`,
+            tone: "muted",
+          };
+        case "started":
+          return {
+            ts,
+            glyph: "●",
+            detail: `started · ${ev.model}`,
+            tone: "muted",
+          };
+        case "loaded-index":
+          return {
+            ts,
+            glyph: "···",
+            detail: `loaded index · ${ev.pageCount} pages · ${ev.edgeCount} edges`,
+            tone: "muted",
+          };
+        case "planning":
+          return { ts, glyph: "···", detail: "planning…", tone: "muted" };
+        case "plan-complete":
+          return {
+            ts,
+            glyph: "⚐",
+            detail: `plan · ${ev.opCount} ops${
+              ev.contradictionCount > 0
+                ? ` · ${ev.contradictionCount} contradiction${ev.contradictionCount === 1 ? "" : "s"}`
+                : ""
+            }`,
+            tone: ev.contradictionCount > 0 ? "amber" : "neutral",
+          };
+        case "op-start":
+          return {
+            ts,
+            glyph: "▸",
+            detail: `op-start · ${ev.op.action} ${ev.op.slug}`,
+            tone: "neutral",
+          };
+        case "op-complete":
+          return {
+            ts,
+            glyph: "✓",
+            detail: `saved ${ev.page.slug} · +${ev.edgesAdded} edges · ${ev.tokens.toLocaleString()} tok`,
+            tone: "ok",
+          };
+        case "op-failed":
+          return {
+            ts,
+            glyph: "✕",
+            detail: `op-failed · ${ev.op.slug} · ${ev.error.slice(0, 60)}`,
+            tone: "error",
+          };
+        case "edges-reconciled":
+          return {
+            ts,
+            glyph: "···",
+            detail: `edges · +${ev.added} / −${ev.removed}`,
+            tone: "muted",
+          };
+        case "succeeded":
+          return {
+            ts,
+            glyph: "✓",
+            detail: `sealed · ${ev.result.tokensUsed.toLocaleString()} tok total`,
+            tone: "ok",
+          };
+        case "failed":
+          return {
+            ts,
+            glyph: "✕",
+            detail: `failed · ${ev.error.slice(0, 80)}`,
+            tone: "error",
+          };
+      }
+    })
+    .reverse()
+    .slice(0, 8);
+}
+
+function fmtClock(ms: number): string {
+  const total = Math.max(0, ms / 1000);
+  if (total < 60) return `${total.toFixed(1)}s`;
+  const m = Math.floor(total / 60);
+  const s = Math.round(total % 60);
+  return `${m}m${s}s`;
+}
+
+// Silence unused-import warning if module shrinks.
+void (null as CSSProperties | null);

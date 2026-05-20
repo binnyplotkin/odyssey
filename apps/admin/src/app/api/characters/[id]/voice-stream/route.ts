@@ -1,10 +1,15 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { getCharacterStore, getWikiStore, getWorldSessionStore } from "@odyssey/db";
+import {
+  getCharacterStore,
+  getWikiStore,
+  getWikisStore,
+  getWorldSessionStore,
+} from "@odyssey/db";
 import { embedText } from "@odyssey/engine";
 import { curate } from "@odyssey/wiki-curator";
 import { TraceEnvelope } from "@/lib/voice-trace";
-import { buildVoiceSystemPrompt } from "@/lib/character-system-prompt";
+import { buildVoiceSystemPrompt } from "@odyssey/engine";
 import {
   shouldSkipRetrieval,
   getRecentTurnSummaries,
@@ -27,9 +32,14 @@ export const dynamic = "force-dynamic";
  * pipeline (Float32 PCM base64); this route translates int16 from the
  * Pocket TTS HTTP/SSE gateway into Float32 to preserve that contract.
  *
- * Pocket TTS does not accept streaming text input the way Moshi did, so we
- * wait for the full LLM reply before calling /speak. For the 1-2 sentence
- * voice agent shape this adds <300ms vs the old token-pipelined path.
+ * Pocket TTS doesn't accept streaming text input the way Moshi did, but we
+ * still want first-audio to land as soon as possible. Strategy: detect
+ * sentence boundaries inside the LLM token stream and fire one /speak per
+ * sentence the moment it completes. Fetches run in parallel; audio events
+ * are forwarded to the browser in dispatch order via a serial drain chain
+ * so chunks always play in sequence. For multi-sentence replies this drops
+ * first-audio from "LLM total + TTS first chunk" to roughly "LLM first
+ * sentence + TTS first chunk".
  *
  * SSE events:
  *   event: "trace"        TraceEnvelope JSON
@@ -60,6 +70,54 @@ const DEFAULT_MAX_TOKENS = 1024;
 const TTS_DEFAULT_VOICE = "abraham";
 const TTS_SAMPLE_RATE = 24000;
 const TTS_PUBLIC_BASE_URL = "https://audio-rt-production.up.railway.app";
+const TTS_MAX_CHUNK_CHARS = 220;
+
+// Abbreviations where a "." doesn't terminate a sentence. Tiny allow-list —
+// false negatives ("Dr. Smith" → split into two chunks) sound only slightly
+// off; false positives (failing to split at "The U.S. is huge.") cost real
+// latency by holding the whole reply in one chunk.
+const TTS_ABBREVIATIONS = new Set([
+  "mr", "mrs", "ms", "dr", "st", "jr", "sr",
+  "vs", "etc", "eg", "ie", "prof", "rev", "hon",
+  "no", "vol",
+]);
+
+function findTtsBoundary(text: string, fromIndex: number): number {
+  // Returns the index *after* a sentence-terminating punctuation followed by
+  // whitespace, or -1 if no boundary is visible in the buffer yet. Caller is
+  // responsible for the final flush at end-of-stream.
+  for (let i = fromIndex; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === "\n") return i + 1;
+    if (ch !== "." && ch !== "?" && ch !== "!") continue;
+    // Need whitespace after the punctuation, else we're mid-token ("3.14",
+    // "node.js"). At end-of-buffer, wait for more tokens.
+    if (i + 1 >= text.length) return -1;
+    if (!/\s/.test(text[i + 1])) continue;
+    if (ch === ".") {
+      let wordStart = i;
+      while (wordStart > 0 && /[A-Za-z]/.test(text[wordStart - 1])) wordStart -= 1;
+      const word = text.slice(wordStart, i).toLowerCase();
+      if (word && TTS_ABBREVIATIONS.has(word)) continue;
+    }
+    return i + 1;
+  }
+  return -1;
+}
+
+function findForceFlushBoundary(text: string, fromIndex: number): number {
+  // If the unsent tail exceeds TTS_MAX_CHUNK_CHARS with no sentence boundary
+  // in sight, cut at the latest comma or whitespace within the window so the
+  // chunk lands on a natural prosodic break. Returns -1 if we should wait.
+  const tail = text.length - fromIndex;
+  if (tail < TTS_MAX_CHUNK_CHARS) return -1;
+  const slice = text.slice(fromIndex, fromIndex + TTS_MAX_CHUNK_CHARS);
+  const lastComma = slice.lastIndexOf(",");
+  if (lastComma >= 60) return fromIndex + lastComma + 1;
+  const lastSpace = slice.lastIndexOf(" ");
+  if (lastSpace >= 60) return fromIndex + lastSpace + 1;
+  return fromIndex + TTS_MAX_CHUNK_CHARS;
+}
 
 export async function POST(
   req: NextRequest,
@@ -79,11 +137,38 @@ export async function POST(
   const promptChunk = body.promptChunk ?? "";
 
   const fallbackCharacter =
-    id === "abraham-fallback" ? { id, slug: "abraham", title: "Abraham" } : null;
-  const character = fallbackCharacter ?? (await getCharacterStore().getById(id));
+    id === "abraham-fallback"
+      ? { id, slug: "abraham", title: "Abraham", brainModel: null }
+      : null;
+  // Accept either a UUID id or a slug. Slug-based lookup makes scene
+  // definitions (which carry slugs, not generated ids) trivially compose
+  // with this route — no resolution layer in the caller.
+  const store = getCharacterStore();
+  const character =
+    fallbackCharacter ?? (await store.getById(id)) ?? (await store.getBySlug(id));
   if (!character) return jsonError(404, "character not found");
 
-  const requestedProvider: LlmProvider = body.provider ?? "cerebras";
+  // Resolve the voice-mode preference baked into the character's L04
+  // Mind/Model config. `brainModel.voice` is the per-mode override block;
+  // anything not set there falls back to the chat-mode top-level fields,
+  // so a character that only specifies voice.model inherits temperature/
+  // topP/maxTokens from chat. Request body still overrides everything —
+  // the wavefield UI's live picker is the highest-priority signal so a
+  // developer can swap models mid-session without re-saving L04.
+  const voiceCfg = character.brainModel?.voice;
+  const characterVoiceProvider: LlmProvider | undefined =
+    voiceCfg?.provider === "anthropic" || voiceCfg?.provider === "cerebras"
+      ? voiceCfg.provider
+      : character.brainModel?.provider === "anthropic" || character.brainModel?.provider === "cerebras"
+        ? (character.brainModel.provider as LlmProvider)
+        : undefined;
+  const characterVoiceModel: string | undefined = voiceCfg?.model ?? character.brainModel?.model;
+  const characterVoiceMaxTokens: number | undefined =
+    voiceCfg?.maxTokens ?? character.brainModel?.maxTokens;
+
+  // Hardcoded fallback when neither body nor character specify a provider:
+  // "cerebras" wins because voice latency budget favors it.
+  const requestedProvider: LlmProvider = body.provider ?? characterVoiceProvider ?? "cerebras";
   const hasCerebras = Boolean(process.env.CEREBRAS_API_KEY?.trim());
   const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
   const provider: LlmProvider =
@@ -98,7 +183,10 @@ export async function POST(
         : hasCerebras
           ? "cerebras"
           : "anthropic";
-  const maxTokens = Math.max(64, Math.min(1024, body.maxTokens ?? DEFAULT_MAX_TOKENS));
+  const maxTokens = Math.max(
+    64,
+    Math.min(1024, body.maxTokens ?? characterVoiceMaxTokens ?? DEFAULT_MAX_TOKENS),
+  );
   const voice = body.voice ?? TTS_DEFAULT_VOICE;
 
   if (!hasCerebras && !hasAnthropic) {
@@ -209,8 +297,11 @@ export async function POST(
                 : message;
               const queryEmbedding = await embedText(embedQuery);
               if (queryEmbedding) {
-                const hits = await getWikiStore().searchPagesByEmbedding(
-                  character.id,
+                const activeWikiIds = (await getWikisStore().listWikisForCharacter(character.id))
+                  .filter((wiki) => wiki.binding.isActive)
+                  .map((wiki) => wiki.id);
+                const hits = await getWikiStore().searchPagesByEmbeddingForWikis(
+                  activeWikiIds,
                   queryEmbedding,
                   { topK: 5, minSimilarity: 0.5 },
                 );
@@ -332,11 +423,113 @@ export async function POST(
               m.content.trim().length > 0,
           );
 
-        // Stream LLM tokens to the browser as they arrive AND accumulate the
-        // full reply so we can hand it to TTS as a single text in one /speak
-        // call once the LLM finishes.
+        // Stream LLM tokens to the browser AND fire Pocket TTS calls per
+        // completed sentence so audio starts flowing while the LLM is still
+        // generating. Each `/speak` is kicked off the instant a boundary is
+        // detected; their audio events are forwarded to the client in
+        // dispatch order via `drainChain` so chunks never play out of
+        // sequence. The fetches themselves run in parallel, gated only by
+        // Pocket TTS's own concurrency on the gateway side.
         let replyText = "";
         let emittedAnyToken = false;
+        let ttsCursor = 0;
+        let ttsChunkCount = 0;
+        let drainChain: Promise<void> = Promise.resolve();
+
+        const drainOneChunk = async (
+          chunkIdx: number,
+          fetchPromise: Promise<Response>,
+        ): Promise<void> => {
+          if (req.signal.aborted) return;
+          const ttsResp = await fetchPromise;
+          if (chunkIdx === 0) {
+            serverTrace.mark("server.tts.fetch.opened", { status: ttsResp.status });
+          }
+          if (!ttsResp.ok || !ttsResp.body) {
+            const detail = await ttsResp.text().catch(() => "");
+            throw new Error(
+              `Pocket TTS ${ttsResp.status}: ${detail.slice(0, 300) || "no body"}`,
+            );
+          }
+          const reader = ttsResp.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (req.signal.aborted) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            let frameEnd: number;
+            while ((frameEnd = buffer.indexOf("\n\n")) !== -1) {
+              const raw = buffer.slice(0, frameEnd);
+              buffer = buffer.slice(frameEnd + 2);
+              let eventName: string | null = null;
+              let dataLine = "";
+              for (const line of raw.split("\n")) {
+                if (line.startsWith("event: ")) eventName = line.slice(7).trim();
+                else if (line.startsWith("data: ")) dataLine += line.slice(6);
+              }
+              if (!eventName || !dataLine) continue;
+
+              if (eventName === "audio") {
+                const payload = JSON.parse(dataLine) as { chunk: string };
+                const float32B64 = int16Base64ToFloat32Base64(payload.chunk);
+                const samples = (Buffer.from(float32B64, "base64").byteLength / 4) | 0;
+                totalSamples += samples;
+                if (firstAudioAt === null) {
+                  firstAudioAt = performance.now();
+                  serverTrace.mark("server.tts.first-audio", {
+                    latencyMs: Math.round(firstAudioAt - startedAt),
+                    chunkIdx,
+                  });
+                  sendEvent("first-audio", {
+                    latencyMs: Math.round(firstAudioAt - startedAt),
+                  });
+                }
+                sendEvent("audio", {
+                  pcm: float32B64,
+                  samples,
+                  sampleRate: TTS_SAMPLE_RATE,
+                });
+              } else if (eventName === "error") {
+                const payload = JSON.parse(dataLine) as { message?: string };
+                throw new Error(`Pocket TTS error: ${payload.message ?? "unknown"}`);
+              }
+              // "meta" and "done" from /speak are absorbed; we emit our own
+              // browser-facing "done" below with combined LLM+TTS metrics.
+            }
+          }
+          serverTrace.mark("server.tts.chunk.drained", { chunkIdx });
+        };
+
+        const dispatchTtsChunk = (text: string): void => {
+          const trimmed = text.trim();
+          if (!trimmed) return;
+          const chunkIdx = ttsChunkCount++;
+          if (chunkIdx === 0) {
+            serverTrace.mark("server.tts.fetch.requested", {
+              voice,
+              firstChunkChars: trimmed.length,
+            });
+          }
+          serverTrace.mark("server.tts.chunk.dispatched", {
+            chunkIdx,
+            chars: trimmed.length,
+          });
+          const fetchPromise = fetch(`${ttsBaseUrl}/speak`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: trimmed, voice }),
+            signal: ttsAbort.signal,
+          });
+          // Attach a no-op rejection handler in case the drain chain rejects
+          // upstream and this fetch's failure is never observed by an awaiter
+          // — otherwise it surfaces as an unhandled promise rejection.
+          fetchPromise.catch(() => null);
+          drainChain = drainChain.then(() => drainOneChunk(chunkIdx, fetchPromise));
+        };
+
         const onToken = (delta: string) => {
           if (req.signal.aborted) return;
           if (!delta) return;
@@ -346,6 +539,22 @@ export async function POST(
           }
           replyText += delta;
           sendEvent("token", { delta });
+
+          // Flush every sentence boundary visible in the new tail. One token
+          // can include multiple boundaries (rare but possible — "Yes. Why?").
+          while (true) {
+            const boundary = findTtsBoundary(replyText, ttsCursor);
+            if (boundary < 0) break;
+            dispatchTtsChunk(replyText.slice(ttsCursor, boundary));
+            ttsCursor = boundary;
+          }
+          // Runaway-sentence guard: force-flush if the unsent tail crosses
+          // TTS_MAX_CHUNK_CHARS without a terminator.
+          const forced = findForceFlushBoundary(replyText, ttsCursor);
+          if (forced > 0) {
+            dispatchTtsChunk(replyText.slice(ttsCursor, forced));
+            ttsCursor = forced;
+          }
         };
 
         // Cerebras-only with retry-once on rate-limit / queue-exceeded.
@@ -357,7 +566,15 @@ export async function POST(
         }
         if (provider === "anthropic") {
           // Explicit override — keep Anthropic available when caller asks for it.
-          modelId = body.model ?? ANTHROPIC_DEFAULT_MODEL;
+          // Priority: body.model → character voice/chat model → hardcoded Anthropic default.
+          // Only honor the character's model when it's actually an Anthropic-side model;
+          // a character pinned to a Cerebras model shouldn't bleed into the Anthropic
+          // fallback branch (which only fires when env steers us here anyway).
+          const characterAnthropicModel =
+            characterVoiceProvider === "anthropic" && characterVoiceModel
+              ? characterVoiceModel
+              : undefined;
+          modelId = body.model ?? characterAnthropicModel ?? ANTHROPIC_DEFAULT_MODEL;
           serverTrace.mark("server.llm.attempt", { provider: "anthropic" });
           ({ inputTokens, outputTokens } = await streamFromAnthropic({
             apiKey: process.env.ANTHROPIC_API_KEY!.trim(),
@@ -371,7 +588,13 @@ export async function POST(
           chosenProvider = "anthropic";
           serverTrace.mark("server.llm.succeeded", { provider: "anthropic", model: modelId });
         } else {
-          modelId = body.model ?? CEREBRAS_DEFAULT_MODEL;
+          // Same priority order as the Anthropic branch — body wins, then
+          // character pref (when Cerebras-side), then hardcoded default.
+          const characterCerebrasModel =
+            characterVoiceProvider === "cerebras" && characterVoiceModel
+              ? characterVoiceModel
+              : undefined;
+          modelId = body.model ?? characterCerebrasModel ?? CEREBRAS_DEFAULT_MODEL;
           for (let attempt = 1; attempt <= 2; attempt += 1) {
             serverTrace.mark("server.llm.attempt", { provider: "cerebras", attempt });
             try {
@@ -427,79 +650,26 @@ export async function POST(
 
         if (req.signal.aborted) return;
 
-        const finalText = replyText.trim();
-        if (!finalText) {
+        // Final flush: hand any unsent tail to TTS. Everything before
+        // ttsCursor was already dispatched as sentences completed.
+        if (ttsCursor < replyText.length) {
+          dispatchTtsChunk(replyText.slice(ttsCursor));
+          ttsCursor = replyText.length;
+        }
+
+        if (ttsChunkCount === 0) {
           throw new Error("LLM returned an empty reply.");
         }
 
-        // Hand the full reply to Pocket TTS. /speak streams int16 PCM frames
-        // back as SSE; we convert each to Float32 and forward as base64 PCM
-        // so the browser keeps its existing decoder.
-        serverTrace.mark("server.tts.fetch.requested", { chars: finalText.length, voice });
-        const ttsResp = await fetch(`${ttsBaseUrl}/speak`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: finalText, voice }),
-          signal: ttsAbort.signal,
+        // Wait for every dispatched chunk to finish forwarding audio to the
+        // browser. Errors from any chunk surface here. On success, the
+        // browser has already received every audio frame.
+        await drainChain;
+
+        serverTrace.mark("server.tts.done", {
+          audioSamples: totalSamples,
+          chunks: ttsChunkCount,
         });
-        serverTrace.mark("server.tts.fetch.opened", { status: ttsResp.status });
-        if (!ttsResp.ok || !ttsResp.body) {
-          const detail = await ttsResp.text().catch(() => "");
-          throw new Error(
-            `Pocket TTS ${ttsResp.status}: ${detail.slice(0, 300) || "no body"}`,
-          );
-        }
-
-        const reader = ttsResp.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (req.signal.aborted) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          let frameEnd: number;
-          while ((frameEnd = buffer.indexOf("\n\n")) !== -1) {
-            const raw = buffer.slice(0, frameEnd);
-            buffer = buffer.slice(frameEnd + 2);
-            let eventName: string | null = null;
-            let dataLine = "";
-            for (const line of raw.split("\n")) {
-              if (line.startsWith("event: ")) eventName = line.slice(7).trim();
-              else if (line.startsWith("data: ")) dataLine += line.slice(6);
-            }
-            if (!eventName || !dataLine) continue;
-
-            if (eventName === "audio") {
-              const payload = JSON.parse(dataLine) as { chunk: string };
-              const float32B64 = int16Base64ToFloat32Base64(payload.chunk);
-              const samples = (Buffer.from(float32B64, "base64").byteLength / 4) | 0;
-              totalSamples += samples;
-              if (firstAudioAt === null) {
-                firstAudioAt = performance.now();
-                serverTrace.mark("server.tts.first-audio", {
-                  latencyMs: Math.round(firstAudioAt - startedAt),
-                });
-                sendEvent("first-audio", {
-                  latencyMs: Math.round(firstAudioAt - startedAt),
-                });
-              }
-              sendEvent("audio", {
-                pcm: float32B64,
-                samples,
-                sampleRate: TTS_SAMPLE_RATE,
-              });
-            } else if (eventName === "error") {
-              const payload = JSON.parse(dataLine) as { message?: string };
-              throw new Error(`Pocket TTS error: ${payload.message ?? "unknown"}`);
-            }
-            // "meta" and "done" from /speak are absorbed; we emit our own
-            // browser-facing "done" below with combined LLM+TTS metrics.
-          }
-        }
-
-        serverTrace.mark("server.tts.done", { audioSamples: totalSamples });
         if (body.sessionId) {
           await getWorldSessionStore().appendEvent({
             sessionId: body.sessionId,
@@ -604,6 +774,11 @@ export async function POST(
         }
         sendEvent("error", { message: msg });
       } finally {
+        // Cancel any /speak fetches that may still be in flight — relevant
+        // when a chunk's drain threw and later chunks' requests are now
+        // orphaned (no consumer reads their body). On success this is a
+        // no-op since every chunk has already completed.
+        if (!ttsAbort.signal.aborted) ttsAbort.abort();
         req.signal.removeEventListener("abort", onAbort);
         closeStream();
       }

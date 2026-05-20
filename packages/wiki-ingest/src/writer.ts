@@ -119,6 +119,8 @@ export async function write(args: {
     contradictions,
     sourceRefs,
     tokens: result.tokens,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
   };
 }
 

@@ -1,5 +1,10 @@
 import { NextRequest } from "next/server";
-import { getCharacterStore, getWikiStore, type WikiSourceKind } from "@odyssey/db";
+import {
+  getCharacterStore,
+  getWikiStore,
+  getWikisStore,
+  type WikiSourceKind,
+} from "@odyssey/db";
 import { runIngestion, isKnownModel } from "@odyssey/wiki-ingest";
 import { embedText, EMBEDDING_MODEL } from "@odyssey/engine";
 
@@ -65,13 +70,19 @@ export async function POST(
 
   const character = await getCharacterStore().getById(id);
   if (!character) return jsonError(404, "character not found");
+  const boundWikis = await getWikisStore().listWikisForCharacter(character.id);
+  const targetWiki =
+    boundWikis.find((w) => w.binding.isActive && w.binding.priority === "primary") ??
+    boundWikis.find((w) => w.binding.isActive) ??
+    boundWikis[0];
+  if (!targetWiki) return jsonError(404, "character has no bound wiki");
 
   // Create the source row up-front. If the user's connection drops mid-run,
   // the source is at least persisted and the ingestion log will reflect a
   // running-then-orphaned state (surfaced as "failed" on retry).
   const wiki = getWikiStore();
   const source = await wiki.createSource({
-    characterId: character.id,
+    wikiId: targetWiki.id,
     title: body.title.trim(),
     kind: body.kind,
     content: body.content,
@@ -88,7 +99,7 @@ export async function POST(
 
       try {
         for await (const ev of runIngestion({
-          characterId: character.id,
+          wikiId: targetWiki.id,
           sourceId: source.id,
           model: body.model,
           embed: embedText,
@@ -107,6 +118,8 @@ export async function POST(
               type: "failed",
               error: msg,
               tokensUsed: 0,
+              inputTokens: 0,
+              outputTokens: 0,
             })}\n\n`,
           ),
         );

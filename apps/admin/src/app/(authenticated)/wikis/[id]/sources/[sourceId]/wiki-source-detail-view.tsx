@@ -1,0 +1,2059 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type {
+  WikiIngestionLogRecord,
+  WikiPageRecord,
+  WikiPageType,
+  WikiSourceKind,
+  WikiSourceRecord,
+  WikiSourceRefRecord,
+} from "@odyssey/db";
+import { RunEffectDiffDrawer } from "@/components/run-effect-diff-drawer";
+
+/* ── Tokens ────────────────────────────────────────────────────── */
+
+const MONO = '"JetBrains Mono", ui-monospace, monospace';
+const DISPLAY = '"Space Grotesk", system-ui, sans-serif';
+const BODY = '"Geist", "Inter", system-ui, sans-serif';
+
+const FG = "rgba(255, 255, 255, 0.95)";
+const TEXT_PRIMARY = "rgba(255, 255, 255, 0.88)";
+const TEXT_SECONDARY = "rgba(255, 255, 255, 0.7)";
+const TEXT_MUTED = "rgba(255, 255, 255, 0.55)";
+const TEXT_FADED = "rgba(255, 255, 255, 0.4)";
+const TEXT_GHOST = "rgba(255, 255, 255, 0.32)";
+const TEXT_QUIET = "rgba(255, 255, 255, 0.2)";
+
+const PANEL_BG = "#0A0A0A";
+const BORDER = "rgba(255, 255, 255, 0.08)";
+const BORDER_STRONG = "rgba(255, 255, 255, 0.12)";
+const DIVIDER = "rgba(255, 255, 255, 0.06)";
+const INPUT_BG = "rgba(255, 255, 255, 0.02)";
+
+const ACCENT = "#8CE7D2";
+const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
+const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
+
+const WARN = "#FACC15";
+const WARN_SOFT = "rgba(250, 204, 21, 0.06)";
+const WARN_RING = "rgba(250, 204, 21, 0.3)";
+
+const DANGER = "#F87171";
+const DANGER_SOFT = "rgba(248, 113, 113, 0.06)";
+const DANGER_RING = "rgba(248, 113, 113, 0.4)";
+
+const TYPE_COLOR: Record<WikiPageType, string> = {
+  entity: "#8CE7D2",
+  event: "#60A5FA",
+  concept: "#A78BFA",
+  relationship: "#FACC15",
+  timeline: "#2DD4BF",
+  voice_identity: "#F472B6",
+};
+
+const KIND_LABEL: Record<WikiSourceKind, string> = {
+  bible: "PRIMARY · BIBLE",
+  primary: "PRIMARY",
+  commentary: "ANNOTATION · COMMENTARY",
+  midrash: "ANNOTATION · MIDRASH",
+  annotation: "ANNOTATION",
+  note: "REFERENCE · NOTE",
+  reference: "REFERENCE",
+  transcript: "TRANSCRIPT",
+};
+
+/* ── Props ─────────────────────────────────────────────────────── */
+
+type Props = {
+  wikiId: string;
+  wikiTitle: string;
+  characterId: string;
+  source: WikiSourceRecord;
+  pages: WikiPageRecord[];
+  runs: WikiIngestionLogRecord[];
+  refs: WikiSourceRefRecord[];
+  activeRunId: string | null;
+  routeBase: string;
+};
+
+/* ── Helpers ───────────────────────────────────────────────────── */
+
+function relative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function wordCount(s: string): number {
+  return s.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function byteSize(s: string): string {
+  const n = new Blob([s]).size;
+  if (n < 1024) return `${n} b`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} kb`;
+  return `${(n / (1024 * 1024)).toFixed(1)} mb`;
+}
+
+function shortRunId(id: string): string {
+  // Friendly short ID — first 5 chars of the slug after any prefix, uppercased
+  const tail = id.replace(/^run[_-]?/i, "");
+  return `R-${tail.slice(0, 5).toUpperCase()}`;
+}
+
+function runStatus(
+  run: WikiIngestionLogRecord,
+): { label: string; color: string; tone: "active" | "warn" | "fail" | "neutral" } {
+  if (run.status === "failed") {
+    return { label: "FAILED", color: DANGER, tone: "fail" };
+  }
+  if (run.status === "running") {
+    return { label: "RUNNING", color: ACCENT, tone: "active" };
+  }
+  if (run.contradictionsFound > 0) {
+    return { label: "PARTIAL", color: WARN, tone: "warn" };
+  }
+  return { label: "COMPLETE", color: ACCENT, tone: "active" };
+}
+
+function pagesTouchedByRun(
+  run: WikiIngestionLogRecord | null,
+  refs: WikiSourceRefRecord[],
+  pageById: Map<string, WikiPageRecord>,
+): WikiPageRecord[] {
+  if (!run) return [];
+  // Refs don't currently carry a runId, so we approximate using time window
+  // between this run and the previous one.
+  const at = new Date(run.startedAt).getTime();
+  return refs
+    .filter((r) => {
+      const t = new Date(r.createdAt).getTime();
+      // Within 6 hours of the run start
+      return t >= at - 6 * 3600_000 && t <= at + 6 * 3600_000;
+    })
+    .map((r) => pageById.get(r.pageId))
+    .filter((p): p is WikiPageRecord => Boolean(p));
+}
+
+/* ── Root ──────────────────────────────────────────────────────── */
+
+export function WikiSourceDetailView({
+  wikiId,
+  wikiTitle,
+  source,
+  pages,
+  runs,
+  refs,
+  activeRunId,
+  routeBase,
+}: Props) {
+  const router = useRouter();
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(
+    activeRunId,
+  );
+
+  const pageById = useMemo(
+    () => new Map(pages.map((p) => [p.id, p])),
+    [pages],
+  );
+
+  const activeRun = useMemo(
+    () => runs.find((r) => r.id === selectedRunId) ?? runs[0] ?? null,
+    [runs, selectedRunId],
+  );
+
+  const effects = useMemo(
+    () => pagesTouchedByRun(activeRun, refs, pageById),
+    [activeRun, refs, pageById],
+  );
+
+  const lastRun = runs[0] ?? null;
+
+  function handleSelectRun(runId: string) {
+    setSelectedRunId(runId);
+    router.replace(`${routeBase}/sources/${source.id}?run=${runId}`, {
+      scroll: false,
+    });
+  }
+
+  const kindLabel = KIND_LABEL[source.kind];
+
+  const searchParams = useSearchParams();
+  const effectPageIds = useMemo(() => effects.map((p) => p.id), [effects]);
+  const handleOpenDiff = useCallback(
+    (pageId: string) => {
+      const next = new URLSearchParams(searchParams.toString());
+      next.set("diff", pageId);
+      router.replace(`${routeBase}/sources/${source.id}?${next.toString()}`, {
+        scroll: false,
+      });
+    },
+    [router, routeBase, source.id, searchParams],
+  );
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 0,
+        padding: "0 0 80px",
+        background: PANEL_BG,
+        minHeight: "calc(100vh - 67px)",
+      }}
+    >
+      <TopEyebrow
+        wikiId={wikiId}
+        wikiTitle={wikiTitle}
+        sourceTitle={source.title}
+      />
+
+      <HeaderBar kindLabel={kindLabel} sourceId={source.id} />
+
+      <HeroBlock source={source} />
+
+      <MetaStrip
+        source={source}
+        runCount={runs.length}
+        lastRun={lastRun}
+        refs={refs}
+      />
+
+      <main
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 20,
+          padding: "32px 32px 0",
+          minWidth: 0,
+        }}
+      >
+        {activeRun ? (
+          <>
+            <RunHistoryStrip
+              runs={runs}
+              activeRunId={activeRun.id}
+              onSelect={handleSelectRun}
+            />
+            <PipelineHeader run={activeRun} />
+            <InputPane source={source} run={activeRun} />
+            <PromptPane run={activeRun} wikiTitle={wikiTitle} />
+            <OutputPane run={activeRun} effects={effects} />
+            <EffectsPane
+              run={activeRun}
+              effects={effects}
+              refs={refs.filter(
+                (r) =>
+                  effects.some((p) => p.id === r.pageId) &&
+                  r.sourceId === source.id,
+              )}
+              routeBase={routeBase}
+              onOpenDiff={handleOpenDiff}
+            />
+          </>
+        ) : (
+          <EmptyState />
+        )}
+      </main>
+      {activeRun && (
+        <RunEffectDiffDrawer
+          wikiId={wikiId}
+          runId={activeRun.id}
+          effectPageIds={effectPageIds}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── TopEyebrow ────────────────────────────────────────────────── */
+
+function TopEyebrow({
+  wikiId,
+  wikiTitle,
+  sourceTitle,
+}: {
+  wikiId: string;
+  wikiTitle: string;
+  sourceTitle: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "18px 32px",
+        borderTop: "0",
+        borderRight: "0",
+        borderBottom: `1px solid ${DIVIDER}`,
+        borderLeft: "0",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 14,
+          fontFamily: MONO,
+          fontSize: 11,
+          fontWeight: 500,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+        }}
+      >
+        <Link
+          href="/wikis"
+          style={{ color: TEXT_GHOST, textDecoration: "none" }}
+        >
+          wikis
+        </Link>
+        <span style={{ color: TEXT_QUIET }}>/</span>
+        <Link
+          href={`/wikis/${wikiId}`}
+          style={{ color: TEXT_MUTED, textDecoration: "none" }}
+        >
+          {wikiTitle}
+        </Link>
+        <span style={{ color: TEXT_QUIET }}>/</span>
+        <Link
+          href={`/wikis/${wikiId}/sources`}
+          style={{ color: TEXT_MUTED, textDecoration: "none" }}
+        >
+          sources
+        </Link>
+        <span style={{ color: TEXT_QUIET }}>/</span>
+        <span style={{ color: ACCENT }}>{sourceTitle}</span>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 14,
+          fontFamily: MONO,
+          fontSize: 10.5,
+          fontWeight: 500,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: TEXT_FADED,
+        }}
+      >
+        <span>⌘← back</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── HeaderBar ─────────────────────────────────────────────────── */
+
+function HeaderBar({
+  kindLabel,
+  sourceId,
+}: {
+  kindLabel: string;
+  sourceId: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "22px 32px 0",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 14,
+        }}
+      >
+        <div
+          style={{
+            display: "inline-flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            padding: "7px 12px",
+            background: ACCENT_SOFT,
+            borderTop: `1px solid ${ACCENT_RING}`,
+            borderRight: `1px solid ${ACCENT_RING}`,
+            borderBottom: `1px solid ${ACCENT_RING}`,
+            borderLeft: `1px solid ${ACCENT_RING}`,
+          }}
+        >
+          <div style={{ width: 6, height: 6, background: ACCENT }} />
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: ACCENT,
+            }}
+          >
+            {kindLabel}
+          </span>
+        </div>
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: TEXT_FADED,
+          }}
+        >
+          {sourceId.slice(0, 12)}
+        </span>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <GhostBtn label="OPEN RAW" trailing="↗" />
+        <PrimaryBtn label="RE-INGEST" trailing="↻" />
+        <IconBtn label="⋯" />
+      </div>
+    </div>
+  );
+}
+
+function GhostBtn({
+  label,
+  trailing,
+}: {
+  label: string;
+  trailing?: string;
+}) {
+  return (
+    <button
+      type="button"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "9px 14px",
+        background: "transparent",
+        borderTop: `1px solid ${BORDER_STRONG}`,
+        borderRight: `1px solid ${BORDER_STRONG}`,
+        borderBottom: `1px solid ${BORDER_STRONG}`,
+        borderLeft: `1px solid ${BORDER_STRONG}`,
+        fontFamily: MONO,
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color: TEXT_PRIMARY,
+        cursor: "pointer",
+      }}
+    >
+      {label}
+      {trailing && <span style={{ color: TEXT_FADED }}>{trailing}</span>}
+    </button>
+  );
+}
+
+function PrimaryBtn({
+  label,
+  trailing,
+}: {
+  label: string;
+  trailing?: string;
+}) {
+  return (
+    <button
+      type="button"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "9px 14px",
+        background: ACCENT,
+        borderTop: `1px solid ${ACCENT}`,
+        borderRight: `1px solid ${ACCENT}`,
+        borderBottom: `1px solid ${ACCENT}`,
+        borderLeft: `1px solid ${ACCENT}`,
+        fontFamily: MONO,
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color: "#0A0A0A",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+      {trailing && <span>{trailing}</span>}
+    </button>
+  );
+}
+
+function IconBtn({ label }: { label: string }) {
+  return (
+    <button
+      type="button"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 36,
+        height: 36,
+        background: "transparent",
+        borderTop: `1px solid ${BORDER_STRONG}`,
+        borderRight: `1px solid ${BORDER_STRONG}`,
+        borderBottom: `1px solid ${BORDER_STRONG}`,
+        borderLeft: `1px solid ${BORDER_STRONG}`,
+        fontFamily: MONO,
+        fontSize: 13,
+        fontWeight: 600,
+        color: TEXT_MUTED,
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/* ── HeroBlock ─────────────────────────────────────────────────── */
+
+function HeroBlock({ source }: { source: WikiSourceRecord }) {
+  const note =
+    typeof source.metadata?.note === "string"
+      ? (source.metadata.note as string)
+      : null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        padding: "36px 40px 12px",
+      }}
+    >
+      <h1
+        style={{
+          margin: 0,
+          fontFamily: DISPLAY,
+          fontSize: 52,
+          fontWeight: 500,
+          lineHeight: "60px",
+          letterSpacing: "-0.014em",
+          color: FG,
+        }}
+      >
+        {source.title}
+      </h1>
+      {note && (
+        <p
+          style={{
+            margin: 0,
+            maxWidth: 760,
+            fontFamily: BODY,
+            fontSize: 16,
+            fontWeight: 400,
+            lineHeight: "26px",
+            color: TEXT_SECONDARY,
+          }}
+        >
+          {note}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ── MetaStrip ─────────────────────────────────────────────────── */
+
+function MetaStrip({
+  source,
+  runCount,
+  lastRun,
+  refs,
+}: {
+  source: WikiSourceRecord;
+  runCount: number;
+  lastRun: WikiIngestionLogRecord | null;
+  refs: WikiSourceRefRecord[];
+}) {
+  const words = wordCount(source.content);
+  const size = byteSize(source.content);
+
+  const lastIngested = lastRun
+    ? `${relative(lastRun.startedAt)} · ${shortRunId(lastRun.id)}`
+    : "never";
+
+  const pagesWritten = lastRun
+    ? `${lastRun.pagesCreated + lastRun.pagesUpdated} · ${lastRun.edgesAdded} edges`
+    : `${refs.length} refs`;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 32,
+        padding: "8px 40px 0",
+        flexWrap: "wrap",
+      }}
+    >
+      <MetaCell label="KIND" value={source.kind.toUpperCase()} accent />
+      <MetaDivider />
+      <MetaCell label="WORDS" value={words.toLocaleString()} />
+      <MetaDivider />
+      <MetaCell label="SIZE" value={size} />
+      <MetaDivider />
+      <MetaCell label="RUNS" value={String(runCount)} />
+      <MetaDivider />
+      <MetaCell label="LAST INGESTED" value={lastIngested} />
+      <MetaDivider />
+      <MetaCell label="PAGES WRITTEN" value={pagesWritten} />
+    </div>
+  );
+}
+
+function MetaCell({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: TEXT_FADED,
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: 12.5,
+          fontWeight: accent ? 600 : 500,
+          letterSpacing: accent ? "0.08em" : "normal",
+          color: accent ? ACCENT : TEXT_PRIMARY,
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function MetaDivider() {
+  return <div style={{ width: 1, height: 32, background: DIVIDER }} />;
+}
+
+/* ── RunHistoryStrip ───────────────────────────────────────────── */
+
+function RunHistoryStrip({
+  runs,
+  activeRunId,
+  onSelect,
+}: {
+  runs: WikiIngestionLogRecord[];
+  activeRunId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const activeRun = runs.find((r) => r.id === activeRunId);
+  const olderRuns = runs.filter((r) => r.id !== activeRunId);
+  const isLatest = runs[0]?.id === activeRunId;
+
+  if (!activeRun) return null;
+
+  const status = runStatus(activeRun);
+  const statusColor =
+    status.tone === "fail" ? DANGER : status.tone === "warn" ? WARN : ACCENT;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={olderRuns.length === 0}
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 14,
+          padding: "10px 14px",
+          background: "transparent",
+          borderTop: `1px solid ${BORDER}`,
+          borderRight: `1px solid ${BORDER}`,
+          borderBottom: open
+            ? `1px solid ${DIVIDER}`
+            : `1px solid ${BORDER}`,
+          borderLeft: `1px solid ${BORDER}`,
+          cursor: olderRuns.length === 0 ? "default" : "pointer",
+          textAlign: "left",
+          width: "100%",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 14,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 10,
+              fontWeight: 500,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              color: TEXT_FADED,
+            }}
+          >
+            {isLatest ? "LATEST RUN" : "VIEWING"}
+          </span>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: ACCENT,
+            }}
+          >
+            {shortRunId(activeRun.id)}
+          </span>
+          <span
+            style={{ fontFamily: MONO, fontSize: 11, color: TEXT_MUTED }}
+          >
+            {relative(activeRun.startedAt)}
+          </span>
+          <span style={{ color: TEXT_QUIET }}>·</span>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 10.5,
+              fontWeight: 500,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: statusColor,
+            }}
+          >
+            {status.label}
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          {!isLatest && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (runs[0]) onSelect(runs[0].id);
+              }}
+              style={{
+                fontFamily: MONO,
+                fontSize: 10.5,
+                fontWeight: 500,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color: TEXT_SECONDARY,
+                cursor: "pointer",
+              }}
+            >
+              JUMP TO LATEST ↑
+            </span>
+          )}
+          {olderRuns.length > 0 && (
+            <span
+              style={{
+                fontFamily: MONO,
+                fontSize: 10.5,
+                fontWeight: 500,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color: TEXT_MUTED,
+              }}
+            >
+              HISTORY · {olderRuns.length} {open ? "↑" : "↓"}
+            </span>
+          )}
+        </div>
+      </button>
+      {open && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 0,
+            borderTop: 0,
+            borderRight: `1px solid ${BORDER}`,
+            borderBottom: `1px solid ${BORDER}`,
+            borderLeft: `1px solid ${BORDER}`,
+            background: INPUT_BG,
+          }}
+        >
+          {olderRuns.map((run) => (
+            <CompactRunRow
+              key={run.id}
+              run={run}
+              onClick={() => {
+                onSelect(run.id);
+                setOpen(false);
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompactRunRow({
+  run,
+  onClick,
+}: {
+  run: WikiIngestionLogRecord;
+  onClick: () => void;
+}) {
+  const status = runStatus(run);
+  const statusColor =
+    status.tone === "fail" ? DANGER : status.tone === "warn" ? WARN : TEXT_MUTED;
+
+  const leftBorder =
+    status.tone === "fail"
+      ? DANGER_RING
+      : status.tone === "warn"
+        ? WARN_RING
+        : BORDER;
+
+  const summary =
+    run.status === "failed"
+      ? run.errorMessage ?? "failed"
+      : `${run.pagesCreated + run.pagesUpdated} pages · ${run.edgesAdded} edges`;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 0,
+        padding: "10px 14px",
+        background: "transparent",
+        borderTop: 0,
+        borderRight: 0,
+        borderBottom: `1px solid ${DIVIDER}`,
+        borderLeft: `2px solid ${leftBorder}`,
+        cursor: "pointer",
+        textAlign: "left",
+        width: "100%",
+      }}
+    >
+      <span
+        style={{
+          width: 80,
+          flexShrink: 0,
+          fontFamily: MONO,
+          fontSize: 12,
+          fontWeight: 500,
+          color: TEXT_PRIMARY,
+        }}
+      >
+        {shortRunId(run.id)}
+      </span>
+      <span
+        style={{
+          width: 110,
+          flexShrink: 0,
+          fontFamily: MONO,
+          fontSize: 11,
+          color: TEXT_MUTED,
+        }}
+      >
+        {relative(run.startedAt)}
+      </span>
+      <span
+        style={{
+          width: 100,
+          flexShrink: 0,
+          fontFamily: MONO,
+          fontSize: 10.5,
+          fontWeight: 500,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: statusColor,
+        }}
+      >
+        {status.label}
+      </span>
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          fontFamily: MONO,
+          fontSize: 11,
+          color: TEXT_SECONDARY,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {summary}
+      </span>
+      <span
+        style={{
+          width: 140,
+          flexShrink: 0,
+          fontFamily: MONO,
+          fontSize: 11,
+          color: TEXT_FADED,
+          textAlign: "right",
+        }}
+      >
+        {run.model ?? "—"}
+      </span>
+    </button>
+  );
+}
+
+/* ── PipelineHeader ────────────────────────────────────────────── */
+
+function PipelineHeader({ run }: { run: WikiIngestionLogRecord }) {
+  const status = runStatus(run);
+  const duration =
+    run.finishedAt && run.startedAt
+      ? `${((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000).toFixed(1)}s`
+      : "—";
+
+  const statusColor =
+    status.tone === "fail" ? DANGER : status.tone === "warn" ? WARN : ACCENT;
+  const statusBg =
+    status.tone === "fail"
+      ? DANGER_SOFT
+      : status.tone === "warn"
+        ? WARN_SOFT
+        : "rgba(140, 231, 210, 0.1)";
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "18px 22px",
+        background: ACCENT_SOFT,
+        borderTop: `1px solid ${ACCENT_RING}`,
+        borderRight: `1px solid ${ACCENT_RING}`,
+        borderBottom: `1px solid ${ACCENT_RING}`,
+        borderLeft: `2px solid ${ACCENT}`,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "baseline",
+          gap: 18,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            color: ACCENT,
+          }}
+        >
+          PIPELINE
+        </span>
+        <span
+          style={{
+            fontFamily: DISPLAY,
+            fontSize: 24,
+            fontWeight: 500,
+            letterSpacing: "-0.01em",
+            color: FG,
+          }}
+        >
+          Run {shortRunId(run.id)}
+        </span>
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: 11,
+            fontWeight: 400,
+            color: TEXT_FADED,
+          }}
+        >
+          {new Date(run.startedAt).toISOString().replace("T", " ").slice(0, 16)}{" "}
+          UTC
+        </span>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 18,
+        }}
+      >
+        <HeaderStat label="DURATION" value={duration} />
+        <HeaderDivider />
+        <HeaderStat
+          label="PAGES"
+          value={`${run.pagesCreated + run.pagesUpdated}`}
+        />
+        <HeaderDivider />
+        <HeaderStat
+          label="TOKENS"
+          value={`${(run.tokensUsed / 1000).toFixed(1)}k`}
+        />
+        <HeaderDivider />
+        <div
+          style={{
+            display: "inline-flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            padding: "7px 12px",
+            background: statusBg,
+            borderTop: `1px solid ${statusColor}`,
+            borderRight: `1px solid ${statusColor}`,
+            borderBottom: `1px solid ${statusColor}`,
+            borderLeft: `1px solid ${statusColor}`,
+          }}
+        >
+          <div style={{ width: 6, height: 6, background: statusColor }} />
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: statusColor,
+            }}
+          >
+            {status.label}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HeaderStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 3,
+        alignItems: "flex-end",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: 9.5,
+          fontWeight: 500,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: TEXT_FADED,
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: 12.5,
+          fontWeight: 500,
+          color: TEXT_PRIMARY,
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function HeaderDivider() {
+  return <div style={{ width: 1, height: 30, background: BORDER }} />;
+}
+
+/* ── Pane shell + gutter ───────────────────────────────────────── */
+
+function PaneShell({
+  number,
+  title,
+  subtitle,
+  trailing,
+  showConnector = true,
+  children,
+}: {
+  number: number;
+  title: string;
+  subtitle: string;
+  trailing?: React.ReactNode;
+  showConnector?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "stretch",
+        gap: 0,
+        borderTop: `1px solid ${BORDER}`,
+        borderRight: `1px solid ${BORDER}`,
+        borderBottom: `1px solid ${BORDER}`,
+        borderLeft: `1px solid ${BORDER}`,
+        background: PANEL_BG,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "flex-start",
+          padding: "24px 0",
+          width: 64,
+          flexShrink: 0,
+          borderTop: 0,
+          borderRight: `1px solid ${DIVIDER}`,
+          borderBottom: 0,
+          borderLeft: 0,
+          gap: 14,
+        }}
+      >
+        <div
+          style={{
+            width: 28,
+            height: 28,
+            background: ACCENT_SOFT,
+            borderTop: `1px solid ${ACCENT}`,
+            borderRight: `1px solid ${ACCENT}`,
+            borderBottom: `1px solid ${ACCENT}`,
+            borderLeft: `1px solid ${ACCENT}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 12,
+              fontWeight: 700,
+              color: ACCENT,
+            }}
+          >
+            {number}
+          </span>
+        </div>
+        {showConnector && (
+          <div
+            style={{
+              width: 1,
+              flex: 1,
+              minHeight: 120,
+              background: BORDER,
+            }}
+          />
+        )}
+      </div>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          padding: "24px 28px 28px",
+          gap: 18,
+          minWidth: 0,
+        }}
+      >
+        <header
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "baseline",
+              gap: 14,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: DISPLAY,
+                fontSize: 22,
+                fontWeight: 500,
+                letterSpacing: "-0.01em",
+                color: FG,
+              }}
+            >
+              {title}
+            </span>
+            <span
+              style={{
+                fontFamily: MONO,
+                fontSize: 11,
+                fontWeight: 500,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: TEXT_FADED,
+              }}
+            >
+              {subtitle}
+            </span>
+          </div>
+          {trailing}
+        </header>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/* ── InputPane ─────────────────────────────────────────────────── */
+
+function InputPane({
+  source,
+  run,
+}: {
+  source: WikiSourceRecord;
+  run: WikiIngestionLogRecord;
+}) {
+  const totalWords = wordCount(source.content);
+  const tokensApprox = Math.round(totalWords * 1.3);
+  const excerpt = source.content.slice(0, 1600);
+
+  return (
+    <PaneShell
+      number={1}
+      title="Input"
+      subtitle="SOURCE CONTENT"
+      trailing={
+        <span style={{ fontFamily: MONO, fontSize: 11, color: TEXT_MUTED }}>
+          ~{tokensApprox.toLocaleString()} tokens
+        </span>
+      }
+    >
+      <pre
+        style={{
+          margin: 0,
+          padding: "22px 24px",
+          background: INPUT_BG,
+          borderTop: `1px solid ${BORDER}`,
+          borderRight: `1px solid ${BORDER}`,
+          borderBottom: `1px solid ${BORDER}`,
+          borderLeft: `1px solid ${BORDER}`,
+          fontFamily: MONO,
+          fontSize: 12.5,
+          fontWeight: 400,
+          lineHeight: "22px",
+          color: TEXT_SECONDARY,
+          whiteSpace: "pre-wrap",
+          maxHeight: 460,
+          overflow: "auto",
+        }}
+      >
+        {excerpt}
+        {source.content.length > excerpt.length && "\n…"}
+      </pre>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 18,
+          padding: "0 4px",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: 10.5,
+            fontWeight: 500,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: TEXT_MUTED,
+          }}
+        >
+          SOURCE {source.kind.toUpperCase()} · {byteSize(source.content)}
+        </span>
+        <span
+          style={{
+            marginLeft: "auto",
+            fontFamily: MONO,
+            fontSize: 10.5,
+            fontWeight: 400,
+            color: TEXT_FADED,
+          }}
+        >
+          This is the content the ingestion run consumed
+        </span>
+      </div>
+    </PaneShell>
+  );
+}
+
+/* ── PromptPane ────────────────────────────────────────────────── */
+
+function PromptPane({
+  run,
+  wikiTitle,
+}: {
+  run: WikiIngestionLogRecord;
+  wikiTitle: string;
+}) {
+  return (
+    <PaneShell
+      number={2}
+      title="Prompt"
+      subtitle="INGESTION CONFIG · WHAT THE MODEL READ"
+      trailing={
+        <Link
+          href="../ingestion"
+          style={{ textDecoration: "none" }}
+        >
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 10px",
+              background: "transparent",
+              borderTop: `1px solid ${BORDER_STRONG}`,
+              borderRight: `1px solid ${BORDER_STRONG}`,
+              borderBottom: `1px solid ${BORDER_STRONG}`,
+              borderLeft: `1px solid ${BORDER_STRONG}`,
+              fontFamily: MONO,
+              fontSize: 10.5,
+              fontWeight: 500,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: TEXT_SECONDARY,
+              cursor: "pointer",
+            }}
+          >
+            VIEW PROMPT EDITOR ↗
+          </span>
+        </Link>
+      }
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "stretch",
+          gap: 0,
+          borderTop: `1px solid ${BORDER}`,
+          borderRight: `1px solid ${BORDER}`,
+          borderBottom: `1px solid ${BORDER}`,
+          borderLeft: `1px solid ${BORDER}`,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            padding: "18px 22px",
+            flex: 1,
+            borderTop: 0,
+            borderRight: `1px solid ${DIVIDER}`,
+            borderBottom: 0,
+            borderLeft: 0,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 10,
+              fontWeight: 500,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: TEXT_FADED,
+            }}
+          >
+            PROMPT
+          </span>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "baseline",
+              gap: 10,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: DISPLAY,
+                fontSize: 24,
+                fontWeight: 500,
+                letterSpacing: "-0.01em",
+                color: FG,
+              }}
+            >
+              {wikiTitle} lens
+            </span>
+            {run.promptHash && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  padding: "3px 7px",
+                  background: ACCENT_SOFT,
+                  borderTop: `1px solid ${ACCENT_RING}`,
+                  borderRight: `1px solid ${ACCENT_RING}`,
+                  borderBottom: `1px solid ${ACCENT_RING}`,
+                  borderLeft: `1px solid ${ACCENT_RING}`,
+                  fontFamily: MONO,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  color: ACCENT,
+                }}
+              >
+                {run.promptHash.slice(0, 7)}
+              </span>
+            )}
+          </div>
+          <span
+            style={{
+              fontFamily: BODY,
+              fontSize: 13,
+              lineHeight: "20px",
+              color: TEXT_MUTED,
+            }}
+          >
+            The ingestion lens that mapped this source into the {wikiTitle}{" "}
+            graph.
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            padding: "18px 22px",
+            width: 220,
+            flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 10,
+              fontWeight: 500,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: TEXT_FADED,
+            }}
+          >
+            MODEL
+          </span>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 13,
+              fontWeight: 500,
+              color: TEXT_PRIMARY,
+            }}
+          >
+            {run.model ?? "—"}
+          </span>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 11,
+              fontWeight: 400,
+              color: TEXT_MUTED,
+            }}
+          >
+            tokens · {run.tokensUsed.toLocaleString()}
+          </span>
+        </div>
+      </div>
+    </PaneShell>
+  );
+}
+
+/* ── OutputPane ────────────────────────────────────────────────── */
+
+function OutputPane({
+  run,
+  effects,
+}: {
+  run: WikiIngestionLogRecord;
+  effects: WikiPageRecord[];
+}) {
+  const success = run.status === "succeeded";
+
+  return (
+    <PaneShell
+      number={3}
+      title="Output"
+      subtitle="MODEL RESPONSE · RUN STATS"
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "stretch",
+          gap: 0,
+          borderTop: `1px solid ${BORDER}`,
+          borderRight: `1px solid ${BORDER}`,
+          borderBottom: `1px solid ${BORDER}`,
+          borderLeft: `1px solid ${BORDER}`,
+        }}
+      >
+        <StatCell label="PAGES CREATED" value={String(run.pagesCreated)} />
+        <StatDivider />
+        <StatCell label="PAGES UPDATED" value={String(run.pagesUpdated)} />
+        <StatDivider />
+        <StatCell label="EDGES ADDED" value={String(run.edgesAdded)} />
+        <StatDivider />
+        <StatCell
+          label="CONTRADICTIONS"
+          value={String(run.contradictionsFound)}
+          tone={run.contradictionsFound > 0 ? "warn" : "neutral"}
+        />
+        <StatDivider />
+        <StatCell
+          label="STATUS"
+          value={success ? "passed" : run.status}
+          tone={success ? "good" : "bad"}
+        />
+      </div>
+      {run.errorMessage && (
+        <pre
+          style={{
+            margin: 0,
+            padding: "16px 20px",
+            background: DANGER_SOFT,
+            borderTop: `1px solid ${DANGER_RING}`,
+            borderRight: `1px solid ${DANGER_RING}`,
+            borderBottom: `1px solid ${DANGER_RING}`,
+            borderLeft: `2px solid ${DANGER}`,
+            fontFamily: MONO,
+            fontSize: 12,
+            lineHeight: "20px",
+            color: DANGER,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {run.errorMessage}
+        </pre>
+      )}
+      {run.notes && (
+        <pre
+          style={{
+            margin: 0,
+            padding: "22px 24px",
+            background: INPUT_BG,
+            borderTop: `1px solid ${BORDER}`,
+            borderRight: `1px solid ${BORDER}`,
+            borderBottom: `1px solid ${BORDER}`,
+            borderLeft: `1px solid ${BORDER}`,
+            fontFamily: MONO,
+            fontSize: 12.5,
+            lineHeight: "22px",
+            color: TEXT_SECONDARY,
+            whiteSpace: "pre-wrap",
+            maxHeight: 280,
+            overflow: "auto",
+          }}
+        >
+          {run.notes}
+        </pre>
+      )}
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: 10.5,
+          color: TEXT_FADED,
+          padding: "0 4px",
+        }}
+      >
+        Schema-validated output produced {effects.length}{" "}
+        {effects.length === 1 ? "page" : "pages"} this run
+      </span>
+    </PaneShell>
+  );
+}
+
+function StatCell({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "good" | "bad" | "warn";
+}) {
+  const color =
+    tone === "good"
+      ? ACCENT
+      : tone === "bad"
+        ? DANGER
+        : tone === "warn"
+          ? WARN
+          : TEXT_PRIMARY;
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        padding: "14px 18px",
+        flex: 1,
+        minWidth: 0,
+      }}
+    >
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: 9.5,
+          fontWeight: 500,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: TEXT_FADED,
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: 14,
+          fontWeight: 500,
+          color,
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function StatDivider() {
+  return <div style={{ width: 1, alignSelf: "stretch", background: DIVIDER }} />;
+}
+
+/* ── EffectsPane ───────────────────────────────────────────────── */
+
+function EffectsPane({
+  run,
+  effects,
+  onOpenDiff,
+}: {
+  run: WikiIngestionLogRecord;
+  effects: WikiPageRecord[];
+  refs: WikiSourceRefRecord[];
+  routeBase: string;
+  onOpenDiff: (pageId: string) => void;
+}) {
+  return (
+    <PaneShell
+      number={4}
+      title="Effects"
+      subtitle="WHAT WAS WRITTEN TO THE GRAPH"
+      showConnector={false}
+      trailing={
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 14,
+          }}
+        >
+          <EffectChip label={`+${run.pagesCreated} PAGES`} tone="good" />
+          {run.pagesUpdated > 0 && (
+            <EffectChip
+              label={`${run.pagesUpdated} UPDATED`}
+              tone="warn"
+            />
+          )}
+          <EffectChip
+            label={`+${run.edgesAdded} EDGES`}
+            tone="neutral"
+          />
+        </div>
+      }
+    >
+      {effects.length === 0 ? (
+        <div
+          style={{
+            padding: "32px 18px",
+            borderTop: `1px dashed ${BORDER_STRONG}`,
+            borderRight: `1px dashed ${BORDER_STRONG}`,
+            borderBottom: `1px dashed ${BORDER_STRONG}`,
+            borderLeft: `1px dashed ${BORDER_STRONG}`,
+            fontFamily: MONO,
+            fontSize: 11,
+            color: TEXT_MUTED,
+            textAlign: "center",
+          }}
+        >
+          No page links attributed to this run window
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 0,
+            borderTop: `1px solid ${BORDER}`,
+            borderRight: `1px solid ${BORDER}`,
+            borderBottom: `1px solid ${BORDER}`,
+            borderLeft: `1px solid ${BORDER}`,
+          }}
+        >
+          <EffectsHeaderRow />
+          {effects.map((page) => (
+            <EffectRow
+              key={page.id}
+              page={page}
+              onOpenDiff={onOpenDiff}
+            />
+          ))}
+        </div>
+      )}
+    </PaneShell>
+  );
+}
+
+function EffectChip({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "good" | "warn" | "neutral";
+}) {
+  const color = tone === "good" ? ACCENT : tone === "warn" ? WARN : TEXT_SECONDARY;
+  const bg = tone === "good" ? ACCENT_SOFT : tone === "warn" ? WARN_SOFT : "transparent";
+  const ring =
+    tone === "good"
+      ? ACCENT_RING
+      : tone === "warn"
+        ? WARN_RING
+        : BORDER_STRONG;
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        padding: "5px 10px",
+        background: bg,
+        borderTop: `1px solid ${ring}`,
+        borderRight: `1px solid ${ring}`,
+        borderBottom: `1px solid ${ring}`,
+        borderLeft: `1px solid ${ring}`,
+        fontFamily: MONO,
+        fontSize: 10.5,
+        fontWeight: 600,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function EffectsHeaderRow() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 0,
+        padding: "10px 18px",
+        background: INPUT_BG,
+        borderTop: 0,
+        borderRight: 0,
+        borderBottom: `1px solid ${DIVIDER}`,
+        borderLeft: 0,
+      }}
+    >
+      <ColHead width={60}>DIFF</ColHead>
+      <ColHead width={100}>TYPE</ColHead>
+      <ColHead flex>PAGE</ColHead>
+      <ColHead width={90} alignRight>
+        CONFIDENCE
+      </ColHead>
+      <ColHead width={32} />
+    </div>
+  );
+}
+
+function ColHead({
+  width,
+  flex,
+  alignRight,
+  children,
+}: {
+  width?: number;
+  flex?: boolean;
+  alignRight?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        ...(flex
+          ? { flex: 1, minWidth: 0 }
+          : { width, flexShrink: 0 }),
+        fontFamily: MONO,
+        fontSize: 10,
+        fontWeight: 500,
+        letterSpacing: "0.18em",
+        textTransform: "uppercase",
+        color: TEXT_FADED,
+        textAlign: alignRight ? "right" : "left",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function EffectRow({
+  page,
+  onOpenDiff,
+}: {
+  page: WikiPageRecord;
+  onOpenDiff: (pageId: string) => void;
+}) {
+  const typeColor = TYPE_COLOR[page.type];
+  const confidencePct = Math.round((page.confidence ?? 0) * 100);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenDiff(page.id)}
+      style={{
+        background: "transparent",
+        borderTop: 0,
+        borderRight: 0,
+        borderBottom: 0,
+        borderLeft: 0,
+        padding: 0,
+        cursor: "pointer",
+        textAlign: "left",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 0,
+          padding: "14px 18px",
+          background: "transparent",
+          borderTop: 0,
+          borderRight: 0,
+          borderBottom: `1px solid ${DIVIDER}`,
+          borderLeft: `2px solid ${ACCENT}`,
+          cursor: "pointer",
+        }}
+      >
+        <div style={{ width: 60, flexShrink: 0 }}>
+          <span
+            style={{
+              display: "inline-flex",
+              padding: "3px 7px",
+              background: ACCENT_SOFT,
+              borderTop: `1px solid ${ACCENT_RING}`,
+              borderRight: `1px solid ${ACCENT_RING}`,
+              borderBottom: `1px solid ${ACCENT_RING}`,
+              borderLeft: `1px solid ${ACCENT_RING}`,
+              fontFamily: MONO,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: ACCENT,
+            }}
+          >
+            + NEW
+          </span>
+        </div>
+        <div
+          style={{
+            width: 100,
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span
+            style={{
+              display: "inline-block",
+              width: 8,
+              height: 8,
+              background: typeColor,
+              flexShrink: 0,
+            }}
+          />
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 10.5,
+              fontWeight: 500,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: TEXT_SECONDARY,
+            }}
+          >
+            {page.type}
+          </span>
+        </div>
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 3,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: DISPLAY,
+              fontSize: 15,
+              fontWeight: 500,
+              color: FG,
+            }}
+          >
+            {page.title}
+          </span>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 11,
+              fontWeight: 400,
+              color: TEXT_MUTED,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {page.slug} · {page.summary ?? ""}
+          </span>
+        </div>
+        <div
+          style={{
+            width: 90,
+            flexShrink: 0,
+            textAlign: "right",
+            fontFamily: MONO,
+            fontSize: 13,
+            fontWeight: 500,
+            color: TEXT_PRIMARY,
+          }}
+        >
+          {confidencePct}%
+        </div>
+        <div
+          style={{
+            width: 32,
+            flexShrink: 0,
+            textAlign: "right",
+            fontFamily: MONO,
+            fontSize: 13,
+            color: TEXT_FADED,
+          }}
+        >
+          ↗
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ── EmptyState ────────────────────────────────────────────────── */
+
+function EmptyState() {
+  return (
+    <div
+      style={{
+        padding: "60px 24px",
+        borderTop: `1px dashed ${BORDER_STRONG}`,
+        borderRight: `1px dashed ${BORDER_STRONG}`,
+        borderBottom: `1px dashed ${BORDER_STRONG}`,
+        borderLeft: `1px dashed ${BORDER_STRONG}`,
+        fontFamily: MONO,
+        fontSize: 12,
+        color: TEXT_MUTED,
+        textAlign: "center",
+      }}
+    >
+      No ingestion runs yet for this source. Hit RE-INGEST to start one.
+    </div>
+  );
+}

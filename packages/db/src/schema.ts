@@ -332,6 +332,11 @@ export const charactersTable = pgTable(
     title: text("title").notNull(),                     // human-facing; renameable
     summary: text("summary"),                           // short one-liner
     image: text("image"),                               // avatar URL; null falls back to initial
+    // Named gradient key from the AvatarGradient registry (e.g. "dune",
+    // "mint"). When `image` is set the uploaded image wins. When both
+    // are null the renderer falls back to the legacy slug-hash gradient
+    // so back-compat is preserved.
+    thumbnailColor: text("thumbnail_color"),
     // Ordered list of named eras for this character's life. Drives timeIndex
     // comparison by mapping era → integer order.
     // Shape: [{ key: "pre-covenant", title: "Pre-Covenant", order: 0 }, …]
@@ -340,6 +345,157 @@ export const charactersTable = pgTable(
     // system prompt so the generic engine interprets raw sources through this
     // character's specific tradition (scripture vs canon novel vs worldbook).
     ingestionPrompt: text("ingestion_prompt"),
+    // L01 Identity — essence sentence + exactly-two defining traits +
+    // optional era/setting. Compiled into the `<identity>` block at the
+    // top of the cached system envelope. Null = use the hardcoded
+    // "You are {title}…" anchor (back-compat for characters created
+    // before this column existed).
+    // Shape: see CharacterIdentity in wiki-types.ts.
+    identity: jsonb("identity"),
+    // L03 Voice & Style — four orthogonal axes (tone palette, decision
+    // spectrum, brevity, register pad) + audio voice prompt + prosody.
+    // Compiled into the `<voice>` block of the cached system envelope.
+    // In 1.3b the audio fields also feed the TTS pipeline.
+    // Shape: see CharacterVoiceStyle in wiki-types.ts.
+    voiceStyle: jsonb("voice_style"),
+    // L04 Brain / Model — inference-call parameters (model, temperature,
+    // top_p, max_tokens, cache preference, optional fallback chain).
+    // Doesn't compile to system-prompt text; the chat route reads it and
+    // overrides its hardcoded defaults. Null = use defaults.
+    // Shape: see CharacterBrainModel in wiki-types.ts.
+    brainModel: jsonb("brain_model"),
+    // L02 Directive — structured scope/exemplars/never/framing/guidance.
+    // Compiled into the cached system envelope as Frontier Playbook XML.
+    // Null = use legacy single-paragraph template (back-compat for
+    // characters created before this column existed).
+    // Shape: see CharacterDirective in wiki-types.ts.
+    directive: jsonb("directive"),
+    // The wiki page (type='voice_identity') that defines how this character
+    // speaks. Points to wiki_pages.id. Always lives in a wiki bound to this
+    // character; surfaced on Persona → Voice & Style rather than under the
+    // /wikis surface. Null until a voice_identity page exists.
+    voiceIdentityPageId: text("voice_identity_page_id"),
+    // Pointer into the global voices library (voices.id). Null falls back
+    // to the audio-rt default voice (abraham). Set via the /voices admin
+    // surface; many characters can share the same voice row.
+    voiceId: text("voice_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
+// ── Voices (global library) ───────────────────────────────────────────
+//
+// A voice = a Pocket TTS speaker embedding (kvcache state) exported from a
+// short audio clip and stored as .safetensors. The source clip lives in
+// the Supabase `voice-sources` bucket; the .safetensors lives in
+// `voice-embeddings`. audio-rt loads the embedding on first /speak call
+// for that voice and caches it in-process.
+//
+// Slug is the stable address used by audio-rt's /speak payload (e.g.
+// "abraham"). For voices baked into the audio-rt Docker image (legacy)
+// only the slug matters; for Supabase-managed voices both id and slug
+// resolve to the same embedding via the lookup path inside audio-rt.
+//
+// Status lifecycle:
+//   uploaded   — row exists, source clip in storage, no embedding yet
+//   processing — audio-rt is running export-voice
+//   ready      — embedding_path set, voice is usable
+//   failed     — extraction errored; statusError holds the message
+export const voicesTable = pgTable(
+  "voices",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    description: text("description"),
+    status: text("status").notNull().default("uploaded"),
+    statusError: text("status_error"),
+    // Path within the voice-sources Supabase bucket. WAV (or whatever the
+    // user uploaded — Pocket TTS accepts wav and mp3). Null only if the
+    // voice was seeded directly without an upload (e.g. legacy bake).
+    sourcePath: text("source_path"),
+    // Path within the voice-embeddings Supabase bucket. Null until
+    // extraction succeeds.
+    embeddingPath: text("embedding_path"),
+    // Optional smoke-test sample synthesized after extraction so the UI
+    // can A/B without re-running synthesis on every page load.
+    previewPath: text("preview_path"),
+    durationS: real("duration_s"),
+    sampleRate: integer("sample_rate"),
+    createdBy: text("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("voices_status_idx").on(t.status),
+  ],
+);
+
+// ── Character versions (named snapshots of full config state) ───────
+//
+// One row per saved version. Version numbers are monotonic per character
+// (v1, v2, v3 …) — the next number is computed at save time as
+// `MAX(versionNumber) + 1`. The `snapshot` JSONB captures the full
+// authorial state at save time: identity, voiceStyle, brainModel,
+// directive, ingestionPrompt, eras, voiceIdentityPageId, title/summary,
+// plus the wiki bindings list (priorities + active flag).
+//
+// Wiki page/edge/source content is NOT snapshotted here — wikis are
+// shared resources with their own change history. The snapshot captures
+// the character's pointer to wikis (bindings), not the wiki content.
+//
+// Restoring a version overwrites the live character row + replaces the
+// bindings list. To preserve history, save a snapshot first.
+export const characterVersionsTable = pgTable(
+  "character_versions",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    characterId: text("character_id").notNull().references(() => charactersTable.id, { onDelete: "cascade" }),
+    versionNumber: integer("version_number").notNull(),
+    snapshot: jsonb("snapshot").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: text("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    uniqueIndex("character_versions_unique_idx").on(t.characterId, t.versionNumber),
+    index("character_versions_character_idx").on(t.characterId),
+  ],
+);
+
+// ── Wikis (shared knowledge resources) ───────────────────────────────
+//
+// A wiki is a shared knowledge resource — pages, edges, sources — that can be
+// bound to many characters via `character_knowledge_bindings`. Wikis own the
+// content; characters reference them. This decouples "what's known about the
+// Genesis world" from "who is using that knowledge to speak right now."
+//
+// Migration: previously wiki_pages/edges/sources were scoped per-character
+// via character_id. They're now scoped per-wiki via wiki_id. The character_id
+// columns remain (nullable) during the transition; a future migration drops
+// them once all rows are backfilled.
+
+/** Top-level wiki container — pages + edges + sources live under this. */
+export const wikisTable = pgTable(
+  "wikis",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    slug: text("slug").notNull().unique(),              // immutable, used in URLs
+    title: text("title").notNull(),                     // human-facing; renameable
+    summary: text("summary"),                           // short one-liner
+    // Ordered list of named eras used by pages in this wiki for timeIndex
+    // mapping. Same shape as `characters.eras` (which is deprecated for new
+    // wikis but kept for back-compat until cleanup).
+    // Shape: [{ key: "pre-covenant", title: "Pre-Covenant", order: 0 }, …]
+    eras: jsonb("eras").notNull().default([]),
+    // Domain knob injected at the top of every ingestion run's system prompt
+    // so the generic engine interprets raw sources through this wiki's specific
+    // tradition (scripture vs canon novel vs worldbook).
+    ingestionPrompt: text("ingestion_prompt"),
+    // Human-facing name for the prompt — separate from the wiki title so the
+    // same wiki can iterate on prompt identity (e.g. "Stoic Narrator") without
+    // renaming the wiki itself. Null falls back to `{title} lens.` in the UI.
+    ingestionPromptName: text("ingestion_prompt_name"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -354,7 +510,13 @@ export const wikiPagesTable = pgTable(
   "wiki_pages",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    characterId: text("character_id").notNull().references(() => charactersTable.id, { onDelete: "cascade" }),
+    // DEPRECATED: kept nullable for back-compat during migration to wiki-scoped
+    // pages. New code should read/write via wikiId. Will be dropped once all
+    // rows are backfilled and dependent stores rewritten.
+    characterId: text("character_id").references(() => charactersTable.id, { onDelete: "cascade" }),
+    // The wiki this page belongs to. Nullable during migration; will be made
+    // NOT NULL once data move script runs against all existing rows.
+    wikiId: text("wiki_id").references(() => wikisTable.id, { onDelete: "cascade" }),
     // entity | event | concept | relationship | timeline | voice_identity
     type: text("type").notNull(),
     slug: text("slug").notNull(),                       // unique per character; immutable
@@ -379,12 +541,22 @@ export const wikiPagesTable = pgTable(
     embedding: vector("embedding", { dimensions: 1536 }),
     embeddingModel: text("embedding_model"),
     embeddedAt: timestamp("embedded_at", { withTimezone: true }),
+    // Cached 2D layout for the Knowledge view. Computed from embeddings via
+    // cosine-distance MDS, persisted so repeat visits are stable. Recomputed
+    // lazily when any page in the character is missing coordinates, or via
+    // an explicit "Recompute layout" action.
+    layoutX: real("layout_x"),
+    layoutY: real("layout_y"),
+    layoutComputedAt: timestamp("layout_computed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("wiki_pages_character_slug_idx").on(t.characterId, t.slug),
+    uniqueIndex("wiki_pages_wiki_slug_idx").on(t.wikiId, t.slug),
     index("wiki_pages_character_type_idx").on(t.characterId, t.type),
+    index("wiki_pages_wiki_idx").on(t.wikiId),
+    index("wiki_pages_wiki_type_idx").on(t.wikiId, t.type),
     // HNSW index for fast cosine similarity. Partial index on rows that
     // actually have an embedding so freshly-created pages don't slow it.
     index("wiki_pages_embedding_idx")
@@ -423,7 +595,10 @@ export const wikiEdgesTable = pgTable(
   "wiki_edges",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    characterId: text("character_id").notNull().references(() => charactersTable.id, { onDelete: "cascade" }),
+    // DEPRECATED: kept nullable for back-compat during migration.
+    characterId: text("character_id").references(() => charactersTable.id, { onDelete: "cascade" }),
+    // The wiki this edge belongs to. Nullable during migration.
+    wikiId: text("wiki_id").references(() => wikisTable.id, { onDelete: "cascade" }),
     fromPageId: text("from_page_id").notNull().references(() => wikiPagesTable.id, { onDelete: "cascade" }),
     toPageId: text("to_page_id").notNull().references(() => wikiPagesTable.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
@@ -435,13 +610,17 @@ export const wikiEdgesTable = pgTable(
     uniqueIndex("wiki_edges_unique_idx").on(t.fromPageId, t.toPageId, t.kind),
     index("wiki_edges_to_page_idx").on(t.toPageId),
     index("wiki_edges_character_idx").on(t.characterId),
+    index("wiki_edges_wiki_idx").on(t.wikiId),
   ],
 );
 
 /** Raw ingested source material (one row per source document). */
 export const wikiSourcesTable = pgTable("wiki_sources", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  characterId: text("character_id").notNull().references(() => charactersTable.id, { onDelete: "cascade" }),
+  // DEPRECATED: kept nullable for back-compat during migration.
+  characterId: text("character_id").references(() => charactersTable.id, { onDelete: "cascade" }),
+  // The wiki this source belongs to. Nullable during migration.
+  wikiId: text("wiki_id").references(() => wikisTable.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   kind: text("kind").notNull(),                          // bible | commentary | midrash | note | transcript
   content: text("content").notNull(),
@@ -466,6 +645,34 @@ export const wikiSourceRefsTable = pgTable(
   (t) => [
     index("wiki_source_refs_page_idx").on(t.pageId),
     index("wiki_source_refs_source_idx").on(t.sourceId),
+  ],
+);
+
+// ── Character ↔ Wiki bindings ─────────────────────────────────────────
+//
+// A character binds to one or more wikis (knowledge graphs). The binding
+// expresses priority — primary wikis weight first in retrieval, secondary
+// next, reference last. A character with no bindings has no world knowledge
+// beyond their own identity/persona configuration.
+
+/** Many-to-many link between characters and wikis with priority. */
+export const characterKnowledgeBindingsTable = pgTable(
+  "character_knowledge_bindings",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    characterId: text("character_id").notNull().references(() => charactersTable.id, { onDelete: "cascade" }),
+    wikiId: text("wiki_id").notNull().references(() => wikisTable.id, { onDelete: "cascade" }),
+    // primary | secondary | reference — controls retrieval ordering and weight.
+    priority: text("priority").notNull().default("primary"),
+    // Disabled bindings are kept for audit but skipped during retrieval.
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("character_knowledge_bindings_unique_idx").on(t.characterId, t.wikiId),
+    index("character_knowledge_bindings_character_idx").on(t.characterId),
+    index("character_knowledge_bindings_wiki_idx").on(t.wikiId),
   ],
 );
 
@@ -526,11 +733,14 @@ export const worldEdgesTable = pgTable(
 /** One row per ingestion run — for the log.md rendering and admin audit. */
 export const wikiIngestionLogTable = pgTable("wiki_ingestion_log", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  characterId: text("character_id").notNull().references(() => charactersTable.id, { onDelete: "cascade" }),
+  // DEPRECATED: kept nullable for back-compat during migration.
+  characterId: text("character_id").references(() => charactersTable.id, { onDelete: "cascade" }),
+  // The wiki this ingestion run targeted. Nullable during migration.
+  wikiId: text("wiki_id").references(() => wikisTable.id, { onDelete: "cascade" }),
   sourceId: text("source_id").references(() => wikiSourcesTable.id, { onDelete: "set null" }),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
-  status: text("status").notNull().default("running"),   // running | succeeded | failed
+  status: text("status").notNull().default("running"),   // queued | running | succeeded | failed | canceled
   /** The LLM model that ran this ingestion — e.g. "claude-sonnet-4-5". */
   model: text("model"),
   /** Short SHA of the character.ingestionPrompt at run time — for reproducibility. */
@@ -542,4 +752,249 @@ export const wikiIngestionLogTable = pgTable("wiki_ingestion_log", {
   tokensUsed: integer("tokens_used").notNull().default(0),
   errorMessage: text("error_message"),
   notes: text("notes"),
+  workerId: text("worker_id"),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
 });
+
+/** Replayable event stream for durable wiki ingestion runs. */
+export const wikiIngestionEventsTable = pgTable(
+  "wiki_ingestion_events",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    runId: text("run_id").notNull().references(() => wikiIngestionLogTable.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("wiki_ingestion_events_run_seq_idx").on(t.runId, t.seq),
+    index("wiki_ingestion_events_run_idx").on(t.runId),
+  ],
+);
+
+// ── Eval harness ────────────────────────────────────────────────────
+//
+// Persists everything the @odyssey/evals package produces: probe suites,
+// individual runs against a character, parameter sweeps, and per-probe
+// drill-down with judge scores + rationales.
+//
+// Source of truth lives here; the file outputs under `.evals/...` are
+// convenience exports for offline reading + CLI piping. See docs/eval-schema.mdx
+// for the full design write-up.
+
+/**
+ * Versioned probe-suite definitions. Old code path kept the suite hard-coded
+ * in TS (`evals/abraham/suite.ts`); lifting it into the DB lets authors edit
+ * and version suites without re-deploys, and lets one suite be referenced by
+ * many runs without copying probes around.
+ *
+ * Versions are immutable once written — editing produces a new (slug, version)
+ * row. Lets historical runs continue to point at exactly the probes they
+ * were judged against.
+ */
+export const evalSuitesTable = pgTable(
+  "eval_suites",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    characterId: text("character_id").notNull().references(() => charactersTable.id, { onDelete: "cascade" }),
+    /** "abraham" — unique per character. */
+    slug: text("slug").notNull(),
+    /** Semver string. Same slug at multiple versions is fine; the unique index
+     * is on (character, slug, version). */
+    version: text("version").notNull(),
+    /** Full probe definitions (Probe[] shape from @odyssey/evals). Jsonb so
+     * the runner can deserialize without a separate probes table — trade-off
+     * is we can't query "which suite uses probe X". Acceptable for v1. */
+    probes: jsonb("probes").notNull().default([]),
+    notes: text("notes"),
+    /** Authored release notes shown in the suite explorer + publish modal.
+     * Replaces the legacy `notes` column for new drafts; both are kept so
+     * older seeded suites don't lose their description text. */
+    releaseNotes: text("release_notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * When this version was published (= became immutable). Null = draft,
+     * still editable via `PATCH /suites/:id`. A partial unique index on
+     * (character_id, slug) WHERE published_at IS NULL enforces "at most one
+     * draft per slug per character" — see migrate-eval-drafts script.
+     *
+     * Existing rows are backfilled with created_at so historical suites
+     * keep behaving immutably (the seed script ran before drafts existed).
+     */
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    /** When a draft was forked from this row's predecessor — null on the
+     * v1.0.0 base and on fully-published rows that weren't forked. Used
+     * by the UI to show "draft forked 3h ago from v1.0.0". */
+    forkedFromId: text("forked_from_id"),
+    createdBy: text("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    uniqueIndex("eval_suites_slug_version_idx").on(t.characterId, t.slug, t.version),
+    index("eval_suites_character_idx").on(t.characterId),
+    index("eval_suites_published_idx").on(t.characterId, t.publishedAt),
+  ],
+);
+
+/**
+ * One row per single-config execution of a suite. Carries the FULL character
+ * snapshot at run time (not a reference) so reruns + debugging can reproduce
+ * exactly what was tested even if the character has been edited since.
+ *
+ * Summary fields are denormalized from `eval_probe_results` so the list view
+ * doesn't have to aggregate on every render — see runs-list query in the
+ * eval-schema doc.
+ */
+export const evalRunsTable = pgTable(
+  "eval_runs",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    characterId: text("character_id").notNull().references(() => charactersTable.id, { onDelete: "cascade" }),
+    suiteId: text("suite_id").notNull().references(() => evalSuitesTable.id, { onDelete: "restrict" }),
+
+    /** Snapshot of L01-L04 at the moment the run started. Full content, not
+     * a reference — lets us reproduce / diff against later character edits. */
+    characterSnapshot: jsonb("character_snapshot").notNull(),
+    /** sha256 of the snapshot's hashable fields. Lets us group "runs against
+     * identical config" across time, even if labels/comments changed. */
+    configHash: text("config_hash").notNull(),
+    /** Per-run override on top of saved brainModel (from --config / --sweep).
+     * Null for runs against the unmodified character. */
+    overrideConfig: jsonb("override_config"),
+    /** The merged config that actually ran (effective = saved + override). */
+    effectiveModelConfig: jsonb("effective_model_config").notNull(),
+
+    judgeModel: text("judge_model").notNull(),
+
+    /** "single" = ad-hoc CLI / UI run. "sweep" = one config inside a sweep.
+     * Joined to the parent sweep via sweepId when source = "sweep". */
+    source: text("source").notNull().default("single"),
+    sweepId: text("sweep_id").references(() => evalSweepsTable.id, { onDelete: "set null" }),
+
+    /** Lifecycle: pending → running → completed (or errored). UI-launched runs
+     * insert a placeholder row immediately (so the activity feed shows it
+     * spinning) and update through the states as the eval progresses.
+     * CLI-launched runs go straight to "completed" since they only write
+     * once the eval finishes. */
+    status: text("status").notNull().default("completed"),
+    errorMessage: text("error_message"),
+
+    // ── Summary (denormalized from probe_results) ──
+    // Defaults to 0 for pending/running rows so the UI can render them
+    // without null-checks; populated on completion.
+    total: integer("total").notNull().default(0),
+    passed: integer("passed").notNull().default(0),
+    failed: integer("failed").notNull().default(0),
+    errored: integer("errored").notNull().default(0),
+    avgOverall: real("avg_overall").notNull().default(0),
+    avgLatencyMs: integer("avg_latency_ms").notNull().default(0),
+    totalTokens: integer("total_tokens").notNull().default(0),
+    estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
+
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    /** Null while the run is pending/running; set on completion or error. */
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    index("eval_runs_char_started_idx").on(t.characterId, t.startedAt),
+    index("eval_runs_config_hash_idx").on(t.characterId, t.configHash),
+    index("eval_runs_sweep_idx").on(t.sweepId),
+  ],
+);
+
+/**
+ * One row per probe in a run — heavy. Stores full character response, all
+ * five dimension scores, judge rationale, and any mechanical-check failures.
+ *
+ * Loaded only when a run is expanded; the list view reads from the
+ * denormalized summary on `eval_runs`.
+ */
+export const evalProbeResultsTable = pgTable(
+  "eval_probe_results",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    runId: text("run_id").notNull().references(() => evalRunsTable.id, { onDelete: "cascade" }),
+
+    /** Suite-local id, e.g. "id-tell-me". Not a FK — probes live as jsonb
+     * inside eval_suites.probes, so this is a soft pointer. */
+    probeId: text("probe_id").notNull(),
+    probeCategory: text("probe_category").notNull(),
+    /** Probe.input verbatim. Denormalized so a probe rename in a future suite
+     * version doesn't corrupt historical run archeology. */
+    input: text("input").notNull(),
+    response: text("response").notNull(),
+
+    /** { voice: { score, rationale }, scope: {…}, frame: {…}, brevity: {…},
+     * factual: {…} } — dimension set may grow, jsonb leaves it open. */
+    scores: jsonb("scores").notNull(),
+    overall: real("overall").notNull(),
+    pass: boolean("pass").notNull(),
+    /** Judge's one-sentence summary. */
+    rationale: text("rationale").notNull(),
+
+    /** Strings describing mechanical checks that failed (e.g. "missing
+     * required substring: 988"). Empty array on clean runs. */
+    mechanicalFailures: jsonb("mechanical_failures").notNull().default([]),
+    /** Runtime errors (timeouts, judge failures, etc.). Empty array on
+     * clean runs; populated when the probe didn't complete cleanly. */
+    errors: jsonb("errors").notNull().default([]),
+
+    latencyMs: integer("latency_ms").notNull(),
+    /** { input, output, cacheRead, cacheCreation } token counts. */
+    tokens: jsonb("tokens").notNull(),
+  },
+  (t) => [
+    index("eval_probe_results_run_idx").on(t.runId),
+    // "How has probe X scored across all runs of this character?" — used by
+    // the per-probe trend view (future) and regression-bisection.
+    index("eval_probe_results_probe_idx").on(t.probeId, t.runId),
+  ],
+);
+
+/**
+ * One row per parameter sweep. The expanded configs, rankings, and Pareto
+ * frontier are denormalized for the same reason as eval_runs.summary —
+ * list view + chart must be fast and not require N+1 aggregation queries.
+ *
+ * Each sweep creates N eval_runs rows (one per config in the grid), joined
+ * via eval_runs.sweepId.
+ */
+export const evalSweepsTable = pgTable(
+  "eval_sweeps",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    characterId: text("character_id").notNull().references(() => charactersTable.id, { onDelete: "cascade" }),
+    suiteId: text("suite_id").notNull().references(() => evalSuitesTable.id, { onDelete: "restrict" }),
+
+    judgeModel: text("judge_model").notNull(),
+
+    /** The SweepSpec — { model: [...], temperature: [...], ... }. Lets the
+     * UI offer "re-run this sweep" with the same grid. */
+    spec: jsonb("spec").notNull(),
+    /** Probe subset filter (null = all probes in the suite). */
+    probeIds: jsonb("probe_ids"),
+    maxConcurrency: integer("max_concurrency"),
+
+    /** Cartesian-expanded configs: [{ id, override }, ...] */
+    configs: jsonb("configs").notNull(),
+    /** Ranked configs after sort, mirrors ConfigRanking[]. */
+    rankings: jsonb("rankings").notNull(),
+    /** Subset of rankings on the Pareto frontier (post-error-filter). */
+    pareto: jsonb("pareto").notNull(),
+
+    /** Lifecycle: pending → running → completed (or errored). Mirrors
+     * eval_runs.status. While a sweep is running, `rankings` and `pareto`
+     * are partial — the runs that have completed so far. */
+    status: text("status").notNull().default("completed"),
+    errorMessage: text("error_message"),
+
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    index("eval_sweeps_char_started_idx").on(t.characterId, t.startedAt),
+  ],
+);

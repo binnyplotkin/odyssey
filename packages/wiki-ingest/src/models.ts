@@ -3,17 +3,17 @@
  * the chosen model's slug in the ingestion log so we can A/B quality and
  * cost over time.
  *
- * Prices are $ per 1k tokens, sourced from Anthropic's public docs at the
- * time of writing. Not load-bearing — recorded for cost estimation only.
+ * Prices are $ per *million* tokens, matching Anthropic's published pricing
+ * format. Not load-bearing — recorded for cost estimation only.
  */
 
 export type ModelMeta = {
   /** Context window (tokens). */
   context: number;
-  /** Input cost $/1k tokens. */
-  inPer1k: number;
-  /** Output cost $/1k tokens. */
-  outPer1k: number;
+  /** Input cost $/1M tokens. */
+  inPerMTok: number;
+  /** Output cost $/1M tokens. */
+  outPerMTok: number;
   /** Whether this model supports Anthropic prompt caching. */
   supportsCaching: boolean;
   /** Human-friendly name for UI display. */
@@ -23,22 +23,22 @@ export type ModelMeta = {
 export const MODELS = {
   "claude-opus-4-5": {
     context: 200_000,
-    inPer1k: 15,
-    outPer1k: 75,
+    inPerMTok: 15,
+    outPerMTok: 75,
     supportsCaching: true,
     label: "Claude Opus 4.5",
   },
   "claude-sonnet-4-5": {
     context: 200_000,
-    inPer1k: 3,
-    outPer1k: 15,
+    inPerMTok: 3,
+    outPerMTok: 15,
     supportsCaching: true,
     label: "Claude Sonnet 4.5",
   },
   "claude-haiku-4-5": {
     context: 200_000,
-    inPer1k: 1,
-    outPer1k: 5,
+    inPerMTok: 1,
+    outPerMTok: 5,
     supportsCaching: true,
     label: "Claude Haiku 4.5",
   },
@@ -69,5 +69,8 @@ export function estimateCost(
   outputTokens: number,
 ): number {
   const m = MODELS[modelId];
-  return (inputTokens / 1000) * m.inPer1k + (outputTokens / 1000) * m.outPer1k;
+  return (
+    (inputTokens / 1_000_000) * m.inPerMTok +
+    (outputTokens / 1_000_000) * m.outPerMTok
+  );
 }

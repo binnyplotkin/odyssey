@@ -8,9 +8,10 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "turbo dev",
-    "dev:web": "turbo dev --filter=@odyssey/web",
-    "dev:admin": "turbo dev --filter=@odyssey/admin",
+    "dev": "node scripts/run-turbo-stream.mjs dev",
+    "dev:web": "node scripts/run-turbo-stream.mjs dev --filter=@odyssey/web",
+    "dev:admin": "node scripts/run-turbo-stream.mjs dev --filter=@odyssey/admin",
+    "worker:wiki-ingest": "tsx packages/wiki-ingest/src/worker.ts",
     "build": "turbo build",
     "lint": "turbo lint",
     "test": "vitest run",
@@ -32,6 +33,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "react-feather": "^2.0.10"
+    "react-feather": "^2.0.10",
+    "tsx": "^4.22.3"
   }
 }

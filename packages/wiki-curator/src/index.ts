@@ -10,6 +10,7 @@
 import {
   getCharacterStore,
   getWikiStore,
+  getWikisStore,
   type WikiPageRecord,
 } from "@odyssey/db";
 import type {
@@ -35,18 +36,30 @@ export async function curate(request: CurateRequest): Promise<CurateResult> {
   const budget = request.tokenBudget ?? DEFAULT_BUDGET;
   const characterStore = getCharacterStore();
   const wikiStore = getWikiStore();
+  const wikisStore = getWikisStore();
 
   const character = await characterStore.getById(request.characterId);
   if (!character) {
     throw new Error(`curate: character not found: ${request.characterId}`);
   }
 
-  // Load the whole wiki — this feature tops out in the low hundreds of pages
-  // per character, so one listPages + one listCharacterEdges is fine.
-  const [pages, edges] = await Promise.all([
-    wikiStore.listPages(character.id),
-    wikiStore.listCharacterEdges(character.id),
+  const boundWikis = await wikisStore.listWikisForCharacter(character.id);
+  const activeWikiIds = boundWikis
+    .filter((wiki) => wiki.binding.isActive)
+    .map((wiki) => wiki.id);
+
+  // Load active wiki-bound knowledge. This is intentionally wiki-scoped:
+  // characters select which wikis are available through bindings, but the
+  // pages/edges themselves belong to those wikis.
+  const [pagesByWiki, edgesByWiki] = await Promise.all([
+    Promise.all(activeWikiIds.map((wikiId) => wikiStore.listPagesForWiki(wikiId))),
+    Promise.all(activeWikiIds.map((wikiId) => wikiStore.listWikiEdges(wikiId))),
   ]);
+  const pages = pagesByWiki.flat();
+  const pageIds = new Set(pages.map((page) => page.id));
+  const edges = edgesByWiki
+    .flat()
+    .filter((edge) => pageIds.has(edge.fromPageId) && pageIds.has(edge.toPageId));
 
   const totalPages = pages.length;
 
@@ -178,3 +191,6 @@ export { EDGE_WEIGHT } from "./traverse";
 
 // Also useful for callers: lightweight render-a-page to get budget cost.
 export { tokensForFull, tokensForSummary, tokensForTitle } from "./budget";
+// Char-based token estimator (chars/4 rule). Used by harness editors
+// to surface "how big is this prompt fragment" without a network call.
+export { estimateTokens } from "./tokens";

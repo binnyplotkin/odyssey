@@ -220,13 +220,14 @@ async function fetchAvailableElevenLabsVoices() {
     return cached.filteredVoices;
   }
 
-  const response = await fetch("https://api.elevenlabs.io/v1/voices", {
+  const requestInit: RequestInit & { cache?: string } = {
     method: "GET",
     headers: {
       "xi-api-key": apiKey,
     },
     cache: "no-store",
-  });
+  };
+  const response = await fetch("https://api.elevenlabs.io/v1/voices", requestInit);
 
   if (!response.ok) {
     throw new Error(`Failed to load ElevenLabs voices (${response.status}).`);

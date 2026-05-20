@@ -28,6 +28,7 @@ export {
 export { getOpenAIClient } from "./openai-client";
 export { embedText, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS } from "./embedding";
 export { AudioCommunicationSimulationEngine } from "./communication";
+export { getScene, listScenes } from "./scenes";
 export {
   generateCommunicationScenario,
   HeuristicKnowledgeTransformer,
@@ -96,3 +97,56 @@ export type {
   SpeechTurnSignal,
   WorldScenarioType,
 } from "./communication";
+
+// L01–L04 prompt builders (moved here from apps/admin/src/lib so
+// both the admin app and the @odyssey/evals package consume one source).
+export {
+  buildSystemPrompt,
+  buildSystemPromptParts,
+  buildVoiceSystemPrompt,
+  buildVoiceSystemPromptParts,
+} from "./character-system-prompt";
+export { compileDirectiveXml } from "./directive-xml";
+export { compileIdentityXml } from "./identity-xml";
+export { compileVoiceXml } from "./voice-xml";
+
+// Model registry v2 — single source of truth for chat / voice models +
+// pricing + capabilities. Consumed by chat route, voice route, evals
+// runner, and the L04 editor.
+export {
+  MODEL_REGISTRY,
+  DEFAULT_CHAT_MODEL,
+  DEFAULT_VOICE_MODEL,
+  modelMetaFor,
+  providerFor,
+  modelsFor,
+  pricingFor,
+} from "./model-registry";
+export type {
+  ProviderId,
+  ModelMode,
+  ModelPricing,
+  ModelCapabilities,
+  LatencyTier,
+  QualityTier,
+  ModelOption,
+} from "./model-registry";
+
+// Multi-provider chat abstraction. Chat route + evals runner consume
+// `getChatProviderForModel(modelId)` and call .complete() / .stream()
+// without caring whether the underlying SDK is Anthropic or OpenAI.
+export {
+  getChatProvider,
+  getChatProviderForModel,
+  AnthropicChatProvider,
+  OpenAIChatProvider,
+  CerebrasChatProvider,
+} from "./chat-providers";
+export type {
+  ChatProvider,
+  ChatRequestOptions,
+  ChatResponse,
+  ChatStreamEvent,
+  ChatSystemBlock,
+  ChatMessage,
+} from "./chat-providers";
