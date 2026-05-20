@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "dotenv -e ../../.env -- next dev --webpack --port 3001",
-    "dev:preview": "dotenv -e ../../.env -- next dev --webpack",
+    "dev:preview": "NEXT_DIST_DIR=.next-preview dotenv -e ../../.env -- next dev --webpack",
     "build": "next build",
     "start": "next start"
   },
@@ -21,6 +21,9 @@
     "@paper-design/shaders-react": "^0.0.72",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "@supabase/supabase-js": "^2.106.0",
+    "@xyflow/react": "^12.10.2",
+    "diff": "^7.0.0",
     "gray-matter": "^4.0.3",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",
@@ -29,10 +32,12 @@
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "sharp": "^0.34.5",
     "three": "^0.183.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/diff": "^7.0.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
