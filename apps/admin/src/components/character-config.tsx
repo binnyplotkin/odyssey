@@ -176,6 +176,25 @@ export function CharacterConfig({
     character.directive,
   );
   const [bindings, setBindings] = useState<ConfigBinding[]>(knowledge.bindings);
+  // Lifted: voice binding + library options live here so both the canvas
+  // card (CharacterCard) and the sidebar picker (VoiceStyleSection) read
+  // and update through a single source of truth. Otherwise the canvas
+  // pill would stay stale until a full page reload.
+  const [voiceId, setVoiceIdLocal] = useState<string | null>(character.voiceId);
+  const [voiceOptions, setVoiceOptions] = useState<PickerVoice[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/voices")
+      .then((r) => r.json())
+      .then((data: { voices: PickerVoice[] }) => {
+        if (cancelled) return;
+        setVoiceOptions(data.voices.filter((v) => v.status === "ready"));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [versions, setVersions] = useState<ConfigVersion[]>(initialVersions);
   const [savedAt, setSavedAt] = useState<number>(Date.now());
   // Sidebar is gated on canvas selection — the character node starts
@@ -296,6 +315,8 @@ export function CharacterConfig({
         character={character}
         identity={identity}
         voiceStyle={voiceStyle}
+        voiceId={voiceId}
+        voiceOptions={voiceOptions}
         brainModel={brainModel}
         bindings={bindings}
         gradient={avGradient}
@@ -339,6 +360,12 @@ export function CharacterConfig({
           bindings={bindings}
           onBindingsChange={(next) => {
             setBindings(next);
+            setSavedAt(Date.now());
+          }}
+          voiceId={voiceId}
+          voiceOptions={voiceOptions}
+          onVoiceIdChange={(next) => {
+            setVoiceIdLocal(next);
             setSavedAt(Date.now());
           }}
           avGradient={avGradient}
@@ -897,6 +924,8 @@ type CharacterNodeData = {
   character: CharacterRecord;
   identity: CharacterIdentity | null;
   voiceStyle: CharacterVoiceStyle | null;
+  voiceId: string | null;
+  voiceOptions: PickerVoice[];
   brainModel: CharacterBrainModel | null;
   bindings: ConfigBinding[];
   gradient: string;
@@ -913,6 +942,8 @@ function CanvasArea({
   character,
   identity,
   voiceStyle,
+  voiceId,
+  voiceOptions,
   brainModel,
   bindings,
   gradient,
@@ -926,6 +957,8 @@ function CanvasArea({
   character: CharacterRecord;
   identity: CharacterIdentity | null;
   voiceStyle: CharacterVoiceStyle | null;
+  voiceId: string | null;
+  voiceOptions: PickerVoice[];
   brainModel: CharacterBrainModel | null;
   bindings: ConfigBinding[];
   gradient: string;
@@ -951,6 +984,8 @@ function CanvasArea({
         character,
         identity,
         voiceStyle,
+        voiceId,
+        voiceOptions,
         brainModel,
         bindings,
         gradient,
@@ -975,6 +1010,8 @@ function CanvasArea({
                 character,
                 identity,
                 voiceStyle,
+                voiceId,
+                voiceOptions,
                 brainModel,
                 bindings,
                 gradient,
@@ -991,6 +1028,8 @@ function CanvasArea({
     character,
     identity,
     voiceStyle,
+    voiceId,
+    voiceOptions,
     brainModel,
     bindings,
     gradient,
@@ -1103,6 +1142,8 @@ function CharacterNode({
         character={data.character}
         identity={data.identity}
         voiceStyle={data.voiceStyle}
+        voiceId={data.voiceId}
+        voiceOptions={data.voiceOptions}
         brainModel={data.brainModel}
         bindings={data.bindings}
         gradient={data.gradient}
@@ -1161,6 +1202,8 @@ function CharacterCard({
   character,
   identity,
   voiceStyle,
+  voiceId,
+  voiceOptions,
   brainModel,
   bindings,
   gradient,
@@ -1171,6 +1214,8 @@ function CharacterCard({
   character: CharacterRecord;
   identity: CharacterIdentity | null;
   voiceStyle: CharacterVoiceStyle | null;
+  voiceId: string | null;
+  voiceOptions: PickerVoice[];
   brainModel: CharacterBrainModel | null;
   bindings: ConfigBinding[];
   gradient: string;
@@ -1181,6 +1226,10 @@ function CharacterCard({
   const essence = identity?.essence ?? character.summary ?? "—";
   const activeModel = brainModel?.model ?? DEFAULT_CHAT_MODEL;
   const tones = (voiceStyle?.tone ?? []).filter((t) => t.trim());
+  // Voice slot render order: library binding wins (it's the real audio
+  // identity), tones fall back when no binding (style without sound), and
+  // when neither is configured the slot dims to signal unconfigured.
+  const boundVoice = voiceId ? voiceOptions.find((v) => v.id === voiceId) : null;
 
   return (
     <div
@@ -1380,13 +1429,23 @@ function CharacterCard({
           icon={<VoiceGlyph />}
           label="voice"
           value={
-            tones.length === 0 ? "no style yet" : tones.slice(0, 2).join(" · ")
+            boundVoice
+              ? boundVoice.slug
+              : voiceId
+                ? "voice bound"
+                : tones.length > 0
+                  ? tones.slice(0, 2).join(" · ")
+                  : "no voice bound"
           }
-          dim={tones.length === 0}
+          dim={!boundVoice && !voiceId && tones.length === 0}
           tooltip={
-            tones.length === 0
-              ? "Voice style not configured"
-              : `Tones: ${tones.join(", ")}`
+            boundVoice
+              ? `Bound to ${boundVoice.name} (${boundVoice.slug})${tones.length ? ` · ${tones.join(", ")}` : ""}`
+              : voiceId
+                ? "Voice bound (loading…)"
+                : tones.length > 0
+                  ? `No voice from library bound · tones: ${tones.join(", ")}`
+                  : "No voice bound — audio-rt falls back to character slug"
           }
           onClick={() => onSelectTab("voice")}
         />
@@ -1599,6 +1658,9 @@ function ConfigSidebar(props: {
   onDirectiveChange: (d: CharacterDirective | null) => void;
   bindings: ConfigBinding[];
   onBindingsChange: (b: ConfigBinding[]) => void;
+  voiceId: string | null;
+  voiceOptions: PickerVoice[];
+  onVoiceIdChange: (next: string | null) => void;
   avGradient: string;
   image: string | null;
   initial: string;
@@ -1790,7 +1852,9 @@ function ConfigSidebar(props: {
             characterId={props.character.id}
             voiceStyle={props.voiceStyle}
             onVoiceStyleChange={props.onVoiceStyleChange}
-            initialVoiceId={props.character.voiceId}
+            voiceId={props.voiceId}
+            voiceOptions={props.voiceOptions}
+            onVoiceIdChange={props.onVoiceIdChange}
           />
         )}
         {props.tab === "limits" && (
@@ -2275,12 +2339,16 @@ function VoiceTab({
   characterId,
   voiceStyle,
   onVoiceStyleChange,
-  initialVoiceId,
+  voiceId,
+  voiceOptions,
+  onVoiceIdChange,
 }: {
   characterId: string;
   voiceStyle: CharacterVoiceStyle | null;
   onVoiceStyleChange: (v: CharacterVoiceStyle | null) => void;
-  initialVoiceId: string | null;
+  voiceId: string | null;
+  voiceOptions: PickerVoice[];
+  onVoiceIdChange: (next: string | null) => void;
 }) {
   return (
     <>
@@ -2288,7 +2356,9 @@ function VoiceTab({
         characterId={characterId}
         voiceStyle={voiceStyle}
         onChange={onVoiceStyleChange}
-        initialVoiceId={initialVoiceId}
+        voiceId={voiceId}
+        voiceOptions={voiceOptions}
+        onVoiceIdChange={onVoiceIdChange}
       />
     </>
   );
@@ -3578,12 +3648,16 @@ function VoiceStyleSection({
   characterId,
   voiceStyle,
   onChange,
-  initialVoiceId,
+  voiceId,
+  voiceOptions,
+  onVoiceIdChange,
 }: {
   characterId: string;
   voiceStyle: CharacterVoiceStyle | null;
   onChange: (v: CharacterVoiceStyle | null) => void;
-  initialVoiceId: string | null;
+  voiceId: string | null;
+  voiceOptions: PickerVoice[];
+  onVoiceIdChange: (next: string | null) => void;
 }) {
   const [draftTone, setDraftTone] = useState("");
 
@@ -3595,31 +3669,16 @@ function VoiceStyleSection({
     });
   });
 
-  // Voice-library binding. Lives as local state because it's independent
-  // of the voiceStyle JSON column and persists via its own endpoint.
-  const [voiceId, setVoiceId] = useState<string | null>(initialVoiceId);
-  const [voiceOptions, setVoiceOptions] = useState<PickerVoice[]>([]);
+  // voiceId + voiceOptions are owned by CharacterConfig — keeping them
+  // there means the canvas voice pill and the sidebar picker share a
+  // source of truth and update together. The PATCH persistence lives
+  // here so the section is the single owner of network writes for it.
   const [voiceError, setVoiceError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/voices")
-      .then((r) => r.json())
-      .then((data: { voices: PickerVoice[] }) => {
-        if (cancelled) return;
-        // Only ready voices can be bound — others would fail PATCH validation.
-        setVoiceOptions(data.voices.filter((v) => v.status === "ready"));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const saveVoiceId = useCallback(
     async (next: string | null) => {
       const prev = voiceId;
-      setVoiceId(next);
+      onVoiceIdChange(next);
       setVoiceError(null);
       const res = await fetch(`/api/characters/${characterId}/voice`, {
         method: "PATCH",
@@ -3629,10 +3688,10 @@ function VoiceStyleSection({
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setVoiceError(body.error ?? `HTTP ${res.status}`);
-        setVoiceId(prev);
+        onVoiceIdChange(prev);
       }
     },
-    [characterId, voiceId],
+    [characterId, voiceId, onVoiceIdChange],
   );
 
   const save = useCallback(
