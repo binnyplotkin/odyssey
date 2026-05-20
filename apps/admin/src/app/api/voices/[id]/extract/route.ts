@@ -10,25 +10,38 @@ import { drainSpeakStreamToWav } from "@/lib/voice-wav";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Pocket TTS export-voice takes ~10–30s on a warm container, longer on a
-// cold one (HF weight download). Give the whole pipeline 3 minutes before
-// the platform kills the request.
-export const maxDuration = 180;
+// The route itself returns ~immediately; the heavy work runs in a detached
+// promise. maxDuration only caps the synchronous portion (validation +
+// status flip + spawn). Background extraction has no per-request limit and
+// can run as long as the Node container is alive.
+export const maxDuration = 30;
 
 /**
  * POST /api/voices/:id/extract
  *
- * Synchronous orchestrator:
- *   1. Mark row status='processing'
- *   2. Download source clip from voice-sources
- *   3. POST to audio-rt /export-voice (base64 + mimeType)
- *   4. Upload returned .safetensors bytes to voice-embeddings/<slug>.safetensors
- *   5. Synthesize a short smoke-test phrase via audio-rt /speak using the
- *      newly-extracted embedding, upload as .preview.wav (best-effort —
- *      failures don't break the extraction).
- *   6. Mark row status='ready' with embeddingPath + previewPath set
+ * Two-phase orchestrator:
  *
- * Any failure → status='failed' with statusError populated. Re-runnable.
+ *   Synchronous (returns 202 in <1s):
+ *     1. Validate the voice + source clip
+ *     2. Flip status='processing', clear statusError
+ *     3. Spawn the background pipeline (no await)
+ *     4. Return 202
+ *
+ *   Background (detached promise, runs as long as the pod is alive):
+ *     5. Download source clip from voice-sources
+ *     6. POST to audio-rt /export-voice (base64 + mimeType)
+ *     7. Upload returned .safetensors bytes to voice-embeddings/<slug>.safetensors
+ *     8. Synthesize a short smoke-test phrase via audio-rt /speak using the
+ *        newly-extracted embedding, upload as .preview.wav (best-effort —
+ *        failures don't break the extraction).
+ *     9. Mark row status='ready' with embeddingPath + previewPath set
+ *
+ * Any background failure → status='failed' with statusError populated.
+ * Polling on /voices/[slug] surfaces both the in-flight Processing UI
+ * and the final state via router.refresh().
+ *
+ * Re-runnable: the client retry button POSTs again, re-entering the flow
+ * from step 1. Source clip stays in the bucket across retries.
  */
 
 /** Smoke-test phrase synthesized at extraction time so the detail page
@@ -66,10 +79,38 @@ export async function POST(
 
   await store.update(id, { status: "processing", statusError: null });
 
+  // Detach. We deliberately don't await — the response goes back as 202
+  // so the client can refresh + render the Processing UI immediately. The
+  // background promise updates the row when it lands (success or failure),
+  // and the page's 3s polling picks up the change.
+  //
+  // Errors are caught and persisted in runExtraction itself; this `void`
+  // is the last line of defense against unhandled-rejection warnings.
+  void runExtraction({
+    voiceId: id,
+    voiceSlug: voice.slug,
+    sourcePath: voice.sourcePath,
+  }).catch((err) => {
+    console.error(`[voices/extract] unhandled error for ${id}:`, err);
+  });
+
+  return NextResponse.json({ status: "processing" }, { status: 202 });
+}
+
+async function runExtraction(args: {
+  voiceId: string;
+  voiceSlug: string;
+  sourcePath: string;
+}): Promise<void> {
+  const { voiceId, voiceSlug, sourcePath } = args;
+  const store = getVoiceStore();
+  const startedAt = Date.now();
+  console.log(`[voices/extract] ${voiceId} (${voiceSlug}) started`);
+
   try {
-    const sourceBytes = await downloadSourceBytes(voice.sourcePath);
+    const sourceBytes = await downloadSourceBytes(sourcePath);
     const audioBase64 = sourceBytes.toString("base64");
-    const mimeType = mimeFromPath(voice.sourcePath);
+    const mimeType = mimeFromPath(sourcePath);
 
     const ttsBaseUrl =
       (process.env.KYUTAI_TTS_BASE_URL ?? "").trim().replace(/\/+$/, "") ||
@@ -100,31 +141,44 @@ export async function POST(
       throw new Error("audio-rt returned empty embedding");
     }
 
-    const embeddingPath = `${voice.slug}.safetensors`;
+    const embeddingPath = `${voiceSlug}.safetensors`;
     await uploadEmbedding(embeddingPath, embeddingBytes);
 
     // Best-effort smoke-test preview. Audio-rt fetches the embedding via the
     // signed URL we just signed, runs /speak, returns SSE. We drain + wrap
     // as WAV + upload. Failures here log but don't fail the extraction —
-    // the voice is already usable; previewPath simply stays null and the
-    // detail page falls back to its "preview not generated" placeholder.
+    // the voice is already usable; previewPath simply stays null.
     const previewPath = await synthAndUploadPreview({
       ttsBaseUrl,
-      voiceSlug: voice.slug,
+      voiceSlug,
       embeddingPath,
     });
 
-    const updated = await store.update(id, {
+    await store.update(voiceId, {
       status: "ready",
       statusError: null,
       embeddingPath,
       previewPath,
     });
-    return NextResponse.json({ voice: updated });
+    console.log(
+      `[voices/extract] ${voiceId} (${voiceSlug}) ready in ${Date.now() - startedAt}ms` +
+        (previewPath ? ` (preview ok)` : ` (preview skipped)`),
+    );
   } catch (error) {
     const message = (error as Error).message ?? String(error);
-    await store.update(id, { status: "failed", statusError: message });
-    return jsonError(500, message);
+    console.warn(
+      `[voices/extract] ${voiceId} (${voiceSlug}) failed in ${Date.now() - startedAt}ms: ${message}`,
+    );
+    await store
+      .update(voiceId, { status: "failed", statusError: message })
+      .catch((updateErr) => {
+        // If we can't even persist the failure status, log loudly so the
+        // row doesn't sit at 'processing' forever silently.
+        console.error(
+          `[voices/extract] ${voiceId} additionally failed to persist failure status:`,
+          updateErr,
+        );
+      });
   }
 }
 
