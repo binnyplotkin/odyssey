@@ -518,14 +518,23 @@ def _extension_from_mime(mime_type: str) -> str:
 
 
 def _decode_source_to_wav(source_path: str, wav_path: str) -> tuple[bool, str]:
+    # Output is pinned to 24kHz mono int16-LE PCM — what Pocket TTS expects
+    # natively and what the Kyutai STT 1B path runs against. Without -ar
+    # and -acodec, ffmpeg keeps whatever sample rate the input had (e.g.
+    # 44.1kHz from a typical mp3), forcing Pocket TTS to resample internally;
+    # that resample step is a known fragile path on some clips.
     result = subprocess.run(
         [
             "ffmpeg",
             "-y",
             "-i",
             source_path,
+            "-ar",
+            "24000",
             "-ac",
             "1",
+            "-acodec",
+            "pcm_s16le",
             wav_path,
         ],
         capture_output=True,
