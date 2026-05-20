@@ -35,6 +35,7 @@ const icons = {
   sessions: <Film size={I} />,
   users: <Users size={I} />,
   characters: <User size={I} />,
+  wikis: <Book size={I} />,
   engine: <Settings size={I} />,
   editor: <Layout size={I} />,
   worldEditor: <GitBranch size={I} />,
@@ -73,6 +74,8 @@ const items: SidebarItem[] = [
   { href: "/changelog", label: "Changelog", section: "Project", icon: icons.changelog, tab: "dev" },
   { href: "/worlds", label: "Worlds", section: "Studio", icon: icons.worlds, tab: "app" },
   { href: "/characters", label: "Characters", section: "Studio", icon: icons.characters, tab: "app" },
+  { href: "/wikis", label: "Wikis", section: "Studio", icon: icons.wikis, tab: "app" },
+  { href: "/voices", label: "Voices", section: "Studio", icon: icons.waveform, tab: "app" },
   { href: "/users", label: "Users", section: "Ops", icon: icons.users, tab: "app" },
   { href: "/sessions", label: "Sessions", section: "Database", icon: icons.sessions, tab: "infra" },
   { href: "/engine", label: "Engine", section: "Tools", icon: icons.engine, tab: "infra" },
@@ -85,6 +88,7 @@ const items: SidebarItem[] = [
   { href: "/voice-test-4", label: "Voice Test 4", section: "Tools", icon: icons.waveform, tab: "infra" },
   { href: "/voice-debug", label: "Voice Debug", section: "Tools", icon: icons.waveform, tab: "infra" },
   { href: "/abrahams-tent", label: "Abraham's Tent", section: "Demos", icon: icons.tent, tab: "infra" },
+  { href: "/scene-test", label: "Scene Orchestrator", section: "Demos", icon: icons.tool, tab: "infra" },
 ];
 
 /* ── Shell Component ──────────────────────────────────────────── */
@@ -110,7 +114,7 @@ function AdminShellInner({ children, initialCollapsed }: { children: React.React
         : theme;
     document.documentElement.setAttribute("data-theme", resolved);
     document.documentElement.style.colorScheme = resolved;
-    document.body.style.background = resolved === "dark" ? "#0C0E14" : "#F5F5F5";
+    document.body.style.background = resolved === "dark" ? "#0A0A0A" : "#F5F5F5";
     localStorage.setItem("odyssey-theme", theme);
   }, [theme]);
 
@@ -122,7 +126,7 @@ function AdminShellInner({ children, initialCollapsed }: { children: React.React
       const resolved = e.matches ? "dark" : "light";
       document.documentElement.setAttribute("data-theme", resolved);
       document.documentElement.style.colorScheme = resolved;
-      document.body.style.background = resolved === "dark" ? "#0C0E14" : "#F5F5F5";
+      document.body.style.background = resolved === "dark" ? "#0A0A0A" : "#F5F5F5";
     };
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
@@ -134,6 +138,7 @@ function AdminShellInner({ children, initialCollapsed }: { children: React.React
 
   const userName = session?.user?.name?.trim() || "Admin";
   const userRole = session?.user?.role === "admin" ? "Admin" : "User";
+  const userEmail = session?.user?.email ?? undefined;
 
   return (
     <Sidebar
@@ -145,6 +150,9 @@ function AdminShellInner({ children, initialCollapsed }: { children: React.React
       linkComponent={Link}
       userName={userName}
       userRole={userRole}
+      userEmail={userEmail}
+      workspaceName="odyssey-labs"
+      docsHref="/docs"
       headerContent={headerContent}
       mainPadding={flush ? "0" : "2rem"}
       onSignOut={() => signOut({ callbackUrl: "/login" })}

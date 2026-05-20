@@ -92,6 +92,14 @@ export type CharacterRecord = {
    * `directive: null` until an author opens L02 and saves.
    */
   directive: CharacterDirective | null;
+  /**
+   * Pointer into the global voices library. When set, the voice-stream
+   * and probe routes resolve this to a signed Supabase URL and pass it to
+   * audio-rt's /speak as `voiceUrl`. When null, the character's slug is
+   * used as the voice id (legacy path — works only for voices baked into
+   * the audio-rt Docker image).
+   */
+  voiceId: string | null;
   createdAt: string;
   updatedAt: string;
 };

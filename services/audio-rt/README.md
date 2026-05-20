@@ -14,16 +14,27 @@ via `KYUTAI_BASE_URL` (STT) and `KYUTAI_TTS_BASE_URL` (TTS).
 - `POST /speak` — body `{ text, voice? }` → SSE stream of
   `meta` / `audio` (base64-encoded int16 PCM @ 24 kHz) / `done`/ `error`
   events.
+- `POST /export-voice` — body `{ audioBase64, mimeType }` → raw
+  `application/octet-stream` bytes of a Pocket TTS `.safetensors`
+  embedding extracted from the reference clip. Called by the admin
+  `/voices` surface; admin then uploads the bytes to the Supabase
+  `voice-embeddings` bucket. Shells out to `pocket-tts export-voice`
+  with `--language ${POCKET_TTS_LANGUAGE}` so the embedding matches the
+  language pinned by `/speak`.
 
 ## Voices
 
-`.safetensors` voice embeddings live in [`voices/`](./voices) and are baked
-into the Docker image. To add a voice:
+Two sources, both addressed by slug from `POST /speak { voice }`:
 
-1. Locally: `pip install pocket-tts && hf auth login`
-2. Run `pocket-tts export-voice path/to/clean_30s.wav voices/<name>.safetensors`
-3. Commit the new `.safetensors` and push — Railway rebuilds and the new
-   voice becomes available via `POST /speak { voice: "<name>" }`.
+1. **Baked into the image** — `.safetensors` files committed to
+   [`voices/`](./voices). Used by legacy voices (`abraham`, `narrator`,
+   `sarah`). Add a new one by running `pocket-tts export-voice
+   path/to/clean_30s.wav voices/<slug>.safetensors`, committing the file,
+   and pushing — Railway rebuilds.
+2. **Managed via the admin `/voices` UI** — clip uploaded to the
+   Supabase `voice-sources` bucket, `.safetensors` extracted via
+   `POST /export-voice` on this service, stored in the `voice-embeddings`
+   bucket. No redeploy needed. (See `apps/admin` `/voices` surface.)
 
 Pocket TTS uses only the first 30s of the source clip. Run the source
 through Adobe Podcast Enhance (or similar) first — the model reproduces
@@ -40,6 +51,19 @@ Override with `POCKET_TTS_LANGUAGE` if upstream releases a fix.
 
 - `HF_TOKEN` — needed at container startup; `kyutai/pocket-tts` is gated.
   Set this on Railway as a service-level variable.
+
+## Concurrency
+
+Pocket TTS streaming state isn't documented as safe across concurrent
+calls on the same `TTSModel` instance, so `PocketTtsRuntime._generate_lock`
+serializes generation within a worker. Cross-session parallelism comes
+from **uvicorn workers** — each worker is a separate Python process with
+its own model, so concurrent `/speak` requests fan out across workers.
+
+- `UVICORN_WORKERS` — number of worker processes. Defaults to `2` in the
+  Dockerfile; set in Railway env to override. Memory cost ≈ 400MB per
+  warmed worker (Pocket TTS + Whisper + Silero). Bump up if more than a
+  couple of concurrent voice sessions are expected.
 
 ## Local dev
 

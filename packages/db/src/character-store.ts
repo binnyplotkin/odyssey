@@ -1,8 +1,13 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "./client";
+import { retryRead } from "./retry";
 import { charactersTable, worldNodesTable } from "./schema";
 import type {
+  CharacterDirective,
+  CharacterIdentity,
+  CharacterBrainModel,
   CharacterRecord,
+  CharacterVoiceStyle,
   CreateCharacterInput,
   EraConfig,
   UpdateCharacterInput,
@@ -42,47 +47,6 @@ function isRecoverableCharacterReadError(error: unknown) {
   return message.includes("Failed query:");
 }
 
-/**
- * The Neon serverless driver speaks HTTP to Neon's edge proxy. Stale sockets
- * occasionally fail with `fetch failed` / `ECONNRESET` mid-read. A single
- * retry recovers the request without changing semantics. Reads only — never
- * wrap writes (could double-apply).
- */
-function isTransientFetchError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const candidates: unknown[] = [
-    error,
-    (error as { cause?: unknown }).cause,
-    (error as { sourceError?: unknown }).sourceError,
-  ];
-  for (const c of candidates) {
-    if (!c || typeof c !== "object") continue;
-    const code = (c as { code?: string }).code ?? "";
-    if (
-      code === "ECONNRESET" ||
-      code === "ECONNREFUSED" ||
-      code === "ETIMEDOUT" ||
-      code === "ENETUNREACH" ||
-      code === "EAI_AGAIN"
-    ) {
-      return true;
-    }
-    const message = (c as { message?: string }).message ?? "";
-    if (message.includes("fetch failed")) return true;
-  }
-  return false;
-}
-
-async function retryRead<T>(op: () => Promise<T>): Promise<T> {
-  try {
-    return await op();
-  } catch (error) {
-    if (!isTransientFetchError(error)) throw error;
-    await new Promise((r) => setTimeout(r, 80));
-    return await op();
-  }
-}
-
 function normalize(row: typeof charactersTable.$inferSelect): CharacterRecord {
   return {
     id: row.id,
@@ -90,8 +54,14 @@ function normalize(row: typeof charactersTable.$inferSelect): CharacterRecord {
     title: row.title,
     summary: row.summary,
     image: row.image,
+    thumbnailColor: row.thumbnailColor,
     eras: (row.eras as EraConfig[] | null) ?? [],
     ingestionPrompt: row.ingestionPrompt,
+    identity: (row.identity as CharacterIdentity | null) ?? null,
+    voiceStyle: (row.voiceStyle as CharacterVoiceStyle | null) ?? null,
+    brainModel: (row.brainModel as CharacterBrainModel | null) ?? null,
+    directive: (row.directive as CharacterDirective | null) ?? null,
+    voiceId: row.voiceId ?? null,
     createdAt: row.createdAt instanceof Date ? toIso(row.createdAt) : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? toIso(row.updatedAt) : String(row.updatedAt),
   };
@@ -171,8 +141,13 @@ function neonStore(): CharacterStore {
           title: input.title,
           summary: input.summary ?? null,
           image: input.image ?? null,
+          thumbnailColor: input.thumbnailColor ?? null,
           eras: input.eras ?? [],
           ingestionPrompt: input.ingestionPrompt ?? null,
+          identity: input.identity ?? null,
+          voiceStyle: input.voiceStyle ?? null,
+          brainModel: input.brainModel ?? null,
+          directive: input.directive ?? null,
           createdAt: now,
           updatedAt: now,
         })
@@ -205,16 +180,17 @@ function neonStore(): CharacterStore {
 
     async countWorldsFor(characterId) {
       try {
-        const db = requireDb();
-        const [row] = await db
-          .select({ n: sql<number>`count(distinct ${worldNodesTable.worldId})::int` })
-          .from(worldNodesTable)
-          .where(
-            and(
-              eq(worldNodesTable.kind, "character"),
-              eq(worldNodesTable.refId, characterId),
+        const [row] = await retryRead(() =>
+          requireDb()
+            .select({ n: sql<number>`count(distinct ${worldNodesTable.worldId})::int` })
+            .from(worldNodesTable)
+            .where(
+              and(
+                eq(worldNodesTable.kind, "character"),
+                eq(worldNodesTable.refId, characterId),
+              ),
             ),
-          );
+        );
         return row?.n ?? 0;
       } catch (error) {
         if (isRecoverableCharacterReadError(error)) return 0;

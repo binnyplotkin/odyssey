@@ -77,6 +77,7 @@ export type {
   VoiceStatus,
   CreateVoiceInput,
   UpdateVoiceInput,
+  BoundCharacterSummary,
 } from "./voice-store";
 
 export { getCharacterVersionStore } from "./character-version-store";

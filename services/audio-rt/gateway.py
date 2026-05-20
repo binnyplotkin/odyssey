@@ -1,13 +1,16 @@
 import asyncio
 import base64
+import hashlib
 import itertools
 import json
 import math
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
 import time
+import urllib.request
 from threading import Lock
 from typing import Iterator
 
@@ -24,6 +27,12 @@ from pydantic import BaseModel
 app = FastAPI(title="odyssey-audio-rt")
 
 VOICES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voices")
+# Cache dir for .safetensors files downloaded from Supabase signed URLs.
+# Lives under VOICES_DIR so it shares the same volume mount; files are keyed
+# by a short hash of the signed URL so a re-extracted voice gets a fresh
+# entry without manual eviction.
+REMOTE_VOICES_DIR = os.path.join(VOICES_DIR, "_remote")
+os.makedirs(REMOTE_VOICES_DIR, exist_ok=True)
 DEFAULT_VOICE_ID = "abraham"
 
 
@@ -35,6 +44,17 @@ class TranscribeRequest(BaseModel):
 class SpeakRequest(BaseModel):
     text: str
     voice: str | None = None
+    # Optional signed URL to a .safetensors voice embedding stored in
+    # Supabase. When provided AND the voice slug is not present in the
+    # baked-in voices/ dir, audio-rt fetches the file once, caches it
+    # under voices/_remote/, and uses it. Admin's /api/voices flow sets
+    # this; legacy callers that only know the slug keep working unchanged.
+    voiceUrl: str | None = None
+
+
+class ExportVoiceRequest(BaseModel):
+    audioBase64: str
+    mimeType: str
 
 
 class KyutaiSttRuntime:
@@ -190,26 +210,73 @@ class PocketTtsRuntime:
                 self._error = str(error)
                 raise
 
-    def _voice_path(self, voice_id: str) -> str:
+    def _voice_path(self, voice_id: str, voice_url: str | None = None) -> str:
         # Voice IDs are simple slugs like "abraham"; reject anything that could
         # escape the voices/ dir.
         if not voice_id or "/" in voice_id or ".." in voice_id:
             raise HTTPException(status_code=400, detail=f"Invalid voice id: {voice_id!r}")
-        path = os.path.join(VOICES_DIR, f"{voice_id}.safetensors")
-        if not os.path.isfile(path):
-            raise HTTPException(status_code=404, detail=f"Voice not found: {voice_id}")
-        return path
+        baked = os.path.join(VOICES_DIR, f"{voice_id}.safetensors")
+        if os.path.isfile(baked):
+            return baked
+        if voice_url:
+            return self._ensure_remote_voice(voice_id, voice_url)
+        raise HTTPException(status_code=404, detail=f"Voice not found: {voice_id}")
 
-    def _get_voice_state(self, voice_id: str):
-        if voice_id in self._voice_states:
-            return self._voice_states[voice_id]
+    def _ensure_remote_voice(self, voice_id: str, voice_url: str) -> str:
+        """Download a Supabase-hosted .safetensors to the local cache.
+
+        Keyed by a short hash of the URL so re-extracted voices (which
+        rotate the signed-URL token) skip stale cache entries naturally.
+        """
+        url_hash = hashlib.sha256(voice_url.encode("utf-8")).hexdigest()[:16]
+        cache_path = os.path.join(REMOTE_VOICES_DIR, f"{voice_id}.{url_hash}.safetensors")
+        if os.path.isfile(cache_path):
+            return cache_path
+        tmp_path = f"{cache_path}.tmp"
+        try:
+            with urllib.request.urlopen(voice_url, timeout=30) as response:
+                if response.status != 200:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Voice fetch failed (HTTP {response.status}) for {voice_id}",
+                    )
+                with open(tmp_path, "wb") as out:
+                    shutil.copyfileobj(response, out)
+            os.replace(tmp_path, cache_path)
+        except HTTPException:
+            raise
+        except Exception as error:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Voice fetch failed for {voice_id}: {error}",
+            ) from error
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+        return cache_path
+
+    def _state_key(self, voice_id: str, voice_url: str | None) -> str:
+        if not voice_url:
+            return voice_id
+        url_hash = hashlib.sha256(voice_url.encode("utf-8")).hexdigest()[:16]
+        return f"{voice_id}@{url_hash}"
+
+    def _get_voice_state(self, voice_id: str, voice_url: str | None = None):
+        key = self._state_key(voice_id, voice_url)
+        if key in self._voice_states:
+            return self._voice_states[key]
         with self._lock:
-            if voice_id in self._voice_states:
-                return self._voice_states[voice_id]
+            if key in self._voice_states:
+                return self._voice_states[key]
             self._load()
             assert self._model is not None
-            state = self._model.get_state_for_audio_prompt(self._voice_path(voice_id))
-            self._voice_states[voice_id] = state
+            state = self._model.get_state_for_audio_prompt(
+                self._voice_path(voice_id, voice_url),
+            )
+            self._voice_states[key] = state
             return state
 
     def status(self) -> dict[str, object]:
@@ -227,7 +294,12 @@ class PocketTtsRuntime:
             "error": self._error,
         }
 
-    def stream_pcm_chunks(self, text: str, voice_id: str) -> Iterator[bytes]:
+    def stream_pcm_chunks(
+        self,
+        text: str,
+        voice_id: str,
+        voice_url: str | None = None,
+    ) -> Iterator[bytes]:
         """Yield raw int16-LE PCM bytes per generated frame.
 
         Pocket TTS yields one ~80ms torch tensor per step; we convert each to
@@ -239,7 +311,7 @@ class PocketTtsRuntime:
         with self._generate_lock:
             self._load()
             assert self._model is not None
-            voice_state = self._get_voice_state(voice_id)
+            voice_state = self._get_voice_state(voice_id, voice_url)
             for chunk in self._model.generate_audio_stream(voice_state, text):
                 arr = chunk.detach().cpu().numpy() if hasattr(chunk, "detach") else np.asarray(chunk)
                 arr = np.clip(arr, -1.0, 1.0)
@@ -576,12 +648,13 @@ def speak(payload: SpeakRequest):
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
     voice_id = payload.voice or DEFAULT_VOICE_ID
+    voice_url = payload.voiceUrl
 
     # Trigger lazy load up front so we can return a synchronous 5xx if model
     # download / voice load fails, instead of a half-streamed response.
     try:
         tts_runtime._load()
-        tts_runtime._get_voice_state(voice_id)
+        tts_runtime._get_voice_state(voice_id, voice_url)
     except HTTPException:
         raise
     except Exception as error:
@@ -603,7 +676,7 @@ def speak(payload: SpeakRequest):
                 "elapsedMs": int((setup_done_at - handler_entered_at) * 1000),
             })
             index = 0
-            for pcm in tts_runtime.stream_pcm_chunks(text, voice_id):
+            for pcm in tts_runtime.stream_pcm_chunks(text, voice_id, voice_url):
                 if first_chunk_at is None:
                     first_chunk_at = time.time()
                 yield sse_event("audio", {
@@ -633,6 +706,83 @@ def speak(payload: SpeakRequest):
         headers={
             "Cache-Control": "no-cache, no-transform",
             "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/export-voice")
+def export_voice(payload: ExportVoiceRequest):
+    """Extract a Pocket TTS voice embedding from a reference clip.
+
+    Accepts the same {audioBase64, mimeType} shape as /transcribe so the
+    admin can pipe any browser-recorded format through. Decodes to WAV via
+    ffmpeg, then shells out to `pocket-tts export-voice` (the documented
+    stable CLI) to produce a .safetensors blob, and returns those raw
+    bytes. The admin uploads them to Supabase Storage and points the
+    voices row at the resulting path.
+
+    Pocket TTS truncates the audio to its first 30s internally.
+    """
+    handler_entered_at = time.time()
+    wav_bytes = _decode_to_wav_bytes(payload.audioBase64, payload.mimeType)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        wav_path = os.path.join(temp_dir, "input.wav")
+        out_path = os.path.join(temp_dir, "out.safetensors")
+        with open(wav_path, "wb") as wav_file:
+            wav_file.write(wav_bytes)
+
+        language = os.getenv("POCKET_TTS_LANGUAGE", "english_2026-01")
+        cmd = [
+            "pocket-tts",
+            "export-voice",
+            "--language",
+            language,
+            "--quiet",
+            wav_path,
+            out_path,
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        except FileNotFoundError as error:
+            raise HTTPException(
+                status_code=500,
+                detail=f"pocket-tts CLI not found on PATH: {error}",
+            ) from error
+        except subprocess.TimeoutExpired as error:
+            raise HTTPException(
+                status_code=504,
+                detail="pocket-tts export-voice timed out after 180s",
+            ) from error
+
+        if result.returncode != 0 or not os.path.isfile(out_path):
+            raise HTTPException(
+                status_code=500,
+                detail=f"pocket-tts export-voice failed (exit {result.returncode}): "
+                f"{(result.stderr or result.stdout).strip()[:500]}",
+            )
+
+        with open(out_path, "rb") as out_file:
+            embedding_bytes = out_file.read()
+
+    elapsed_ms = int((time.time() - handler_entered_at) * 1000)
+    print(
+        f"[/export-voice] bytes_in={len(wav_bytes)} bytes_out={len(embedding_bytes)} "
+        f"total_ms={elapsed_ms}",
+        flush=True,
+    )
+    return StreamingResponse(
+        iter([embedding_bytes]),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Length": str(len(embedding_bytes)),
+            "X-Elapsed-Ms": str(elapsed_ms),
         },
     )
 

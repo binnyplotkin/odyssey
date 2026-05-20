@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   getCharacterStore,
+  getVoiceStore,
   getWikiStore,
   getWikisStore,
   getWorldSessionStore,
@@ -16,6 +17,7 @@ import {
   formatRecentConversation,
   summarizeTurnInBackground,
 } from "@/lib/voice-context-helpers";
+import { createEmbeddingSignedUrl } from "@/lib/voices-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -187,7 +189,35 @@ export async function POST(
     64,
     Math.min(1024, body.maxTokens ?? characterVoiceMaxTokens ?? DEFAULT_MAX_TOKENS),
   );
-  const voice = body.voice ?? TTS_DEFAULT_VOICE;
+  // Voice resolution priority:
+  //   1. body.voice explicit override (caller knows the slug)
+  //   2. character.voiceId binding → resolve to slug + signed embedding URL
+  //   3. fallback default
+  // The signed URL is passed alongside the slug so audio-rt can fetch
+  // Supabase-managed voices that aren't baked into its Docker image.
+  // URL is one-shot per request — 1h TTL is plenty for the longest voice
+  // session.
+  let voice: string;
+  let voiceUrl: string | null = null;
+  if (body.voice) {
+    voice = body.voice;
+  } else if (
+    "voiceId" in character &&
+    typeof character.voiceId === "string" &&
+    character.voiceId
+  ) {
+    const bound = await getVoiceStore().getById(character.voiceId);
+    if (bound?.status === "ready" && bound.embeddingPath) {
+      voice = bound.slug;
+      voiceUrl = await createEmbeddingSignedUrl(bound.embeddingPath).catch(
+        () => null,
+      );
+    } else {
+      voice = character.slug ?? TTS_DEFAULT_VOICE;
+    }
+  } else {
+    voice = TTS_DEFAULT_VOICE;
+  }
 
   if (!hasCerebras && !hasAnthropic) {
     return jsonError(
@@ -520,7 +550,7 @@ export async function POST(
           const fetchPromise = fetch(`${ttsBaseUrl}/speak`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: trimmed, voice }),
+            body: JSON.stringify({ text: trimmed, voice, voiceUrl }),
             signal: ttsAbort.signal,
           });
           // Attach a no-op rejection handler in case the drain chain rejects
