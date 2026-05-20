@@ -21,7 +21,7 @@
  *   ...
  */
 
-import type { WikiPageRecord } from "@odyssey/db";
+import { flattenWikilinks, type WikiPageRecord } from "@odyssey/db";
 import type { SelectedPage } from "./types";
 
 export function renderPromptChunk(
@@ -103,7 +103,19 @@ export function renderPromptChunk(
     parts.push(list);
   }
 
-  return parts.join("\n").trim();
+  // Build a slug→title map from every selected page so flattenWikilinks
+  // can resolve display-less `[[slug]]` references to their real title.
+  // Anything not in the map falls back to a prettified slug.
+  const titleBySlug = new Map<string, string>();
+  for (const s of selected) titleBySlug.set(s.page.slug, s.page.title);
+
+  // Strip every wikilink before handing the chunk to the LLM. The model
+  // doesn't use slug-as-anchor for anything generative — leaving them in
+  // just bleeds `[[…]]` syntax into the response (observed regression in
+  // Abraham's "Were you afraid?" probe). Doing this as a final pass means
+  // every emit site above stays template-simple — no `flatten()` calls
+  // sprinkled through the renderer.
+  return flattenWikilinks(parts.join("\n").trim(), titleBySlug);
 }
 
 /* ── Page rendering helpers ────────────────────────────────────── */

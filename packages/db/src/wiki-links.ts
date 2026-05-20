@@ -96,6 +96,46 @@ export function resolveWikilinks(
   });
 }
 
+/**
+ * Strip wikilink syntax for downstream consumers that should never see it
+ * (LLM prompt chunks, voice transcripts, plain-text exports). Each link is
+ * collapsed to a human-readable form:
+ *
+ *   - `[[slug|Display Text]]`   → `Display Text`
+ *   - `[[slug]]` (known)        → `<title from titleBySlug>`
+ *   - `[[slug]]` (unknown)      → derived from the slug
+ *                                  (e.g. `haran-city` → `Haran City`)
+ *
+ * The LLM doesn't use the slug-as-anchor signal for anything generative —
+ * left in place it just bleeds the `[[…]]` syntax into model output. Strip
+ * at render time and the prompt reads as natural language.
+ */
+export function flattenWikilinks(
+  body: string,
+  titleBySlug?: Map<string, string>,
+): string {
+  if (!body) return body;
+  return body.replace(WIKILINK_RE, (_match, rawSlug: string, rawDisplay?: string) => {
+    const slug = rawSlug.trim();
+    const display = rawDisplay?.trim();
+    if (display) return display;
+    const known = titleBySlug?.get(slug);
+    if (known) return known;
+    return prettifySlug(slug);
+  });
+}
+
+/** Best-effort fallback when we have only a slug — `haran-city` → `Haran City`.
+ * Not perfect for slugs that already encode meaningful punctuation, but good
+ * enough for the unknown-link case where the alternative is leaking syntax. */
+function prettifySlug(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 /* ── Slug validation ───────────────────────────────────────────── */
 
 const SLUG_RE = /^[a-z][a-z0-9-]{1,63}$/;
