@@ -37,6 +37,10 @@ import type {
 } from "@odyssey/db";
 import { DEFAULT_CHAT_MODEL, type ModelOption } from "@odyssey/engine";
 import { KnowledgeGraphIcon } from "@/components/knowledge-graph-icon";
+import {
+  VoiceLibraryPicker,
+  type PickerVoice,
+} from "@/components/voice-library-picker";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -3594,16 +3598,14 @@ function VoiceStyleSection({
   // Voice-library binding. Lives as local state because it's independent
   // of the voiceStyle JSON column and persists via its own endpoint.
   const [voiceId, setVoiceId] = useState<string | null>(initialVoiceId);
-  const [voiceOptions, setVoiceOptions] = useState<
-    Array<{ id: string; slug: string; name: string; status: string }>
-  >([]);
+  const [voiceOptions, setVoiceOptions] = useState<PickerVoice[]>([]);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/voices")
       .then((r) => r.json())
-      .then((data: { voices: Array<{ id: string; slug: string; name: string; status: string }> }) => {
+      .then((data: { voices: PickerVoice[] }) => {
         if (cancelled) return;
         // Only ready voices can be bound — others would fail PATCH validation.
         setVoiceOptions(data.voices.filter((v) => v.status === "ready"));
@@ -3778,30 +3780,11 @@ function VoiceStyleSection({
         }
       />
 
-      <FieldLabel>
-        voice (TTS) ·{" "}
-        {voiceId
-          ? voiceOptions.find((v) => v.id === voiceId)?.slug ?? "unknown"
-          : "default (character slug)"}
-      </FieldLabel>
-      <select
-        value={voiceId ?? ""}
-        onChange={(e) => saveVoiceId(e.target.value || null)}
-        style={{
-          ...inputStyle,
-          padding: "8px 10px",
-          fontFamily: T.fontMono,
-          fontSize: 12,
-          cursor: "pointer",
-        }}
-      >
-        <option value="">— use character slug (legacy / baked-in voice) —</option>
-        {voiceOptions.map((v) => (
-          <option key={v.id} value={v.id}>
-            {v.name} · {v.slug}
-          </option>
-        ))}
-      </select>
+      <VoiceLibraryPicker
+        currentVoiceId={voiceId}
+        voices={voiceOptions}
+        onChange={saveVoiceId}
+      />
       {voiceError && (
         <div
           style={{
