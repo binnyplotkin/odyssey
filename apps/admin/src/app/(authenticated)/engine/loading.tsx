@@ -7,7 +7,7 @@ export default function EngineLoading() {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           padding: "12px 16px",
           borderBottom: "1px solid var(--border)",
           flexShrink: 0,
@@ -36,7 +36,7 @@ export default function EngineLoading() {
             alignItems: "center",
             justifyContent: "center",
             flexDirection: "column",
-            gap: 14,
+            gap: "var(--space-14)",
           }}
         >
           <Skeleton width={120} height={120} variant="circle" />
@@ -52,16 +52,16 @@ export default function EngineLoading() {
             width: 260,
             background: "var(--card)",
             border: "1px solid var(--card-border)",
-            borderRadius: 12,
-            padding: 14,
+            borderRadius: "var(--radius-xl)",
+            padding: "var(--space-14)",
             display: "flex",
             flexDirection: "column",
-            gap: 10,
+            gap: "var(--space-10)",
           }}
         >
           <Skeleton width={100} height={11} />
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
               <Skeleton width={10} height={10} variant="circle" static />
               <Skeleton width="70%" height={12} />
             </div>

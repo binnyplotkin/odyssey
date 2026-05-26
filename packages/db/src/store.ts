@@ -1,5 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "./client";
+import { retryRead } from "./retry";
 import { sessionsTable, turnsTable } from "./schema";
 import {
   sessionRecordSchema,
@@ -121,12 +122,15 @@ class NeonPersistenceStore implements PersistenceStore {
     if (!this.db) {
       return null;
     }
+    const db = this.db;
 
-    const rows = await this.db
-      .select()
-      .from(sessionsTable)
-      .where(eq(sessionsTable.id, sessionId))
-      .limit(1);
+    const rows = await retryRead(() =>
+      db
+        .select()
+        .from(sessionsTable)
+        .where(eq(sessionsTable.id, sessionId))
+        .limit(1),
+    );
 
     const row = rows[0];
 
@@ -166,12 +170,15 @@ class NeonPersistenceStore implements PersistenceStore {
     if (!this.db) {
       return [];
     }
+    const db = this.db;
 
-    const rows = await this.db
-      .select()
-      .from(sessionsTable)
-      .orderBy(desc(sessionsTable.lastActiveAt))
-      .limit(12);
+    const rows = await retryRead(() =>
+      db
+        .select()
+        .from(sessionsTable)
+        .orderBy(desc(sessionsTable.lastActiveAt))
+        .limit(12),
+    );
 
     return rows.map((row) =>
       sessionRecordSchema.parse({
@@ -207,12 +214,15 @@ class NeonPersistenceStore implements PersistenceStore {
     if (!this.db) {
       return [];
     }
+    const db = this.db;
 
-    const rows = await this.db
-      .select()
-      .from(turnsTable)
-      .where(eq(turnsTable.sessionId, sessionId))
-      .orderBy(desc(turnsTable.stateVersion));
+    const rows = await retryRead(() =>
+      db
+        .select()
+        .from(turnsTable)
+        .where(eq(turnsTable.sessionId, sessionId))
+        .orderBy(desc(turnsTable.stateVersion)),
+    );
 
     return rows
       .map((row) =>

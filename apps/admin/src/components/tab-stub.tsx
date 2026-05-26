@@ -4,7 +4,7 @@ export function TabStub({ title, description }: { title: string; description: st
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      padding: "5rem 2rem", gap: 14, textAlign: "center",
+      padding: "5rem 2rem", gap: "var(--space-14)", textAlign: "center",
     }}>
       <div style={{
         width: 56, height: 56, borderRadius: "50%",
@@ -20,7 +20,7 @@ export function TabStub({ title, description }: { title: string; description: st
       <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 20, fontWeight: 600, margin: 0, color: "var(--foreground)" }}>
         {title}
       </h2>
-      <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: "var(--muted)", margin: 0, maxWidth: 440, lineHeight: 1.55 }}>
+      <p style={{ fontFamily: "'Inter', sans-serif", fontSize: "var(--font-size-md)", color: "var(--muted)", margin: 0, maxWidth: 440, lineHeight: 1.55 }}>
         {description}
       </p>
     </div>

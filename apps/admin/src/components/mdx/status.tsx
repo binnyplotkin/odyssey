@@ -65,9 +65,9 @@ export async function Status({
     <div style={{
       display: "flex",
       alignItems: "flex-start",
-      gap: 10,
+      gap: "var(--space-10)",
       padding: "10px 14px",
-      borderRadius: 8,
+      borderRadius: "var(--radius-md)",
       background: style.bg,
       border: `1px solid ${style.border}`,
       margin: "8px 0",

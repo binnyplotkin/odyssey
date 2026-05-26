@@ -27,7 +27,7 @@ const T = {
   mutedSoft: "#7C8494",
   mutedFaint: "#5B6272",
   pink: "#E8A0B5",
-  mint: "#7AE5C5",
+  mint: "#8FD1CB",
   mintInk: "#07201B",
   amber: "#E8B76A",
   purple: "#B496E6",
@@ -169,7 +169,7 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
 
   if (loading) {
     return (
-      <div style={{ padding: 24, color: T.mutedSoft, fontFamily: T.fontBody, fontSize: 13 }}>
+      <div style={{ padding: "var(--space-24)", color: T.mutedSoft, fontFamily: T.fontBody, fontSize: "var(--font-size-md)" }}>
         Loading character…
       </div>
     );
@@ -177,7 +177,7 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
 
   if (!data) {
     return (
-      <div style={{ padding: 24, color: T.danger, fontFamily: T.fontBody, fontSize: 13 }}>
+      <div style={{ padding: "var(--space-24)", color: T.danger, fontFamily: T.fontBody, fontSize: "var(--font-size-md)" }}>
         {error ?? "Character not found."}
       </div>
     );
@@ -200,21 +200,21 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
     }}>
       {/* ── Rail Header ───────────────────────────────────────── */}
       <div style={{
-        display: "flex", flexDirection: "column", gap: 14,
+        display: "flex", flexDirection: "column", gap: "var(--space-14)",
         padding: "20px 22px 18px",
         background: T.panel,
         borderBottom: `1px solid ${T.borderSoft}`,
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <EyebrowRow dot={T.pink} color={T.mutedFaint}>Selected · Character</EyebrowRow>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
             <IconBox label="More">⋯</IconBox>
             <IconBox label="Close inspector" onClick={onClose}>×</IconBox>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-14)" }}>
           <CharacterAvatar title={character.title} image={character.image} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", minWidth: 0 }}>
             <div style={{
               fontFamily: T.fontHeading, fontSize: 19, fontWeight: 500,
               color: T.textPrimary, lineHeight: "24px", letterSpacing: "-0.01em",
@@ -223,7 +223,7 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
               {character.title}
             </div>
             <div style={{
-              fontFamily: T.fontMono, fontSize: 11, color: T.mutedSoft,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.mutedSoft,
               lineHeight: "14px",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
@@ -248,7 +248,7 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                fontFamily: T.fontBody, fontSize: 11, fontWeight: 500,
+                fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500,
                 color: T.mint, textDecoration: "none",
               }}
             >
@@ -258,13 +258,13 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
         >
           {character.summary && (
             <p style={{
-              fontFamily: T.fontBody, fontSize: 13, color: T.textSecondary,
+              fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.textSecondary,
               lineHeight: "20px", margin: 0,
             }}>
               {character.summary}
             </p>
           )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
             {character.eras.slice(0, 4).map((era) => (
               <TagChip key={era.key} tone="era">{era.title}</TagChip>
             ))}
@@ -338,17 +338,17 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
           padding="20px 22px 22px"
           gap={12}
           eyebrowRight={
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.mutedFaint, letterSpacing: "0.02em" }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.mutedFaint, letterSpacing: "0.02em" }}>
               {edges.length} {edges.length === 1 ? "edge" : "edges"}
             </span>
           }
         >
           {edges.length === 0 ? (
-            <p style={{ fontFamily: T.fontBody, fontSize: 12, color: T.mutedSoft, margin: 0 }}>
+            <p style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.mutedSoft, margin: 0 }}>
               No edges yet. Connect this character to places or events to define context.
             </p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
               {edges.map(({ edge, direction, otherNode }) => (
                 <ConnectionRow
                   key={edge.id}
@@ -365,30 +365,30 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
 
       {/* ── Actions Footer ────────────────────────────────────── */}
       <div style={{
-        display: "flex", flexDirection: "column", gap: 14,
+        display: "flex", flexDirection: "column", gap: "var(--space-14)",
         padding: "18px 22px 20px",
         background: T.panel,
         borderTop: `1px solid ${T.borderSoft}`,
       }}>
         {error && (
           <div style={{
-            fontFamily: T.fontBody, fontSize: 11, color: T.amber,
-            padding: "6px 10px", borderRadius: 6,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.amber,
+            padding: "6px 10px", borderRadius: "var(--radius-sm)",
             background: "rgba(232,183,106,0.10)", border: `1px solid rgba(232,183,106,0.35)`,
           }}>
             {error}
           </div>
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
           <button
             type="button"
             onClick={handleSave}
             disabled={!dirty || saving}
             style={{
-              flex: 1, padding: "10px 12px", borderRadius: 8, border: "none",
+              flex: 1, padding: "10px 12px", borderRadius: "var(--radius-md)", border: "none",
               background: dirty ? T.mint : "rgba(122,229,197,0.25)",
               color: dirty ? T.mintInk : "rgba(7,32,27,0.50)",
-              fontFamily: T.fontBody, fontSize: 13, fontWeight: 500, lineHeight: "16px",
+              fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500, lineHeight: "16px",
               cursor: dirty && !saving ? "pointer" : "default",
             }}
           >
@@ -399,10 +399,10 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
             onClick={handleRevert}
             disabled={!dirty || saving}
             style={{
-              padding: "10px 14px", borderRadius: 8,
+              padding: "10px 14px", borderRadius: "var(--radius-md)",
               background: "transparent", border: `1px solid ${T.borderStrong}`,
               color: dirty ? T.muted : T.mutedFaint,
-              fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, lineHeight: "16px",
+              fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500, lineHeight: "16px",
               cursor: dirty && !saving ? "pointer" : "default",
             }}
           >
@@ -410,17 +410,17 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
           </button>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.mutedFaint, lineHeight: "12px" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.mutedFaint, lineHeight: "12px" }}>
             world_nodes.updated_at · {node.updatedAt ? relativeTime(node.updatedAt) : "never"}
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
             <button
               type="button"
               onClick={handleUnlink}
               disabled={unlinking}
               style={{
                 border: "none", background: "transparent", padding: 0,
-                color: T.muted, fontFamily: T.fontBody, fontSize: 11, fontWeight: 500, lineHeight: "14px",
+                color: T.muted, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500, lineHeight: "14px",
                 cursor: unlinking ? "default" : "pointer",
               }}
             >
@@ -432,7 +432,7 @@ export function CharacterInspector({ worldId, characterSlug, onClose, onUnlinked
               disabled={unlinking}
               style={{
                 border: "none", background: "transparent", padding: 0,
-                color: T.dangerSoft, fontFamily: T.fontBody, fontSize: 11, fontWeight: 500, lineHeight: "14px",
+                color: T.dangerSoft, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500, lineHeight: "14px",
                 cursor: unlinking ? "default" : "pointer",
               }}
             >
@@ -484,10 +484,10 @@ function Section({
 
 function EyebrowRow({ dot, color, children }: { dot: string; color: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ width: 6, height: 6, borderRadius: 999, background: dot }} />
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+      <span style={{ width: 6, height: 6, borderRadius: "var(--radius-pill)", background: dot }} />
       <span style={{
-        fontFamily: T.fontMono, fontSize: 10, color,
+        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color,
         letterSpacing: "0.18em", textTransform: "uppercase", lineHeight: "12px",
       }}>
         {children}
@@ -503,10 +503,10 @@ function IconBox({ children, onClick, label }: { children: React.ReactNode; onCl
       onClick={onClick}
       aria-label={label}
       style={{
-        width: 26, height: 26, borderRadius: 6,
+        width: 26, height: 26, borderRadius: "var(--radius-sm)",
         border: `1px solid ${T.borderMid}`, background: "transparent",
         color: T.mutedSoft, cursor: onClick ? "pointer" : "default",
-        fontFamily: T.fontBody, fontSize: 13, lineHeight: 1,
+        fontFamily: T.fontBody, fontSize: "var(--font-size-md)", lineHeight: 1,
         display: "flex", alignItems: "center", justifyContent: "center",
       }}
     >
@@ -518,13 +518,13 @@ function IconBox({ children, onClick, label }: { children: React.ReactNode; onCl
 function UnsavedPill() {
   return (
     <div style={{
-      display: "inline-flex", alignItems: "center", gap: 6,
-      padding: "3px 8px", borderRadius: 999,
+      display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+      padding: "3px 8px", borderRadius: "var(--radius-pill)",
       background: "rgba(232,183,106,0.10)", border: "1px solid rgba(232,183,106,0.24)",
     }}>
-      <span style={{ width: 6, height: 6, borderRadius: 999, background: T.amber }} />
+      <span style={{ width: 6, height: 6, borderRadius: "var(--radius-pill)", background: T.amber }} />
       <span style={{
-        fontFamily: T.fontBody, fontSize: 10, fontWeight: 500,
+        fontFamily: T.fontBody, fontSize: "var(--font-size-xs)", fontWeight: 500,
         color: T.amber, letterSpacing: "0.06em", textTransform: "uppercase",
       }}>
         Unsaved
@@ -549,7 +549,7 @@ function FieldText({
   mono?: boolean;
 }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <label style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <FieldLabel>{label}</FieldLabel>
       <input
         type="text"
@@ -557,11 +557,11 @@ function FieldText({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         style={{
-          padding: "9px 12px", borderRadius: 8,
+          padding: "9px 12px", borderRadius: "var(--radius-md)",
           background: T.card, border: `1px solid ${T.borderStrong}`,
           color: T.textPrimary,
           fontFamily: mono ? T.fontMono : T.fontBody,
-          fontSize: 13, lineHeight: "16px", outline: "none",
+          fontSize: "var(--font-size-md)", lineHeight: "16px", outline: "none",
         }}
       />
     </label>
@@ -584,12 +584,12 @@ function FieldTextarea({
   minHeight?: number;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <FieldLabel>{label}</FieldLabel>
         {overrideTag && (
           <span style={{
-            fontFamily: T.fontBody, fontSize: 9, fontWeight: 500,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-2xs)", fontWeight: 500,
             color: T.amber, letterSpacing: "0.08em", textTransform: "uppercase",
           }}>
             {overrideTag}
@@ -602,10 +602,10 @@ function FieldTextarea({
         placeholder={placeholder}
         rows={3}
         style={{
-          padding: "9px 12px", borderRadius: 8,
+          padding: "9px 12px", borderRadius: "var(--radius-md)",
           background: T.card, border: `1px solid ${T.borderStrong}`,
           color: T.textPrimary,
-          fontFamily: T.fontBody, fontSize: 12, lineHeight: "18px", outline: "none",
+          fontFamily: T.fontBody, fontSize: "var(--font-size-base)", lineHeight: "18px", outline: "none",
           resize: "vertical",
           minHeight: minHeight ?? undefined,
         }}
@@ -617,7 +617,7 @@ function FieldTextarea({
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <span style={{
-      fontFamily: T.fontBody, fontSize: 10, fontWeight: 500,
+      fontFamily: T.fontBody, fontSize: "var(--font-size-xs)", fontWeight: 500,
       color: T.mutedSoft, letterSpacing: "0.14em", textTransform: "uppercase", lineHeight: "12px",
     }}>
       {children}
@@ -649,30 +649,30 @@ function BaselineEditor({
     onChange({ ...scores, [key]: clamped });
   }
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <FieldLabel>Emotional baseline</FieldLabel>
       <div style={{
-        display: "flex", flexDirection: "column", gap: 8,
-        padding: "12px", borderRadius: 8,
+        display: "flex", flexDirection: "column", gap: "var(--space-8)",
+        padding: "12px", borderRadius: "var(--radius-md)",
         background: T.card, border: `1px solid ${T.borderStrong}`,
       }}>
         {BASELINE_ROWS.map(({ key, label, tone }) => {
           const v = Math.max(0, Math.min(100, Math.round(scores[key] ?? 0)));
           const fill = tone === "mint" ? T.mint : T.amber;
           return (
-            <div key={key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div key={key} style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
               <span style={{
-                width: 72, fontFamily: T.fontMono, fontSize: 11, color: T.muted, lineHeight: "14px",
+                width: 72, fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.muted, lineHeight: "14px",
               }}>
                 {label}
               </span>
               <div style={{
-                flex: 1, height: 4, borderRadius: 999,
+                flex: 1, height: 4, borderRadius: "var(--radius-pill)",
                 background: T.borderMid, position: "relative", overflow: "hidden",
               }}>
                 <div style={{
                   position: "absolute", left: 0, top: 0, bottom: 0,
-                  width: `${v}%`, background: fill, borderRadius: 999,
+                  width: `${v}%`, background: fill, borderRadius: "var(--radius-pill)",
                 }} />
               </div>
               <input
@@ -684,7 +684,7 @@ function BaselineEditor({
                 style={{
                   width: 40, textAlign: "right",
                   background: "transparent", border: "none", outline: "none",
-                  color: T.textPrimary, fontFamily: T.fontMono, fontSize: 11, lineHeight: "14px",
+                  color: T.textPrimary, fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", lineHeight: "14px",
                   padding: 0,
                 }}
               />
@@ -715,13 +715,13 @@ function MotivationsEditor({
     onChange([...list, ""]);
   }
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <FieldLabel>Motivations</FieldLabel>
         <AddButton onClick={add} />
       </div>
       {list.length === 0 && (
-        <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.mutedFaint }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.mutedFaint }}>
           None yet. Drives the engine&apos;s goal-seeking behavior.
         </span>
       )}
@@ -729,15 +729,15 @@ function MotivationsEditor({
         <div
           key={i}
           style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "9px 12px", borderRadius: 8,
+            display: "flex", alignItems: "center", gap: "var(--space-8)",
+            padding: "9px 12px", borderRadius: "var(--radius-md)",
             background: T.card, border: `1px solid ${T.borderStrong}`,
           }}
         >
           <span style={{
-            width: 18, height: 18, borderRadius: 999, flexShrink: 0,
+            width: 18, height: 18, borderRadius: "var(--radius-pill)", flexShrink: 0,
             background: "rgba(232,160,181,0.10)", color: T.pink,
-            fontFamily: T.fontMono, fontSize: 10, lineHeight: "18px",
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", lineHeight: "18px",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
             {i + 1}
@@ -749,7 +749,7 @@ function MotivationsEditor({
             placeholder="Bear a child"
             style={{
               flex: 1, border: "none", background: "transparent", outline: "none",
-              color: T.textPrimary, fontFamily: T.fontBody, fontSize: 12, lineHeight: "18px",
+              color: T.textPrimary, fontFamily: T.fontBody, fontSize: "var(--font-size-base)", lineHeight: "18px",
               padding: 0,
             }}
           />
@@ -759,7 +759,7 @@ function MotivationsEditor({
             aria-label="Remove motivation"
             style={{
               border: "none", background: "transparent", color: T.mutedFaint,
-              cursor: "pointer", fontFamily: T.fontBody, fontSize: 14, padding: "0 2px",
+              cursor: "pointer", fontFamily: T.fontBody, fontSize: "var(--font-size-lg)", padding: "0 2px",
             }}
           >
             ×
@@ -789,30 +789,30 @@ function BehaviorTriggersEditor({
     onChange([...triggers, { condition: "", behavior: "" }]);
   }
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <FieldLabel>Behavior triggers</FieldLabel>
         <AddButton onClick={add} />
       </div>
       {triggers.length === 0 ? (
-        <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.mutedFaint }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.mutedFaint }}>
           None yet. Define conditions that alter this character&apos;s response.
         </span>
       ) : (
         <div style={{
           display: "flex", flexDirection: "column",
-          padding: "10px 12px", borderRadius: 8, gap: 6,
+          padding: "10px 12px", borderRadius: "var(--radius-md)", gap: "var(--space-6)",
           background: T.card, border: `1px solid ${T.borderStrong}`,
         }}>
           {triggers.map((t, i) => (
             <div key={i} style={{
-              display: "flex", flexDirection: "column", gap: 4,
+              display: "flex", flexDirection: "column", gap: "var(--space-4)",
               paddingBottom: i < triggers.length - 1 ? 6 : 0,
               borderBottom: i < triggers.length - 1 ? `1px solid ${T.borderMid}` : "none",
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
                 <span style={{
-                  fontFamily: T.fontMono, fontSize: 10, color: T.mint,
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.mint,
                   letterSpacing: "0.02em", flexShrink: 0,
                 }}>
                   if ·
@@ -824,7 +824,7 @@ function BehaviorTriggersEditor({
                   placeholder="visitor mentions prophecy"
                   style={{
                     flex: 1, border: "none", background: "transparent", outline: "none",
-                    color: T.mint, fontFamily: T.fontMono, fontSize: 10, lineHeight: "14px",
+                    color: T.mint, fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", lineHeight: "14px",
                     padding: 0, letterSpacing: "0.02em",
                   }}
                 />
@@ -834,15 +834,15 @@ function BehaviorTriggersEditor({
                   aria-label="Remove trigger"
                   style={{
                     border: "none", background: "transparent", color: T.mutedFaint,
-                    cursor: "pointer", fontFamily: T.fontBody, fontSize: 13, padding: "0 2px",
+                    cursor: "pointer", fontFamily: T.fontBody, fontSize: "var(--font-size-md)", padding: "0 2px",
                   }}
                 >
                   ×
                 </button>
               </div>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-6)" }}>
                 <span style={{
-                  fontFamily: T.fontBody, fontSize: 12, color: T.mutedSoft,
+                  fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.mutedSoft,
                   lineHeight: "17px", flexShrink: 0,
                 }}>
                   then
@@ -854,7 +854,7 @@ function BehaviorTriggersEditor({
                   placeholder="laugh softly and offer another cup"
                   style={{
                     flex: 1, border: "none", background: "transparent", outline: "none",
-                    color: T.textPrimary, fontFamily: T.fontBody, fontSize: 12, lineHeight: "17px",
+                    color: T.textPrimary, fontFamily: T.fontBody, fontSize: "var(--font-size-base)", lineHeight: "17px",
                     padding: 0,
                   }}
                 />
@@ -874,7 +874,7 @@ function AddButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       style={{
         border: "none", background: "transparent", padding: 0,
-        color: T.mint, fontFamily: T.fontBody, fontSize: 11, fontWeight: 500,
+        color: T.mint, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500,
         cursor: "pointer", letterSpacing: "0.02em",
       }}
     >
@@ -899,28 +899,28 @@ function ConnectionRow({
   const tone = kindTone(kind);
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 10,
-      padding: "9px 12px", borderRadius: 8,
+      display: "flex", alignItems: "center", gap: "var(--space-10)",
+      padding: "9px 12px", borderRadius: "var(--radius-md)",
       background: T.card, border: `1px solid ${T.borderMid}`,
     }}>
       <span style={{
-        padding: "2px 7px", borderRadius: 4,
+        padding: "2px 7px", borderRadius: "var(--radius-xs)",
         background: tone.bg, border: `1px solid ${tone.border}`,
-        fontFamily: T.fontMono, fontSize: 9, color: tone.fg, letterSpacing: "0.02em",
+        fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: tone.fg, letterSpacing: "0.02em",
         flexShrink: 0,
       }}>
         {kind}
       </span>
       <span style={{
         flex: 1, minWidth: 0,
-        fontFamily: T.fontBody, fontSize: 12, color: T.textPrimary, lineHeight: "16px",
+        fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.textPrimary, lineHeight: "16px",
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>
         {direction === "out" ? "→" : "←"} {otherLabel}
       </span>
       {otherKind && (
         <span style={{
-          fontFamily: T.fontMono, fontSize: 10, color: T.mutedFaint,
+          fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.mutedFaint,
           flexShrink: 0,
         }}>
           {otherKind}
@@ -952,9 +952,9 @@ function TagChip({ tone, children }: { tone: "era" | "neutral"; children: React.
       : { bg: T.card, border: T.borderMid, fg: T.muted };
   return (
     <span style={{
-      padding: "4px 8px", borderRadius: 6,
+      padding: "4px 8px", borderRadius: "var(--radius-sm)",
       background: palette.bg, border: `1px solid ${palette.border}`,
-      fontFamily: T.fontMono, fontSize: 10, color: palette.fg, letterSpacing: "0.04em",
+      fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: palette.fg, letterSpacing: "0.04em",
       lineHeight: "12px",
     }}>
       {children}
@@ -977,7 +977,7 @@ function CharacterAvatar({ title, image }: { title: string; image: string | null
           src={image}
           alt=""
           style={{
-            width: 52, height: 52, borderRadius: 12,
+            width: 52, height: 52, borderRadius: "var(--radius-xl)",
             objectFit: "cover", display: "block",
           }}
         />
@@ -989,10 +989,10 @@ function CharacterAvatar({ title, image }: { title: string; image: string | null
     <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}>
       <div
         style={{
-          width: 52, height: 52, borderRadius: 12,
+          width: 52, height: 52, borderRadius: "var(--radius-xl)",
           background: T.avatarGradient,
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontFamily: T.fontHeading, fontSize: 22, fontWeight: 500,
+          fontFamily: T.fontHeading, fontSize: "var(--font-size-3xl)", fontWeight: 500,
           color: T.avatarInk, lineHeight: "28px",
         }}
       >
@@ -1007,7 +1007,7 @@ function LinkDot() {
   return (
     <span style={{
       position: "absolute", right: -3, bottom: -3,
-      width: 14, height: 14, borderRadius: 999,
+      width: 14, height: 14, borderRadius: "var(--radius-pill)",
       background: T.mint, border: `2.5px solid ${T.panel}`,
     }} />
   );

@@ -92,8 +92,9 @@ until each background warm-up finishes downloading weights from HuggingFace
 
 ## Streaming STT (`/api/asr-streaming`)
 
-WebSocket endpoint that the browser connects to via `MOSHI_WS_URL` in
-[`apps/admin/src/lib/moshi-client.ts`](../../apps/admin/src/lib/moshi-client.ts).
+WebSocket endpoint that the browser connects to via the audio-rt streaming
+STT client in
+[`apps/admin/src/lib/audio-rt-streaming-stt.ts`](../../apps/admin/src/lib/audio-rt-streaming-stt.ts).
 Stack: faster-whisper (`base.en`, int8) for transcription + silero-vad
 ONNX for end-of-speech detection. Protocol is msgpack — see the gateway's
 inline docs in [`gateway.py`](./gateway.py) for the message types.

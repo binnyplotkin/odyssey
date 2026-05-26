@@ -32,7 +32,7 @@ const C = {
   textHigh: "rgba(255,255,255,0.65)",
   textMid: "rgba(255,255,255,0.45)",
   textLow: "rgba(255,255,255,0.35)",
-  mint: "#8CE7D2",
+  mint: "#8FD1CB",
   mintSoft: "rgba(140,231,210,0.12)",
   mintMid: "rgba(140,231,210,0.20)",
   mintBg: "rgba(140,231,210,0.06)",
@@ -220,7 +220,7 @@ function HeaderRail({
         display: "flex",
         flexDirection: "column",
         padding: "24px 32px 20px",
-        gap: 18,
+        gap: "var(--space-18)",
         borderBottom: `1px solid ${C.borderSoft}`,
         background: C.bg,
       }}
@@ -258,10 +258,10 @@ function TopRow({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: 20,
+        gap: "var(--space-20)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-14)", minWidth: 0 }}>
         <Link
           href="/sessions"
           aria-label="Back to sessions"
@@ -271,7 +271,7 @@ function TopRow({
             justifyContent: "center",
             width: 32,
             height: 32,
-            borderRadius: 8,
+            borderRadius: "var(--radius-md)",
             border: `1px solid ${C.border}`,
             color: C.textMid,
             flexShrink: 0,
@@ -288,9 +288,9 @@ function TopRow({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 10,
+            gap: "var(--space-10)",
             fontFamily: FONT_MONO,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             color: C.textMid,
             minWidth: 0,
             overflow: "hidden",
@@ -308,7 +308,7 @@ function TopRow({
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", flexShrink: 0 }}>
         <NavButton label="Prev" />
         <NavButton label="Next" />
         <ReplayButton />
@@ -328,11 +328,11 @@ function NavButton({ label }: { label: string }) {
       style={{
         background: "transparent",
         border: `1px solid ${C.border}`,
-        borderRadius: 8,
+        borderRadius: "var(--radius-md)",
         padding: "8px 14px",
         color: C.textHigh,
         fontFamily: FONT_BODY,
-        fontSize: 12,
+        fontSize: "var(--font-size-base)",
         fontWeight: 500,
         cursor: "pointer",
       }}
@@ -352,11 +352,11 @@ function ReplayButton() {
         gap: 7,
         background: C.mint,
         border: "none",
-        borderRadius: 8,
+        borderRadius: "var(--radius-md)",
         padding: "8px 14px",
         color: "#06110f",
         fontFamily: FONT_BODY,
-        fontSize: 12,
+        fontSize: "var(--font-size-base)",
         fontWeight: 700,
         cursor: "pointer",
       }}
@@ -383,8 +383,8 @@ function Avatar({
     variant === "user"
       ? "linear-gradient(135deg, #E5C49A 0%, #B07F4F 100%)"
       : variant === "assistant"
-        ? "linear-gradient(135deg, #8CE7D2 0%, #105A59 100%)"
-        : "linear-gradient(135deg, #8CE7D2 0%, #3A8B7A 100%)";
+        ? "linear-gradient(135deg, #8FD1CB 0%, #105A59 100%)"
+        : "linear-gradient(135deg, #8FD1CB 0%, #3A8B7A 100%)";
   return (
     <div
       style={{
@@ -430,8 +430,8 @@ function IdentityStrip({
   subTags: string[];
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)", flexWrap: "wrap" }}>
         <Eyebrow color={statusColor} bold>
           <span
             style={{
@@ -440,7 +440,7 @@ function IdentityStrip({
               height: 6,
               borderRadius: "50%",
               background: statusColor,
-              marginRight: 8,
+              marginRight: "var(--space-8)",
               verticalAlign: "middle",
             }}
           />
@@ -457,7 +457,7 @@ function IdentityStrip({
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
-          gap: 24,
+          gap: "var(--space-24)",
           flexWrap: "wrap",
         }}
       >
@@ -478,7 +478,7 @@ function IdentityStrip({
           style={{
             color: C.textMid,
             fontFamily: FONT_MONO,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             letterSpacing: "0.02em",
           }}
         >
@@ -490,10 +490,10 @@ function IdentityStrip({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 16,
+          gap: "var(--space-16)",
           flexWrap: "wrap",
           fontFamily: FONT_MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           color: C.textMid,
           letterSpacing: "0.04em",
         }}
@@ -521,7 +521,7 @@ function Eyebrow({
     <span
       style={{
         fontFamily: FONT_MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         letterSpacing: "0.18em",
         textTransform: "uppercase",
         color: color ?? (strong ? C.textHigh : C.textLow),
@@ -550,6 +550,7 @@ function KpiStrip({ stats }: { stats: ReturnType<typeof computeStats> }) {
       value: stats.tokens.value,
       sub: stats.tokens.sub,
     },
+    { label: "Cost", value: stats.cost.value, sub: stats.cost.sub },
     { label: "Audio", value: stats.audio.value, sub: stats.audio.sub },
     {
       label: "STT rejected",
@@ -565,7 +566,7 @@ function KpiStrip({ stats }: { stats: ReturnType<typeof computeStats> }) {
         display: "grid",
         gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
         border: `1px solid ${C.border}`,
-        borderRadius: 12,
+        borderRadius: "var(--radius-xl)",
         background: C.panel,
         overflow: "hidden",
       }}
@@ -598,14 +599,14 @@ function KpiCell({
         borderRight: divider ? `1px solid ${C.borderSoft}` : "none",
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: "var(--space-4)",
         minWidth: 0,
       }}
     >
       <div
         style={{
           fontFamily: FONT_MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.16em",
           textTransform: "uppercase",
           color: C.textLow,
@@ -617,7 +618,7 @@ function KpiCell({
         style={{
           display: "flex",
           alignItems: "baseline",
-          gap: 10,
+          gap: "var(--space-10)",
           minWidth: 0,
         }}
       >
@@ -641,7 +642,7 @@ function KpiCell({
           <span
             style={{
               fontFamily: FONT_MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: C.textLow,
               letterSpacing: "0.04em",
               whiteSpace: "nowrap",
@@ -692,7 +693,7 @@ function ConversationColumn({
         flex: "0 0 680px",
         maxWidth: 680,
         padding: "20px 24px 28px",
-        gap: 14,
+        gap: "var(--space-14)",
         borderRight: `1px solid ${C.borderSoft}`,
         background: C.bg,
         minWidth: 0,
@@ -705,7 +706,7 @@ function ConversationColumn({
         onFilterChange={onFilterChange}
       />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-14)" }}>
         {turns.length === 0 ? (
           <EmptyHint>No turns recorded for this session.</EmptyHint>
         ) : (
@@ -752,17 +753,17 @@ function ConvHeader({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: 16,
+        gap: "var(--space-16)",
         flexWrap: "wrap",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
         <Eyebrow>Conversation</Eyebrow>
         <span
           style={{
             fontFamily: FONT_DISPLAY,
             fontWeight: 600,
-            fontSize: 18,
+            fontSize: "var(--font-size-2xl)",
             lineHeight: "22px",
             letterSpacing: "-0.01em",
             color: C.text,
@@ -771,7 +772,7 @@ function ConvHeader({
           {turnCount} turns · {duration}
         </span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
         {filters.map((f) => (
           <button
             key={f.key}
@@ -779,12 +780,12 @@ function ConvHeader({
             onClick={() => onFilterChange(f.key)}
             style={{
               padding: "5px 12px",
-              borderRadius: 999,
+              borderRadius: "var(--radius-pill)",
               border: "none",
               background: filter === f.key ? C.mintSoft : "transparent",
               color: filter === f.key ? C.mint : C.textMid,
               fontFamily: FONT_BODY,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               fontWeight: 500,
               cursor: "pointer",
             }}
@@ -836,31 +837,31 @@ function TurnEntry({
           cursor: "pointer",
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: "var(--space-6)",
           padding: "14px 18px",
           borderTop: `1px solid ${C.borderSoft}`,
           minWidth: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, fontFamily: FONT_MONO, fontSize: 11, color: C.textLow, letterSpacing: "0.04em" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-12)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)", fontFamily: FONT_MONO, fontSize: "var(--font-size-sm)", color: C.textLow, letterSpacing: "0.04em" }}>
             <span style={{ color: C.text, fontWeight: 700 }}>TURN {turnNum}</span>
             <span>{startedAt}</span>
             {turn.status && turn.status !== "succeeded" && turn.status !== "completed" ? (
               <span style={{ color: C.amber, textTransform: "uppercase" }}>{turn.status}</span>
             ) : null}
           </div>
-          <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: C.textLow }}>
+          <div style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-sm)", color: C.textLow }}>
             {headlineMs != null ? `first-audio ${headlineMs}ms` : "—"}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
-          <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow, letterSpacing: "0.16em", textTransform: "uppercase", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-8)", minWidth: 0 }}>
+          <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: C.textLow, letterSpacing: "0.16em", textTransform: "uppercase", flexShrink: 0 }}>
             {(turn.userText ? "USER" : "ASSIST")}
           </span>
           <span
             style={{
-              fontSize: 14,
+              fontSize: "var(--font-size-lg)",
               color: C.textHigh,
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -892,25 +893,25 @@ function TurnEntry({
         position: "relative",
         display: "flex",
         flexDirection: "column",
-        gap: 14,
+        gap: "var(--space-14)",
         padding: "16px 18px 18px",
-        borderRadius: 14,
+        borderRadius: "var(--radius-2xl)",
         border: `1px solid ${C.mintMid}`,
         background: C.mintBg,
         boxShadow: `0 0 0 4px rgba(140,231,210,0.04)`,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-14)", flexWrap: "wrap" }}>
         <span
           style={{
             display: "inline-flex",
             alignItems: "center",
             padding: "3px 9px",
-            borderRadius: 999,
+            borderRadius: "var(--radius-pill)",
             background: C.mintSoft,
             color: C.mint,
             fontFamily: FONT_MONO,
-            fontSize: 9,
+            fontSize: "var(--font-size-2xs)",
             fontWeight: 700,
             letterSpacing: "0.16em",
             textTransform: "uppercase",
@@ -918,7 +919,7 @@ function TurnEntry({
         >
           Focused
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: FONT_MONO, fontSize: 11, color: C.textLow, letterSpacing: "0.04em" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", fontFamily: FONT_MONO, fontSize: "var(--font-size-sm)", color: C.textLow, letterSpacing: "0.04em" }}>
           <span style={{ color: C.text, fontWeight: 700 }}>TURN {turnNum}</span>
           <span style={{ color: C.textMid }}>{startedAt}</span>
           {completedAt ? <span style={{ color: C.textMid }}>→ {completedAt}</span> : null}
@@ -929,11 +930,11 @@ function TurnEntry({
               display: "inline-flex",
               alignItems: "center",
               padding: "3px 9px",
-              borderRadius: 999,
+              borderRadius: "var(--radius-pill)",
               background: C.amberSoft,
               color: C.amber,
               fontFamily: FONT_MONO,
-              fontSize: 9,
+              fontSize: "var(--font-size-2xs)",
               fontWeight: 700,
               letterSpacing: "0.12em",
               textTransform: "uppercase",
@@ -942,7 +943,7 @@ function TurnEntry({
             Interrupted{interruptionMs != null ? ` · ${(interruptionMs / 1000).toFixed(1)}s` : ""}
           </span>
         ) : null}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14, fontFamily: FONT_MONO, fontSize: 11, color: C.textLow }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "var(--space-14)", fontFamily: FONT_MONO, fontSize: "var(--font-size-sm)", color: C.textLow }}>
           {headlineMs != null ? <Stat label="first-audio" value={`${headlineMs}ms`} mint /> : null}
           {tokens != null && outTokens != null ? <Stat label="tok" value={`${tokens}/${outTokens}`} /> : null}
         </div>
@@ -965,7 +966,7 @@ function TurnEntry({
         audioSrc={assistantAudio ? `/api/world-sessions/${sessionId}/audio/${assistantAudio.id}` : null}
       />
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-8)" }}>
         {ctxPages > 0 ? <Pill>{ctxPages} pages · {ctxTokens ?? "?"} ctx tok</Pill> : null}
         {countTimeGated(turnContext) > 0 ? <Pill>{countTimeGated(turnContext)} time-gated</Pill> : null}
         {countDropped(turnContext) > 0 ? <Pill>{countDropped(turnContext)} budget-dropped</Pill> : null}
@@ -993,9 +994,9 @@ function Speaker({
   audioSrc?: string | null;
 }) {
   return (
-    <div style={{ display: "flex", gap: 14 }}>
+    <div style={{ display: "flex", gap: "var(--space-14)" }}>
       <Avatar label={avatarLabel} size={32} variant={side} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, flex: 1 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)", minWidth: 0, flex: 1 }}>
         <Eyebrow>{line}</Eyebrow>
         {audioSrc ? (
           <audio
@@ -1014,7 +1015,7 @@ function Speaker({
             margin: 0,
             color: text ? C.text : C.textMid,
             fontStyle: italic ? "italic" : "normal",
-            fontSize: 14,
+            fontSize: "var(--font-size-lg)",
             lineHeight: 1.55,
             whiteSpace: "pre-wrap",
             overflowWrap: "anywhere",
@@ -1029,8 +1030,8 @@ function Speaker({
 
 function Stat({ label, value, mint }: { label: string; value: string; mint?: boolean }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
-      <span style={{ color: C.textLow, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: "var(--space-4)" }}>
+      <span style={{ color: C.textLow, fontSize: "var(--font-size-xs)", letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
       <span style={{ color: mint ? C.mint : C.text, fontWeight: 700 }}>{value}</span>
     </span>
   );
@@ -1045,12 +1046,12 @@ function Pill({ children, tone }: { children: React.ReactNode; tone?: "amber" | 
         display: "inline-flex",
         alignItems: "center",
         padding: "3px 10px",
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         background: bg,
         color,
         border: `1px solid ${tone === "amber" ? "rgba(229,184,90,0.2)" : tone === "mint" ? C.mintMid : C.border}`,
         fontFamily: FONT_MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         letterSpacing: "0.04em",
       }}
     >
@@ -1095,7 +1096,7 @@ function InspectorRail({
         display: "flex",
         flexDirection: "column",
         padding: "20px 24px 28px",
-        gap: 14,
+        gap: "var(--space-14)",
         background: C.bgRail,
       }}
     >
@@ -1107,7 +1108,7 @@ function InspectorRail({
 
       <TabBar tabs={TABS} active={activeTab} onChange={onTabChange} />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-14)", minWidth: 0 }}>
         {activeTab === "pipeline" ? (
           <PipelinePanel turn={activeTurn} context={activeContext} events={turnEvents} />
         ) : null}
@@ -1159,17 +1160,17 @@ function InspectorHeader({
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "space-between",
-        gap: 16,
+        gap: "var(--space-16)",
         flexWrap: "wrap",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
         <Eyebrow>Inspector · {turnLabel}</Eyebrow>
         <span
           style={{
             fontFamily: FONT_DISPLAY,
             fontWeight: 600,
-            fontSize: 18,
+            fontSize: "var(--font-size-2xl)",
             lineHeight: "22px",
             letterSpacing: "-0.01em",
             color: C.text,
@@ -1183,14 +1184,14 @@ function InspectorHeader({
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "5px 12px",
-            borderRadius: 999,
+            borderRadius: "var(--radius-pill)",
             border: `1px solid ${C.mintMid}`,
             background: C.mintSoft,
             color: C.mint,
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.12em",
           }}
         >
@@ -1224,7 +1225,7 @@ function TabBar({
               all: "unset",
               display: "inline-flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
               padding: "10px 14px",
               cursor: "pointer",
               borderBottom: isActive ? `2px solid ${C.mint}` : "2px solid transparent",
@@ -1232,18 +1233,18 @@ function TabBar({
               color: isActive ? C.text : C.textMid,
               fontFamily: FONT_BODY,
               fontWeight: isActive ? 600 : 500,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
             }}
           >
             <span
               style={{
                 width: 16,
                 height: 16,
-                borderRadius: 4,
+                borderRadius: "var(--radius-xs)",
                 border: `1px solid ${isActive ? C.mintMid : C.border}`,
                 color: isActive ? C.mint : C.textLow,
                 fontFamily: FONT_MONO,
-                fontSize: 9,
+                fontSize: "var(--font-size-2xs)",
                 fontWeight: 700,
                 display: "inline-flex",
                 alignItems: "center",
@@ -1286,17 +1287,17 @@ function PipelinePanel({
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          gap: 16,
+          gap: "var(--space-16)",
           flexWrap: "wrap",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
           <Eyebrow>STT → LLM → TTS data flow</Eyebrow>
           <span
             style={{
               fontFamily: FONT_DISPLAY,
               fontWeight: 600,
-              fontSize: 16,
+              fontSize: "var(--font-size-xl)",
               color: C.text,
               letterSpacing: "-0.01em",
             }}
@@ -1304,7 +1305,7 @@ function PipelinePanel({
             Pipeline ribbon · turn {String((turn.turnIndex ?? 0) + 1).padStart(2, "0")}
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
           <Chip>{markCount} marks</Chip>
           <Chip>click marks to scrub</Chip>
         </div>
@@ -1323,14 +1324,14 @@ function Chip({ children, mint }: { children: React.ReactNode; mint?: boolean })
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 6,
+        gap: "var(--space-6)",
         padding: "4px 10px",
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         border: `1px solid ${mint ? C.mintMid : C.border}`,
         background: mint ? C.mintSoft : "transparent",
         color: mint ? C.mint : C.textMid,
         fontFamily: FONT_MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         letterSpacing: "0.04em",
       }}
     >
@@ -1341,7 +1342,7 @@ function Chip({ children, mint }: { children: React.ReactNode; mint?: boolean })
 
 function TimeRuler({ ticks, totalMs }: { ticks: number[]; totalMs: number }) {
   return (
-    <div style={{ position: "relative", height: 18, marginTop: 14, marginLeft: 110 }}>
+    <div style={{ position: "relative", height: 18, marginTop: "var(--space-14)", marginLeft: 110 }}>
       {ticks.map((t, i) => (
         <div
           key={`${t}-${i}`}
@@ -1350,7 +1351,7 @@ function TimeRuler({ ticks, totalMs }: { ticks: number[]; totalMs: number }) {
             left: `${(t / totalMs) * 100}%`,
             transform: "translateX(-50%)",
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: C.textLow,
           }}
         >
@@ -1374,24 +1375,24 @@ type LaneItem = {
 
 function PipelineLanes({ items, totalMs }: { items: LaneItem[]; totalMs: number }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", marginTop: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", marginTop: "var(--space-6)" }}>
       {items.map((item, i) => (
         <div
           key={`${item.laneTitle}-${i}`}
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 12,
+            gap: "var(--space-12)",
             height: 34,
             borderTop: i === 0 ? `1px solid ${C.borderSoft}` : "none",
             borderBottom: `1px solid ${C.borderSoft}`,
           }}
         >
           <div style={{ width: 100, flexShrink: 0, display: "flex", flexDirection: "column" }}>
-            <span style={{ fontFamily: FONT_MONO, fontSize: 9, color: C.textLow, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+            <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-2xs)", color: C.textLow, letterSpacing: "0.16em", textTransform: "uppercase" }}>
               {item.laneTitle}
             </span>
-            <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: C.text, letterSpacing: "0.02em" }}>
+            <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-sm)", color: C.text, letterSpacing: "0.02em" }}>
               {item.laneSub}
             </span>
           </div>
@@ -1418,7 +1419,7 @@ function LaneBar({ item, totalMs }: { item: LaneItem; totalMs: number }) {
           left: `${left}%`,
           width: `${width}%`,
           height: 14,
-          borderRadius: 4,
+          borderRadius: "var(--radius-xs)",
           background: fill,
           boxShadow: item.highlight ? `0 0 0 1px ${C.mint}` : undefined,
         }}
@@ -1446,7 +1447,7 @@ function LaneBar({ item, totalMs }: { item: LaneItem; totalMs: number }) {
             transform: "translate(-50%, -150%)",
             left: `${((item.startMs + item.endMs) / 2 / totalMs) * 100}%`,
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: item.amber ? C.amber : C.text,
             whiteSpace: "nowrap",
           }}
@@ -1464,9 +1465,9 @@ function HeadlineMetrics({ metrics }: { metrics: { label: string; value: string;
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))`,
-        marginTop: 14,
+        marginTop: "var(--space-14)",
         border: `1px solid ${C.border}`,
-        borderRadius: 10,
+        borderRadius: "var(--radius-lg)",
         background: C.panel,
         overflow: "hidden",
       }}
@@ -1478,19 +1479,19 @@ function HeadlineMetrics({ metrics }: { metrics: { label: string; value: string;
             padding: "12px 14px",
             display: "flex",
             flexDirection: "column",
-            gap: 3,
+            gap: "var(--space-3)",
             borderRight: i < metrics.length - 1 ? `1px solid ${C.borderSoft}` : "none",
             background: m.tone === "amber" ? "rgba(229,184,90,0.06)" : "transparent",
           }}
         >
-          <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+          <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: C.textLow, letterSpacing: "0.16em", textTransform: "uppercase" }}>
             {m.label}
           </span>
           <span
             style={{
               fontFamily: FONT_DISPLAY,
               fontWeight: 600,
-              fontSize: 22,
+              fontSize: "var(--font-size-3xl)",
               color: m.tone === "mint" ? C.mint : m.tone === "amber" ? C.amber : C.text,
               letterSpacing: "-0.01em",
             }}
@@ -1498,7 +1499,7 @@ function HeadlineMetrics({ metrics }: { metrics: { label: string; value: string;
             {m.value}
           </span>
           {m.sub ? (
-            <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow }}>{m.sub}</span>
+            <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: C.textLow }}>{m.sub}</span>
           ) : null}
         </div>
       ))}
@@ -1519,16 +1520,16 @@ function TraceMarksPanel({ turn, events }: { turn: WorldSessionTurnRecord; event
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 12,
+          gap: "var(--space-12)",
         }}
       >
         <Eyebrow>trace marks · serverTrace.events</Eyebrow>
-        <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow }}>
+        <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: C.textLow }}>
           {Math.min(marks.length, 16)} of {total}
         </span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", marginTop: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", marginTop: "var(--space-10)" }}>
         {marks.length === 0 ? (
           <EmptyHint>No trace marks captured.</EmptyHint>
         ) : (
@@ -1538,22 +1539,22 @@ function TraceMarksPanel({ turn, events }: { turn: WorldSessionTurnRecord; event
               style={{
                 display: "grid",
                 gridTemplateColumns: "80px minmax(0, 200px) minmax(0, 1fr) 64px",
-                gap: 12,
+                gap: "var(--space-12)",
                 padding: "10px 0",
                 borderTop: i === 0 ? `1px solid ${C.borderSoft}` : "none",
                 borderBottom: `1px solid ${C.borderSoft}`,
               }}
             >
-              <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: mark.amber ? C.amber : C.mint, fontWeight: 600 }}>
+              <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-sm)", color: mark.amber ? C.amber : C.mint, fontWeight: 600 }}>
                 +{Math.round(mark.ms)}ms
               </span>
-              <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-sm)", color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {mark.name}
               </span>
               <span
                 style={{
                   fontFamily: FONT_MONO,
-                  fontSize: 11,
+                  fontSize: "var(--font-size-sm)",
                   color: C.textHigh,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -1562,7 +1563,7 @@ function TraceMarksPanel({ turn, events }: { turn: WorldSessionTurnRecord; event
               >
                 {mark.detail}
               </span>
-              <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow, textAlign: "right" }}>
+              <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: C.textLow, textAlign: "right" }}>
                 {mark.source}
               </span>
             </div>
@@ -1686,21 +1687,21 @@ function KnowledgeGraphViz({
 
   return (
     <Panel>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-16)", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
           <Eyebrow>Curator topology · radial</Eyebrow>
-          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16, color: C.text, letterSpacing: "-0.01em" }}>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: "var(--font-size-xl)", color: C.text, letterSpacing: "-0.01em" }}>
             Wiki graph reach for this turn
           </span>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: "var(--space-6)" }}>
           <Chip mint>radial</Chip>
           <Chip>force</Chip>
           <Chip>list</Chip>
         </div>
       </div>
 
-      <div style={{ position: "relative", marginTop: 10 }}>
+      <div style={{ position: "relative", marginTop: "var(--space-10)" }}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
           width="100%"
@@ -1870,28 +1871,28 @@ function NodeInspector({ node, center }: { node: GraphNode; center: GraphNode | 
         width: 220,
         background: "rgba(12,14,20,0.92)",
         border: `1px solid ${C.borderStrong}`,
-        borderRadius: 10,
+        borderRadius: "var(--radius-lg)",
         padding: "12px 14px",
         backdropFilter: "blur(8px)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-8)" }}>
+        <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: "var(--font-size-lg)", color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {node.slug}
         </span>
         <Chip mint={node.kind === "selected"}>{kindLabel[node.kind].toUpperCase()}</Chip>
       </div>
-      <div style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textMid, marginTop: 6, letterSpacing: "0.04em" }}>
+      <div style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: C.textMid, marginTop: "var(--space-6)", letterSpacing: "0.04em" }}>
         type {node.type}
         {node.score != null ? ` · score ${node.score.toFixed(1)}` : ""}
         {node.tokens != null ? ` · ${node.tokens} tok` : ""}
       </div>
       {node.isSeed ? (
-        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.mint, letterSpacing: "0.06em" }}>SEED · query-title</span>
+        <div style={{ marginTop: "var(--space-8)", display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: C.mint, letterSpacing: "0.06em" }}>SEED · query-title</span>
         </div>
       ) : null}
-      <div style={{ marginTop: 8, fontFamily: FONT_MONO, fontSize: 10, color: C.textLow }}>
+      <div style={{ marginTop: "var(--space-8)", fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: C.textLow }}>
         trail: {truncateLabel(trail, 30)}
       </div>
     </div>
@@ -1913,18 +1914,18 @@ function Legend() {
       style={{
         display: "flex",
         flexWrap: "wrap",
-        gap: 14,
-        marginTop: 10,
-        paddingTop: 10,
+        gap: "var(--space-14)",
+        marginTop: "var(--space-10)",
+        paddingTop: "var(--space-10)",
         borderTop: `1px solid ${C.borderSoft}`,
         fontFamily: FONT_MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         color: C.textMid,
         letterSpacing: "0.04em",
       }}
     >
       {items.map((it, i) => (
-        <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-6)" }}>
           {it.line ? (
             <span
               style={{
@@ -2012,9 +2013,9 @@ function GraphPanel({ context }: { context: WorldSessionContextBuildRecord | nul
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${summary.length}, minmax(0, 1fr))`,
-            marginTop: 12,
+            marginTop: "var(--space-12)",
             border: `1px solid ${C.border}`,
-            borderRadius: 10,
+            borderRadius: "var(--radius-lg)",
             background: C.panel,
             overflow: "hidden",
           }}
@@ -2026,11 +2027,11 @@ function GraphPanel({ context }: { context: WorldSessionContextBuildRecord | nul
                 padding: "12px 14px",
                 display: "flex",
                 flexDirection: "column",
-                gap: 3,
+                gap: "var(--space-3)",
                 borderRight: i < summary.length - 1 ? `1px solid ${C.borderSoft}` : "none",
               }}
             >
-              <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+              <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: C.textLow, letterSpacing: "0.14em", textTransform: "uppercase" }}>
                 {m.label}
               </span>
               <span
@@ -2053,7 +2054,7 @@ function GraphPanel({ context }: { context: WorldSessionContextBuildRecord | nul
 
       <Panel>
         <Eyebrow>Selected pages · in priority order</Eyebrow>
-        <div style={{ marginTop: 10, display: "flex", flexDirection: "column" }}>
+        <div style={{ marginTop: "var(--space-10)", display: "flex", flexDirection: "column" }}>
           {pages.length === 0 ? (
             <EmptyHint>No pages selected.</EmptyHint>
           ) : (
@@ -2069,12 +2070,12 @@ function GraphPanel({ context }: { context: WorldSessionContextBuildRecord | nul
                   style={{
                     display: "grid",
                     gridTemplateColumns: "30px minmax(0, 1fr) 110px 70px 50px",
-                    gap: 12,
+                    gap: "var(--space-12)",
                     padding: "10px 0",
                     borderTop: i === 0 ? `1px solid ${C.borderSoft}` : "none",
                     borderBottom: `1px solid ${C.borderSoft}`,
                     fontFamily: FONT_MONO,
-                    fontSize: 11,
+                    fontSize: "var(--font-size-sm)",
                   }}
                 >
                   <span style={{ color: C.textLow }}>{String(i + 1).padStart(2, "0")}</span>
@@ -2104,9 +2105,9 @@ function PromptInspectorPanel({ context }: { context: WorldSessionContextBuildRe
           style={{
             fontFamily: FONT_DISPLAY,
             fontWeight: 600,
-            fontSize: 16,
+            fontSize: "var(--font-size-xl)",
             color: C.text,
-            marginTop: 4,
+            marginTop: "var(--space-4)",
             letterSpacing: "-0.01em",
           }}
         >
@@ -2114,12 +2115,12 @@ function PromptInspectorPanel({ context }: { context: WorldSessionContextBuildRe
         </div>
       </Panel>
 
-      <div className="session-detail-prompt-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 14, minWidth: 0 }}>
+      <div className="session-detail-prompt-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: "var(--space-14)", minWidth: 0 }}>
         <Panel>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
               <Eyebrow>Prompt chunk · curator output</Eyebrow>
-              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14, color: C.text }}>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: "var(--font-size-lg)", color: C.text }}>
                 {promptChunk.length.toLocaleString()} chars
               </span>
             </div>
@@ -2129,9 +2130,9 @@ function PromptInspectorPanel({ context }: { context: WorldSessionContextBuildRe
         </Panel>
         <Panel>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
               <Eyebrow>System prompt · sent to LLM</Eyebrow>
-              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14, color: C.text }}>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: "var(--font-size-lg)", color: C.text }}>
                 {systemPrompt.length.toLocaleString()} chars
               </span>
             </div>
@@ -2178,7 +2179,7 @@ function VoicePanel({
             display: "grid",
             gridTemplateColumns: `repeat(${summary.length}, minmax(0, 1fr))`,
             border: `1px solid ${C.border}`,
-            borderRadius: 10,
+            borderRadius: "var(--radius-lg)",
             background: C.panel,
             overflow: "hidden",
           }}
@@ -2190,18 +2191,18 @@ function VoicePanel({
                 padding: "12px 14px",
                 display: "flex",
                 flexDirection: "column",
-                gap: 3,
+                gap: "var(--space-3)",
                 borderRight: i < summary.length - 1 ? `1px solid ${C.borderSoft}` : "none",
               }}
             >
-              <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: C.textLow, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+              <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: C.textLow, letterSpacing: "0.14em", textTransform: "uppercase" }}>
                 {m.label}
               </span>
               <span
                 style={{
                   fontFamily: FONT_DISPLAY,
                   fontWeight: 600,
-                  fontSize: 22,
+                  fontSize: "var(--font-size-3xl)",
                   color: m.tone === "mint" ? C.mint : m.tone === "amber" ? C.amber : C.text,
                   letterSpacing: "-0.01em",
                 }}
@@ -2215,7 +2216,7 @@ function VoicePanel({
 
       <Panel>
         <Eyebrow>Per-word audit · stt.word events</Eyebrow>
-        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", maxHeight: 360, overflow: "auto" }}>
+        <div style={{ marginTop: "var(--space-10)", display: "flex", flexDirection: "column", maxHeight: 360, overflow: "auto" }}>
           {wordEvents.length === 0 ? (
             <EmptyHint>No word events captured.</EmptyHint>
           ) : (
@@ -2229,12 +2230,12 @@ function VoicePanel({
                   style={{
                     display: "grid",
                     gridTemplateColumns: "32px 70px 60px minmax(0, 1fr) 50px",
-                    gap: 12,
+                    gap: "var(--space-12)",
                     padding: "8px 0",
                     borderTop: i === 0 ? `1px solid ${C.borderSoft}` : "none",
                     borderBottom: `1px solid ${C.borderSoft}`,
                     fontFamily: FONT_MONO,
-                    fontSize: 11,
+                    fontSize: "var(--font-size-sm)",
                   }}
                 >
                   <span style={{ color: C.textLow }}>{String(i + 1).padStart(2, "0")}</span>
@@ -2260,7 +2261,7 @@ function VoicePanel({
             controls
             preload="metadata"
             src={`/api/world-sessions/${sessionId}/audio/${userClip.id}`}
-            style={{ width: "100%", marginTop: 10, height: 36, filter: "invert(1) hue-rotate(180deg) saturate(0.6)" }}
+            style={{ width: "100%", marginTop: "var(--space-10)", height: 36, filter: "invert(1) hue-rotate(180deg) saturate(0.6)" }}
           />
         </Panel>
       ) : null}
@@ -2324,11 +2325,11 @@ function Panel({ children }: { children: React.ReactNode }) {
       style={{
         background: C.panelStrong,
         border: `1px solid ${C.borderStrong}`,
-        borderRadius: 12,
-        padding: 18,
+        borderRadius: "var(--radius-xl)",
+        padding: "var(--space-18)",
         display: "flex",
         flexDirection: "column",
-        gap: 10,
+        gap: "var(--space-10)",
         minWidth: 0,
       }}
     >
@@ -2342,14 +2343,14 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
     <pre
       style={{
         margin: 0,
-        marginTop: 10,
-        padding: 14,
+        marginTop: "var(--space-10)",
+        padding: "var(--space-14)",
         background: "#06080C",
         border: `1px solid ${C.borderSoft}`,
-        borderRadius: 8,
+        borderRadius: "var(--radius-md)",
         color: C.textHigh,
         fontFamily: FONT_MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         lineHeight: 1.55,
         whiteSpace: "pre-wrap",
         overflow: "auto",
@@ -2363,7 +2364,7 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 
 function EmptyHint({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ margin: 0, color: C.textMid, fontFamily: FONT_BODY, fontSize: 13 }}>{children}</p>
+    <p style={{ margin: 0, color: C.textMid, fontFamily: FONT_BODY, fontSize: "var(--font-size-md)" }}>{children}</p>
   );
 }
 
@@ -2381,10 +2382,10 @@ function CopyButton({ text }: { text: string }) {
       style={{
         background: "transparent",
         border: `1px solid ${C.border}`,
-        borderRadius: 6,
+        borderRadius: "var(--radius-sm)",
         color: C.textMid,
         fontFamily: FONT_MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         padding: "4px 10px",
         cursor: "pointer",
       }}
@@ -2410,10 +2411,23 @@ function computeStats(detail: WorldSessionDetailRecord) {
 
   let inTokens = 0;
   let outTokens = 0;
+  let estimatedCostUsd = 0;
   for (const t of turns) {
     const usage = asRecord(t.tokenUsage);
-    inTokens += numberField(usage, "input") ?? numberField(usage, "promptTokens") ?? 0;
-    outTokens += numberField(usage, "output") ?? numberField(usage, "completionTokens") ?? 0;
+    inTokens +=
+      numberField(usage, "input") ??
+      numberField(usage, "inputTokens") ??
+      numberField(usage, "promptTokens") ??
+      0;
+    outTokens +=
+      numberField(usage, "output") ??
+      numberField(usage, "outputTokens") ??
+      numberField(usage, "completionTokens") ??
+      0;
+    estimatedCostUsd +=
+      numberField(usage, "estimatedCostUsd") ??
+      numberField(asRecord(t.metadata?.cost), "estimatedCostUsd") ??
+      0;
   }
   for (const c of contextBuilds) {
     inTokens += c.tokensUsed ?? 0;
@@ -2436,6 +2450,10 @@ function computeStats(detail: WorldSessionDetailRecord) {
     tokens: {
       value: inTokens + outTokens > 1000 ? `${((inTokens + outTokens) / 1000).toFixed(1)}K` : `${inTokens + outTokens}`,
       sub: inTokens || outTokens ? `in ${formatNumber(inTokens)} · out ${formatNumber(outTokens)}` : undefined,
+    },
+    cost: {
+      value: formatCost(estimatedCostUsd),
+      sub: estimatedCostUsd > 0 ? "est. model cost" : undefined,
     },
     audio: {
       value: formatBytes(audioBytes),
@@ -2766,6 +2784,12 @@ function formatNumber(n: number) {
   if (n >= 10000) return `${(n / 1000).toFixed(0)}K`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
   return String(n);
+}
+
+function formatCost(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "$0.0000";
+  if (value < 0.01) return `$${value.toFixed(4)}`;
+  return `$${value.toFixed(3)}`;
 }
 
 function formatBytes(bytes: number) {

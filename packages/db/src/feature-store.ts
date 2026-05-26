@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "./client";
+import { retryRead } from "./retry";
 import { featuresTable } from "./schema";
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -138,10 +139,11 @@ function neonStore(): FeatureStore {
       const db = getDb();
       if (!db) return memoryStore().list(versionId);
       try {
-        const query = versionId
-          ? db.select().from(featuresTable).where(eq(featuresTable.versionId, versionId))
-          : db.select().from(featuresTable);
-        const rows = await query;
+        const rows = await retryRead(() =>
+          versionId
+            ? db.select().from(featuresTable).where(eq(featuresTable.versionId, versionId))
+            : db.select().from(featuresTable),
+        );
         return rows.map(normalize).sort(
           (a, b) => a.sortOrder - b.sortOrder || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         );
@@ -155,7 +157,9 @@ function neonStore(): FeatureStore {
       const db = getDb();
       if (!db) return memoryStore().getById(id);
       try {
-        const [row] = await db.select().from(featuresTable).where(eq(featuresTable.id, id)).limit(1);
+        const [row] = await retryRead(() =>
+          db.select().from(featuresTable).where(eq(featuresTable.id, id)).limit(1),
+        );
         return row ? normalize(row) : null;
       } catch (e: unknown) {
         if (isMissingTable(e)) return memoryStore().getById(id);

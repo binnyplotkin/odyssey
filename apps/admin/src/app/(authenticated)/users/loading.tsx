@@ -3,14 +3,14 @@ import { Skeleton } from "@odyssey/ui";
 const CARD: React.CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--card-border)",
-  borderRadius: 12,
+  borderRadius: "var(--radius-xl)",
 };
 
 const COLS = ["Email", "Role", "Auth", "Sessions", "Last active", "Created"];
 
 export default function UsersLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Skeleton width={120} height={20} />
         <Skeleton width={140} height={28} radius={8} />
@@ -39,15 +39,15 @@ export default function UsersLoading() {
               alignItems: "center",
               padding: "14px 16px",
               borderBottom: i === 7 ? "none" : "1px solid var(--card-border)",
-              gap: 12,
+              gap: "var(--space-12)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
               <Skeleton width={28} height={28} variant="circle" />
               <Skeleton width="70%" height={13} />
             </div>
             <Skeleton width={56} height={18} radius={999} static />
-            <div style={{ display: "flex", gap: 4 }}>
+            <div style={{ display: "flex", gap: "var(--space-4)" }}>
               <Skeleton width={18} height={18} variant="circle" static />
               <Skeleton width={18} height={18} variant="circle" static />
             </div>

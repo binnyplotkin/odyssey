@@ -134,11 +134,11 @@ function formatRelative(iso: string | null | undefined): { label: string; dotCol
   const diffMs = Date.now() - then;
   const mins = Math.floor(diffMs / 60000);
 
-  if (mins < 2) return { label: "Active now", dotColor: "#4ADE80" };
-  if (mins < 60) return { label: `${mins}m ago`, dotColor: "#4ADE80" };
+  if (mins < 2) return { label: "Active now", dotColor: "var(--status-live)" };
+  if (mins < 60) return { label: `${mins}m ago`, dotColor: "var(--status-live)" };
 
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return { label: `${hours}h ago`, dotColor: "#FACC15" };
+  if (hours < 24) return { label: `${hours}h ago`, dotColor: "var(--status-draft)" };
 
   const days = Math.floor(hours / 24);
   if (days < 7) return { label: `${days}d ago`, dotColor: "var(--muted)" };
@@ -299,14 +299,22 @@ export function SessionsTable({ sessions }: Props) {
 
   useEffect(() => {
     setContent(
-      <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          gap: "var(--space-12)",
+          minWidth: 0,
+        }}
+      >
         <h1
           style={{
-            fontSize: 16,
+            fontSize: "var(--font-size-xl)",
             fontWeight: 700,
             color: "var(--foreground)",
             marginTop: 0,
-            marginRight: 12,
+            marginRight: 0,
             marginBottom: 0,
             marginLeft: 0,
             whiteSpace: "nowrap",
@@ -316,7 +324,7 @@ export function SessionsTable({ sessions }: Props) {
           Sessions
         </h1>
 
-        <div ref={filterRef} className="admin-table-header-filters" style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
+        <div ref={filterRef} className="admin-table-header-filters" style={{ display: "flex", gap: "var(--space-6)", whiteSpace: "nowrap" }}>
           {FILTER_PILLS.map((pill) => {
             const activeValue = filters[pill.key];
             const isActive = !!activeValue;
@@ -327,15 +335,17 @@ export function SessionsTable({ sessions }: Props) {
             return (
               <div key={pill.key} style={{ position: "relative" }}>
                 <button
+                  className="odyssey-filter-pill"
+                  data-active={isActive}
                   type="button"
                   onClick={() => setOpenFilterRef.current(isOpen ? null : pill.key)}
                   style={{
                     padding: "5px 12px",
-                    borderRadius: 8,
-                    border: `1px solid ${isActive ? "rgba(140, 231, 210, 0.3)" : "var(--border)"}`,
-                    background: isActive ? "rgba(140, 231, 210, 0.08)" : "transparent",
-                    color: isActive ? "#8CE7D2" : "var(--muted)",
-                    fontSize: 11,
+                    borderRadius: "var(--radius-md)",
+                    border: `1px solid ${isActive ? "var(--border-active)" : "var(--border)"}`,
+                    background: isActive ? "var(--accent-soft)" : "transparent",
+                    color: isActive ? "var(--accent-strong)" : "var(--muted)",
+                    fontSize: "var(--font-size-sm)",
                     fontWeight: 500,
                     cursor: "pointer",
                     fontFamily: "inherit",
@@ -343,7 +353,7 @@ export function SessionsTable({ sessions }: Props) {
                   }}
                 >
                   {pill.label}
-                  {isActive && <span style={{ marginLeft: 4, opacity: 0.7 }}>{activeLabel}</span>}
+                  {isActive && <span style={{ marginLeft: "var(--space-4)", opacity: 0.7 }}>{activeLabel}</span>}
                 </button>
                 {isOpen && (
                   <FilterDropdown
@@ -360,6 +370,7 @@ export function SessionsTable({ sessions }: Props) {
         <div style={{ flex: 1 }} />
 
         <button
+          className="odyssey-icon-button"
           type="button"
           onClick={() => clearAllFiltersRef.current()}
           style={{
@@ -368,7 +379,7 @@ export function SessionsTable({ sessions }: Props) {
             justifyContent: "center",
             width: 30,
             height: 30,
-            borderRadius: 8,
+            borderRadius: "var(--radius-md)",
             border: "1px solid var(--border)",
             background: "transparent",
             color: "var(--muted)",
@@ -383,18 +394,18 @@ export function SessionsTable({ sessions }: Props) {
             <path d="M5.5 20.5V16H10" />
           </svg>
         </button>
-      </>,
+      </div>,
     );
     return () => setContent(null);
   }, [filters, openFilter, setContent]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div className="admin-table-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div className="admin-table-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div className="admin-table-search" style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "0.5rem 0.75rem", borderRadius: 10,
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)" }}>
+      <div className="admin-table-toolbar odyssey-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-16)", flexWrap: "wrap" }}>
+        <div className="admin-table-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: "var(--space-16)" }}>
+          <div className="admin-table-search odyssey-search" style={{
+            display: "flex", alignItems: "center", gap: "var(--space-8)",
+            padding: "0.5rem 0.75rem", borderRadius: "var(--radius-lg)",
             background: T.panel, border: `1px solid ${T.border}`,
             width: 360,
           }}>
@@ -421,10 +432,10 @@ export function SessionsTable({ sessions }: Props) {
           </span>
         </div>
 
-        <div className="admin-table-toolbar-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "0.4rem 0.75rem", borderRadius: 9999,
+        <div className="admin-table-toolbar-actions" style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+          <div className="odyssey-select-shell" style={{
+            display: "flex", alignItems: "center", gap: "var(--space-6)",
+            padding: "0.4rem 0.75rem", borderRadius: "var(--radius-button, 12px)",
             border: `1px solid ${T.border}`,
             fontSize: "0.75rem", color: T.muted, fontFamily: T.fontBody,
           }}>
@@ -445,11 +456,12 @@ export function SessionsTable({ sessions }: Props) {
             </select>
           </div>
           <button
+            className="odyssey-ghost-button"
             type="button"
             onClick={exportCsv}
             style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "0.4rem 0.75rem", borderRadius: 9999,
+              display: "flex", alignItems: "center", gap: "var(--space-6)",
+              padding: "0.4rem 0.75rem", borderRadius: "var(--radius-button, 12px)",
               border: `1px solid ${T.border}`, background: "transparent",
               color: T.muted, fontSize: "0.75rem", cursor: "pointer",
               fontFamily: T.fontBody,
@@ -472,7 +484,7 @@ export function SessionsTable({ sessions }: Props) {
           minWidth: 1340,
           background: T.panel,
           border: `1px solid ${T.border}`,
-          borderRadius: 14,
+          borderRadius: "var(--radius-2xl)",
           overflow: "hidden",
         }}>
           <HeaderRow />
@@ -506,6 +518,7 @@ function FilterDropdown({
 }) {
   return (
     <div
+      className="odyssey-dropdown"
       style={{
         position: "absolute",
         top: "calc(100% + 6px)",
@@ -513,28 +526,30 @@ function FilterDropdown({
         minWidth: 160,
         background: "var(--dropdown-bg, var(--panel))",
         border: "1px solid var(--border)",
-        borderRadius: 8,
+        borderRadius: "var(--radius-md)",
         padding: "4px 0",
         zIndex: 100,
-        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+        boxShadow: "var(--elevation-card)",
       }}
     >
       {options.map((option) => (
         <button
+          className="odyssey-dropdown-item"
+          data-active={active === option.value}
           key={option.value}
           type="button"
           onClick={() => onSelect(option.value)}
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
             width: "100%",
             padding: "6px 12px",
-            background: active === option.value ? "rgba(140, 231, 210, 0.08)" : "none",
+            background: active === option.value ? "var(--accent-soft)" : "none",
             border: "none",
             cursor: "pointer",
-            color: active === option.value ? "#8CE7D2" : "var(--muted)",
-            fontSize: 11,
+            color: active === option.value ? "var(--accent-strong)" : "var(--muted)",
+            fontSize: "var(--font-size-sm)",
             fontFamily: "var(--font-mono, ui-monospace, monospace)",
             textAlign: "left",
           }}
@@ -559,12 +574,12 @@ function HeaderRow() {
 
   return (
     <div className="admin-table-header-row" style={{
-      display: "flex", alignItems: "center", gap: 20,
+      display: "flex", alignItems: "center", gap: "var(--space-20)",
       padding: "12px 20px",
       borderBottom: `1px solid ${T.border}`,
       background: T.cardHover,
     }}>
-      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
+      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: "var(--radius-xs)" }} />
       <span style={{ ...headerStyle, flex: 1, minWidth: 0 }}>Session</span>
       <span style={{ ...headerStyle, width: 100 }}>Mode</span>
       <span style={{ ...headerStyle, width: 110 }}>Status</span>
@@ -587,7 +602,7 @@ function SessionDataRow({ session }: { session: SessionRow }) {
       className="admin-table-data-row"
       href={`/sessions/${session.id}`}
       style={{
-        display: "flex", alignItems: "center", gap: 20,
+        display: "flex", alignItems: "center", gap: "var(--space-20)",
         padding: "14px 20px",
         borderBottom: `1px solid ${T.border}`,
         transition: "background 100ms",
@@ -597,12 +612,12 @@ function SessionDataRow({ session }: { session: SessionRow }) {
       onMouseEnter={(event) => { event.currentTarget.style.background = T.cardHover; }}
       onMouseLeave={(event) => { event.currentTarget.style.background = "transparent"; }}
     >
-      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
+      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: "var(--radius-xs)" }} />
 
-      <div className="admin-table-primary-cell" style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+      <div className="admin-table-primary-cell" style={{ display: "flex", alignItems: "center", gap: "var(--space-12)", flex: 1, minWidth: 0 }}>
         <SessionIcon mode={session.mode} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", minWidth: 0 }}>
             <span style={{
               fontFamily: T.fontHeading,
               fontSize: "0.875rem",
@@ -623,7 +638,7 @@ function SessionDataRow({ session }: { session: SessionRow }) {
                 color: T.accentStrong,
                 background: T.accentSoft,
                 padding: "2px 6px",
-                borderRadius: 4,
+                borderRadius: "var(--radius-xs)",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
               }}>
@@ -654,7 +669,7 @@ function SessionDataRow({ session }: { session: SessionRow }) {
         <MobileField label="Turns">{session.turnCount}</MobileField>
         <MobileField label="Events">{session.eventCount}</MobileField>
         <MobileField label="Last active">
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
             {active.dotColor && (
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: active.dotColor, display: "block" }} />
             )}
@@ -684,7 +699,7 @@ function SessionDataRow({ session }: { session: SessionRow }) {
           {userLabel(session)}
         </div>
         <div style={{
-          marginTop: 2,
+          marginTop: "var(--space-2)",
           fontFamily: T.fontMono,
           fontSize: "0.625rem",
           color: T.muted,
@@ -713,7 +728,7 @@ function SessionDataRow({ session }: { session: SessionRow }) {
       <MetricCell className="admin-table-desktop-cell" value={session.turnCount} width={70} mutedWhenZero />
       <MetricCell className="admin-table-desktop-cell" value={session.eventCount} width={80} mutedWhenZero />
 
-      <div className="admin-table-desktop-cell" style={{ width: 130, flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+      <div className="admin-table-desktop-cell" style={{ width: 130, flexShrink: 0, display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
         {active.dotColor && (
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: active.dotColor, display: "block" }} />
         )}
@@ -746,12 +761,12 @@ function MobileField({ label, children }: { label: string; children: ReactNode }
 
 function SessionIcon({ mode }: { mode: string }) {
   const colors = mode === "voice"
-    ? { bg: "rgba(140, 231, 210, 0.14)", fg: "#8CE7D2" }
+    ? { bg: "color-mix(in srgb, var(--active-teal) 14%, transparent)", fg: "var(--active-teal)" }
     : mode === "chat"
-      ? { bg: "rgba(122, 176, 232, 0.14)", fg: "#7AB0E8" }
+      ? { bg: "color-mix(in srgb, var(--signal-blue) 14%, transparent)", fg: "var(--signal-blue)" }
       : mode === "simulation"
-        ? { bg: "rgba(180, 157, 232, 0.14)", fg: "#B49DE8" }
-        : { bg: "rgba(168, 174, 196, 0.14)", fg: "#A8AEC4" };
+        ? { bg: "color-mix(in srgb, var(--event-violet) 14%, transparent)", fg: "var(--event-violet)" }
+        : { bg: "color-mix(in srgb, var(--status-archived) 14%, transparent)", fg: "var(--status-archived)" };
 
   return (
     <div style={{
@@ -782,10 +797,10 @@ function ModeBadge({ mode }: { mode: string }) {
     <span style={{
       display: "inline-flex",
       alignItems: "center",
-      gap: 6,
+      gap: "var(--space-6)",
       padding: "4px 10px",
       background: T.cardHover,
-      borderRadius: 9999,
+      borderRadius: "var(--radius-button, 12px)",
       fontFamily: T.fontMono,
       fontSize: "0.625rem",
       fontWeight: 600,
@@ -801,19 +816,19 @@ function ModeBadge({ mode }: { mode: string }) {
 function StatusBadge({ status }: { status: string }) {
   const normalized = statusFilterValue(status);
   const color = normalized === "active"
-    ? "#8CE7D2"
+    ? "var(--active-teal)"
     : normalized === "error"
-      ? "#F4A8A8"
-      : "#A3E635";
+      ? "var(--status-error)"
+      : "var(--status-live)";
 
   return (
     <span style={{
       display: "inline-flex",
       alignItems: "center",
-      gap: 6,
+      gap: "var(--space-6)",
       padding: "4px 10px",
       background: normalized === "active" ? T.accentSoft : T.cardHover,
-      borderRadius: 9999,
+      borderRadius: "var(--radius-button, 12px)",
       fontFamily: T.fontMono,
       fontSize: "0.625rem",
       fontWeight: 600,

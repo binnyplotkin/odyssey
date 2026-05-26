@@ -81,11 +81,12 @@ export async function uploadEmbedding(
 export async function uploadPreview(
   path: string,
   bytes: Buffer,
+  contentType: string = "audio/wav",
 ): Promise<void> {
   const { error } = await getSupabaseStorageClient()
     .storage.from(VOICE_EMBEDDINGS_BUCKET)
     .upload(path, bytes, {
-      contentType: "audio/wav",
+      contentType,
       upsert: true,
     });
   if (error) throw new Error(`upload(preview) failed: ${error.message}`);

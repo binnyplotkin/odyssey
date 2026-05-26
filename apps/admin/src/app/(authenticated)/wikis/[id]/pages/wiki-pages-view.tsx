@@ -32,7 +32,7 @@ const BORDER = "rgba(255, 255, 255, 0.08)";
 const DIVIDER = "rgba(255, 255, 255, 0.06)";
 const INPUT_BG = "rgba(255, 255, 255, 0.02)";
 
-const ACCENT = "#8CE7D2";
+const ACCENT = "#8FD1CB";
 const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
 const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
 
@@ -41,7 +41,7 @@ const DANGER = "#f87171";
 
 /** Six-color type palette — same one used in the knowledge graph. */
 const TYPE_COLOR: Record<WikiPageType, string> = {
-  entity: "#8CE7D2",
+  entity: "#8FD1CB",
   event: "#60A5FA",
   concept: "#A78BFA",
   relationship: "#FACC15",
@@ -253,7 +253,7 @@ export function WikiPagesView({
         style={{
           display: "grid",
           gridTemplateColumns: "480px minmax(0, 1fr)",
-          gap: 24,
+          gap: "var(--space-24)",
           flex: 1,
           minHeight: 0,
           padding: "16px 24px 24px",
@@ -362,11 +362,11 @@ function TopEyebrow({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 14,
+        gap: "var(--space-14)",
         padding: "20px 24px 16px",
         color: TEXT_FADED,
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         fontWeight: 500,
         letterSpacing: "0.16em",
         textTransform: "uppercase",
@@ -434,7 +434,7 @@ function FilterStrip({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         height: 44,
         margin: "0 24px",
         padding: "0 12px",
@@ -444,7 +444,7 @@ function FilterStrip({
     >
       <SearchInput value={query} onChange={onQueryChange} />
       <span style={{ width: 1, height: 20, background: BORDER }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
         {FILTER_ORDER.map((t) => {
           const active = typeFilter === t;
           const count = typeCounts[t] ?? 0;
@@ -508,14 +508,14 @@ function FilterStrip({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
+          gap: "var(--space-6)",
           height: 28,
           padding: "0 14px",
           background: ACCENT,
           color: "#050505",
           border: "none",
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           fontWeight: 600,
           letterSpacing: "0.1em",
           textTransform: "uppercase",
@@ -537,14 +537,14 @@ function chipStyle(
   return {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: "var(--space-6)",
     height: 26,
     padding: "0 10px",
     border: `1px solid ${active ? ring : BORDER}`,
     background: active ? soft : "transparent",
     color: active ? color : TEXT_SECONDARY,
     fontFamily: MONO,
-    fontSize: 10,
+    fontSize: "var(--font-size-xs)",
     fontWeight: active ? 500 : 400,
     cursor: "pointer",
     textTransform: "uppercase",
@@ -563,7 +563,7 @@ function SearchInput({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: "var(--space-10)",
         height: 32,
         width: 320,
         padding: "0 12px",
@@ -600,10 +600,10 @@ function SearchInput({
           outline: "none",
           color: FG,
           fontFamily: MONO,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
         }}
       />
-      <span style={{ color: TEXT_GHOST, fontFamily: MONO, fontSize: 10 }}>
+      <span style={{ color: TEXT_GHOST, fontFamily: MONO, fontSize: "var(--font-size-xs)" }}>
         ⌘F
       </span>
     </div>
@@ -624,7 +624,7 @@ function ListHeader({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         padding: "12px 16px",
         borderBottom: `1px solid ${BORDER}`,
         flexShrink: 0,
@@ -634,7 +634,7 @@ function ListHeader({
         style={{
           color: FG,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: 500,
           letterSpacing: "0.14em",
           textTransform: "uppercase",
@@ -643,7 +643,7 @@ function ListHeader({
         Pages
       </span>
       <span style={{ flex: 1, height: 1, background: DIVIDER }} />
-      <span style={{ color: TEXT_GHOST, fontFamily: MONO, fontSize: 10 }}>
+      <span style={{ color: TEXT_GHOST, fontFamily: MONO, fontSize: "var(--font-size-xs)" }}>
         {visible} of {total}
       </span>
     </div>
@@ -665,17 +665,17 @@ function ListFooter({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: "var(--space-10)",
         padding: "10px 16px",
         borderTop: `1px solid ${BORDER}`,
         flexShrink: 0,
         color: TEXT_FADED,
         fontFamily: MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         letterSpacing: "0.06em",
       }}
     >
-      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
         <span
           style={{
             width: 5,
@@ -718,11 +718,11 @@ function EraGroup({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           padding: "14px 16px 8px 16px",
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           fontWeight: 500,
           letterSpacing: "0.14em",
           textTransform: "uppercase",
@@ -777,7 +777,7 @@ function PageRow({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: "var(--space-4)",
         padding: "12px 14px 12px 12px",
         borderTop: "none",
         borderRight: "none",
@@ -792,7 +792,7 @@ function PageRow({
         transition: "background 150ms",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
         <span
           style={{
             width: 6,
@@ -805,7 +805,7 @@ function PageRow({
           style={{
             color: active ? FG : TEXT_PRIMARY,
             fontFamily: BODY,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             fontWeight: active ? 500 : 400,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -820,7 +820,7 @@ function PageRow({
           style={{
             color: active ? ACCENT : TEXT_MUTED,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.06em",
             flexShrink: 0,
           }}
@@ -831,10 +831,10 @@ function PageRow({
       {page.summary && (
         <div
           style={{
-            paddingLeft: 16,
+            paddingLeft: "var(--space-16)",
             color: TEXT_MUTED,
             fontFamily: BODY,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             lineHeight: "18px",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -848,11 +848,11 @@ function PageRow({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          paddingLeft: 16,
+          gap: "var(--space-10)",
+          paddingLeft: "var(--space-16)",
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.04em",
         }}
       >
@@ -891,7 +891,7 @@ function PageRow({
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 5,
+                gap: "var(--space-5)",
                 color: DANGER,
               }}
             >
@@ -968,7 +968,7 @@ function PageDetail({
     frontmatterRows.push({
       label: "Aliases",
       value: (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
           {aliases.map((a) => (
             <span
               key={a}
@@ -977,7 +977,7 @@ function PageDetail({
                 border: `1px solid rgba(255, 255, 255, 0.12)`,
                 color: TEXT_PRIMARY,
                 fontFamily: MONO,
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
               }}
             >
               {a}
@@ -1023,7 +1023,7 @@ function PageDetail({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: "var(--space-12)",
           padding: "12px 16px",
           borderBottom: `1px solid ${BORDER}`,
           flexShrink: 0,
@@ -1042,7 +1042,7 @@ function PageDetail({
           style={{
             color: TEXT_FADED,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 500,
             letterSpacing: "0.14em",
             textTransform: "uppercase",
@@ -1055,7 +1055,7 @@ function PageDetail({
           style={{
             color: TEXT_SECONDARY,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.06em",
             textTransform: "uppercase",
           }}
@@ -1063,7 +1063,7 @@ function PageDetail({
           {page.type === "voice_identity" ? "Voice" : page.type}
         </span>
         <span style={{ color: TEXT_QUIET, fontFamily: MONO }}>·</span>
-        <span style={{ color: TEXT_MUTED, fontFamily: MONO, fontSize: 10 }}>
+        <span style={{ color: TEXT_MUTED, fontFamily: MONO, fontSize: "var(--font-size-xs)" }}>
           /pages/{page.slug}
         </span>
         <span style={{ flex: 1 }} />
@@ -1072,13 +1072,13 @@ function PageDetail({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
             height: 26,
             padding: "0 10px",
             border: `1px solid rgba(255, 255, 255, 0.16)`,
             color: TEXT_PRIMARY,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 500,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -1092,13 +1092,13 @@ function PageDetail({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
             height: 26,
             padding: "0 10px",
             border: `1px solid rgba(255, 255, 255, 0.16)`,
             color: TEXT_PRIMARY,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 500,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -1120,7 +1120,7 @@ function PageDetail({
             background: "transparent",
             color: TEXT_MUTED,
             fontFamily: MONO,
-            fontSize: 14,
+            fontSize: "var(--font-size-lg)",
             cursor: "pointer",
           }}
         >
@@ -1135,7 +1135,7 @@ function PageDetail({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "22px 24px 18px",
             borderBottom: `1px solid ${DIVIDER}`,
           }}
@@ -1144,7 +1144,7 @@ function PageDetail({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 12,
+              gap: "var(--space-12)",
               flexWrap: "wrap",
             }}
           >
@@ -1164,13 +1164,13 @@ function PageDetail({
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 6,
+                gap: "var(--space-6)",
                 padding: "2px 8px",
                 border: `1px solid ${color}4D`,
                 background: `${color}14`,
                 color,
                 fontFamily: MONO,
-                fontSize: 9,
+                fontSize: "var(--font-size-2xs)",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
               }}
@@ -1191,11 +1191,11 @@ function PageDetail({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              gap: "var(--space-10)",
               flexWrap: "wrap",
               color: TEXT_FADED,
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               letterSpacing: "0.04em",
             }}
           >
@@ -1222,10 +1222,10 @@ function PageDetail({
           {page.summary && (
             <div
               style={{
-                paddingTop: 4,
+                paddingTop: "var(--space-4)",
                 color: TEXT_SECONDARY,
                 fontFamily: BODY,
-                fontSize: 14,
+                fontSize: "var(--font-size-lg)",
                 lineHeight: "22px",
                 maxWidth: 760,
               }}
@@ -1268,7 +1268,7 @@ function PageDetail({
                 margin: 0,
                 padding: "4px 24px 14px 24px",
                 fontFamily: MONO,
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 lineHeight: "20px",
                 color: TEXT_PRIMARY,
                 whiteSpace: "pre-wrap",
@@ -1283,11 +1283,11 @@ function PageDetail({
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 10,
+                gap: "var(--space-10)",
                 padding: "8px 24px 14px",
                 color: TEXT_FADED,
                 fontFamily: MONO,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.06em",
               }}
             >
@@ -1296,7 +1296,7 @@ function PageDetail({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
+                  gap: "var(--space-6)",
                   padding: "4px 10px",
                   border: `1px solid rgba(255, 255, 255, 0.12)`,
                   color: TEXT_SECONDARY,
@@ -1344,7 +1344,7 @@ function PageDetail({
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 8,
+                gap: "var(--space-8)",
                 padding: "8px 24px 24px 24px",
               }}
             >
@@ -1377,12 +1377,12 @@ function PanelSectionHeader({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: "var(--space-10)",
         padding: "14px 24px 8px 24px",
         borderTop: withTopBorder ? `1px solid ${DIVIDER}` : "none",
         color: TEXT_FADED,
         fontFamily: MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         fontWeight: 500,
         letterSpacing: "0.14em",
         textTransform: "uppercase",
@@ -1410,7 +1410,7 @@ function KvRow({
         display: "flex",
         alignItems: "center",
         padding: "8px 24px",
-        gap: 16,
+        gap: "var(--space-16)",
         borderTop: `1px solid ${DIVIDER}`,
         borderBottom: last ? `1px solid ${DIVIDER}` : "none",
       }}
@@ -1420,7 +1420,7 @@ function KvRow({
           width: 140,
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.1em",
           textTransform: "uppercase",
           flexShrink: 0,
@@ -1433,7 +1433,7 @@ function KvRow({
           flex: 1,
           color: TEXT_PRIMARY,
           fontFamily: MONO,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
         }}
       >
         {value}
@@ -1462,7 +1462,7 @@ function LinkRow({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         height: 38,
         padding: "0 24px",
         borderTop: `1px solid ${DIVIDER}`,
@@ -1489,7 +1489,7 @@ function LinkRow({
           flex: 1,
           color: TEXT_PRIMARY,
           fontFamily: BODY,
-          fontSize: 13,
+          fontSize: "var(--font-size-md)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -1501,7 +1501,7 @@ function LinkRow({
         style={{
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.04em",
         }}
       >
@@ -1531,19 +1531,19 @@ function SourceCard({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 6,
+        gap: "var(--space-6)",
         padding: "12px 14px",
         border: `1px solid ${BORDER}`,
         background: INPUT_BG,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
         <span
           style={{
             flex: 1,
             color: FG,
             fontFamily: BODY,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             fontWeight: 500,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -1556,7 +1556,7 @@ function SourceCard({
           style={{
             color: kindColor,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.1em",
             flexShrink: 0,
           }}
@@ -1569,7 +1569,7 @@ function SourceCard({
           style={{
             color: TEXT_FADED,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.04em",
           }}
         >
@@ -1580,11 +1580,11 @@ function SourceCard({
         <blockquote
           style={{
             margin: 0,
-            paddingLeft: 10,
+            paddingLeft: "var(--space-10)",
             borderLeft: `2px solid ${ACCENT_RING}`,
             color: TEXT_SECONDARY,
             fontFamily: BODY,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             fontStyle: "italic",
             lineHeight: "18px",
           }}
@@ -1597,7 +1597,7 @@ function SourceCard({
           style={{
             color: TEXT_SECONDARY,
             fontFamily: BODY,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             lineHeight: "18px",
           }}
         >
@@ -1616,7 +1616,7 @@ function EmptyState({ children }: { children: ReactNode }) {
         textAlign: "center",
         color: TEXT_FADED,
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         letterSpacing: "0.04em",
       }}
     >

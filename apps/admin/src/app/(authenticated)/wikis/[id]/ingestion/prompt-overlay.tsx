@@ -1,24 +1,29 @@
 "use client";
 
 /**
- * Prompt editor as an overlay on the ingestion page. Triggered by the
- * `configure ↗` link in the pipeline strip. Closes on backdrop click or
- * ESC. Phosphor / terminal direction — sharp corners, hairline borders,
- * mint as the single signal, mono labels.
+ * Prompt editor as an overlay on the ingestion page. It keeps the prompt
+ * body as the primary operational surface and lets supporting state recede.
  */
 
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 /* ── Tokens ─────────────────────────────────────────────────── */
 
-const MONO = "'JetBrains Mono', ui-monospace, monospace";
-const DISPLAY = "'Space Grotesk', system-ui, sans-serif";
+const MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
+const DISPLAY = "var(--font-display, 'Space Grotesk'), system-ui, sans-serif";
+const BODY = "var(--font-body, Inter), system-ui, sans-serif";
 
 const T = {
   bg: "var(--background)",
+  panel: "var(--panel)",
   card: "var(--card)",
   border: "var(--border)",
   divider: "var(--divider)",
+  inputBg: "var(--input-bg)",
+  inputBorder: "var(--input-border)",
+  headerBg: "var(--header-bg, var(--background))",
+  headerBorder: "var(--header-border, var(--divider))",
+  headerBlur: "var(--header-blur, 18px)",
   fg: "var(--text-primary)",
   text: "var(--text-secondary)",
   muted: "var(--text-tertiary)",
@@ -26,9 +31,22 @@ const T = {
   ghost: "var(--text-placeholder)",
   accent: "var(--accent-strong)",
   accentSoft: "var(--accent-soft)",
-  accentLine: "color-mix(in srgb, var(--accent-strong) 30%, transparent)",
+  accentLine: "var(--accent-border)",
   onAccent: "var(--background)",
 };
+
+const PROMPT_OVERLAY_CSS = `
+  .ingestion-prompt-editor:focus-within,
+  .ingestion-prompt-test-field:focus-within {
+    border-color: var(--accent-border) !important;
+    box-shadow: var(--ring-shadow-selected);
+  }
+
+  .ingestion-prompt-input::placeholder,
+  .ingestion-prompt-test-input::placeholder {
+    color: var(--text-placeholder);
+  }
+`;
 
 const MINT_PURPLE = "#B79EFF"; // secondary dot for model
 
@@ -197,13 +215,14 @@ export function PromptOverlay({
         position: "fixed",
         inset: 0,
         zIndex: 100,
-        background: "rgba(0, 0, 0, 0.72)",
+        background: "var(--modal-backdrop)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 32,
+        padding: "clamp(16px, 3vw, 32px)",
       }}
     >
+      <style>{PROMPT_OVERLAY_CSS}</style>
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -213,10 +232,12 @@ export function PromptOverlay({
           maxWidth: 1640,
           height: "100%",
           maxHeight: 980,
-          background: T.bg,
-          border: `1px solid ${T.border}`,
+          background: T.panel,
+          border: `1px solid ${T.headerBorder}`,
+          borderRadius: "var(--radius-lg)",
           overflow: "hidden",
-          boxShadow: "0 24px 80px rgba(0, 0, 0, 0.6)",
+          boxShadow: "var(--elevation-panel)",
+          fontFamily: BODY,
         }}
       >
         <Topbar
@@ -233,17 +254,18 @@ export function PromptOverlay({
             flex: 1,
             overflow: "auto",
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) 380px",
-            gap: 32,
-            padding: "32px 32px 36px",
+            gridTemplateColumns: "minmax(0, 1fr) 340px",
+            gap: "var(--space-24)",
+            padding: "clamp(22px, 3vw, 32px)",
             alignItems: "flex-start",
+            background: T.bg,
           }}
         >
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 22,
+              gap: "var(--space-18)",
               minWidth: 0,
             }}
           >
@@ -276,7 +298,7 @@ export function PromptOverlay({
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 20,
+              gap: "var(--space-16)",
               position: "sticky",
               top: 0,
             }}
@@ -356,10 +378,12 @@ function Topbar({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 14,
+        gap: "var(--space-14)",
         padding: "0 16px 0 20px",
-        height: 48,
-        borderBottom: `1px solid ${T.border}`,
+        height: 52,
+        borderBottom: `1px solid ${T.headerBorder}`,
+        background: T.headerBg,
+        backdropFilter: `blur(${T.headerBlur})`,
         flexShrink: 0,
       }}
     >
@@ -376,19 +400,19 @@ function Topbar({
         style={{
           color: T.muted,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
         }}
       >
         Ingestion Prompt
       </span>
-      <span style={{ color: T.faded, fontFamily: MONO, fontSize: 11 }}>/</span>
+      <span style={{ color: T.faded, fontFamily: MONO, fontSize: "var(--font-size-sm)" }}>/</span>
       <span
         style={{
           color: T.text,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           letterSpacing: "0.06em",
           textTransform: "uppercase",
           maxWidth: 320,
@@ -408,12 +432,13 @@ function Topbar({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
           padding: "0 12px",
           maxWidth: 320,
           height: 26,
           border: statusBorder,
           background: statusBg,
+          borderRadius: "var(--radius-pill)",
         }}
       >
         <span
@@ -429,7 +454,7 @@ function Topbar({
           style={{
             color: statusText,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 500,
             letterSpacing: "0.12em",
             textTransform: "uppercase",
@@ -461,24 +486,7 @@ function Topbar({
         {saving ? "Saving…" : "Save"}
       </PrimaryButton>
 
-      <span
-        style={{
-          width: 1,
-          height: 20,
-          background: T.border,
-          margin: "0 4px",
-        }}
-      />
-      <span
-        style={{
-          color: T.faded,
-          fontFamily: MONO,
-          fontSize: 10,
-          letterSpacing: "0.1em",
-        }}
-      >
-        esc to close
-      </span>
+      <span style={{ width: 1, height: 20, background: T.headerBorder, margin: "0 4px" }} />
       <button
         type="button"
         onClick={onClose}
@@ -492,11 +500,12 @@ function Topbar({
           width: 28,
           height: 28,
           border: "none",
+          borderRadius: "var(--radius-sm)",
           background:
-            hovered === "close" ? "var(--panel)" : "transparent",
+            hovered === "close" ? "var(--sidebar-hover, var(--panel))" : "transparent",
           color: hovered === "close" ? T.fg : T.muted,
           fontFamily: MONO,
-          fontSize: 16,
+          fontSize: "var(--font-size-xl)",
           cursor: "pointer",
           transition: "background 150ms, color 150ms",
         }}
@@ -540,15 +549,15 @@ function IdentityStrip({
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "space-between",
-        gap: 24,
-        paddingBottom: 4,
+        gap: "var(--space-24)",
+        paddingBottom: "var(--space-4)",
       }}
     >
       <div
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: "var(--space-12)",
           maxWidth: 760,
           minWidth: 0,
           flex: 1,
@@ -558,10 +567,10 @@ function IdentityStrip({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 14,
+            gap: "var(--space-14)",
             color: T.muted,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             fontWeight: 500,
             letterSpacing: "0.16em",
             textTransform: "uppercase",
@@ -589,7 +598,7 @@ function IdentityStrip({
           style={{
             display: "flex",
             alignItems: "baseline",
-            gap: 10,
+            gap: "var(--space-10)",
             position: "relative",
           }}
         >
@@ -613,12 +622,13 @@ function IdentityStrip({
               color: hasCustomName ? T.fg : T.muted,
               fontStyle: hasCustomName ? "normal" : "italic",
               fontFamily: DISPLAY,
-              fontSize: 36,
+              fontSize: 30,
               fontWeight: 500,
-              lineHeight: "44px",
-              letterSpacing: "-0.01em",
-              borderBottom: `1px solid ${focused ? T.accent : hovered || nameDirty ? T.border : "transparent"}`,
-              transition: "border-color 150ms, color 150ms",
+              lineHeight: "38px",
+              letterSpacing: 0,
+              borderBottom: `1px solid ${focused ? T.accentLine : hovered || nameDirty ? T.inputBorder : "transparent"}`,
+              transition: "border-color 150ms, color 150ms, box-shadow 150ms",
+              boxShadow: focused ? "0 1px 0 var(--accent-border)" : "none",
             }}
           />
           {nameDirty && (
@@ -630,7 +640,7 @@ function IdentityStrip({
                 borderRadius: "50%",
                 background: T.accent,
                 flexShrink: 0,
-                marginBottom: 14,
+                marginBottom: "var(--space-14)",
               }}
             />
           )}
@@ -640,13 +650,14 @@ function IdentityStrip({
             margin: 0,
             maxWidth: 680,
             color: T.text,
-            fontSize: 13,
+            fontFamily: BODY,
+            fontSize: "var(--font-size-md)",
             lineHeight: "20px",
           }}
         >
           {hasCustomName
-            ? `Saved as “${displayName}”. The voice every ingestion run inherits — edit the body below to change how the engine reads sources into pages.`
-            : "The voice every ingestion run inherits. Name this lens or edit the body below to change how the engine reads sources."}
+            ? `Saved as “${displayName}”. Defines how the engine reads source material into wiki pages.`
+            : "Defines how the engine reads source material into wiki pages."}
         </p>
       </div>
       <div
@@ -711,11 +722,15 @@ function EditorCard({
   const dirtyComparison = isDirty || diff !== 0;
   return (
     <div
+      className="ingestion-prompt-editor"
       style={{
         display: "flex",
         flexDirection: "column",
-        border: `1px solid ${T.border}`,
-        background: T.bg,
+        border: `1px solid ${T.inputBorder}`,
+        borderRadius: "var(--radius-lg)",
+        background: T.inputBg,
+        overflow: "hidden",
+        transition: "border-color 150ms, box-shadow 150ms",
       }}
     >
       {/* Header */}
@@ -723,11 +738,11 @@ function EditorCard({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 14,
+          gap: "var(--space-14)",
           padding: "12px 18px",
           borderBottom: `1px solid ${T.divider}`,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
         }}
@@ -735,36 +750,37 @@ function EditorCard({
         <span style={{ color: T.fg, fontWeight: 500 }}>Prompt body</span>
         <span style={{ color: T.faded }}>·</span>
         <span style={{ color: T.muted }}>Markdown</span>
-        <span style={{ color: T.faded }}>·</span>
-        <span style={{ color: T.muted }}>Auto-format on save</span>
         <span style={{ flex: 1 }} />
         <span
           style={{
             display: "flex",
-            gap: 14,
-            color: T.faded,
-            letterSpacing: "0.06em",
-            textTransform: "none",
+            gap: "var(--space-14)",
+            color: T.muted,
+            letterSpacing: "0.08em",
           }}
         >
-          <span>⌘K · insert variable</span>
-          <span style={{ color: T.ghost }}>|</span>
-          <span>⌘/ · toggle section</span>
+          <span>
+            {sections} section{sections === 1 ? "" : "s"}
+          </span>
+          <span style={{ color: T.ghost }}>/</span>
+          <span>
+            {variables} variable{variables === 1 ? "" : "s"}
+          </span>
         </span>
       </div>
 
       {/* Body */}
-      <div style={{ display: "flex", minHeight: 460, position: "relative" }}>
+      <div style={{ display: "flex", minHeight: 520, position: "relative" }}>
         <pre
           aria-hidden
           style={{
             margin: 0,
-            padding: "18px 12px 18px 16px",
-            background: "rgba(255, 255, 255, 0.014)",
+            padding: "20px 12px 20px 16px",
+            background: "transparent",
             borderRight: `1px solid ${T.divider}`,
             fontFamily: MONO,
-            fontSize: 12,
-            lineHeight: "22px",
+            fontSize: "var(--font-size-base)",
+            lineHeight: "24px",
             color: T.faded,
             textAlign: "right",
             userSelect: "none",
@@ -772,11 +788,12 @@ function EditorCard({
           }}
         >
           {Array.from(
-            { length: Math.max(20, lineCount) },
+            { length: Math.max(24, lineCount) },
             (_, i) => i + 1,
           ).join("\n")}
         </pre>
         <textarea
+          className="ingestion-prompt-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           spellCheck={false}
@@ -787,12 +804,12 @@ function EditorCard({
             outline: "none",
             background: "transparent",
             color: T.fg,
-            fontFamily: MONO,
-            fontSize: 13,
-            lineHeight: "22px",
-            padding: "18px 22px",
+            fontFamily: BODY,
+            fontSize: "var(--font-size-md)",
+            lineHeight: "24px",
+            padding: "20px 22px",
             resize: "vertical",
-            minHeight: 460,
+            minHeight: 520,
             whiteSpace: "pre-wrap",
           }}
         />
@@ -807,11 +824,11 @@ function EditorCard({
           padding: "10px 18px",
           borderTop: `1px solid ${T.divider}`,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           color: T.text,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-18)" }}>
           <span>
             <span style={{ color: T.fg }}>{tokens.toLocaleString()}</span>{" "}
             tokens
@@ -826,17 +843,12 @@ function EditorCard({
               </>
             )}
           </span>
-          <span style={{ color: T.faded }}>·</span>
-          <span>
-            {sections} section{sections === 1 ? "" : "s"} · {variables} variable
-            {variables === 1 ? "" : "s"}
-          </span>
         </div>
         <span
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
             color: footerTextColor,
           }}
         >
@@ -921,8 +933,10 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
       style={{
         display: "flex",
         flexDirection: "column",
-        border: `1px solid ${T.border}`,
-        background: T.bg,
+        border: `1px solid color-mix(in srgb, var(--border) 70%, transparent)`,
+        borderRadius: "var(--radius-md)",
+        background: T.card,
+        overflow: "hidden",
       }}
     >
       {/* Header */}
@@ -930,11 +944,11 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          padding: "14px 20px",
+          gap: "var(--space-10)",
+          padding: "12px 18px",
           borderBottom: `1px solid ${T.divider}`,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           fontWeight: 500,
           letterSpacing: "0.14em",
           textTransform: "uppercase",
@@ -942,9 +956,6 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
       >
         <span style={{ color: T.fg }}>Test prompt</span>
         <span style={{ flex: 1, height: 1, background: T.divider }} />
-        <span style={{ color: T.faded, letterSpacing: "0.12em" }}>
-          Sketch · Preview · Save
-        </span>
       </div>
 
       {/* Body */}
@@ -952,7 +963,7 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 14,
+          gap: "var(--space-14)",
           padding: "18px 20px",
         }}
       >
@@ -960,21 +971,27 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
           style={{
             margin: 0,
             color: T.text,
-            fontSize: 13,
+            fontFamily: BODY,
+            fontSize: "var(--font-size-md)",
             lineHeight: "20px",
             maxWidth: 720,
           }}
         >
-          Pour a sample passage through your draft to preview what the engine
-          will write — without committing to a full ingestion run.
+          Preview how the current prompt interprets source material before a
+          full ingestion run.
         </p>
 
         {/* Source lane */}
         <div
+          className="ingestion-prompt-test-field"
           style={{
             display: "flex",
             alignItems: "stretch",
-            border: `1px solid ${T.border}`,
+            border: `1px solid ${T.inputBorder}`,
+            borderRadius: "var(--radius-md)",
+            background: T.inputBg,
+            overflow: "hidden",
+            transition: "border-color 150ms, box-shadow 150ms",
           }}
         >
           <div
@@ -983,10 +1000,10 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
               flexShrink: 0,
               padding: "14px 14px",
               borderRight: `1px solid ${T.divider}`,
-              background: "rgba(255, 255, 255, 0.014)",
+              background: "transparent",
               color: T.muted,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               letterSpacing: "0.14em",
               textTransform: "uppercase",
             }}
@@ -994,9 +1011,10 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
             Source
           </div>
           <textarea
+            className="ingestion-prompt-test-input"
             value={sample}
             onChange={(e) => setSample(e.target.value)}
-            placeholder="Paste a passage to test… (or load a sample)"
+            placeholder="Paste a passage to test..."
             rows={3}
             spellCheck={false}
             style={{
@@ -1006,8 +1024,8 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
               outline: "none",
               background: "transparent",
               color: T.fg,
-              fontFamily: MONO,
-              fontSize: 12,
+              fontFamily: BODY,
+              fontSize: "var(--font-size-base)",
               lineHeight: "20px",
               padding: "14px 16px",
               resize: "vertical",
@@ -1020,8 +1038,8 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 12,
-            paddingTop: 4,
+            gap: "var(--space-12)",
+            paddingTop: "var(--space-4)",
           }}
         >
           <GhostButton
@@ -1041,7 +1059,7 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
             style={{
               color: T.faded,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               letterSpacing: "0.06em",
             }}
           >
@@ -1055,14 +1073,15 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
               height: 32,
               padding: "0 16px",
               background: canRun ? T.accent : T.accentSoft,
               border: canRun ? "none" : `1px solid ${T.accentLine}`,
+              borderRadius: "var(--radius-sm)",
               color: canRun ? T.onAccent : T.accent,
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               fontWeight: 600,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
@@ -1081,13 +1100,14 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              gap: "var(--space-10)",
               padding: "10px 14px",
               border: `1px solid color-mix(in srgb, var(--danger) 36%, transparent)`,
+              borderRadius: "var(--radius-md)",
               background:
                 "color-mix(in srgb, var(--danger) 8%, transparent)",
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               color: "var(--danger)",
               letterSpacing: "0.04em",
             }}
@@ -1131,17 +1151,20 @@ function TestResultPanel({
         display: "flex",
         flexDirection: "column",
         border: `1px solid ${T.border}`,
+        borderRadius: "var(--radius-md)",
+        background: T.card,
+        overflow: "hidden",
       }}
     >
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           padding: "12px 16px",
           borderBottom: `1px solid ${T.divider}`,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           fontWeight: 500,
           letterSpacing: "0.14em",
           textTransform: "uppercase",
@@ -1177,11 +1200,12 @@ function TestResultPanel({
           aria-label="Clear result"
           style={{
             border: "none",
+            borderRadius: "var(--radius-sm)",
             background:
-              hovered === "clear" ? "var(--panel)" : "transparent",
+              hovered === "clear" ? "var(--sidebar-hover, var(--panel))" : "transparent",
             color: hovered === "clear" ? T.fg : T.muted,
             fontFamily: MONO,
-            fontSize: 14,
+            fontSize: "var(--font-size-lg)",
             cursor: "pointer",
             width: 24,
             height: 24,
@@ -1199,7 +1223,7 @@ function TestResultPanel({
           margin: 0,
           padding: "16px 18px",
           fontFamily: MONO,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
           lineHeight: "20px",
           color: T.fg,
           whiteSpace: "pre-wrap",
@@ -1273,7 +1297,7 @@ function StateCard({
             padding: "10px 16px",
             color: "var(--danger)",
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.04em",
             borderTop: `1px solid ${T.divider}`,
             wordBreak: "break-word",
@@ -1282,18 +1306,6 @@ function StateCard({
           ● {saveError}
         </div>
       )}
-      <div
-        style={{
-          padding: "10px 16px",
-          color: T.faded,
-          fontFamily: MONO,
-          fontSize: 10,
-          letterSpacing: "0.06em",
-          borderTop: `1px solid ${T.divider}`,
-        }}
-      >
-        save overwrites the wiki prompt · discard restores the saved baseline
-      </div>
     </Card>
   );
 }
@@ -1321,7 +1333,7 @@ function StateRow({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: "var(--space-4)",
         padding: "12px 16px",
         borderLeft: `2px solid ${isDraft ? dotColor ?? T.accent : "transparent"}`,
         background: isDraft ? T.accentSoft : "transparent",
@@ -1332,9 +1344,9 @@ function StateRow({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
           fontFamily: MONO,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
         }}
       >
         <span
@@ -1350,7 +1362,7 @@ function StateRow({
         <span
           style={{
             color: isDraft ? metaColor ?? T.accent : T.faded,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.06em",
             textTransform: "uppercase",
           }}
@@ -1360,10 +1372,10 @@ function StateRow({
       </div>
       <div
         style={{
-          paddingLeft: 14,
+          paddingLeft: "var(--space-14)",
           color: T.text,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
         }}
       >
         {detail}
@@ -1434,7 +1446,7 @@ function VariableRow({
           flex: 1,
           color: muted ? T.muted : T.accent,
           fontFamily: MONO,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -1446,8 +1458,8 @@ function VariableRow({
         style={{
           color: muted ? T.faded : T.text,
           fontFamily: MONO,
-          fontSize: 11,
-          paddingRight: 16,
+          fontSize: "var(--font-size-sm)",
+          paddingRight: "var(--space-16)",
         }}
       >
         {value}
@@ -1472,7 +1484,7 @@ function RuntimeCard() {
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
             }}
           >
             <span
@@ -1516,12 +1528,12 @@ function RuntimeRow({
           flex: 1,
           color: T.text,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
         }}
       >
         {label}
       </span>
-      <span style={{ color: T.fg, fontFamily: MONO, fontSize: 12 }}>
+      <span style={{ color: T.fg, fontFamily: MONO, fontSize: "var(--font-size-base)" }}>
         {value}
       </span>
     </div>
@@ -1536,8 +1548,10 @@ function Card({ children }: { children: ReactNode }) {
       style={{
         display: "flex",
         flexDirection: "column",
-        border: `1px solid ${T.border}`,
-        background: T.bg,
+        border: `1px solid color-mix(in srgb, var(--border) 70%, transparent)`,
+        borderRadius: "var(--radius-md)",
+        background: T.card,
+        overflow: "hidden",
       }}
     >
       {children}
@@ -1557,11 +1571,11 @@ function CardHeader({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: "var(--space-10)",
         padding: "14px 16px 12px 16px",
         borderBottom: `1px solid ${T.divider}`,
         fontFamily: MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         fontWeight: 500,
         letterSpacing: "0.14em",
         textTransform: "uppercase",
@@ -1587,19 +1601,19 @@ function CardHeader({
 
 function StatBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
       <span
         style={{
           color: T.muted,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
         }}
       >
         {label}
       </span>
-      <span style={{ color: T.fg, fontFamily: MONO, fontSize: 13 }}>
+      <span style={{ color: T.fg, fontFamily: MONO, fontSize: "var(--font-size-md)" }}>
         {value}
       </span>
     </div>
@@ -1642,8 +1656,9 @@ function PrimaryButton({
         background: disabled ? T.accentSoft : T.accent,
         color: disabled ? T.accent : T.onAccent,
         border: disabled ? `1px solid ${T.accentLine}` : "none",
+        borderRadius: "var(--radius-sm)",
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         fontWeight: 600,
         letterSpacing: "0.1em",
         textTransform: "uppercase",
@@ -1684,11 +1699,12 @@ function GhostButton({
         alignItems: "center",
         height: 30,
         padding: "0 14px",
-        background: hovered && !disabled ? "var(--panel)" : "transparent",
+        background: hovered && !disabled ? "var(--sidebar-hover, var(--panel))" : "transparent",
         color: disabled ? T.faded : T.text,
         border: `1px solid ${disabled ? T.divider : T.border}`,
+        borderRadius: "var(--radius-sm)",
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         fontWeight: 500,
         letterSpacing: "0.1em",
         textTransform: "uppercase",

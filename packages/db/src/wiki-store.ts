@@ -1557,6 +1557,7 @@ function neonStore(): WikiStore {
 
     async appendIngestionEvent(runId, payload) {
       const db = requireDb();
+      const id = crypto.randomUUID();
       const eventType =
         typeof payload === "object" &&
         payload !== null &&
@@ -1566,8 +1567,9 @@ function neonStore(): WikiStore {
           : "event";
 
       const rows = await db.execute<typeof wikiIngestionEventsTable.$inferSelect>(sql`
-        INSERT INTO wiki_ingestion_events (run_id, seq, type, payload, created_at)
+        INSERT INTO wiki_ingestion_events (id, run_id, seq, type, payload, created_at)
         VALUES (
+          ${id},
           ${runId},
           COALESCE((SELECT MAX(seq) + 1 FROM wiki_ingestion_events WHERE run_id = ${runId}), 1),
           ${eventType},

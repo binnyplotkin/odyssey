@@ -21,6 +21,7 @@ export default auth((req) => {
     pathname === "/api/audio/reply" ||
     pathname === "/api/audio/gateway-health" ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/cron/") ||  // machine-to-machine; gated by CRON_SECRET
     pathname === "/login"
   ) {
     return;

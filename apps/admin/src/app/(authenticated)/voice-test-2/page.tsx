@@ -746,14 +746,14 @@ function EnergyMeter({ getEnergy }: { getEnergy: () => number }) {
   }, [getEnergy]);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ fontSize: 11, opacity: 0.6, width: 50 }}>Energy</span>
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+      <span style={{ fontSize: "var(--font-size-sm)", opacity: 0.6, width: 50 }}>Energy</span>
       <div
         style={{
           flex: 1,
           height: 4,
           background: "rgba(255,255,255,0.1)",
-          borderRadius: 2,
+          borderRadius: "var(--radius-2xs)",
           overflow: "hidden",
         }}
       >
@@ -762,12 +762,12 @@ function EnergyMeter({ getEnergy }: { getEnergy: () => number }) {
           style={{
             height: "100%",
             background: "var(--accent, #0d9488)",
-            borderRadius: 2,
+            borderRadius: "var(--radius-2xs)",
             transition: "width 0.05s linear",
           }}
         />
       </div>
-      <span ref={labelRef} style={{ fontSize: 11, opacity: 0.6, width: 32, textAlign: "right" }}>
+      <span ref={labelRef} style={{ fontSize: "var(--font-size-sm)", opacity: 0.6, width: 32, textAlign: "right" }}>
         0%
       </span>
     </div>
@@ -830,7 +830,7 @@ export default function VoiceTest2Page() {
         >
           <h1
             style={{
-              fontSize: 18,
+              fontSize: "var(--font-size-2xl)",
               fontWeight: 700,
               color: "white",
               margin: 0,
@@ -839,7 +839,7 @@ export default function VoiceTest2Page() {
           >
             Voice Test 2
           </h1>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", margin: "2px 0 0" }}>
+          <p style={{ fontSize: "var(--font-size-base)", color: "rgba(255,255,255,0.5)", margin: "2px 0 0" }}>
             r3f Audio Visualizer
           </p>
         </div>
@@ -852,7 +852,7 @@ export default function VoiceTest2Page() {
           borderTop: "1px solid rgba(255,255,255,0.08)",
           padding: "12px 20px",
           display: "flex",
-          gap: 16,
+          gap: "var(--space-16)",
           alignItems: "center",
           flexWrap: "wrap",
         }}
@@ -862,16 +862,16 @@ export default function VoiceTest2Page() {
           onClick={audio.active ? audio.stop : audio.start}
           style={{
             padding: "6px 16px",
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             border: "none",
             background: audio.active ? "#dc2626" : "#0d9488",
             color: "white",
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             fontWeight: 600,
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -888,7 +888,7 @@ export default function VoiceTest2Page() {
         <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.1)" }} />
 
         {/* Visualizer mode selector */}
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: "var(--space-4)" }}>
           {MODES.map((m) => (
             <button
               key={m.key}
@@ -896,7 +896,7 @@ export default function VoiceTest2Page() {
               title={m.label}
               style={{
                 padding: "5px 10px",
-                borderRadius: 5,
+                borderRadius: "var(--radius-sm)",
                 border:
                   mode === m.key
                     ? "1px solid rgba(255,255,255,0.3)"
@@ -906,14 +906,14 @@ export default function VoiceTest2Page() {
                     ? "rgba(255,255,255,0.12)"
                     : "rgba(255,255,255,0.03)",
                 color: mode === m.key ? "white" : "rgba(255,255,255,0.5)",
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
+                gap: "var(--space-4)",
               }}
             >
-              <span style={{ fontSize: 14 }}>{m.icon}</span>
+              <span style={{ fontSize: "var(--font-size-lg)" }}>{m.icon}</span>
               {m.label}
             </button>
           ))}
@@ -923,8 +923,8 @@ export default function VoiceTest2Page() {
         <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.1)" }} />
 
         {/* Palette selector */}
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginRight: 4 }}>
+        <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "center" }}>
+          <span style={{ fontSize: "var(--font-size-sm)", color: "rgba(255,255,255,0.4)", marginRight: "var(--space-4)" }}>
             Palette
           </span>
           {(Object.keys(PALETTES) as PaletteKey[]).map((pk) => (
@@ -935,7 +935,7 @@ export default function VoiceTest2Page() {
               style={{
                 width: 22,
                 height: 22,
-                borderRadius: 4,
+                borderRadius: "var(--radius-xs)",
                 border:
                   paletteKey === pk
                     ? "2px solid white"
@@ -956,7 +956,7 @@ export default function VoiceTest2Page() {
           onClick={() => setAutoOrbit(!autoOrbit)}
           style={{
             padding: "5px 10px",
-            borderRadius: 5,
+            borderRadius: "var(--radius-sm)",
             border: autoOrbit
               ? "1px solid rgba(255,255,255,0.3)"
               : "1px solid rgba(255,255,255,0.06)",
@@ -964,7 +964,7 @@ export default function VoiceTest2Page() {
               ? "rgba(255,255,255,0.12)"
               : "rgba(255,255,255,0.03)",
             color: autoOrbit ? "white" : "rgba(255,255,255,0.5)",
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             cursor: "pointer",
           }}
         >
@@ -988,8 +988,8 @@ export default function VoiceTest2Page() {
             background: "rgba(220,38,38,0.9)",
             color: "white",
             padding: "8px 16px",
-            borderRadius: 8,
-            fontSize: 13,
+            borderRadius: "var(--radius-md)",
+            fontSize: "var(--font-size-md)",
             zIndex: 20,
           }}
         >

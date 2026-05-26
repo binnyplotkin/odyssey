@@ -466,7 +466,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
     backdropFilter: "blur(16px)",
     border: "1px solid var(--border)",
     boxShadow: "0 24px 80px var(--shadow)",
-    borderRadius: "0.75rem",
+    borderRadius: "var(--radius-xl)",
   };
 
   const labelStyle: React.CSSProperties = {
@@ -481,7 +481,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "0.5rem 0.75rem",
-    borderRadius: "0.5rem",
+    borderRadius: "var(--radius-md)",
     border: "1px solid var(--border)",
     background: "var(--panel)",
     color: "var(--foreground)",
@@ -491,7 +491,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
 
   const pillBase: React.CSSProperties = {
     padding: "0.375rem 0.875rem",
-    borderRadius: "9999px",
+    borderRadius: "var(--radius-pill)",
     border: "1px solid var(--border)",
     fontSize: "0.8125rem",
     cursor: "pointer",
@@ -515,7 +515,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
 
   const smallBtnStyle: React.CSSProperties = {
     padding: "0.25rem 0.625rem",
-    borderRadius: "0.375rem",
+    borderRadius: "var(--radius-sm)",
     border: "1px solid var(--border)",
     background: "var(--panel)",
     color: "var(--foreground)",
@@ -600,7 +600,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
             >
               Reset
             </button>
-            <span style={{ ...labelStyle, padding: "0.25rem 0.5rem", borderRadius: "0.375rem", border: "1px solid var(--border)" }}>
+            <span style={{ ...labelStyle, padding: "0.25rem 0.5rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
               {Math.round(zoom * 100)}%
             </span>
           </div>
@@ -710,7 +710,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                     width: node.w,
                     minHeight: node.h,
                     padding: "1rem",
-                    borderRadius: "0.75rem",
+                    borderRadius: "var(--radius-xl)",
                     border: `1.5px solid ${tone.border}`,
                     background: "var(--panel)",
                     backdropFilter: "blur(12px)",
@@ -728,7 +728,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                         height: 10,
                         borderRadius: "50%",
                         background: tone.dot,
-                        marginTop: 4,
+                        marginTop: "var(--space-4)",
                         flexShrink: 0,
                       }}
                     />
@@ -804,7 +804,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                 style={{
                   width: "100%",
                   padding: "0.5rem 1rem",
-                  borderRadius: "0.5rem",
+                  borderRadius: "var(--radius-md)",
                   border: "1px solid var(--accent)",
                   background: "var(--accent-soft)",
                   color: "var(--accent-strong)",
@@ -832,7 +832,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                 <div
                   style={{
                     padding: "0.875rem",
-                    borderRadius: "0.5rem",
+                    borderRadius: "var(--radius-md)",
                     border: "1px solid var(--border)",
                     background: "var(--panel)",
                   }}
@@ -862,7 +862,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                       key={`${step.id}:${index}`}
                       style={{
                         padding: "0.875rem",
-                        borderRadius: "0.5rem",
+                        borderRadius: "var(--radius-md)",
                         border: "1px solid var(--border)",
                       }}
                     >
@@ -874,7 +874,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                         style={{
                           marginTop: "0.625rem",
                           padding: "0.75rem",
-                          borderRadius: "0.375rem",
+                          borderRadius: "var(--radius-sm)",
                           border: "1px solid var(--border)",
                           background: "var(--background)",
                           fontSize: "0.75rem",
@@ -897,7 +897,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                   alignItems: "center",
                   justifyContent: "center",
                   minHeight: 420,
-                  borderRadius: "0.5rem",
+                  borderRadius: "var(--radius-md)",
                   border: "1px dashed var(--border)",
                   color: "var(--muted)",
                   fontSize: "0.875rem",

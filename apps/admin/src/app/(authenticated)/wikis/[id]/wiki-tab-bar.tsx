@@ -95,7 +95,7 @@ function IngestionAction({
         color: ACCENT,
         textDecoration: "none",
         fontFamily: MONO,
-        fontSize: 16,
+        fontSize: "var(--font-size-xl)",
         fontWeight: 500,
         transition:
           "background 120ms ease, color 120ms ease, border-color 120ms ease",

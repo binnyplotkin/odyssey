@@ -261,7 +261,7 @@ export function CharacterIngestion({
   /* ── Render ────────────────────────────────────────────────── */
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)" }}>
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
 
       {/* Tab toggle: Prompt ↔ Data */}
@@ -277,34 +277,34 @@ export function CharacterIngestion({
         style={{
           display: tab === "data" ? "flex" : "none",
           flexDirection: "column",
-          gap: 20,
+          gap: "var(--space-20)",
         }}
       >
         {/* Missing-prompt warning */}
         {!hasIngestionPrompt && (
           <div style={{
-            display: "flex", alignItems: "flex-start", gap: 10,
-            padding: "12px 16px", borderRadius: 12,
-            background: "rgba(250,204,21,0.05)",
-            border: "1px solid rgba(250,204,21,0.25)",
+            display: "flex", alignItems: "flex-start", gap: "var(--space-10)",
+            padding: "12px 16px", borderRadius: "var(--radius-xl)",
+            background: "color-mix(in srgb, var(--status-draft) 6%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--status-draft) 24%, transparent)",
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FACC15" strokeWidth="2" strokeLinecap="round" style={{ marginTop: 1, flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--status-draft)" strokeWidth="2" strokeLinecap="round" style={{ marginTop: "var(--space-1)", flexShrink: 0 }}>
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
               <line x1="12" y1="9" x2="12" y2="13" />
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-              <span style={{ fontFamily: T.fontBody, fontSize: 13, fontWeight: 500, color: T.fg }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", flex: 1 }}>
+              <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500, color: T.fg }}>
                 No ingestion prompt set
               </span>
-              <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "18px" }}>
+              <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: "18px" }}>
                 This character has no domain-awareness steering. Ingestion will run, but the LLM won&apos;t know what tradition the source comes from.{" "}
                 <button
                   type="button"
                   onClick={() => setTab("prompt")}
                   style={{
                     background: "none", border: "none", padding: 0,
-                    color: "#8CE7D2", cursor: "pointer", font: "inherit",
+                    color: "var(--accent-strong)", cursor: "pointer", font: "inherit",
                   }}
                 >
                   Set a prompt →
@@ -315,7 +315,7 @@ export function CharacterIngestion({
         )}
 
         {/* Top row: form + active run side-by-side */}
-        <div style={{ display: "flex", flexDirection: "row", gap: 20 }}>
+        <div style={{ display: "flex", flexDirection: "row", gap: "var(--space-20)" }}>
           <div style={{ flex: "1 1 0", minWidth: 0 }}>
             <SourceForm
               kind={kind} setKind={setKind}
@@ -369,8 +369,8 @@ function IngestionTabToggle({
       role="tablist"
       aria-label="Ingestion view"
       style={{
-        display: "inline-flex", padding: 2, borderRadius: 8,
-        border: `1px solid ${T.border}`, background: "rgba(0,0,0,0.25)",
+        display: "inline-flex", padding: "var(--space-2)", borderRadius: "var(--radius-md)",
+        border: `1px solid ${T.border}`, background: "var(--input-bg)",
         alignSelf: "flex-start",
       }}
     >
@@ -386,12 +386,12 @@ function IngestionTabToggle({
             onClick={() => setTab(t.value)}
             style={{
               padding: "5px 14px",
-              fontFamily: T.fontMono, fontSize: 10, fontWeight: 600,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600,
               letterSpacing: "0.1em", textTransform: "uppercase",
               color: active ? T.fg : T.muted,
-              background: active ? "rgba(140, 231, 210, 0.12)" : "transparent",
-              border: "none", borderRadius: 6, cursor: "pointer",
-              display: "inline-flex", alignItems: "center", gap: 6,
+              background: active ? "var(--accent-soft)" : "transparent",
+              border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
             }}
           >
             {t.label}
@@ -400,7 +400,7 @@ function IngestionTabToggle({
                 aria-hidden
                 style={{
                   width: 6, height: 6, borderRadius: "50%",
-                  background: "#FACC15",
+                  background: "var(--status-draft)",
                 }}
               />
             )}
@@ -448,33 +448,33 @@ function IngestionPromptEditor({
         display: "flex", alignItems: "flex-start", justifyContent: "space-between",
         padding: "14px 20px", borderBottom: `1px solid ${T.border}`,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
           <span style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "4px 10px", borderRadius: 999,
-            background: "rgba(140,231,210,0.08)", border: "1px solid rgba(140,231,210,0.2)",
+            display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+            padding: "4px 10px", borderRadius: "var(--radius-button, 12px)",
+            background: "var(--accent-soft)", border: "1px solid var(--border-active)",
           }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8CE7D2" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 600, color: "#8CE7D2", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent-strong)" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600, color: "var(--accent-strong)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
               Ingestion Prompt
             </span>
           </span>
-          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted }}>
             The single domain knob — injected into every compile run.
           </span>
         </div>
       </div>
 
       <div style={{
-        padding: "12px 20px", background: "rgba(140,231,210,0.04)",
+        padding: "12px 20px", background: "color-mix(in srgb, var(--active-teal) 5%, transparent)",
         borderBottom: `1px solid ${T.border}`,
-        display: "flex", alignItems: "flex-start", gap: 10,
+        display: "flex", alignItems: "flex-start", gap: "var(--space-10)",
       }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8CE7D2" strokeWidth="2" strokeLinecap="round" style={{ marginTop: 1, flexShrink: 0 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-strong)" strokeWidth="2" strokeLinecap="round" style={{ marginTop: "var(--space-1)", flexShrink: 0 }}>
           <circle cx="12" cy="12" r="10" />
           <path d="M12 16v-4M12 8h.01" />
         </svg>
-        <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "18px" }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: "18px" }}>
           The engine is domain-agnostic. Pages, edges, eras, source kinds — all generic. This prompt is where you teach the LLM what tradition this character belongs to and how to treat its sources.
         </span>
       </div>
@@ -487,7 +487,7 @@ function IngestionPromptEditor({
         style={{
           width: "100%", border: "none", outline: "none", resize: "vertical",
           padding: "18px 22px", background: "var(--background)",
-          fontFamily: T.fontMono, fontSize: 13, color: T.fg, lineHeight: "21px",
+          fontFamily: T.fontMono, fontSize: "var(--font-size-md)", color: T.fg, lineHeight: "21px",
           minHeight: 320, boxSizing: "border-box",
         }}
       />
@@ -495,8 +495,8 @@ function IngestionPromptEditor({
       {error && (
         <div style={{
           padding: "10px 20px", borderTop: `1px solid ${T.border}`,
-          background: "rgba(232,144,144,0.08)",
-          color: "#E89090", fontFamily: T.fontBody, fontSize: 13,
+          background: "color-mix(in srgb, var(--status-error) 8%, transparent)",
+          color: "var(--status-error)", fontFamily: T.fontBody, fontSize: "var(--font-size-md)",
         }}>
           {error}
         </div>
@@ -506,23 +506,23 @@ function IngestionPromptEditor({
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "12px 20px", borderTop: `1px solid ${T.border}`,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, letterSpacing: "0.05em" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-14)" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, letterSpacing: "0.05em" }}>
             {charCount.toLocaleString()} chars · ~{tokenEst.toLocaleString()} tokens
           </span>
           {!dirty && savedAt && (
-            <span style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: T.fontMono, fontSize: 10, color: "#4ADE80" }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ADE80" }} />
+            <span style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "var(--status-live)" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--status-live)" }} />
               Saved {relativeShort(savedAt)}
             </span>
           )}
           {dirty && (
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, color: "#FACC15" }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "var(--status-draft)" }}>
               Unsaved changes
             </span>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
           {dirty && (
             <button
               type="button"
@@ -537,9 +537,9 @@ function IngestionPromptEditor({
             disabled={!dirty || pending}
             onClick={save}
             style={{
-              padding: "6px 16px", borderRadius: 8, border: "none",
+              padding: "6px 16px", borderRadius: "var(--radius-md)", border: "none",
               background: T.accent, color: "var(--background)",
-              fontFamily: T.fontBody, fontSize: 12, fontWeight: 600,
+              fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 600,
               cursor: !dirty || pending ? "not-allowed" : "pointer",
               opacity: !dirty || pending ? 0.5 : 1,
             }}
@@ -601,33 +601,33 @@ function SourceForm(p: {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 20px", borderBottom: `1px solid ${T.border}`,
       }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             New Source
           </span>
-          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted }}>
             Paste your text — we&apos;ll auto-fill the title, kind, and tags.
           </span>
         </div>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
           ~30s – 3min
         </span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "18px 20px 20px 20px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)", padding: "18px 20px 20px 20px" }}>
         {/* Content — always visible, always first. */}
         <Field
           label="Content"
           trailing={
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
               {p.classifying && (
-                <span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: T.fontMono, fontSize: 10, color: "#8CE7D2" }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#8CE7D2", animation: "pulse 1.5s ease-in-out infinite" }} />
+                <span style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "var(--accent-strong)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent-strong)", animation: "pulse 1.5s ease-in-out infinite" }} />
                   Analyzing…
                 </span>
               )}
               {!p.classifying && p.classifiedBy === "ai" && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: T.fontMono, fontSize: 10, color: "#8CE7D2" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-6)", fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "var(--accent-strong)" }}>
                   <SparkIcon />
                   AI-filled
                   <button
@@ -635,8 +635,8 @@ function SourceForm(p: {
                     onClick={() => p.onClassify(p.content, "regenerate")}
                     disabled={p.classifying || p.content.trim().length < 80}
                     style={{
-                      marginLeft: 4, padding: 0, border: "none", background: "transparent",
-                      color: "#8CE7D2", textDecoration: "underline", cursor: "pointer",
+                      marginLeft: "var(--space-4)", padding: 0, border: "none", background: "transparent",
+                      color: "var(--accent-strong)", textDecoration: "underline", cursor: "pointer",
                       fontFamily: "inherit", fontSize: "inherit",
                     }}
                   >
@@ -649,17 +649,17 @@ function SourceForm(p: {
                   type="button"
                   onClick={() => p.onClassify(p.content, "regenerate")}
                   style={{
-                    display: "inline-flex", alignItems: "center", gap: 5,
-                    padding: "3px 9px", borderRadius: 999,
-                    border: "1px solid rgba(140,231,210,0.3)", background: "rgba(140,231,210,0.08)",
-                    color: "#8CE7D2", fontFamily: T.fontMono, fontSize: 10, cursor: "pointer",
+                    display: "inline-flex", alignItems: "center", gap: "var(--space-5)",
+                    padding: "3px 9px", borderRadius: "var(--radius-button, 12px)",
+                    border: "1px solid var(--border-active)", background: "var(--accent-soft)",
+                    color: "var(--accent-strong)", fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", cursor: "pointer",
                   }}
                 >
                   <SparkIcon />
                   Auto-fill
                 </button>
               )}
-              <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+              <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
                 {p.wordCount.toLocaleString()} words · {p.kbSize} kb
               </span>
             </div>
@@ -674,12 +674,12 @@ function SourceForm(p: {
             placeholder="Paste the full source text here. Markdown, plain prose, verse-numbered scripture — whatever the LLM should draw on."
             style={{
               ...inputStyle, resize: "vertical",
-              fontFamily: T.fontMono, fontSize: 12, lineHeight: "20px",
+              fontFamily: T.fontMono, fontSize: "var(--font-size-base)", lineHeight: "20px",
               minHeight: 220,
             }}
           />
           {p.classifyError && (
-            <span style={{ fontFamily: T.fontBody, fontSize: 11, color: "#E89090", marginTop: 4 }}>
+            <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: "var(--status-error)", marginTop: "var(--space-4)" }}>
               Auto-fill failed: {p.classifyError}
             </span>
           )}
@@ -690,9 +690,9 @@ function SourceForm(p: {
               type="button"
               onClick={p.onOpenDetails}
               style={{
-                alignSelf: "flex-start", marginTop: 6,
+                alignSelf: "flex-start", marginTop: "var(--space-6)",
                 padding: 0, border: "none", background: "transparent",
-                color: T.muted, fontFamily: T.fontBody, fontSize: 11,
+                color: T.muted, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)",
                 cursor: "pointer", textDecoration: "underline",
               }}
             >
@@ -706,23 +706,23 @@ function SourceForm(p: {
         {p.detailsOpen && (
           <>
             <Field label="Source kind">
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
                 {KINDS.map((k) => (
                   <button
                     key={k.value}
                     type="button"
                     onClick={() => p.setKind(k.value)}
                     style={{
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                      padding: "6px 12px", borderRadius: 999,
-                      border: `1px solid ${p.kind === k.value ? "rgba(140,231,210,0.4)" : T.border}`,
-                      background: p.kind === k.value ? "rgba(140,231,210,0.1)" : "transparent",
-                      color: p.kind === k.value ? "#8CE7D2" : T.muted,
-                      fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, cursor: "pointer",
+                      display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+                      padding: "6px 12px", borderRadius: "var(--radius-button, 12px)",
+                      border: `1px solid ${p.kind === k.value ? "var(--border-active)" : T.border}`,
+                      background: p.kind === k.value ? "var(--accent-soft)" : "transparent",
+                      color: p.kind === k.value ? "var(--accent-strong)" : T.muted,
+                      fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500, cursor: "pointer",
                     }}
                   >
                     {p.kind === k.value && (
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#8CE7D2" }} />
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent-strong)" }} />
                     )}
                     {k.label}
                   </button>
@@ -742,22 +742,22 @@ function SourceForm(p: {
 
             <Field label="Tags" optional help="Domain labels — searchable, no engine behaviour.">
               <div style={{
-                display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
-                padding: "8px 12px", borderRadius: 10,
+                display: "flex", flexWrap: "wrap", alignItems: "center", gap: "var(--space-6)",
+                padding: "8px 12px", borderRadius: "var(--radius-lg)",
                 background: "var(--background)", border: `1px solid ${T.border}`,
                 minHeight: 42,
               }}>
                 {p.tags.map((t) => (
                   <span key={t} style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    padding: "2px 8px 2px 10px", borderRadius: 999,
-                    background: "rgba(251,167,192,0.1)", border: "1px solid rgba(251,167,192,0.25)",
+                    display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+                    padding: "2px 8px 2px 10px", borderRadius: "var(--radius-button, 12px)",
+                    background: "color-mix(in srgb, var(--event-violet) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--event-violet) 24%, transparent)",
                   }}>
-                    <span style={{ fontFamily: T.fontBody, fontSize: 11, color: "#FBA7C0" }}>{t}</span>
+                    <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: "var(--event-violet)" }}>{t}</span>
                     <button
                       type="button" onClick={() => p.removeTag(t)}
                       aria-label={`remove ${t}`}
-                      style={{ border: "none", background: "transparent", color: "#FBA7C0", cursor: "pointer", padding: 0, display: "flex" }}
+                      style={{ border: "none", background: "transparent", color: "var(--event-violet)", cursor: "pointer", padding: 0, display: "flex" }}
                     >
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
@@ -780,7 +780,7 @@ function SourceForm(p: {
                   style={{
                     flex: 1, minWidth: 120, border: "none", outline: "none",
                     background: "transparent", color: T.fg,
-                    fontFamily: T.fontBody, fontSize: 12,
+                    fontFamily: T.fontBody, fontSize: "var(--font-size-base)",
                   }}
                 />
               </div>
@@ -789,20 +789,20 @@ function SourceForm(p: {
         )}
 
         {/* Footer actions */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "var(--space-6)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
             <label style={{
-              display: "flex", alignItems: "center", gap: 6,
-              fontFamily: T.fontBody, fontSize: 11, color: T.muted,
+              display: "flex", alignItems: "center", gap: "var(--space-6)",
+              fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted,
             }}>
               Model
               <select
                 value={p.model}
                 onChange={(e) => p.setModel(e.target.value as ModelId)}
                 style={{
-                  padding: "5px 8px", borderRadius: 6,
+                  padding: "5px 8px", borderRadius: "var(--radius-sm)",
                   border: `1px solid ${T.border}`, background: "var(--background)",
-                  color: T.fg, fontSize: 11, outline: "none", cursor: "pointer",
+                  color: T.fg, fontSize: "var(--font-size-sm)", outline: "none", cursor: "pointer",
                   fontFamily: T.fontBody,
                 }}
               >
@@ -818,10 +818,10 @@ function SourceForm(p: {
             onClick={p.onCompile}
             style={{
               display: "inline-flex", alignItems: "center", gap: 7,
-              padding: "8px 18px", borderRadius: 10, border: "none",
-              background: p.canCompile ? "#8CE7D2" : "var(--card-hover)",
-              color: p.canCompile ? "#0C0E14" : T.muted,
-              fontFamily: T.fontBody, fontSize: 13, fontWeight: 600,
+              padding: "8px 18px", borderRadius: "var(--radius-lg)", border: "none",
+              background: p.canCompile ? "var(--emissive-mint)" : "var(--card-hover)",
+              color: p.canCompile ? "#07100E" : T.muted,
+              fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
               cursor: p.canCompile ? "pointer" : "not-allowed",
             }}
           >
@@ -857,7 +857,7 @@ function IdleRunPanel() {
       display: "flex", alignItems: "center", justifyContent: "center",
       textAlign: "center", padding: "3rem 2rem",
     }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center", maxWidth: 320 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)", alignItems: "center", maxWidth: 320 }}>
         <div style={{
           width: 48, height: 48, borderRadius: "50%",
           background: T.cardHover, display: "flex", alignItems: "center", justifyContent: "center",
@@ -866,10 +866,10 @@ function IdleRunPanel() {
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
           </svg>
         </div>
-        <span style={{ fontFamily: T.fontBody, fontSize: 13, fontWeight: 500, color: T.fg }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500, color: T.fg }}>
           No active run
         </span>
-        <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: 1.55 }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: 1.55 }}>
           Fill out the form and hit Compile — progress will stream here.
         </span>
       </div>
@@ -899,7 +899,7 @@ function LiveRunPanel({
       case "loaded-index":
         progressItems.push({
           kind: "done",
-          label: `Loaded wiki index · ${ev.pageCount} pages, ${ev.edgeCount} edges`,
+          label: `Loaded knowledge graph · ${ev.pageCount} nodes, ${ev.edgeCount} edges`,
         });
         break;
       case "planning":
@@ -970,22 +970,22 @@ function LiveRunPanel({
   const isDone = stream.status === "succeeded";
   const isFail = stream.status === "failed";
 
-  const headerAccent = isDone ? "#4ADE80" : isFail ? "#E89090" : "#8CE7D2";
+  const headerAccent = isDone ? "var(--status-live)" : isFail ? "var(--status-error)" : "var(--accent-strong)";
   const headerLabel = isDone ? "Succeeded" : isFail ? "Failed" : "Compiling · live";
 
   return (
-    <div style={{
+    <div className="odyssey-log-panel" style={{
       ...cardShell,
-      border: `1px solid ${isDone ? "rgba(74,222,128,0.35)" : isFail ? "rgba(232,144,144,0.35)" : "rgba(140,231,210,0.35)"}`,
+      border: `1px solid ${isDone ? "color-mix(in srgb, var(--status-live) 34%, transparent)" : isFail ? "color-mix(in srgb, var(--status-error) 34%, transparent)" : "var(--border-active)"}`,
       display: "flex", flexDirection: "column", minHeight: 360,
     }}>
       {/* Header */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 20px", borderBottom: `1px solid ${T.border}`,
-        background: isDone ? "rgba(74,222,128,0.06)" : isFail ? "rgba(232,144,144,0.06)" : "rgba(140,231,210,0.06)",
+        background: isDone ? "color-mix(in srgb, var(--status-live) 6%, transparent)" : isFail ? "var(--critical-wash)" : "color-mix(in srgb, var(--active-teal) 6%, transparent)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
           <span style={{
             width: 10, height: 10, borderRadius: "50%",
             background: headerAccent,
@@ -993,44 +993,44 @@ function LiveRunPanel({
             animation: isRunning ? "pulse 1.5s ease-in-out infinite" : "none",
           }} />
           <span style={{
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 600,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600,
             color: headerAccent, letterSpacing: "0.08em", textTransform: "uppercase",
           }}>
             {headerLabel}
           </span>
         </div>
-        <span style={{ fontFamily: T.fontMono, fontSize: 11, color: headerAccent }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: headerAccent }}>
           {elapsedLabel}
         </span>
       </div>
 
       {/* Progress bar */}
       <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.border}` }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-8)" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             {contextLabel || "Progress"}
           </span>
-          <span style={{ fontFamily: T.fontMono, fontSize: 11, fontWeight: 500, color: headerAccent }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", fontWeight: 500, color: headerAccent }}>
             {progressPct}%
           </span>
         </div>
-        <div style={{ height: 4, borderRadius: 2, background: "var(--card-hover)", position: "relative", overflow: "hidden" }}>
+        <div style={{ height: 4, borderRadius: "var(--radius-2xs)", background: "var(--card-hover)", position: "relative", overflow: "hidden" }}>
           <div style={{
             position: "absolute", top: 0, left: 0, height: "100%",
             width: `${progressPct}%`,
             background: `linear-gradient(90deg, ${headerAccent} 0%, ${headerAccent}99 100%)`,
-            borderRadius: 2,
+            borderRadius: "var(--radius-2xs)",
             transition: "width 350ms ease-out",
           }} />
         </div>
       </div>
 
       {/* Stream log */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 20px", flex: 1, overflow: "auto", maxHeight: 420 }}>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)", padding: "14px 20px", flex: 1, overflow: "auto", maxHeight: 420 }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Stream
         </span>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
           {progressItems.map((item, i) => <StreamItem key={i} item={item} />)}
         </div>
       </div>
@@ -1041,10 +1041,10 @@ function LiveRunPanel({
         padding: "12px 20px", borderTop: `1px solid ${T.border}`,
         background: "var(--background)",
       }}>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
           {runTokens.toLocaleString()} tokens
         </span>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: "var(--space-8)" }}>
           {isRunning && (
             <button onClick={onCancel} style={ghostBtn}>Cancel</button>
           )}
@@ -1068,19 +1068,19 @@ type ProgressItem = {
 
 function StreamItem({ item }: { item: ProgressItem }) {
   const colors = {
-    active: { bg: "rgba(140,231,210,0.12)", icon: "#8CE7D2" },
-    done:   { bg: "rgba(74,222,128,0.1)", icon: "#4ADE80" },
-    error:  { bg: "rgba(232,144,144,0.12)", icon: "#E89090" },
-    success:{ bg: "rgba(74,222,128,0.15)", icon: "#4ADE80" },
+    active: { bg: "color-mix(in srgb, var(--active-teal) 12%, transparent)", icon: "var(--accent-strong)" },
+    done:   { bg: "color-mix(in srgb, var(--status-live) 10%, transparent)", icon: "var(--status-live)" },
+    error:  { bg: "color-mix(in srgb, var(--status-error) 12%, transparent)", icon: "var(--status-error)" },
+    success:{ bg: "color-mix(in srgb, var(--status-live) 15%, transparent)", icon: "var(--status-live)" },
   }[item.kind];
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+    <div className="odyssey-stream-row" style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-10)" }}>
       <span style={{
         width: 16, height: 16, borderRadius: "50%",
         background: colors.bg,
         display: "flex", alignItems: "center", justifyContent: "center",
-        flexShrink: 0, marginTop: 1,
+        flexShrink: 0, marginTop: "var(--space-1)",
       }}>
         {item.kind === "active" ? (
           <span style={{
@@ -1094,17 +1094,17 @@ function StreamItem({ item }: { item: ProgressItem }) {
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={colors.icon} strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
         )}
       </span>
-      <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", flex: 1, minWidth: 0 }}>
         <span style={{
-          fontFamily: T.fontBody, fontSize: 12,
+          fontFamily: T.fontBody, fontSize: "var(--font-size-base)",
           fontWeight: item.kind === "active" ? 500 : 400,
-          color: item.kind === "error" ? "#E89090" : T.fg,
+          color: item.kind === "error" ? "var(--status-error)" : T.fg,
           wordBreak: "break-word",
         }}>
           {item.label}
         </span>
         {item.detail && (
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
             {item.detail}
           </span>
         )}
@@ -1127,24 +1127,24 @@ function HistoryCard({
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 20px", borderBottom: `1px solid ${T.border}`,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Recent runs
           </span>
-          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted }}>
             {stats.totalRuns} total · {stats.weekTokens.toLocaleString()} tokens this week
           </span>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: "var(--space-6)" }}>
           {(["all","succeeded","failed"] as const).map((f) => (
             <button
               key={f} type="button" onClick={() => setFilter(f)}
               style={{
-                padding: "4px 10px", borderRadius: 999,
+                padding: "4px 10px", borderRadius: "var(--radius-button, 12px)",
                 border: filter === f ? "none" : `1px solid ${T.border}`,
-                background: filter === f ? "rgba(140,231,210,0.1)" : "transparent",
-                color: filter === f ? "#8CE7D2" : T.muted,
-                fontFamily: T.fontBody, fontSize: 11, cursor: "pointer",
+                background: filter === f ? "var(--accent-soft)" : "transparent",
+                color: filter === f ? "var(--accent-strong)" : T.muted,
+                fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", cursor: "pointer",
               }}
             >
               {f === "all" ? "All" : f === "succeeded" ? "Succeeded" : "Failed"}
@@ -1156,14 +1156,14 @@ function HistoryCard({
       {filtered.length === 0 ? (
         <div style={{
           padding: "3rem 2rem", textAlign: "center",
-          color: T.muted, fontSize: 13, fontFamily: T.fontBody,
+          color: T.muted, fontSize: "var(--font-size-md)", fontFamily: T.fontBody,
         }}>
           No runs yet. Hit Compile above to kick one off.
         </div>
       ) : (
         <>
           <div style={{
-            display: "flex", alignItems: "center", gap: 16,
+            display: "flex", alignItems: "center", gap: "var(--space-16)",
             padding: "10px 20px",
             borderBottom: `1px solid ${T.border}`, background: "var(--card-hover)",
           }}>
@@ -1191,8 +1191,12 @@ function HistoryRowView({ row, characterId }: { row: HistoryRow; characterId: st
   const [error, setError] = useState<string | null>(null);
   const dur = durationLabel(row.startedAt, row.finishedAt);
   const when = relative(row.startedAt);
-  const statusColor = row.status === "succeeded" ? "#4ADE80" : row.status === "failed" ? "#E89090" : "#8CE7D2";
-  const iconBg = row.status === "succeeded" ? "rgba(74,222,128,0.12)" : row.status === "failed" ? "rgba(232,144,144,0.12)" : "rgba(140,231,210,0.12)";
+  const statusColor = row.status === "succeeded" ? "var(--status-live)" : row.status === "failed" ? "var(--status-error)" : "var(--accent-strong)";
+  const iconBg = row.status === "succeeded"
+    ? "color-mix(in srgb, var(--status-live) 12%, transparent)"
+    : row.status === "failed"
+      ? "color-mix(in srgb, var(--status-error) 12%, transparent)"
+      : "color-mix(in srgb, var(--active-teal) 12%, transparent)";
 
   function openPurge() {
     setError(null);
@@ -1221,7 +1225,7 @@ function HistoryRowView({ row, characterId }: { row: HistoryRow; characterId: st
 
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 16,
+      display: "flex", alignItems: "center", gap: "var(--space-16)",
       padding: "14px 20px", borderBottom: `1px solid ${T.border}`,
     }}>
       <span style={{
@@ -1237,33 +1241,33 @@ function HistoryRowView({ row, characterId }: { row: HistoryRow; characterId: st
         )}
       </span>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontFamily: T.fontHeading, fontSize: 13, fontWeight: 500, color: T.fg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 360 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", flexWrap: "wrap" }}>
+          <span style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-md)", fontWeight: 500, color: T.fg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 360 }}>
             {row.sourceTitle}
           </span>
           <span style={miniPill}>{row.sourceKind}</span>
           {row.sourceTags.slice(0, 2).map((t) => (
-            <span key={t} style={{ ...miniPill, background: "rgba(251,167,192,0.08)", color: "#FBA7C0" }}>{t}</span>
+            <span key={t} style={{ ...miniPill, background: "color-mix(in srgb, var(--event-violet) 8%, transparent)", color: "var(--event-violet)" }}>{t}</span>
           ))}
         </div>
-        <span style={{ fontFamily: T.fontBody, fontSize: 11, color: row.status === "failed" ? "#E89090B3" : T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: row.status === "failed" ? "color-mix(in srgb, var(--status-error) 70%, transparent)" : T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {row.status === "failed" && row.errorMessage
             ? row.errorMessage
             : `${row.pagesCreated} created · ${row.pagesUpdated} updated · ${row.edgesAdded} edges${row.contradictionsFound ? ` · ${row.contradictionsFound} contradiction${row.contradictionsFound === 1 ? "" : "s"}` : ""}`}
         </span>
       </div>
 
-      <span style={{ width: 130, flexShrink: 0, fontFamily: T.fontMono, fontSize: 11, color: statusColor }}>
+      <span style={{ width: 130, flexShrink: 0, fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: statusColor }}>
         {row.status}
       </span>
-      <span style={{ width: 90, flexShrink: 0, textAlign: "right", fontFamily: T.fontMono, fontSize: 11, color: T.fg }}>
+      <span style={{ width: 90, flexShrink: 0, textAlign: "right", fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.fg }}>
         {dur}
       </span>
-      <span style={{ width: 90, flexShrink: 0, textAlign: "right", fontFamily: T.fontMono, fontSize: 11, color: T.fg }}>
+      <span style={{ width: 90, flexShrink: 0, textAlign: "right", fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.fg }}>
         {row.tokensUsed.toLocaleString()}
       </span>
-      <span style={{ width: 90, flexShrink: 0, fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
+      <span style={{ width: 90, flexShrink: 0, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>
         {when}
       </span>
       <span style={{ width: 60, flexShrink: 0, display: "flex", justifyContent: "flex-end" }}>
@@ -1273,9 +1277,9 @@ function HistoryRowView({ row, characterId }: { row: HistoryRow; characterId: st
           disabled={pending}
           title="Purge this run + its source + orphan pages"
           style={{
-            padding: "4px 10px", borderRadius: 6,
-            border: "1px solid rgba(232,144,144,0.22)",
-            background: "transparent", color: "#E89090",
+            padding: "4px 10px", borderRadius: "var(--radius-sm)",
+            border: "1px solid color-mix(in srgb, var(--status-error) 22%, transparent)",
+            background: "transparent", color: "var(--status-error)",
             fontFamily: T.fontBody, fontSize: 10.5,
             cursor: pending ? "not-allowed" : "pointer",
             opacity: pending ? 0.5 : 1,
@@ -1315,17 +1319,17 @@ function Field({
   trailing?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--space-8)" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-8)" }}>
           <span style={{
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted,
             letterSpacing: "0.08em", textTransform: "uppercase",
           }}>
             {label}{optional && " · optional"}
           </span>
           {help && (
-            <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>{help}</span>
+            <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>{help}</span>
           )}
         </div>
         {trailing}
@@ -1336,32 +1340,35 @@ function Field({
 }
 
 const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "10px 14px", borderRadius: 10,
-  background: "var(--background)", border: `1px solid ${T.border}`,
-  color: T.fg, outline: "none", fontFamily: T.fontBody, fontSize: 13,
+  width: "100%", padding: "10px 14px", borderRadius: "var(--radius-button, 12px)",
+  background: "var(--input-bg)", border: "1px solid var(--input-border)",
+  color: T.fg, outline: "none", fontFamily: T.fontBody, fontSize: "var(--font-size-md)",
   boxSizing: "border-box",
 };
 
 const cardShell: React.CSSProperties = {
   display: "flex", flexDirection: "column",
-  background: T.panel, border: `1px solid ${T.border}`,
-  borderRadius: 14, overflow: "clip",
+  background: "var(--card-material, var(--panel))",
+  border: "1px solid var(--border-subtle, var(--border))",
+  borderRadius: "var(--radius-card, 18px)",
+  boxShadow: "var(--elevation-card)",
+  overflow: "clip",
 };
 
 const ghostBtn: React.CSSProperties = {
-  padding: "5px 12px", borderRadius: 8,
-  border: `1px solid ${T.border}`, background: "transparent",
-  color: T.fg, fontFamily: T.fontBody, fontSize: 11, cursor: "pointer",
+  padding: "5px 12px", borderRadius: "var(--radius-button, 12px)",
+  border: "1px solid var(--input-border)", background: "var(--input-bg)",
+  color: T.fg, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", cursor: "pointer",
 };
 
 const colHeader: React.CSSProperties = {
-  fontFamily: T.fontMono, fontSize: 9, fontWeight: 500, color: T.muted,
+  fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 500, color: T.muted,
   letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0,
 };
 
 const miniPill: React.CSSProperties = {
-  padding: "1px 7px", borderRadius: 4, background: "var(--card-hover)",
-  fontFamily: T.fontMono, fontSize: 9, fontWeight: 500,
+  padding: "1px 7px", borderRadius: "var(--radius-xs)", background: "var(--card-hover)",
+  fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 500,
   color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase",
 };
 

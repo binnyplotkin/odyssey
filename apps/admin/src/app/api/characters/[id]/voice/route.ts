@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCharacterStore, getVoiceStore } from "@odyssey/db";
+import { invalidateVoicesList } from "@/lib/voices-cache";
+import { invalidateCharactersList } from "@/lib/characters-cache";
+import { invalidateCharacterDetail } from "@/lib/character-detail-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +50,14 @@ export async function PATCH(
   });
   if (!updated) return jsonError(404, "character not found");
 
+  // Voice bindings drive `boundCharacterCount` + `boundCharacters` on
+  // every row in the voices library — invalidate so the next /voices
+  // visit reflects the new binding. Also clear the per-character detail
+  // cache (the voice id surfaces in the brand chip + voice slot) and the
+  // characters list (voiceStyle.referenceClipUrl can change downstream).
+  invalidateVoicesList();
+  invalidateCharactersList();
+  invalidateCharacterDetail(id);
   return NextResponse.json({ character: updated });
 }
 

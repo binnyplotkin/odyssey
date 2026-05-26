@@ -20,7 +20,7 @@ export type AvatarGradientKey =
 
 export const AVATAR_GRADIENTS: Record<AvatarGradientKey, string> = {
   dune: "linear-gradient(135deg, #C9A26B 0%, #6E5031 100%)",
-  mint: "linear-gradient(135deg, #8CE7D2 0%, #3F8F84 100%)",
+  mint: "linear-gradient(135deg, #8FD1CB 0%, #3F8F84 100%)",
   fog: "linear-gradient(135deg, #A8C4E8 0%, #4F6A9C 100%)",
   amethyst: "linear-gradient(135deg, #C7A5FF 0%, #6E4FB8 100%)",
   amber: "linear-gradient(135deg, #E8B87A 0%, #8C6A38 100%)",

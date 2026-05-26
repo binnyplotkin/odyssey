@@ -948,9 +948,9 @@ def export_voice(payload: ExportVoiceRequest):
 
 # ── Streaming STT WebSocket ─────────────────────────────────────────
 #
-# Protocol mirrors the Modal moshi-server contract that the browser already
-# speaks (apps/admin/src/lib/moshi-client.ts:MoshiStreamingSttSession), so
-# the only client change to cut over is `MOSHI_WS_URL`.
+# Protocol is the browser audio-rt streaming STT contract used by
+# apps/admin/src/lib/audio-rt-streaming-stt.ts. It remains msgpack-compatible
+# with the older Moshi-era client while the legacy debug surfaces migrate.
 #
 #   client → server (msgpack frames):
 #     { type: "Audio", pcm: Float32[1920] }   # 80 ms @ 24 kHz mono

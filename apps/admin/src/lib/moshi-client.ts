@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * Legacy audio client for the older voice panel/debug surfaces.
+ *
+ * The "Moshi" name is historical: the current production audio runtime is
+ * the audio-rt service. New character sandbox work should use
+ * `audio-rt-streaming-stt.ts` instead of adding new imports here. This file
+ * stays in place until the older voice panel and debug tools are migrated.
+ */
+
 function utf8Encode(input: string): Uint8Array {
   return new TextEncoder().encode(input);
 }

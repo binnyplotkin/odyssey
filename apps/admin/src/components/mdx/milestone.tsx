@@ -42,7 +42,7 @@ export async function Milestone({
   return (
     <div style={{
       border: "1px solid var(--border)",
-      borderRadius: 10,
+      borderRadius: "var(--radius-lg)",
       background: "var(--panel)",
       padding: "16px 18px",
       margin: "12px 0",
@@ -52,7 +52,7 @@ export async function Milestone({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        marginBottom: 12,
+        marginBottom: "var(--space-12)",
       }}>
         <span style={{
           fontWeight: 600,
@@ -73,11 +73,11 @@ export async function Milestone({
       {/* Progress bar */}
       <div style={{
         height: 6,
-        borderRadius: 3,
+        borderRadius: "var(--radius-xs)",
         background: "rgba(255,255,255,0.06)",
         overflow: "hidden",
         display: "flex",
-        marginBottom: 14,
+        marginBottom: "var(--space-14)",
       }}>
         {done > 0 && (
           <div style={{
@@ -97,7 +97,7 @@ export async function Milestone({
       </div>
 
       {/* Ticket list */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
         {valid.map((ticket) => {
           const statusIcon = ticket.status === "done" ? "\u2713"
             : (ticket.status === "in-progress" || ticket.status === "review") ? "\u25C9"
@@ -112,7 +112,7 @@ export async function Milestone({
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 8,
+                gap: "var(--space-8)",
                 fontSize: "0.8125rem",
               }}
             >

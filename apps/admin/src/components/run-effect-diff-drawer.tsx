@@ -30,7 +30,7 @@ const BORDER = "rgba(255, 255, 255, 0.08)";
 const BORDER_STRONG = "rgba(255, 255, 255, 0.12)";
 const DIVIDER = "rgba(255, 255, 255, 0.06)";
 
-const ACCENT = "#8CE7D2";
+const ACCENT = "#8FD1CB";
 const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
 const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
 
@@ -43,7 +43,7 @@ const WARN_SOFT = "rgba(250, 204, 21, 0.04)";
 const WARN_RING = "rgba(250, 204, 21, 0.3)";
 
 const TYPE_COLOR: Record<WikiPageType, string> = {
-  entity: "#8CE7D2",
+  entity: "#8FD1CB",
   event: "#60A5FA",
   concept: "#A78BFA",
   relationship: "#FACC15",
@@ -51,7 +51,7 @@ const TYPE_COLOR: Record<WikiPageType, string> = {
   voice_identity: "#F472B6",
 };
 
-const BACKDROP_BG = "rgba(0, 0, 0, 0.6)";
+const BACKDROP_BG = "var(--modal-backdrop)";
 
 /* ── Props ─────────────────────────────────────────────────────── */
 
@@ -257,13 +257,13 @@ function DrawerHeader({
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          gap: 14,
+          gap: "var(--space-14)",
         }}
       >
         <span
           style={{
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 500,
             letterSpacing: "0.2em",
             textTransform: "uppercase",
@@ -278,7 +278,7 @@ function DrawerHeader({
             display: "inline-flex",
             flexDirection: "row",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
             padding: "3px 8px",
             background: loading ? "transparent" : chipBg,
             borderTop: `1px solid ${loading ? BORDER_STRONG : chipRing}`,
@@ -300,7 +300,7 @@ function DrawerHeader({
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               fontWeight: 600,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
@@ -327,7 +327,7 @@ function DrawerHeader({
           borderBottom: `1px solid ${BORDER_STRONG}`,
           borderLeft: `1px solid ${BORDER_STRONG}`,
           fontFamily: MONO,
-          fontSize: 13,
+          fontSize: "var(--font-size-md)",
           fontWeight: 600,
           color: TEXT_MUTED,
           cursor: "pointer",
@@ -353,7 +353,7 @@ function DrawerBody({ data }: { data: DiffPayload }) {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: "var(--space-12)",
           padding: "24px 28px 8px",
         }}
       >
@@ -362,7 +362,7 @@ function DrawerBody({ data }: { data: DiffPayload }) {
             display: "flex",
             flexDirection: "row",
             alignItems: "center",
-            gap: 10,
+            gap: "var(--space-10)",
           }}
         >
           <span
@@ -408,9 +408,9 @@ function DrawerBody({ data }: { data: DiffPayload }) {
             display: "flex",
             flexDirection: "row",
             alignItems: "baseline",
-            gap: 10,
+            gap: "var(--space-10)",
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: TEXT_MUTED,
           }}
         >
@@ -673,7 +673,7 @@ function FrontmatterField({
         }}
       >
         {rows.length === 0 ? (
-          <div style={{ padding: 14, fontFamily: MONO, fontSize: 11, color: TEXT_FADED }}>
+          <div style={{ padding: "var(--space-14)", fontFamily: MONO, fontSize: "var(--font-size-sm)", color: TEXT_FADED }}>
             (empty)
           </div>
         ) : (
@@ -766,7 +766,7 @@ function FmRow({ row, last }: { row: FmDiffRow; last: boolean }) {
         display: "flex",
         flexDirection: "row",
         alignItems: "flex-start",
-        gap: 14,
+        gap: "var(--space-14)",
         padding: "10px 14px",
         background: bg,
         borderTop: 0,
@@ -780,7 +780,7 @@ function FmRow({ row, last }: { row: FmDiffRow; last: boolean }) {
           width: 110,
           flexShrink: 0,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: 500,
           color: keyColor,
         }}
@@ -793,9 +793,9 @@ function FmRow({ row, last }: { row: FmDiffRow; last: boolean }) {
           minWidth: 0,
           display: "flex",
           flexDirection: "column",
-          gap: 4,
+          gap: "var(--space-4)",
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           wordBreak: "break-word",
         }}
       >
@@ -824,7 +824,7 @@ function FmRow({ row, last }: { row: FmDiffRow; last: boolean }) {
         style={{
           flexShrink: 0,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           fontWeight: 500,
           letterSpacing: "0.16em",
           textTransform: "uppercase",
@@ -903,7 +903,7 @@ function ScalarsField({
                 display: "flex",
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 14,
+                gap: "var(--space-14)",
                 padding: "10px 14px",
                 background: bg,
                 borderTop: 0,
@@ -918,7 +918,7 @@ function ScalarsField({
                   width: 110,
                   flexShrink: 0,
                   fontFamily: MONO,
-                  fontSize: 11,
+                  fontSize: "var(--font-size-sm)",
                   fontWeight: 500,
                   color: isNew || changed ? TEXT_PRIMARY : TEXT_MUTED,
                 }}
@@ -931,9 +931,9 @@ function ScalarsField({
                   display: "flex",
                   flexDirection: "row",
                   alignItems: "center",
-                  gap: 8,
+                  gap: "var(--space-8)",
                   fontFamily: MONO,
-                  fontSize: 11,
+                  fontSize: "var(--font-size-sm)",
                 }}
               >
                 {isNew || row.old === null ? (
@@ -952,7 +952,7 @@ function ScalarsField({
                 style={{
                   flexShrink: 0,
                   fontFamily: MONO,
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   fontWeight: 500,
                   letterSpacing: "0.16em",
                   textTransform: "uppercase",
@@ -1011,7 +1011,7 @@ function DiffBanner({
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           margin: "14px 28px 0",
           padding: "12px 16px",
           background: ADD_SOFT,
@@ -1024,7 +1024,7 @@ function DiffBanner({
         <span
           style={{
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 600,
             letterSpacing: "0.18em",
             textTransform: "uppercase",
@@ -1033,7 +1033,7 @@ function DiffBanner({
         >
           NEW
         </span>
-        <span style={{ fontFamily: MONO, fontSize: 11, color: TEXT_SECONDARY }}>
+        <span style={{ fontFamily: MONO, fontSize: "var(--font-size-sm)", color: TEXT_SECONDARY }}>
           first version of this page · {wordCount(current.body)} words
         </span>
       </div>
@@ -1047,7 +1047,7 @@ function DiffBanner({
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
-        gap: 10,
+        gap: "var(--space-10)",
         margin: "14px 28px 0",
         padding: "12px 16px",
         background: WARN_SOFT,
@@ -1061,7 +1061,7 @@ function DiffBanner({
       <span
         style={{
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           fontWeight: 600,
           letterSpacing: "0.18em",
           textTransform: "uppercase",
@@ -1070,7 +1070,7 @@ function DiffBanner({
       >
         CHANGED
       </span>
-      <span style={{ fontFamily: MONO, fontSize: 11, color: TEXT_SECONDARY }}>
+      <span style={{ fontFamily: MONO, fontSize: "var(--font-size-sm)", color: TEXT_SECONDARY }}>
         +{added} / −{removed} words · field-level diff pending
       </span>
     </div>
@@ -1105,7 +1105,7 @@ function FieldSection({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 8,
+        gap: "var(--space-8)",
         padding: "20px 28px 0",
       }}
     >
@@ -1120,7 +1120,7 @@ function FieldSection({
         <span
           style={{
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 500,
             letterSpacing: "0.2em",
             textTransform: "uppercase",
@@ -1132,7 +1132,7 @@ function FieldSection({
         <span
           style={{
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 500,
             letterSpacing: "0.16em",
             textTransform: "uppercase",
@@ -1182,7 +1182,7 @@ function DrawerFooter({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: 14,
+        gap: "var(--space-14)",
         padding: "16px 24px",
         borderTop: `1px solid ${DIVIDER}`,
         borderRight: 0,
@@ -1216,14 +1216,14 @@ function DrawerFooter({
           onClick={() => nextId && onNavigate(nextId)}
         />
       </div>
-      <div style={{ display: "flex", flexDirection: "row", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "row", gap: "var(--space-8)" }}>
         {page && (
           <Link
             href={`/wikis/${wikiId}/pages/${page.slug}`}
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
               padding: "8px 12px",
               background: ACCENT,
               borderTop: `1px solid ${ACCENT}`,
@@ -1264,7 +1264,7 @@ function NavBtn({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
+        gap: "var(--space-8)",
         padding: "8px 12px",
         background: "transparent",
         border: 0,
@@ -1304,7 +1304,7 @@ function StatusBlock({
       style={{
         padding: "60px 24px",
         fontFamily: MONO,
-        fontSize: 12,
+        fontSize: "var(--font-size-base)",
         color: tone === "error" ? "#F87171" : TEXT_MUTED,
         textAlign: "center",
       }}

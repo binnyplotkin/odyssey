@@ -114,7 +114,7 @@ export type MatterIngestionState = {
 const COLOR_TEAL = "rgba(140,231,210,1)";
 const COLOR_SUCCESS = "rgba(74,222,128,1)";
 const COLOR_DANGER = "rgba(248,113,113,1)";
-const RGB_NEURAL_WHITE: [number, number, number] = [255, 255, 255];
+const RGB_NEURAL_COLOR: [number, number, number] = [111, 191, 136];
 
 const PULSE_EVENT_TYPES: ReadonlySet<IngestionEvent["type"]> = new Set([
   "plan-complete",
@@ -302,6 +302,8 @@ export type ASCIIMatterCanvasProps = {
   backgroundColor?: string | null;
   /** Optional color for the quiet source-field dots behind active matter. */
   baseFieldColor?: string;
+  /** Live neural activity color. Defaults to --neural_color. */
+  neuralColor?: string;
   /** Multiplier for the quiet source-field dots. Default 1. */
   baseFieldStrength?: number;
   /** Override the phase-derived `attract` strength (0..1). */
@@ -360,7 +362,7 @@ const KIND_COLOR_RGB: Record<string, [number, number, number]> = {
   note: [250, 204, 21],
   transcript: [74, 222, 128],
   reference: [125, 211, 252],
-  planning: RGB_NEURAL_WHITE,
+  planning: RGB_NEURAL_COLOR,
   contradiction: [251, 146, 60],
   failed: [248, 113, 113],
   success: [74, 222, 128],
@@ -825,9 +827,10 @@ function frameHotspotsFor(
   phase: MatterPhase,
   t: number,
   baseColor: [number, number, number],
+  neuralColor: [number, number, number],
 ): FrameHotspot[] {
   const ambientColor =
-    phase === "thinking" || phase === "speaking" ? RGB_NEURAL_WHITE : baseColor;
+    phase === "thinking" || phase === "speaking" ? neuralColor : baseColor;
   const ambientScale =
     phase === "idle"
       ? 0.28
@@ -1107,6 +1110,24 @@ function parseCssColorToRgb(color: string, fallback = "140,231,210"): string {
   return fallback;
 }
 
+function resolveCssColorToRgb(
+  host: Element,
+  color: string,
+  fallback = "140,231,210",
+): string {
+  const c = color.trim();
+  if (!c.startsWith("var(")) return parseCssColorToRgb(c, fallback);
+
+  const match = /^var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)$/.exec(c);
+  if (!match) return fallback;
+
+  const [, token, tokenFallback] = match;
+  const resolved = getComputedStyle(host).getPropertyValue(token).trim();
+  if (resolved) return parseCssColorToRgb(resolved, fallback);
+  if (tokenFallback) return parseCssColorToRgb(tokenFallback.trim(), fallback);
+  return fallback;
+}
+
 const FOG_SPRITES = new Map<string, HTMLCanvasElement>();
 function getFogSprite(rgb: string): HTMLCanvasElement {
   const cached = FOG_SPRITES.get(rgb);
@@ -1369,6 +1390,7 @@ export function ASCIIMatterCanvas({
   color = "rgba(140,231,210,1)",
   backgroundColor = null,
   baseFieldColor,
+  neuralColor = "var(--neural_color, #6FBF88)",
   baseFieldStrength = 1,
   attractOverride,
   curlOverride,
@@ -1572,11 +1594,17 @@ export function ASCIIMatterCanvas({
     ro.observe(canvas);
     resize();
 
-    const rgb = parseCssColorToRgb(color);
-    const baseFieldRgb = parseCssColorToRgb(baseFieldColor ?? color);
+    const rgb = resolveCssColorToRgb(canvas, color);
+    const baseFieldRgb = resolveCssColorToRgb(canvas, baseFieldColor ?? color);
+    const neuralRgb = resolveCssColorToRgb(
+      canvas,
+      neuralColor,
+      "111,191,136",
+    );
     const baseRgb = rgbStringToTuple(rgb);
+    const neuralRgbTuple = rgbStringToTuple(neuralRgb);
     const bgRgb = bgColorRef.current
-      ? parseCssColorToRgb(bgColorRef.current, "12,14,20")
+      ? resolveCssColorToRgb(canvas, bgColorRef.current, "12,14,20")
       : null;
 
     let raf = 0;
@@ -1663,7 +1691,13 @@ export function ASCIIMatterCanvas({
       );
       const neuralEnabled = activationMode !== "off";
       const frameHotspots = neuralEnabled
-        ? frameHotspotsFor(activeHotspotsRef.current, phaseNow, t, baseRgb)
+        ? frameHotspotsFor(
+            activeHotspotsRef.current,
+            phaseNow,
+            t,
+            baseRgb,
+            neuralRgbTuple,
+          )
         : [];
 
       for (let i = 0; i < particles.length; i++) {
@@ -1874,6 +1908,7 @@ export function ASCIIMatterCanvas({
     color,
     backgroundColor,
     baseFieldColor,
+    neuralColor,
     baseFieldStrength,
     activationMode,
     surfaceTone,

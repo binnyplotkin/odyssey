@@ -4,54 +4,40 @@ import { useEffect } from "react";
 import { Skeleton } from "@odyssey/ui";
 import { useHeaderContent } from "@/components/header-context";
 
-// Suspense fallback for CharacterHeaderShell — pushes a layout-shaped
-// skeleton into the shared header slot so the visible chrome (back arrow,
-// avatar/title, tabs, action buttons) shimmers in place rather than
-// flashing the parent /characters list loader.
+/**
+ * Suspense fallback for CharacterHeaderShell. Each subpage injects its
+ * own header once it loads (CharacterConfig has breadcrumb + version
+ * dropdown + Sandbox link; chat has its own immersive header; etc.), so
+ * this fallback only needs to render the common shape they all share —
+ * an avatar tile + breadcrumb crumb. Anything beyond that varies per
+ * page and would jump visually when the real header lands.
+ */
 
 export function CharacterHeaderSkeleton() {
   const { setContent } = useHeaderContent();
 
   useEffect(() => {
     setContent(
-      <>
-        {/* Back arrow */}
-        <Skeleton width={28} height={28} radius={6} style={{ marginRight: 14, flexShrink: 0 }} />
-
-        {/* Avatar + title */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <Skeleton width={24} height={24} variant="circle" />
-          <Skeleton width={140} height={16} />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)", flexShrink: 0 }}>
+          {/* Avatar tile */}
+          <Skeleton width={22} height={22} radius={0} />
+          {/* Breadcrumb: "characters / <title>" */}
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+            <Skeleton width={68} height={12} />
+            <span style={{ color: "var(--muted)", opacity: 0.5 }}>/</span>
+            <Skeleton width={120} height={14} />
+          </div>
         </div>
-
-        {/* Vertical divider */}
-        <span
-          style={{
-            width: 1,
-            height: 20,
-            background: "var(--border)",
-            display: "block",
-            marginLeft: 14,
-            marginRight: 14,
-            flexShrink: 0,
-          }}
-        />
-
-        {/* Tab pills */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-          {[68, 56, 68, 76].map((w, i) => (
-            <Skeleton key={i} width={w} height={24} radius={8} static />
-          ))}
-        </div>
-
         <div style={{ flex: 1 }} />
-
-        {/* Action buttons */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <Skeleton width={76} height={26} radius={8} static />
-          <Skeleton width={64} height={26} radius={8} static />
-        </div>
-      </>,
+      </div>,
     );
     return () => setContent(null);
   }, [setContent]);

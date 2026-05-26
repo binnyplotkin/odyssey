@@ -132,25 +132,25 @@ export function WikiPageEditor({ characterId, page, eras, onSaved, onCancel }: P
       {/* Header — type badge + slug + version + Cancel/Save */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: 10, padding: "12px 20px",
+        gap: "var(--space-10)", padding: "12px 20px",
         borderBottom: `1px solid ${T.border}`, background: "var(--card-hover)",
         flexShrink: 0, position: "sticky", top: 0, zIndex: 2,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", minWidth: 0 }}>
           <TypeBadge type={page.type} />
-          <span style={{ fontFamily: T.fontMono, fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.muted, whiteSpace: "nowrap" }}>
             {page.slug}
           </span>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
             v{page.version}
           </span>
           {dirty && (
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, color: "#FACC15" }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "var(--status-draft)" }}>
               unsaved
             </span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: "var(--space-8)", flexShrink: 0 }}>
           <button type="button" onClick={onCancel} style={btnGhost} disabled={pending}>
             Cancel
           </button>
@@ -168,7 +168,7 @@ export function WikiPageEditor({ characterId, page, eras, onSaved, onCancel }: P
         </div>
       </div>
 
-      <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: "var(--space-18)" }}>
 
         {/* Title + summary */}
         <FieldGroup label="Identity">
@@ -196,17 +196,17 @@ export function WikiPageEditor({ characterId, page, eras, onSaved, onCancel }: P
               ...textInput,
               resize: "vertical",
               minHeight: 240,
-              fontFamily: T.fontMono, fontSize: 12, lineHeight: "20px",
+              fontFamily: T.fontMono, fontSize: "var(--font-size-base)", lineHeight: "20px",
             }}
           />
         </FieldGroup>
 
         {/* Time + confidence + knowsFuture */}
         <FieldGroup label="Timeline & confidence">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-12)" }}>
             <Field label="Era">
               {sortedEras.length === 0 ? (
-                <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+                <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted }}>
                   No eras configured for this character.
                 </span>
               ) : (
@@ -244,27 +244,27 @@ export function WikiPageEditor({ characterId, page, eras, onSaved, onCancel }: P
             </Field>
           </div>
           <Field label="Knows future" help="True if the character was promised this but hasn't lived it yet.">
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-8)", cursor: "pointer" }}>
               <input
                 type="checkbox"
                 checked={knowsFuture}
                 onChange={(e) => setKnowsFuture(e.target.checked)}
-                style={{ accentColor: "#8CE7D2" }}
+                style={{ accentColor: "var(--accent-strong)" }}
               />
-              <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.fg }}>
+              <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.fg }}>
                 {knowsFuture ? "yes — bleeds through the timeline filter" : "no"}
               </span>
             </label>
           </Field>
           <Field label="Confidence" help={`Synthesis certainty. Current: ${confidence.toFixed(2)}.`}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
               <input
                 type="range" min={0} max={1} step={0.01}
                 value={confidence}
                 onChange={(e) => setConfidence(Number(e.target.value))}
-                style={{ flex: 1, accentColor: "#8CE7D2" }}
+                style={{ flex: 1, accentColor: "var(--accent-strong)" }}
               />
-              <span style={{ fontFamily: T.fontMono, fontSize: 11, color: "#8CE7D2", width: 40, textAlign: "right" }}>
+              <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: "var(--accent-strong)", width: 40, textAlign: "right" }}>
                 {confidence.toFixed(2)}
               </span>
             </div>
@@ -294,7 +294,7 @@ export function WikiPageEditor({ characterId, page, eras, onSaved, onCancel }: P
               values={perspective.feels ?? []}
               onChange={(feels) => setPerspective({ ...perspective, feels })}
               placeholder="conflicted, reverent…"
-              color="#E879A0"
+              color="var(--status-error)"
             />
           </Field>
           <Field label="Stake" help="One phrase — why does this matter to the character?">
@@ -322,12 +322,12 @@ export function WikiPageEditor({ characterId, page, eras, onSaved, onCancel }: P
               ...textInput,
               resize: "vertical",
               minHeight: 160,
-              fontFamily: T.fontMono, fontSize: 12, lineHeight: "19px",
-              color: frontmatterError ? "#E89090" : T.fg,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-base)", lineHeight: "19px",
+              color: frontmatterError ? "var(--status-error)" : T.fg,
             }}
           />
           {frontmatterError && (
-            <span style={{ fontFamily: T.fontMono, fontSize: 11, color: "#E89090" }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: "var(--status-error)" }}>
               {frontmatterError}
             </span>
           )}
@@ -336,16 +336,17 @@ export function WikiPageEditor({ characterId, page, eras, onSaved, onCancel }: P
         {/* Read-only side (contradictions, sourceRefs) — reminder they're managed by ingest */}
         {contradictions.length > 0 && (
           <FieldGroup label={`Contradictions · ${contradictions.length}`} help="Managed by ingestion — not editable here.">
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
               {contradictions.map((c, i) => (
                 <div key={i} style={{
-                  padding: "6px 10px", borderRadius: 8,
-                  background: "rgba(232,144,144,0.06)", border: "1px solid rgba(232,144,144,0.2)",
+                  padding: "6px 10px", borderRadius: "var(--radius-md)",
+                  background: "var(--critical-wash)",
+                  border: "1px solid color-mix(in srgb, var(--status-error) 20%, transparent)",
                 }}>
-                  <span style={{ fontFamily: T.fontMono, fontSize: 10, color: "#E89090" }}>
+                  <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "var(--status-error)" }}>
                     vs {c.otherPageId.slice(0, 8)}…
                   </span>
-                  <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, marginLeft: 8 }}>
+                  <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, marginLeft: "var(--space-8)" }}>
                     {c.note}
                   </span>
                 </div>
@@ -356,9 +357,10 @@ export function WikiPageEditor({ characterId, page, eras, onSaved, onCancel }: P
 
         {error && (
           <div style={{
-            padding: "10px 14px", borderRadius: 10,
-            background: "rgba(232,144,144,0.08)", border: "1px solid rgba(232,144,144,0.25)",
-            color: "#E89090", fontFamily: T.fontBody, fontSize: 13,
+            padding: "10px 14px", borderRadius: "var(--radius-lg)",
+            background: "color-mix(in srgb, var(--status-error) 8%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--status-error) 25%, transparent)",
+            color: "var(--status-error)", fontFamily: T.fontBody, fontSize: "var(--font-size-md)",
           }}>
             {error}
           </div>
@@ -374,13 +376,14 @@ function TypeBadge({ type }: { type: WikiPageType }) {
   const color = TYPE_COLOR[type];
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", gap: 6,
-      padding: "3px 9px", borderRadius: 999,
-      background: `${color}1F`, border: `1px solid ${color}33`,
+      display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+      padding: "3px 9px", borderRadius: "var(--radius-button, 12px)",
+      background: `color-mix(in srgb, ${color} 12%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${color} 22%, transparent)`,
     }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
       <span style={{
-        fontFamily: T.fontMono, fontSize: 10, fontWeight: 600, color,
+        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600, color,
         letterSpacing: "0.06em", textTransform: "uppercase",
       }}>
         {type}
@@ -393,21 +396,21 @@ function FieldGroup({
   label, help, children,
 }: { label: string; help?: string; children: React.ReactNode }) {
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+    <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--space-8)" }}>
         <span style={{
-          fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted,
+          fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted,
           letterSpacing: "0.1em", textTransform: "uppercase",
         }}>
           {label}
         </span>
         {help && (
-          <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted, textAlign: "right" }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted, textAlign: "right" }}>
             {help}
           </span>
         )}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
         {children}
       </div>
     </section>
@@ -416,13 +419,13 @@ function FieldGroup({
 
 function Field({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontFamily: T.fontBody, fontSize: 11, fontWeight: 500, color: T.fg }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--space-8)" }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500, color: T.fg }}>
           {label}
         </span>
         {help && (
-          <span style={{ fontFamily: T.fontBody, fontSize: 10, color: T.muted }}>{help}</span>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-xs)", color: T.muted }}>{help}</span>
         )}
       </div>
       {children}
@@ -446,17 +449,18 @@ function TagInput({
   }
   return (
     <div style={{
-      display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
-      padding: "6px 10px", borderRadius: 8,
+      display: "flex", flexWrap: "wrap", alignItems: "center", gap: "var(--space-6)",
+      padding: "6px 10px", borderRadius: "var(--radius-md)",
       background: "var(--background)", border: `1px solid ${T.border}`,
       minHeight: 36,
     }}>
       {values.map((t) => (
         <span key={t} style={{
-          display: "inline-flex", alignItems: "center", gap: 5,
-          padding: "2px 7px 2px 9px", borderRadius: 999,
-          background: `${color}14`, border: `1px solid ${color}33`,
-          fontFamily: T.fontBody, fontSize: 11, color,
+          display: "inline-flex", alignItems: "center", gap: "var(--space-5)",
+          padding: "2px 7px 2px 9px", borderRadius: "var(--radius-button, 12px)",
+          background: `color-mix(in srgb, ${color} 8%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${color} 22%, transparent)`,
+          fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color,
         }}>
           {t}
           <button type="button" onClick={() => remove(t)}
@@ -479,7 +483,7 @@ function TagInput({
         style={{
           flex: 1, minWidth: 80, border: "none", outline: "none",
           background: "transparent", color: T.fg,
-          fontFamily: T.fontBody, fontSize: 11, padding: "2px 4px",
+          fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", padding: "2px 4px",
         }}
       />
     </div>
@@ -489,12 +493,12 @@ function TagInput({
 /* ── Utils ─────────────────────────────────────────────────────── */
 
 const TYPE_COLOR: Record<WikiPageType, string> = {
-  entity:         "#FBA7C0",
-  event:          "#FACC15",
-  concept:        "#A88CFF",
-  relationship:   "#8CE7D2",
-  timeline:       "#94A3B8",
-  voice_identity: "#E879A0",
+  entity:         "var(--event-violet)",
+  event:          "var(--status-draft)",
+  concept:        "var(--signal-blue)",
+  relationship:   "var(--accent-strong)",
+  timeline:       "var(--status-archived)",
+  voice_identity: "var(--status-error)",
 };
 
 function timeIndexEq(a: TimeIndex | null, b: TimeIndex | null): boolean {
@@ -516,20 +520,20 @@ function perspectiveEq(a: Perspective, b: Perspective): boolean {
 /* ── Styles ────────────────────────────────────────────────────── */
 
 const textInput: React.CSSProperties = {
-  width: "100%", padding: "7px 10px", borderRadius: 6,
-  background: "var(--background)", border: `1px solid ${T.border}`,
+  width: "100%", padding: "7px 10px", borderRadius: "var(--radius-button, 12px)",
+  background: "var(--input-bg)", border: "1px solid var(--input-border)",
   color: T.fg, outline: "none",
-  fontFamily: T.fontBody, fontSize: 12, boxSizing: "border-box",
+  fontFamily: T.fontBody, fontSize: "var(--font-size-base)", boxSizing: "border-box",
 };
 
 const btnGhost: React.CSSProperties = {
-  padding: "5px 12px", borderRadius: 8,
-  border: `1px solid ${T.border}`, background: "transparent",
-  color: T.fg, fontFamily: T.fontBody, fontSize: 11, cursor: "pointer",
+  padding: "5px 12px", borderRadius: "var(--radius-button, 12px)",
+  border: "1px solid var(--input-border)", background: "var(--input-bg)",
+  color: T.fg, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", cursor: "pointer",
 };
 
 const btnPrimary: React.CSSProperties = {
-  padding: "6px 14px", borderRadius: 8, border: "none",
-  background: T.accent, color: "var(--background)",
-  fontFamily: T.fontBody, fontSize: 12, fontWeight: 600, cursor: "pointer",
+  padding: "6px 14px", borderRadius: "var(--radius-button, 12px)", border: "none",
+  background: "var(--emissive-mint)", color: "#07100E",
+  fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 600, cursor: "pointer",
 };

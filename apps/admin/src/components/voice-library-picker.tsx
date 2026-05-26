@@ -26,6 +26,12 @@ export type PickerVoice = {
   durationS: number | null;
   boundCharacterCount?: number;
   status: string;
+  /** Provider discriminator — used by the character page to decide whether
+   * to surface per-binding override controls (only ElevenLabs has tunable
+   * knobs today). */
+  provider?: string;
+  /** Voice-level provider config (defaults the override sits on top of). */
+  providerConfig?: Record<string, unknown>;
 };
 
 type Props = {
@@ -188,20 +194,20 @@ export function VoiceLibraryPicker({ currentVoiceId, voices, onChange }: Props) 
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
         {/* Label row */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 8,
+            gap: "var(--space-8)",
           }}
         >
           <span
             style={{
               fontFamily: FONT_MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               color: "var(--text-tertiary)",
               letterSpacing: "0.10em",
             }}
@@ -221,7 +227,7 @@ export function VoiceLibraryPicker({ currentVoiceId, voices, onChange }: Props) 
             <span
               style={{
                 fontFamily: FONT_MONO,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: "var(--text-quaternary)",
                 letterSpacing: "0.06em",
               }}
@@ -233,19 +239,19 @@ export function VoiceLibraryPicker({ currentVoiceId, voices, onChange }: Props) 
             <span
               style={{
                 fontFamily: FONT_MONO,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: "var(--accent-strong)",
                 letterSpacing: "0.06em",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 5,
+                gap: "var(--space-5)",
               }}
             >
               <span
                 style={{
                   width: 5,
                   height: 5,
-                  borderRadius: 999,
+                  borderRadius: "var(--radius-pill)",
                   background: "var(--accent-strong)",
                   boxShadow: "0 0 8px var(--accent-strong)",
                 }}
@@ -275,7 +281,7 @@ export function VoiceLibraryPicker({ currentVoiceId, voices, onChange }: Props) 
 
         {/* Trigger actions (bound only) */}
         {current && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
             <button
               type="button"
               onClick={() => setOpen(true)}
@@ -335,8 +341,9 @@ function UnboundCard({ onClick }: { onClick: () => void }) {
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
-        gap: 14,
+        gap: "var(--space-14)",
         padding: "14px 16px",
+        borderRadius: "var(--radius-xl)",
         background: "rgba(255,255,255,0.025)",
         border: "1px dashed rgba(255,255,255,0.14)",
         cursor: "pointer",
@@ -349,6 +356,7 @@ function UnboundCard({ onClick }: { onClick: () => void }) {
           justifyContent: "center",
           width: 44,
           height: 44,
+          borderRadius: "var(--radius-lg)",
           flexShrink: 0,
           background: "rgba(255,255,255,0.03)",
           border: "1px dashed rgba(255,255,255,0.14)",
@@ -360,7 +368,7 @@ function UnboundCard({ onClick }: { onClick: () => void }) {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 2,
+          gap: "var(--space-2)",
           flex: 1,
           minWidth: 0,
         }}
@@ -368,7 +376,7 @@ function UnboundCard({ onClick }: { onClick: () => void }) {
         <span
           style={{
             fontFamily: FONT_BODY,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             fontWeight: 500,
             color: "var(--text-secondary)",
           }}
@@ -378,7 +386,7 @@ function UnboundCard({ onClick }: { onClick: () => void }) {
         <span
           style={{
             fontFamily: FONT_BODY,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: "var(--text-tertiary)",
             lineHeight: "16px",
           }}
@@ -393,16 +401,18 @@ function UnboundCard({ onClick }: { onClick: () => void }) {
           onClick();
         }}
         style={{
-          padding: "7px 12px",
-          background: "transparent",
-          border: "1px solid color-mix(in srgb, var(--accent-strong) 30%, transparent)",
+          padding: "7px 14px",
+          borderRadius: "var(--radius-md)",
+          background: "rgba(140,231,210,0.06)",
+          border: "1px solid var(--accent-border)",
           color: "var(--accent-strong)",
           fontFamily: FONT_BODY,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: 600,
           cursor: "pointer",
           whiteSpace: "nowrap",
           flexShrink: 0,
+          letterSpacing: "0.02em",
         }}
       >
         choose voice
@@ -448,12 +458,13 @@ function BoundCard({
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
-        gap: 14,
+        gap: "var(--space-14)",
         padding: "14px 16px",
+        borderRadius: "var(--radius-xl)",
         background: "rgba(140,231,210,0.04)",
         border: `1px solid ${
           focused
-            ? "color-mix(in srgb, var(--accent-strong) 40%, transparent)"
+            ? "var(--accent-glow)"
             : "color-mix(in srgb, var(--accent-strong) 18%, transparent)"
         }`,
         cursor: "pointer",
@@ -464,16 +475,16 @@ function BoundCard({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 2,
+          gap: "var(--space-2)",
           flex: 1,
           minWidth: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-8)" }}>
           <span
             style={{
               fontFamily: FONT_BODY,
-              fontSize: 14,
+              fontSize: "var(--font-size-lg)",
               fontWeight: 600,
               color: "var(--text-primary)",
             }}
@@ -483,7 +494,7 @@ function BoundCard({
           <span
             style={{
               fontFamily: FONT_MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: "var(--text-quaternary)",
               letterSpacing: "0.04em",
             }}
@@ -494,7 +505,7 @@ function BoundCard({
         <div
           style={{
             fontFamily: FONT_BODY,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             lineHeight: "16px",
             color: "var(--text-tertiary)",
             overflow: "hidden",
@@ -515,6 +526,7 @@ function BoundCard({
           justifyContent: "center",
           width: 32,
           height: 32,
+          borderRadius: "var(--radius-pill)",
           flexShrink: 0,
           background: isPlaying ? "var(--accent-strong)" : "transparent",
           border: `1px solid ${
@@ -570,7 +582,7 @@ const Popover = function PopoverInner({
         flexDirection: "column",
         background: "#0F1112",
         border: "1px solid rgba(255,255,255,0.12)",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.50)",
+        boxShadow: "var(--elevation-panel)",
         zIndex: 100,
       }}
     >
@@ -580,7 +592,7 @@ const Popover = function PopoverInner({
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           padding: "12px 14px",
           borderBottom: "1px solid rgba(255,255,255,0.06)",
           flexShrink: 0,
@@ -610,14 +622,14 @@ const Popover = function PopoverInner({
             border: 0,
             outline: 0,
             fontFamily: FONT_BODY,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             color: "var(--text-primary)",
           }}
         />
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: "var(--text-quaternary)",
             letterSpacing: "0.06em",
             flexShrink: 0,
@@ -640,7 +652,7 @@ const Popover = function PopoverInner({
             style={{
               padding: "20px 14px",
               fontFamily: FONT_BODY,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               color: "var(--text-tertiary)",
               textAlign: "center",
             }}
@@ -680,7 +692,7 @@ const Popover = function PopoverInner({
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: "var(--text-tertiary)",
             letterSpacing: "0.06em",
           }}
@@ -692,9 +704,9 @@ const Popover = function PopoverInner({
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 5,
+            gap: "var(--space-5)",
             fontFamily: FONT_BODY,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: "var(--accent-strong)",
             textDecoration: "none",
           }}
@@ -728,7 +740,7 @@ function SentinelRow({
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         padding: "10px 14px",
         background: selected ? "rgba(140,231,210,0.06)" : "transparent",
         borderBottom: "1px solid rgba(255,255,255,0.06)",
@@ -742,6 +754,7 @@ function SentinelRow({
           justifyContent: "center",
           width: 32,
           height: 32,
+          borderRadius: "var(--radius-md)",
           flexShrink: 0,
           background: "rgba(255,255,255,0.03)",
           border: "1px dashed rgba(255,255,255,0.14)",
@@ -749,11 +762,11 @@ function SentinelRow({
       >
         <WaveformGlyph color="rgba(255,255,255,0.30)" size="small" />
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", flex: 1, minWidth: 0 }}>
         <span
           style={{
             fontFamily: FONT_BODY,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             fontWeight: 500,
             color: "var(--text-secondary)",
           }}
@@ -763,7 +776,7 @@ function SentinelRow({
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: "var(--text-tertiary)",
             letterSpacing: "0.04em",
           }}
@@ -809,7 +822,7 @@ function VoiceRow({
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         padding: "10px 14px",
         background: selected ? "rgba(140,231,210,0.06)" : "transparent",
         borderBottom: "1px solid rgba(255,255,255,0.06)",
@@ -817,12 +830,12 @@ function VoiceRow({
       }}
     >
       <WaveformThumb size={32} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-6)" }}>
           <span
             style={{
               fontFamily: FONT_BODY,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
               fontWeight: 600,
               color: "var(--text-primary)",
             }}
@@ -832,7 +845,7 @@ function VoiceRow({
           <span
             style={{
               fontFamily: FONT_MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: "var(--text-quaternary)",
               letterSpacing: "0.04em",
             }}
@@ -843,7 +856,7 @@ function VoiceRow({
         <span
           style={{
             fontFamily: FONT_BODY,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: "var(--text-tertiary)",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -893,6 +906,7 @@ function WaveformThumb({ size }: { size: number }) {
         justifyContent: "center",
         width: size,
         height: size,
+        borderRadius: size <= 32 ? "var(--radius-md)" : "var(--radius-lg)",
         flexShrink: 0,
         background:
           "linear-gradient(135deg, #105A59 0%, #1a3a3a 50%, #0f2828 100%)",
@@ -982,24 +996,25 @@ function CheckIcon() {
 }
 
 function smallButtonStyle(tone: "neutral" | "danger"): CSSProperties {
+  const base: CSSProperties = {
+    padding: "5px 12px",
+    borderRadius: "var(--radius-md)",
+    background: "transparent",
+    fontFamily: FONT_BODY,
+    fontSize: "var(--font-size-sm)",
+    cursor: "pointer",
+    lineHeight: 1,
+  };
   if (tone === "danger") {
     return {
-      padding: "5px 10px",
-      background: "transparent",
+      ...base,
       border: "1px solid rgba(232,160,160,0.18)",
       color: "rgba(232,160,160,0.85)",
-      fontFamily: FONT_BODY,
-      fontSize: 11,
-      cursor: "pointer",
     };
   }
   return {
-    padding: "5px 10px",
-    background: "transparent",
+    ...base,
     border: "1px solid var(--border)",
     color: "var(--text-secondary)",
-    fontFamily: FONT_BODY,
-    fontSize: 11,
-    cursor: "pointer",
   };
 }

@@ -1425,7 +1425,7 @@ export function ThreeDWaveformPage() {
           bottom: 18,
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
           zIndex: 4,
         }}
       >
@@ -1433,11 +1433,11 @@ export function ThreeDWaveformPage() {
           onClick={audio.active ? audio.stop : audio.start}
           style={{
             padding: "7px 14px",
-            borderRadius: 999,
+            borderRadius: "var(--radius-pill)",
             border: audio.active ? "1px solid rgba(255,130,130,0.42)" : "1px solid rgba(191,245,239,0.48)",
             background: audio.active ? "rgba(255,100,100,0.12)" : "rgba(143,209,203,0.12)",
             color: audio.active ? "#ffc2c2" : COLORS.highlight,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.08em",
             fontWeight: 700,
             cursor: "pointer",
@@ -1455,11 +1455,11 @@ export function ThreeDWaveformPage() {
             top: 58,
             left: "50%",
             transform: "translateX(-50%)",
-            borderRadius: 10,
+            borderRadius: "var(--radius-lg)",
             border: "1px solid rgba(255,110,110,0.6)",
             background: "rgba(90,8,8,0.9)",
             color: "#ffd7d7",
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             padding: "8px 12px",
           }}
         >

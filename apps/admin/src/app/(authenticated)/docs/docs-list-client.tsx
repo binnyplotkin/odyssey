@@ -19,15 +19,17 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
 
   useEffect(() => {
     setContent(
-      <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground, #fff)", marginTop: 0, marginRight: 0, marginBottom: 0, marginLeft: 0, whiteSpace: "nowrap" }}>
-        Docs
-      </h1>
+      <div style={{ display: "flex", alignItems: "center", width: "100%", minWidth: 0 }}>
+        <h1 style={{ fontSize: "var(--font-size-xl)", fontWeight: 700, color: "var(--foreground, #fff)", marginTop: 0, marginRight: 0, marginBottom: 0, marginLeft: 0, whiteSpace: "nowrap" }}>
+          Docs
+        </h1>
+      </div>
     );
     return () => setContent(null);
   }, [setContent]);
 
   return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
       {docs.length === 0 ? (
         <p style={{ color: "var(--muted)", fontSize: "0.875rem", padding: "32px" }}>
           No documents found. Add <code>.md</code> or <code>.mdx</code> files to the <code>docs/</code> directory.
@@ -55,11 +57,11 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
                 flexDirection: "column",
                 justifyContent: "space-between",
                 padding: "40px 40px",
-                gap: 20,
+                gap: "var(--space-20)",
                 background: "var(--panel)",
               }}
             >
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
                 <span
                   style={{
                     fontSize: "0.8125rem",
@@ -76,7 +78,7 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
                 </span>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)", flex: 1 }}>
                 <h2
                   style={{
                     fontSize: "1.75rem",
@@ -133,7 +135,7 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
               style={{
                 display: "flex",
                 flexDirection: imageLeft ? "row" : "row-reverse",
-                borderRadius: 14,
+                borderRadius: "var(--radius-2xl)",
                 border: "1px solid var(--border)",
                 overflow: "hidden",
                 textDecoration: "none",

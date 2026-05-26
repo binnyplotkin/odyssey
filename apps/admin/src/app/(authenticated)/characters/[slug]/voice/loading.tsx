@@ -7,7 +7,7 @@ export default function CharacterVoiceLoading() {
         position: "relative",
         height: "100%",
         background: "var(--panel)",
-        borderRadius: 12,
+        borderRadius: "var(--radius-xl)",
         overflow: "hidden",
       }}
     >
@@ -19,7 +19,7 @@ export default function CharacterVoiceLoading() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: 4,
+          gap: "var(--space-4)",
         }}
       >
         {Array.from({ length: 24 }).map((_, i) => {
@@ -38,11 +38,11 @@ export default function CharacterVoiceLoading() {
           bottom: 24,
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: "var(--space-12)",
           padding: "12px 16px",
           background: "var(--card)",
           border: "1px solid var(--card-border)",
-          borderRadius: 999,
+          borderRadius: "var(--radius-pill)",
         }}
       >
         <Skeleton width={36} height={36} variant="circle" />

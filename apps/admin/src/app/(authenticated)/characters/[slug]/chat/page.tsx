@@ -29,6 +29,9 @@ export default async function ChatPage({ params }: { params: Params }) {
         summary: character.summary,
         image: character.image,
         eras: character.eras,
+        // Forwarded so the wavefield (mounted by the Voice tab) can
+        // pre-select the L04 voice-mode override when authored.
+        brainModel: character.brainModel,
       }}
       pages={pages}
       edges={edges}

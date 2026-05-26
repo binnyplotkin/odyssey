@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "./client";
+import { retryRead } from "./retry";
 import { ticketsTable } from "./schema";
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -159,7 +160,7 @@ function neonStore(): TicketStore {
       const db = getDb();
       if (!db) return memoryStore().list();
       try {
-        const rows = await db.select().from(ticketsTable);
+        const rows = await retryRead(() => db.select().from(ticketsTable));
         return rows.map(normalize).sort(
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
         );
@@ -173,7 +174,9 @@ function neonStore(): TicketStore {
       const db = getDb();
       if (!db) return memoryStore().getById(id);
       try {
-        const [row] = await db.select().from(ticketsTable).where(eq(ticketsTable.id, id)).limit(1);
+        const [row] = await retryRead(() =>
+          db.select().from(ticketsTable).where(eq(ticketsTable.id, id)).limit(1),
+        );
         return row ? normalize(row) : null;
       } catch (e: unknown) {
         if (isMissingTable(e)) return memoryStore().getById(id);
@@ -249,7 +252,9 @@ function neonStore(): TicketStore {
       const db = getDb();
       if (!db) return memoryStore().listByFeature(featureId);
       try {
-        const rows = await db.select().from(ticketsTable).where(eq(ticketsTable.featureId, featureId));
+        const rows = await retryRead(() =>
+          db.select().from(ticketsTable).where(eq(ticketsTable.featureId, featureId)),
+        );
         return rows.map(normalize).sort(
           (a, b) => a.sortOrder - b.sortOrder || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         );

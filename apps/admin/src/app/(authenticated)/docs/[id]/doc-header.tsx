@@ -9,11 +9,11 @@ export function DocHeader({ title }: { title: string }) {
 
   useEffect(() => {
     setContent(
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
         <Link
           href="/docs"
           style={{
-            fontSize: 16,
+            fontSize: "var(--font-size-xl)",
             fontWeight: 700,
             color: "var(--muted)",
             textDecoration: "none",
@@ -22,10 +22,10 @@ export function DocHeader({ title }: { title: string }) {
         >
           Docs
         </Link>
-        <span style={{ color: "var(--muted)", fontSize: 14 }}>/</span>
+        <span style={{ color: "var(--muted)", fontSize: "var(--font-size-lg)" }}>/</span>
         <span
           style={{
-            fontSize: 16,
+            fontSize: "var(--font-size-xl)",
             fontWeight: 700,
             color: "var(--foreground, #fff)",
             whiteSpace: "nowrap",

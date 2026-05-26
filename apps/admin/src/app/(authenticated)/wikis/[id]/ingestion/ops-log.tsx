@@ -3,20 +3,10 @@
 import type { PlanOp } from "@odyssey/wiki-ingest";
 
 /**
- * OpsLog — terminal-style log of the operations in the active ingestion
- * plan. Replaces the older vertical card list with one-liner rows so the
- * user can scroll through 10+ ops in the same vertical budget. Active op
- * gets a mint left-border + soft mint background; done rows get a mint
- * check + +N edges + tokens; queued rows dim; failed rows go danger-red
- * with the error message in the slug slot.
- *
- * Self-contained: depends only on CSS variables from the admin theme and
- * the PlanOp type from `@odyssey/wiki-ingest`. The OpQueueRow union is
- * exported so the caller (LiveProgress) can keep its derivation logic in
- * place and just pass the result in.
+ * OpsLog — compact execution trace for the active ingestion plan.
  */
 
-const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
+const FONT_MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
 const DANGER = "var(--danger)";
 
@@ -34,7 +24,7 @@ export type OpsLogProps = {
 
 export function OpsLog({ queue, opsDone, opsTotal }: OpsLogProps) {
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
       <style>{ANIM_CSS}</style>
       <header
         style={{
@@ -46,25 +36,24 @@ export function OpsLog({ queue, opsDone, opsTotal }: OpsLogProps) {
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             color: ACCENT,
           }}
         >
-          ops
+          execution trace
         </span>
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.14em",
             textTransform: "uppercase",
             color: "var(--text-tertiary)",
           }}
         >
-          {opsDone} of {opsTotal || "—"} done
-          {queue.length > 8 ? " · scroll" : ""}
+          {opsDone} / {opsTotal || "—"} ops
         </span>
       </header>
 
@@ -72,11 +61,13 @@ export function OpsLog({ queue, opsDone, opsTotal }: OpsLogProps) {
         style={{
           display: "flex",
           flexDirection: "column",
-          border: "1px solid var(--border)",
-          background: "#070707",
+          border: "1px solid var(--input-border)",
+          borderRadius: "var(--radius-lg)",
+          background: "var(--input-bg)",
           fontFamily: FONT_MONO,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
           padding: "6px 0",
+          overflow: "hidden",
         }}
       >
         <ColumnHeader />
@@ -85,10 +76,10 @@ export function OpsLog({ queue, opsDone, opsTotal }: OpsLogProps) {
           <div
             style={{
               padding: "14px 18px",
-              fontSize: 12,
-              color: "var(--text-tertiary)",
-            }}
-          >
+              fontSize: "var(--font-size-base)",
+            color: "var(--text-tertiary)",
+          }}
+        >
             waiting for plan…
           </div>
         ) : (
@@ -115,7 +106,7 @@ function ColumnHeader() {
         display: "flex",
         alignItems: "center",
         padding: "6px 18px",
-        fontSize: 9,
+        fontSize: "var(--font-size-2xs)",
         letterSpacing: "0.18em",
         textTransform: "uppercase",
         color: "var(--text-tertiary)",
@@ -125,7 +116,7 @@ function ColumnHeader() {
       <span style={{ width: 22, flexShrink: 0 }} />
       <span style={{ width: 30, flexShrink: 0 }}>#</span>
       <span style={{ width: 74, flexShrink: 0 }}>Action</span>
-      <span style={{ flex: 1, paddingLeft: 8, minWidth: 0 }}>Slug</span>
+      <span style={{ flex: 1, paddingLeft: "var(--space-8)", minWidth: 0 }}>Slug</span>
       <span style={{ width: 80, flexShrink: 0, textAlign: "right" }}>+Edges</span>
       <span style={{ width: 90, flexShrink: 0, textAlign: "right" }}>Tokens</span>
     </div>
@@ -148,17 +139,17 @@ function OpRow({
 
   const rowStyle: React.CSSProperties = isWriting
     ? {
-        background: "color-mix(in srgb, var(--accent-strong) 8%, transparent)",
+        background: "color-mix(in srgb, var(--accent-strong) 6%, transparent)",
         borderLeft: `2px solid ${ACCENT}`,
-        paddingLeft: 16,
+        paddingLeft: "var(--space-16)",
       }
     : isFailed
       ? {
-          background: "color-mix(in srgb, var(--danger) 8%, transparent)",
+          background: "color-mix(in srgb, var(--danger) 6%, transparent)",
           borderLeft: `2px solid ${DANGER}`,
-          paddingLeft: 16,
+          paddingLeft: "var(--space-16)",
         }
-      : { paddingLeft: 18 };
+      : { paddingLeft: "var(--space-18)" };
 
   const baseColor = isQueued
     ? "var(--text-tertiary)"
@@ -191,12 +182,14 @@ function OpRow({
       style={{
         display: "flex",
         alignItems: "center",
-        padding: "8px 18px",
+        minHeight: 36,
+        padding: "7px 18px",
         paddingLeft: rowStyle.paddingLeft,
         background: rowStyle.background,
         borderLeft: rowStyle.borderLeft,
-        borderBottom: isLast ? "none" : "1px solid rgba(255, 255, 255, 0.04)",
+        borderBottom: isLast ? "none" : "1px solid var(--divider)",
         color: baseColor,
+        opacity: isQueued ? 0.72 : 1,
       }}
     >
       {/* Status glyph gutter */}
@@ -240,7 +233,7 @@ function OpRow({
       <span
         style={{
           flex: 1,
-          paddingLeft: 8,
+          paddingLeft: "var(--space-8)",
           minWidth: 0,
           color: slugColor,
           fontWeight: isWriting ? 600 : 400,
@@ -255,7 +248,7 @@ function OpRow({
             style={{
               color: "var(--text-tertiary)",
               fontWeight: 400,
-              marginLeft: 8,
+              marginLeft: "var(--space-8)",
             }}
           >
             ·{" "}
@@ -267,7 +260,7 @@ function OpRow({
             style={{
               color: DANGER,
               fontWeight: 400,
-              marginLeft: 8,
+              marginLeft: "var(--space-8)",
               opacity: 0.85,
             }}
           >
@@ -324,7 +317,7 @@ function PulseDot({ color }: { color: string }) {
         display: "inline-block",
         width: 6,
         height: 6,
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         background: color,
         boxShadow: `0 0 10px ${color}`,
         animation: "ops-log-pulse 1.1s ease-in-out infinite",

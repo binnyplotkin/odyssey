@@ -2,7 +2,7 @@ import type { KnowledgeGraphData, WikiPageType } from "@odyssey/db";
 
 /** Per-type dot color — matches the canvas palette. */
 const TYPE_COLOR: Record<WikiPageType, string> = {
-  entity: "#8CE7D2",
+  entity: "#8FD1CB",
   event: "#F4A3B8",
   concept: "#B197FC",
   relationship: "#F7D26B",

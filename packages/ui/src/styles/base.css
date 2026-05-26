@@ -7,38 +7,57 @@
  * and shared utilities. Each app imports this, then a theme file that sets
  * the actual variable values.
  *
- * Color palette derived from the landing-page hero image
- * (packages/media/landing_page.jpeg):
- *
- *   #000500  near-black green
- *   #0F2006  dark forest
- *   #192922  deep forest
- *   #2A4535  dark sage
- *   #05473F  deep teal
- *   #105A59  teal
- *   #8CE7D2  mint
- *   #C7F7E5  light mint
- *   #DBFDFF  ice cyan
+ * The contract intentionally keeps older aliases (`--panel`, `--card`,
+ * `--accent`, etc.) so product surfaces can migrate incrementally.
  */
 
 /* ── Tailwind theme mapping ─────────────────────────────────── */
 
 @theme inline {
   /* Typography */
-  --font-sans: var(--font-display, ui-sans-serif), system-ui, sans-serif;
-  --font-mono: var(--font-mono, ui-monospace), "Cascadia Code", monospace;
+  --font-sans: var(--font-body, Inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display, "Space Grotesk"), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono, "JetBrains Mono"), ui-monospace, "Cascadia Code", monospace;
 
   /* Semantic surface colors */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
+  --color-node-canvas: var(--node-canvas);
   --color-panel: var(--panel);
   --color-panel-strong: var(--panel-strong);
   --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-medium: var(--border-medium);
+  --color-border-active: var(--border-active);
+
+  /* Ink-wash scale (neutral tints on top of any surface) */
+  --color-ink-wash: var(--ink-wash);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-fill: var(--ink-fill);
+  --color-ink-line: var(--ink-line);
+  --color-ink-edge: var(--ink-edge);
 
   /* Semantic accent colors */
+  --color-passive-teal: var(--passive-teal);
+  --color-active-teal: var(--active-teal);
+  --color-emissive-mint: var(--emissive-mint);
+  --color-signal-blue: var(--signal-blue);
+  --color-event-violet: var(--event-violet);
+  --color-warning-amber: var(--warning-amber);
+  --color-critical-crimson: var(--critical-crimson);
   --color-accent: var(--accent);
   --color-accent-strong: var(--accent-strong);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-wash: var(--accent-wash);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-border: var(--accent-border);
+  --color-accent-glow: var(--accent-glow);
+  --color-accent-on: var(--accent-on);
 
   /* Semantic text colors */
   --color-muted: var(--muted);
@@ -49,8 +68,19 @@
   --color-text-placeholder: var(--text-placeholder);
 
   /* Semantic status colors */
+  --color-status-live: var(--status-live);
+  --color-status-draft: var(--status-draft);
+  --color-status-archived: var(--status-archived);
+  --color-status-error: var(--status-error);
+  --color-status-processing: var(--status-processing);
+  --color-status-info: var(--status-info);
   --color-success: var(--success);
   --color-danger: var(--danger);
+
+  /* Critical fill scale (status-error tints) */
+  --color-critical-wash: var(--critical-wash);
+  --color-critical-fill: var(--critical-fill);
+  --color-critical-border: var(--critical-border);
 
   /* Component tokens */
   --color-card: var(--card);
@@ -61,6 +91,26 @@
   --color-dropdown-bg: var(--dropdown-bg);
   --color-dropdown-border: var(--dropdown-border);
   --color-divider: var(--divider);
+  --color-modal-backdrop: var(--modal-backdrop);
+  --color-ring: var(--ring-color);
+  --color-header-bg: var(--header-bg);
+  --color-header-border: var(--header-border);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-border: var(--sidebar-active-border);
+  --blur-header: var(--header-blur);
+
+  /* Radius scale (t-shirt sizes) */
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-3xl: var(--radius-3xl);
+  --radius-pill: var(--radius-pill);
 
   /* Palette — raw scale for one-off use */
   --color-forest-950: var(--forest-950);
@@ -82,6 +132,11 @@
   box-sizing: border-box;
 }
 
+:focus-visible {
+  outline: var(--ring-width) solid var(--ring-color);
+  outline-offset: var(--ring-offset);
+}
+
 html,
 body {
   height: 100vh;
@@ -93,6 +148,7 @@ body {
 body {
   color: var(--foreground);
   background: var(--background);
+  font-family: var(--font-body, Inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 a {
@@ -108,9 +164,15 @@ textarea {
 
 /* ── Scrollbar ────────────────────────────────────────────── */
 
+/* Brand mint (#8FD1CB) hardcoded so the scrollbar matches the brand mark
+ * in both themes — same rationale as the Odyssey icon in admin-shell:
+ * scrollbar identity stays consistent rather than tracking --accent
+ * which darkens in light mode for CTA contrast.
+ * Square corners (no border-radius) — reads as a precise utility surface,
+ * not a soft pill. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--accent) transparent;
+  scrollbar-color: #8FD1CB transparent;
 }
 
 *::-webkit-scrollbar {
@@ -123,17 +185,17 @@ textarea {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: var(--accent);
-  border-radius: 3px;
+  background: #8FD1CB;
+  border-radius: 0;
 }
 
 /* ── Shared component classes ───────────────────────────────── */
 
 .panel {
-  background: var(--panel);
-  backdrop-filter: blur(16px);
+  background: var(--surface-material, var(--panel));
+  backdrop-filter: blur(18px);
   border: 1px solid var(--border);
-  box-shadow: 0 24px 80px var(--shadow);
+  box-shadow: var(--elevation-panel, 0 24px 80px var(--shadow));
 }
 
 .panel-strong {
@@ -143,6 +205,43 @@ textarea {
 
 .text-balance {
   text-wrap: balance;
+}
+
+.odyssey-surface {
+  background: var(--surface-material, var(--panel));
+  border: 1px solid var(--border-subtle, var(--border));
+  box-shadow: var(--elevation-surface, 0 8px 40px var(--shadow));
+}
+
+.odyssey-card {
+  background: var(--card-material, var(--card));
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card, 18px);
+  box-shadow: var(--elevation-card, 0 8px 40px var(--shadow));
+}
+
+.odyssey-canvas {
+  background: var(--canvas-background, var(--background));
+}
+
+.odyssey-control {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-button, 12px);
+}
+
+.odyssey-signal {
+  animation: odyssey-breathe var(--motion-breathe, 3.8s) ease-in-out infinite;
+}
+
+@keyframes odyssey-breathe {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
+@keyframes odyssey-signal-flow {
+  from { stroke-dashoffset: 28; }
+  to { stroke-dashoffset: 0; }
 }
 
 /* ── Sidebar ──────────────────────────────────────────────── */
@@ -182,7 +281,8 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton {
+  .skeleton,
+  .odyssey-signal {
     animation: none;
   }
 }

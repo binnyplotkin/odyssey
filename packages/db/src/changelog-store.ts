@@ -1,5 +1,6 @@
 import { eq, desc } from "drizzle-orm";
 import { getDb } from "./client";
+import { retryRead } from "./retry";
 import { changelogEntriesTable } from "./schema";
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -129,11 +130,13 @@ function neonStore(): ChangelogStore {
       const db = getDb();
       if (!db) return memoryStore().list(versionId);
       try {
-        let query = db.select().from(changelogEntriesTable);
-        if (versionId) {
-          query = query.where(eq(changelogEntriesTable.versionId, versionId)) as typeof query;
-        }
-        const rows = await query.orderBy(desc(changelogEntriesTable.createdAt));
+        const rows = await retryRead(() => {
+          let query = db.select().from(changelogEntriesTable);
+          if (versionId) {
+            query = query.where(eq(changelogEntriesTable.versionId, versionId)) as typeof query;
+          }
+          return query.orderBy(desc(changelogEntriesTable.createdAt));
+        });
         return rows.map(normalize);
       } catch (e: unknown) {
         if (isMissingTable(e)) return memoryStore().list(versionId);
@@ -144,7 +147,9 @@ function neonStore(): ChangelogStore {
       const db = getDb();
       if (!db) return memoryStore().getById(id);
       try {
-        const [row] = await db.select().from(changelogEntriesTable).where(eq(changelogEntriesTable.id, id)).limit(1);
+        const [row] = await retryRead(() =>
+          db.select().from(changelogEntriesTable).where(eq(changelogEntriesTable.id, id)).limit(1),
+        );
         return row ? normalize(row) : null;
       } catch (e: unknown) {
         if (isMissingTable(e)) return memoryStore().getById(id);

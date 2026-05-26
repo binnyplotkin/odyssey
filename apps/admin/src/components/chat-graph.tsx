@@ -31,12 +31,12 @@ const T = {
 const FG = (pct: number) => `color-mix(in srgb, var(--foreground) ${pct}%, transparent)`;
 
 const TYPE_COLOR: Record<WikiPageType, string> = {
-  entity:         "#FBA7C0",
-  event:          "#FACC15",
-  concept:        "#A88CFF",
-  relationship:   "#8CE7D2",
-  timeline:       "#94A3B8",
-  voice_identity: "#E879A0",
+  entity:         "var(--active-teal)",
+  event:          "var(--warning-amber)",
+  concept:        "var(--event-violet)",
+  relationship:   "var(--emissive-mint)",
+  timeline:       "var(--status-archived)",
+  voice_identity: "var(--critical-crimson)",
 };
 
 /* ── Per-turn curator snapshot (mirrors character-chat.tsx shape) ── */
@@ -119,9 +119,9 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
   const emptyGraph = pages.length === 0;
 
   return (
-    <div style={{ position: "relative", background: `radial-gradient(circle at 50% 40%, ${FG(2)} 0%, ${FG(8)} 100%)` }}>
+    <div style={{ position: "relative", background: "var(--canvas-background)" }}>
       {emptyGraph ? (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: H, color: T.muted, fontFamily: T.fontBody, fontSize: 13 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: H, color: T.muted, fontFamily: T.fontBody, fontSize: "var(--font-size-md)" }}>
           No wiki pages yet.
         </div>
       ) : (
@@ -142,7 +142,7 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
                 textAnchor="middle"
                 style={{
                   fontFamily: T.fontMono,
-                  fontSize: 9,
+                  fontSize: "var(--font-size-2xs)",
                   fontWeight: 600,
                   fill: col.key === currentEra ? "var(--accent-strong)" : FG(35),
                   letterSpacing: "0.1em",
@@ -151,7 +151,7 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
                 {col.title.toUpperCase()}
               </text>
               {col.key === currentEra && (
-                <text x={col.center} y={HEADER_H + 6} textAnchor="middle" style={{ fontFamily: T.fontMono, fontSize: 8, fill: "color-mix(in srgb, var(--accent-strong) 70%, transparent)", letterSpacing: "0.06em" }}>
+                <text x={col.center} y={HEADER_H + 6} textAnchor="middle" style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-3xs)", fill: "color-mix(in srgb, var(--accent-strong) 70%, transparent)", letterSpacing: "0.06em" }}>
                   current
                 </text>
               )}
@@ -162,7 +162,7 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
           {!isTypeMode && (
             <>
               <line x1={SIDE_PAD} y1={H - TIMELESS_H} x2={W - SIDE_PAD} y2={H - TIMELESS_H} style={{ stroke: FG(6) }} strokeDasharray="2 4" />
-              <text x={SIDE_PAD} y={H - TIMELESS_H + 14} style={{ fontFamily: T.fontMono, fontSize: 8, fontWeight: 500, fill: FG(30), letterSpacing: "0.1em" }}>
+              <text x={SIDE_PAD} y={H - TIMELESS_H + 14} style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-3xs)", fontWeight: 500, fill: FG(30), letterSpacing: "0.1em" }}>
                 TIMELESS
               </text>
             </>
@@ -195,13 +195,26 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
             {activeEdges.map((e, i) => {
               const color = EDGE_COLOR[e.kind] ?? FG(35);
               return (
-                <line
-                  key={i}
-                  x1={e.from.x} y1={e.from.y} x2={e.to.x} y2={e.to.y}
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                  style={{ pointerEvents: "none", stroke: color }}
-                />
+                <g key={i}>
+                  <line
+                    x1={e.from.x} y1={e.from.y} x2={e.to.x} y2={e.to.y}
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                    style={{ pointerEvents: "none", stroke: color }}
+                  />
+                  <line
+                    x1={e.from.x} y1={e.from.y} x2={e.to.x} y2={e.to.y}
+                    strokeWidth="1"
+                    strokeLinecap="round"
+                    strokeDasharray="2 10"
+                    style={{
+                      pointerEvents: "none",
+                      stroke: "var(--emissive-mint)",
+                      opacity: 0.7,
+                      animation: "odyssey-signal-flow 1.6s linear infinite",
+                    }}
+                  />
+                </g>
               );
             })}
           </g>
@@ -220,9 +233,11 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
       {/* Legend */}
       <div style={{
         position: "absolute", bottom: 8, right: 10,
-        display: "flex", alignItems: "center", gap: 10,
-        padding: "3px 10px", borderRadius: 999,
-        background: "var(--background)", border: `1px solid ${T.border}`,
+        display: "flex", alignItems: "center", gap: "var(--space-10)",
+        padding: "3px 10px", borderRadius: "var(--radius-pill)",
+        background: "color-mix(in srgb, var(--background) 80%, transparent)",
+        border: `1px solid ${T.border}`,
+        backdropFilter: "blur(14px)",
         pointerEvents: "none",
       }}>
         <LegendDot color="var(--accent-strong)" label="seed" ring />
@@ -271,12 +286,18 @@ function NodeDot({ node, state }: { node: Node; state: NodeState }) {
   return (
     <g transform={`translate(${node.x}, ${node.y})`} opacity={opacity} style={{ pointerEvents: "none" }}>
       {showRing && (
-        <circle r={r + 5} fill="none" style={{ stroke: "var(--accent-strong)" }} strokeWidth="1.25" opacity="0.9" />
+        <circle r={r + 5} fill="none" style={{ stroke: "var(--emissive-mint)" }} strokeWidth="1.25" opacity="0.9" />
       )}
+      <circle r={r + 5} fill={color} opacity={state === "inactive" ? 0 : 0.12} />
       <circle
         r={r}
         fill={fill}
-        style={{ stroke: strokeColor }}
+        style={{
+          stroke: strokeColor,
+          filter: state === "seed" || state === "selected"
+            ? "drop-shadow(0 0 8px color-mix(in srgb, var(--emissive-mint) 45%, transparent))"
+            : undefined,
+        }}
         strokeWidth={strokeWidth}
         strokeDasharray={state === "time-gated" ? "2 2" : undefined}
       />
@@ -303,7 +324,7 @@ function NodeDot({ node, state }: { node: Node; state: NodeState }) {
 
 function LegendDot({ color, label, ring, dash }: { color: string; label: string; ring?: boolean; dash?: boolean }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-4)" }}>
       <svg width="10" height="10" viewBox="0 0 10 10">
         {ring && <circle cx="5" cy="5" r="4" fill="none" style={{ stroke: color }} strokeWidth="1.25" />}
         <circle
@@ -315,7 +336,7 @@ function LegendDot({ color, label, ring, dash }: { color: string; label: string;
           strokeDasharray={dash ? "1.5 1.5" : undefined}
         />
       </svg>
-      <span style={{ fontFamily: T.fontMono, fontSize: 9, color: T.muted, letterSpacing: "0.04em" }}>{label}</span>
+      <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: T.muted, letterSpacing: "0.04em" }}>{label}</span>
     </span>
   );
 }
@@ -534,9 +555,9 @@ function truncateLabel(s: string, max: number): string {
 
 const EDGE_COLOR: Record<EdgeKind, string> = {
   mentions:        FG(35),
-  relates_to:      "rgba(251,167,192,0.7)",
-  participates_in: "rgba(250,204,21,0.7)",
-  happens_at:      "rgba(122,176,232,0.7)",
-  perspective_of:  "rgba(168,140,255,0.7)",
-  contradicts:     "rgba(232,144,144,0.8)",
+  relates_to:      "color-mix(in srgb, var(--active-teal) 76%, transparent)",
+  participates_in: "color-mix(in srgb, var(--warning-amber) 78%, transparent)",
+  happens_at:      "color-mix(in srgb, var(--signal-blue) 76%, transparent)",
+  perspective_of:  "color-mix(in srgb, var(--event-violet) 76%, transparent)",
+  contradicts:     "color-mix(in srgb, var(--critical-crimson) 82%, transparent)",
 };

@@ -231,10 +231,10 @@ export function Menu<V extends string>({
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
         style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "5px 10px", borderRadius: 8,
+          display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+          padding: "5px 10px", borderRadius: "var(--radius-md)",
           border: `1px solid ${T.border}`, background: "transparent",
-          color: T.fg, fontFamily: T.fontBody, fontSize: 11, outline: "none",
+          color: T.fg, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", outline: "none",
           cursor: disabled ? "not-allowed" : "pointer",
           ...triggerStyle,
         }}
@@ -275,11 +275,11 @@ export function Menu<V extends string>({
             minWidth: pos.width,
             zIndex: 900,
             display: "flex", flexDirection: "column",
-            padding: 4,
+            padding: "var(--space-4)",
             background: T.background,
-            borderRadius: 12,
+            borderRadius: "var(--radius-xl)",
             border: `1px solid ${T.border}`,
-            boxShadow: "0 24px 48px -12px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.4)",
+            boxShadow: "var(--elevation-menu)",
             maxHeight: "60vh", overflowY: "auto",
           }}
         >
@@ -299,13 +299,13 @@ export function Menu<V extends string>({
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   width: "100%", textAlign: "left",
-                  padding: "7px 10px", borderRadius: 8, border: "none",
+                  padding: "7px 10px", borderRadius: "var(--radius-md)", border: "none",
                   background: highlighted ? T.cardHover : "transparent",
                   color: it.disabled ? T.muted : selected ? T.accent : T.fg,
-                  fontFamily: T.fontBody, fontSize: 12,
+                  fontFamily: T.fontBody, fontSize: "var(--font-size-base)",
                   fontWeight: selected ? 600 : 400,
                   cursor: it.disabled ? "not-allowed" : "pointer",
-                  gap: 12,
+                  gap: "var(--space-12)",
                   outline: "none",
                 }}
               >
@@ -313,7 +313,7 @@ export function Menu<V extends string>({
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 8,
+                    gap: "var(--space-8)",
                     minWidth: 0,
                     flex: "1 1 auto",
                   }}
@@ -337,7 +337,7 @@ export function Menu<V extends string>({
                 </span>
                 {it.meta && (
                   <span style={{
-                    fontFamily: T.fontMono, fontSize: 9, fontWeight: 500,
+                    fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 500,
                     color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase",
                     flexShrink: 0,
                   }}>

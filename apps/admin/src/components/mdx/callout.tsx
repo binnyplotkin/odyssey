@@ -39,7 +39,7 @@ export function Callout({
   return (
     <div style={{
       padding: "12px 16px",
-      borderRadius: 8,
+      borderRadius: "var(--radius-md)",
       background: style.bg,
       borderLeft: `3px solid ${style.accent}`,
       margin: "12px 0",
@@ -53,7 +53,7 @@ export function Callout({
           color: style.accent,
           textTransform: "uppercase",
           letterSpacing: "0.04em",
-          marginBottom: 4,
+          marginBottom: "var(--space-4)",
         }}>
           {title ?? style.label}
         </div>

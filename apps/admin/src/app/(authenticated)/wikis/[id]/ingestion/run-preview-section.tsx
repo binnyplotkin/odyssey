@@ -17,8 +17,8 @@ import { MODELS, estimateCost, type ModelId } from "@odyssey/wiki-ingest";
  * a real estimate later without touching the consumer.
  */
 
-const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
-const FONT_HEAD = "'Inter', system-ui, sans-serif";
+const FONT_MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
+const FONT_HEAD = "var(--font-body, Inter), system-ui, sans-serif";
 const ACCENT = "var(--accent-strong)";
 
 const CHUNK_TOKEN_BUDGET = 512;
@@ -53,23 +53,23 @@ export function RunPreviewSection({
   const msPerOp = opCount === 0 ? 0 : Math.round((seconds * 1000) / opCount);
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
       <header
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 22,
-          paddingBottom: 8,
+          paddingBottom: 0,
         }}
       >
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
-            color: ACCENT,
+            color: "var(--text-tertiary)",
           }}
         >
           {stepLabel}
@@ -80,9 +80,9 @@ export function RunPreviewSection({
             alignItems: "center",
             gap: 7,
             padding: "3px 8px",
-            border: "1px solid var(--border)",
+            border: "1px solid color-mix(in srgb, var(--border) 62%, transparent)",
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.12em",
             textTransform: "uppercase",
             color: canRun ? "var(--text-secondary)" : "var(--text-tertiary)",
@@ -101,8 +101,9 @@ export function RunPreviewSection({
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
           gap: 0,
-          border: "1px solid var(--border)",
-          background: "var(--card)",
+          border: "1px solid color-mix(in srgb, var(--border) 58%, transparent)",
+          background: "color-mix(in srgb, var(--card) 58%, transparent)",
+          opacity: 0.78,
         }}
       >
         <Stat
@@ -149,15 +150,15 @@ function Stat({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 6,
-        padding: "16px 20px",
-        borderRight: "1px solid var(--divider)",
+        gap: "var(--space-4)",
+        padding: "11px 14px",
+        borderRight: "1px solid color-mix(in srgb, var(--divider) 64%, transparent)",
       }}
     >
       <span
         style={{
           fontFamily: FONT_MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-2xs)",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
           color: "var(--text-tertiary)",
@@ -168,9 +169,9 @@ function Stat({
       <span
         style={{
           fontFamily: FONT_HEAD,
-          fontSize: 22,
+          fontSize: 15,
           fontWeight: 600,
-          letterSpacing: "-0.01em",
+          letterSpacing: 0,
           color: accent ? ACCENT : "var(--text-primary)",
         }}
       >
@@ -179,7 +180,7 @@ function Stat({
       <span
         style={{
           fontFamily: FONT_MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-2xs)",
           color: "var(--text-tertiary)",
         }}
       >
@@ -197,7 +198,7 @@ function Dot({ color, glow }: { color: string; glow: boolean }) {
         display: "inline-block",
         width: 6,
         height: 6,
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         background: color,
         boxShadow: glow ? `0 0 6px ${color}` : undefined,
         flexShrink: 0,

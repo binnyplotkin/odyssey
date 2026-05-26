@@ -1,155 +1,282 @@
-import { Skeleton } from "@odyssey/ui";
+"use client";
 
-const PANEL: React.CSSProperties = {
-  background: "var(--panel)",
-  border: "1px solid var(--border)",
+/**
+ * /characters loading skeleton — Next renders this while the page's
+ * server component fetches summaries. Mirrors the live CharactersGrid
+ * layout (page padding, pill search, 3-stat card, model-badge footer)
+ * so the transition from skeleton → real data lands without layout
+ * shift.
+ *
+ * Client component because we need `useHeaderContent().setFlush(true)`
+ * to claim the full-bleed layout — otherwise the admin shell wraps
+ * children in 2rem of padding for one frame, then collapses when the
+ * real grid mounts. Same trick as /voices.
+ */
+
+import { useLayoutEffect } from "react";
+import { useHeaderContent } from "@/components/header-context";
+
+const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
+
+const SHIMMER = `
+  @keyframes characters-loading-shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+`;
+
+const shimmer: React.CSSProperties = {
+  background:
+    "linear-gradient(90deg, var(--ink-soft) 0%, color-mix(in srgb, var(--text-primary) 9%, transparent) 50%, var(--ink-soft) 100%)",
+  backgroundSize: "200% 100%",
+  animation: "characters-loading-shimmer 1.6s ease-in-out infinite",
+  borderRadius: "var(--radius-xs)",
 };
 
-function CardSkeleton() {
+export default function CharactersLoading() {
+  const { setFlush } = useHeaderContent();
+  useLayoutEffect(() => {
+    setFlush(true);
+    return () => setFlush(false);
+  }, [setFlush]);
+
+  const cardCount = 8;
+
   return (
     <div
       style={{
-        ...PANEL,
-        width: 363,
-        borderRadius: 14,
-        overflow: "hidden",
+        minHeight: "100%",
+        background: "var(--background)",
         display: "flex",
         flexDirection: "column",
       }}
     >
-      {/* Gradient header */}
-      <div style={{ position: "relative", height: 128, background: "var(--card-hover)" }}>
-        <div style={{ position: "absolute", top: 14, right: 14 }}>
-          <Skeleton width={56} height={20} radius={999} static />
-        </div>
-      </div>
+      <style>{SHIMMER}</style>
 
-      {/* Body */}
-      <div
-        style={{
-          padding: "16px 18px 18px 18px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 18,
-        }}
-      >
-        {/* Avatar + title row */}
-        <div style={{ position: "relative", marginTop: -44, minHeight: 56 }}>
-          <div
-            style={{
-              position: "absolute",
-              top: 17,
-              left: 0,
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              boxShadow: "0 0 0 3px var(--background)",
-              background: "var(--panel)",
-              overflow: "hidden",
-            }}
-          >
-            <Skeleton width="100%" height="100%" variant="circle" />
-          </div>
-          <div
-            style={{
-              paddingLeft: 78,
-              paddingTop: 34,
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-            }}
-          >
-            <Skeleton width="60%" height={18} />
-            <Skeleton width={80} height={10} />
-          </div>
-        </div>
-
-        {/* Description */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <Skeleton width="100%" height={13} />
-          <Skeleton width="80%" height={13} />
-        </div>
-
-        {/* Stats row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 20,
-            padding: "12px 0",
-            borderTop: "1px solid var(--border)",
-            borderBottom: "1px solid var(--border)",
-          }}
-        >
-          {[0, 1, 2].map((i) => (
-            <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <Skeleton width={28} height={22} />
-              <Skeleton width={40} height={9} />
-            </div>
-          ))}
-          <div
-            style={{
-              marginLeft: "auto",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              gap: 4,
-            }}
-          >
-            <Skeleton width={64} height={13} />
-            <Skeleton width={56} height={9} />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Skeleton width={12} height={12} variant="circle" />
-          <Skeleton width={140} height={12} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function CharactersLoading() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Toolbar */}
+      {/* ── Toolbar skeleton ──────────────────────────────────────── */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 16,
+          gap: "var(--space-16)",
           flexWrap: "wrap",
+          padding: "24px 40px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-16)",
+            flex: "1 1 490px",
+            flexWrap: "wrap",
+            minWidth: 0,
+          }}
+        >
           <div
             style={{
-              ...PANEL,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "0.5rem 0.75rem",
-              borderRadius: 10,
-              width: 320,
+              ...shimmer,
+              width: 360,
+              maxWidth: "100%",
+              height: 36,
+              flex: "0 1 360px",
+              borderRadius: "var(--radius-pill)",
             }}
-          >
-            <Skeleton width={14} height={14} variant="circle" />
-            <Skeleton width={140} height={13} />
-          </div>
-          <Skeleton width={180} height={11} />
+            aria-hidden
+          />
+          <div
+            style={{
+              ...shimmer,
+              width: 140,
+              height: 12,
+            }}
+            aria-hidden
+          />
         </div>
-        <Skeleton width={200} height={32} radius={999} />
+        <div
+          style={{
+            ...shimmer,
+            width: 180,
+            height: 32,
+            borderRadius: "var(--radius-pill)",
+          }}
+          aria-hidden
+        />
       </div>
 
-      {/* Card grid */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <CardSkeleton key={i} />
+      {/* ── Card grid skeleton ────────────────────────────────────── */}
+      {/* Mirrors the live grid: minmax(360px, 1fr) so the skeleton
+       * reflows at the same breakpoints (4 cols ≳1640px, 3 ≳1240,
+       * 2 ≳840, 1 below). */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+          gap: "var(--space-16)",
+          width: "100%",
+          padding: "0 40px 56px",
+        }}
+        aria-busy="true"
+        aria-label="Loading characters"
+      >
+        {Array.from({ length: cardCount }, (_, i) => (
+          <SkeletonCard key={i} />
         ))}
       </div>
+
+      <span
+        role="status"
+        aria-live="polite"
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+          whiteSpace: "nowrap",
+          border: 0,
+        }}
+      >
+        Loading characters
+      </span>
+    </div>
+  );
+}
+
+/** Ghost character card matching the live card's rhythm — 48×48
+ * portrait, title + meta stack, 2-line essence, 3-cell stats panel,
+ * model-badge footer. Same minHeight as the real card so a row with
+ * mixed empty/loaded states doesn't jolt vertically. */
+function SkeletonCard() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 280,
+        padding: "var(--space-18)",
+        gap: "var(--space-14)",
+        borderRadius: "var(--radius-2xl)",
+        background: "var(--card)",
+        border: "1px solid var(--card-border)",
+        minWidth: 0,
+      }}
+    >
+      {/* Top row: portrait + title + meta */}
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
+        <div
+          style={{
+            ...shimmer,
+            width: 48,
+            height: 48,
+            borderRadius: "var(--radius-lg)",
+            flexShrink: 0,
+          }}
+          aria-hidden
+        />
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-5)",
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <div style={{ ...shimmer, width: "62%", height: 18 }} aria-hidden />
+          <div style={{ ...shimmer, width: "40%", height: 10 }} aria-hidden />
+        </div>
+      </div>
+
+      {/* Essence — 2 lines of ghost text */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+        <div style={{ ...shimmer, width: "100%", height: 12 }} aria-hidden />
+        <div style={{ ...shimmer, width: "72%", height: 12 }} aria-hidden />
+      </div>
+
+      {/* Stats panel — 3 cells inside the rounded inner block, same
+       * 14px padding + 10px radius + hairline border as the live one */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          padding: "var(--space-14)",
+          background:
+            "var(--ink-wash)",
+          border:
+            "1px solid var(--ink-soft)",
+          borderRadius: "var(--radius-lg)",
+        }}
+      >
+        <StatCellSkeleton first />
+        <StatCellSkeleton accent />
+        <StatCellSkeleton last />
+      </div>
+
+      {/* Footer — model badge ghost (single pill, left-aligned) */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          paddingTop: "var(--space-10)",
+          marginTop: "auto",
+          borderTop:
+            "1px solid var(--ink-soft)",
+        }}
+      >
+        <div
+          style={{
+            ...shimmer,
+            width: 96,
+            height: 18,
+            borderRadius: "var(--radius-sm)",
+            fontFamily: FONT_MONO,
+          }}
+          aria-hidden
+        />
+      </div>
+    </div>
+  );
+}
+
+function StatCellSkeleton({
+  first,
+  accent,
+  last,
+}: {
+  first?: boolean;
+  accent?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 0,
+        padding: first || last ? "0 6px" : "0 6px",
+        paddingLeft: first ? 0 : 6,
+        paddingRight: last ? 0 : 6,
+        borderRight: last
+          ? "none"
+          : "1px solid var(--ink-soft)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-6)",
+      }}
+    >
+      <div style={{ ...shimmer, width: 38, height: 9, borderRadius: "var(--radius-xs)" }} aria-hidden />
+      <div
+        style={{
+          ...shimmer,
+          width: accent ? 28 : 56,
+          height: accent ? 14 : 11,
+          borderRadius: "var(--radius-xs)",
+        }}
+        aria-hidden
+      />
     </div>
   );
 }

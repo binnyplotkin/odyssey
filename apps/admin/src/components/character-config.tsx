@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { updateCharacterMeta } from "@/app/(authenticated)/characters/actions";
+import {
+  updateCharacterMeta,
+  updateCharacterVoiceSettings,
+} from "@/app/(authenticated)/characters/actions";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -34,9 +37,15 @@ import type {
   BindingPriority,
   IdentityTrait,
   KnowledgeGraphData,
+  VoiceSettingsOverride,
 } from "@odyssey/db";
-import { DEFAULT_CHAT_MODEL, type ModelOption } from "@odyssey/engine";
+import { DEFAULT_CHAT_MODEL, type ModelOption } from "@/lib/model-registry";
+import { CharacterNodeCard } from "@/components/character-node-card";
 import { KnowledgeGraphIcon } from "@/components/knowledge-graph-icon";
+import { EditableText } from "@/components/editable-text";
+import { Pathname } from "@/components/pathname";
+import { TabBar, type TabItem } from "@/components/tab-bar";
+import { Menu, type MenuItem } from "@/components/menu";
 import {
   VoiceLibraryPicker,
   type PickerVoice,
@@ -271,15 +280,16 @@ export function CharacterConfig({
   // Inject the top header content. Title is editable in both this header
   // and the sidebar; both bind to the same `title` state so edits propagate
   // live across surfaces.
+  const activeModelId = brainModel?.model ?? DEFAULT_CHAT_MODEL;
+  const modelLabel =
+    chatModels.find((m) => m.id === activeModelId)?.label ?? activeModelId;
   useEffect(() => {
     setContent(
       <CharacterPageHeader
         characterSlug={character.slug}
         title={title}
         onTitleChange={saveTitle}
-        avGradient={avGradient}
-        image={image}
-        initial={initial}
+        modelLabel={modelLabel}
         versions={versions}
         onSaveVersion={saveVersion}
         onRestoreVersion={restoreVersion}
@@ -291,9 +301,7 @@ export function CharacterConfig({
     character.slug,
     title,
     saveTitle,
-    avGradient,
-    image,
-    initial,
+    modelLabel,
     versions,
     saveVersion,
     restoreVersion,
@@ -419,9 +427,7 @@ function CharacterPageHeader({
   characterSlug,
   title,
   onTitleChange,
-  avGradient,
-  image,
-  initial,
+  modelLabel,
   versions,
   onSaveVersion,
   onRestoreVersion,
@@ -429,88 +435,53 @@ function CharacterPageHeader({
   characterSlug: string;
   title: string;
   onTitleChange: (next: string) => void | Promise<void>;
-  avGradient: string;
-  image: string | null;
-  initial: string;
+  modelLabel: string;
   versions: ConfigVersion[];
   onSaveVersion: () => void | Promise<void>;
   onRestoreVersion: (versionId: string) => void | Promise<void>;
 }) {
   return (
-    <>
-      <div
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        width: "100%",
+        gap: "var(--space-16)",
+      }}
+    >
+      <Pathname
+        segments={[
+          { label: "characters", href: "/characters" },
+          {
+            label: title,
+            href: `/characters/${characterSlug}`,
+            tag: true,
+            editable: {
+              onRename: onTitleChange,
+              ariaLabel: "Character name",
+            },
+          },
+        ]}
+      />
+      <span
         style={{
-          display: "flex",
+          display: "inline-flex",
           alignItems: "center",
-          gap: 12,
-          flexShrink: 0,
+          padding: "2px 9px",
+          borderRadius: "var(--radius-pill)",
+          border: "1px solid var(--border)",
+          fontFamily: T.fontMono,
+          fontSize: "var(--font-size-2xs)",
+          fontWeight: 500,
+          letterSpacing: "0.20em",
+          textTransform: "uppercase",
+          color: "var(--text-secondary)",
+          whiteSpace: "nowrap",
         }}
+        title={`Brain model: ${modelLabel}`}
       >
-        <div
-          style={{
-            width: 22,
-            height: 22,
-            background: image
-              ? `center/cover no-repeat url("${image}"), var(--card-hover)`
-              : avGradient,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            border:
-              "1px solid color-mix(in srgb, var(--accent-strong) 18%, transparent)",
-          }}
-        >
-          {!image && (
-            <span
-              style={{
-                fontFamily: T.fontHeading,
-                fontSize: 11,
-                fontWeight: 600,
-                color: "rgba(12,14,20,0.85)",
-                lineHeight: "12px",
-              }}
-            >
-              {initial}
-            </span>
-          )}
-        </div>
-        <Link
-          href="/characters"
-          style={{
-            fontFamily: T.fontMono,
-            fontSize: 11,
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            color: T.accent,
-            textDecoration: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          characters
-        </Link>
-        <span
-          style={{
-            fontFamily: T.fontMono,
-            fontSize: 11,
-            color: "var(--text-quaternary)",
-          }}
-        >
-          /
-        </span>
-        <EditableText
-          value={title}
-          onChange={onTitleChange}
-          ariaLabel="Character name"
-          style={{
-            fontFamily: T.fontHeading,
-            fontSize: 15,
-            fontWeight: 600,
-            letterSpacing: "-0.01em",
-            color: T.fg,
-          }}
-        />
-      </div>
+        {modelLabel}
+      </span>
 
       <div style={{ flex: 1 }} />
 
@@ -518,7 +489,7 @@ function CharacterPageHeader({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
           flexShrink: 0,
         }}
       >
@@ -532,13 +503,14 @@ function CharacterPageHeader({
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-6)",
             padding: "7px 16px",
             border: `1px solid ${T.accent}`,
+            borderRadius: "var(--radius-pill)",
             background: T.accent,
             color: "var(--background)",
             fontFamily: T.fontHeading,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             fontWeight: 600,
             textDecoration: "none",
             whiteSpace: "nowrap",
@@ -556,7 +528,9 @@ function CharacterPageHeader({
             justifyContent: "center",
             width: 30,
             height: 28,
-            border: `1px solid ${T.border}`,
+            border:
+              "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
+            borderRadius: "var(--radius-pill)",
             background: "transparent",
             color: "var(--text-tertiary)",
             textDecoration: "none",
@@ -586,7 +560,7 @@ function CharacterPageHeader({
           </svg>
         </Link>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -639,15 +613,20 @@ function VersionDropdown({
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         style={{
-          padding: "6px 12px",
-          border: `1px solid ${open ? T.accent : T.border}`,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "var(--space-4)",
+          padding: "7px 14px",
+          border: `1px solid ${open ? T.accent : "color-mix(in srgb, var(--text-primary) 8%, transparent)"}`,
+          borderRadius: "var(--radius-pill)",
           background: open ? T.accentSoft : "transparent",
           color: open ? T.accent : "var(--text-tertiary)",
           fontFamily: T.fontMono,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           letterSpacing: "0.10em",
           textTransform: "uppercase",
           cursor: "pointer",
+          whiteSpace: "nowrap",
         }}
       >
         {label} ▾
@@ -687,13 +666,13 @@ function VersionDropdown({
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 8,
+              gap: "var(--space-8)",
               padding: "8px 14px",
               border: "none",
               background: "transparent",
               color: T.fg,
               fontFamily: T.fontBody,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               fontWeight: 500,
               cursor: saving ? "wait" : "pointer",
               textAlign: "left",
@@ -710,7 +689,7 @@ function VersionDropdown({
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: T.muted,
               }}
             >
@@ -724,7 +703,7 @@ function VersionDropdown({
             style={{
               padding: "4px 14px",
               fontFamily: T.fontMono,
-              fontSize: 9,
+              fontSize: "var(--font-size-2xs)",
               color: T.muted,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -738,7 +717,7 @@ function VersionDropdown({
               style={{
                 padding: "8px 14px 12px",
                 fontFamily: T.fontBody,
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
                 color: T.muted,
                 lineHeight: 1.5,
               }}
@@ -761,13 +740,13 @@ function VersionDropdown({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 8,
+                  gap: "var(--space-8)",
                   width: "100%",
                   padding: "7px 14px",
                   border: "none",
                   background: "transparent",
                   fontFamily: T.fontBody,
-                  fontSize: 12,
+                  fontSize: "var(--font-size-base)",
                   color: T.fg,
                   cursor: "pointer",
                   textAlign: "left",
@@ -779,13 +758,13 @@ function VersionDropdown({
                   e.currentTarget.style.background = "transparent";
                 }}
               >
-                <span style={{ fontFamily: T.fontMono, fontSize: 11 }}>
+                <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)" }}>
                   v{v.versionNumber}
                 </span>
                 <span
                   style={{
                     fontFamily: T.fontMono,
-                    fontSize: 10,
+                    fontSize: "var(--font-size-xs)",
                     color: T.muted,
                   }}
                 >
@@ -797,124 +776,6 @@ function VersionDropdown({
         </div>
       )}
     </div>
-  );
-}
-
-/* ── EditableText ──────────────────────────────────────────────── */
-
-/**
- * Click-to-edit inline text. Renders as a span by default; click swaps to
- * an input. Enter or blur commits the change (only if non-empty + changed);
- * Escape reverts.
- */
-function EditableText({
-  value,
-  onChange,
-  ariaLabel,
-  style,
-  maxLength = 80,
-}: {
-  value: string;
-  onChange: (next: string) => void | Promise<void>;
-  ariaLabel: string;
-  style?: React.CSSProperties;
-  maxLength?: number;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Reset draft whenever the upstream value changes (e.g. live update from
-  // a different surface that edited the same field).
-  useEffect(() => {
-    if (!editing) setDraft(value);
-  }, [value, editing]);
-
-  // Focus + select on edit-mode entry.
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editing]);
-
-  function commit() {
-    const next = draft.trim();
-    if (next && next !== value) {
-      void onChange(next);
-    } else {
-      setDraft(value);
-    }
-    setEditing(false);
-  }
-
-  // Shared box geometry so the layout stays put across non-edit / hover /
-  // edit states. Only border-color + background swap; padding + margin +
-  // border-width never change.
-  const boxStyle: React.CSSProperties = {
-    borderRadius: 6,
-    padding: "2px 8px",
-    margin: "-2px -8px",
-    borderStyle: "solid",
-    borderWidth: 1,
-  };
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commit();
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            setDraft(value);
-            setEditing(false);
-          }
-        }}
-        aria-label={ariaLabel}
-        maxLength={maxLength}
-        style={{
-          ...style,
-          ...boxStyle,
-          background: "var(--input-bg)",
-          borderColor: "var(--border)",
-          outline: "none",
-          minWidth: 80,
-          color: "var(--foreground)",
-        }}
-      />
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => setEditing(true)}
-      aria-label={`Edit ${ariaLabel.toLowerCase()}`}
-      style={{
-        ...style,
-        ...boxStyle,
-        background: "transparent",
-        // Border is always rendered — transparent in idle state so the box
-        // size stays identical when it becomes visible on hover or edit.
-        borderColor: "transparent",
-        cursor: "text",
-        textAlign: "left",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "var(--border)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "transparent";
-      }}
-    >
-      {value}
-    </button>
   );
 }
 
@@ -1044,7 +905,7 @@ function CanvasArea({
         flex: "1 1 0",
         minWidth: 0,
         position: "relative",
-        background: "var(--background)",
+        background: "var(--node-canvas)",
       }}
     >
       <ReactFlowProvider>
@@ -1062,7 +923,7 @@ function CanvasArea({
           proOptions={{ hideAttribution: true }}
           panOnScroll
           selectionOnDrag={false}
-          style={{ background: "var(--background)" }}
+          style={{ background: "var(--node-canvas)" }}
         >
           <Background
             variant={BackgroundVariant.Lines}
@@ -1084,28 +945,6 @@ function CanvasArea({
         </ReactFlow>
       </ReactFlowProvider>
 
-      {/* Fixed overlays — stat hints + recent sessions float above the
-          canvas, anchored to the page rather than the canvas viewport. */}
-      <div
-        style={{
-          position: "absolute",
-          top: 28,
-          left: 32,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          pointerEvents: "none",
-        }}
-      >
-        <CornerStat
-          label="knowledge graph"
-          value={`${knowledge.pageCount} facts · ${knowledge.entityCount} entities`}
-        />
-        <CornerStat
-          label="episodic memory"
-          value={`${sessions.rememberedCount} sessions remembered`}
-        />
-      </div>
     </div>
   );
 }
@@ -1114,44 +953,44 @@ function CharacterNode({
   data,
   selected,
 }: NodeProps<FlowNode<CharacterNodeData>>) {
-  // Fixed width inside the node — React Flow nodes don't get flex sizing
-  // from their parent, so the card's responsive maxWidth doesn't apply.
-  //
-  // Selection ring: 6px accent halo at 40% opacity. Hover: a thinner, more
-  // subtle ring as an affordance. color-mix() lets the alpha apply to the
-  // theme token so the ring stays in the right palette per theme.
-  const [hovered, setHovered] = useState(false);
+  /* Active brain model + bound voice resolution. The voice lookup
+   * walks `voiceOptions` to find the option whose id matches the
+   * character's voiceId; falling back to the raw id avoids the slot
+   * reading "+ connect" while we're still loading voiceOptions. */
+  const activeModel = data.brainModel?.model ?? DEFAULT_CHAT_MODEL;
+  const boundVoice = data.voiceId
+    ? data.voiceOptions.find((v) => v.id === data.voiceId) ?? null
+    : null;
+  const voiceSlug = boundVoice?.slug ?? null;
+  const voiceProvider = boundVoice?.provider ?? null;
 
-  const selectedRing =
-    "0 0 0 6px color-mix(in srgb, var(--accent-strong) 40%, transparent)";
-  const hoverRing =
-    "0 0 0 3px color-mix(in srgb, var(--accent-strong) 20%, transparent)";
+  /* Empty-state heuristic: when essentially nothing has been configured
+   * yet — no curated identity, no model override, no bindings, no
+   * voice — render the dashed "empty" variant so the canvas reads as
+   * "this character is blank, start filling it in". `selected` always
+   * wins over `empty` so the user keeps visual feedback while editing
+   * a brand-new character. */
+  const hasIdentity = Boolean(
+    data.identity?.essence?.trim() ||
+      (data.identity?.traits ?? []).some((t) => t.name?.trim()),
+  );
+  const isEmpty =
+    !hasIdentity && !data.brainModel && data.bindings.length === 0 && !voiceSlug;
+  const state = selected
+    ? "selected"
+    : isEmpty
+      ? "empty"
+      : "ready";
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        // Square node: width drives the aspect ratio set on the card below.
-        width: 420,
-        boxShadow: selected ? selectedRing : hovered ? hoverRing : "none",
-        transition: "box-shadow 120ms ease",
-      }}
-    >
-      <CharacterCard
-        character={data.character}
-        identity={data.identity}
-        voiceStyle={data.voiceStyle}
-        voiceId={data.voiceId}
-        voiceOptions={data.voiceOptions}
-        brainModel={data.brainModel}
-        bindings={data.bindings}
-        gradient={data.gradient}
-        image={data.image}
-        initial={data.initial}
-        onSelectTab={data.onSelectTab}
-      />
-    </div>
+    <CharacterNodeCard
+      character={data.character}
+      bindings={data.bindings.map((b) => b.wiki)}
+      activeModel={activeModel}
+      voiceSlug={voiceSlug}
+      voiceProvider={voiceProvider}
+      state={state}
+    />
   );
 }
 
@@ -1168,14 +1007,14 @@ function CornerStat({ label, value }: { label: string; value: string }) {
           "color-mix(in srgb, var(--background) 70%, transparent)",
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: "var(--space-4)",
         maxWidth: 260,
       }}
     >
       <span
         style={{
           fontFamily: T.fontMono,
-          fontSize: 9,
+          fontSize: "var(--font-size-2xs)",
           color: T.accent,
           letterSpacing: "0.18em",
           textTransform: "uppercase",
@@ -1186,7 +1025,7 @@ function CornerStat({ label, value }: { label: string; value: string }) {
       <span
         style={{
           fontFamily: T.fontMono,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           color: "var(--text-secondary)",
         }}
       >
@@ -1241,7 +1080,7 @@ function CharacterCard({
         padding: "22px 22px",
         display: "flex",
         flexDirection: "column",
-        gap: 16,
+        gap: "var(--space-16)",
         overflow: "hidden",
       }}
     >
@@ -1251,16 +1090,16 @@ function CharacterCard({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 8,
+          gap: "var(--space-8)",
         }}
       >
         <div
-          style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}
+          style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", minWidth: 0 }}
         >
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: T.accent,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
@@ -1272,7 +1111,7 @@ function CharacterCard({
         <span
           style={{
             fontFamily: T.fontMono,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: "var(--text-quaternary)",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -1285,7 +1124,7 @@ function CharacterCard({
       </div>
 
       {/* thumbnail column + identity stack (name, traits, essence) */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 18 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-18)" }}>
         <div
           style={{
             width: 128,
@@ -1324,7 +1163,7 @@ function CharacterCard({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 10,
+            gap: "var(--space-10)",
             minWidth: 0,
             flex: 1,
           }}
@@ -1342,7 +1181,7 @@ function CharacterCard({
             {character.title}
           </h2>
           {identity?.traits && identity.traits.some((t) => t.name.trim()) && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-10)" }}>
               {identity.traits
                 .filter((t) => t.name.trim())
                 .map((t) => (
@@ -1352,9 +1191,9 @@ function CharacterCard({
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
-                      gap: 6,
+                      gap: "var(--space-6)",
                       fontFamily: T.fontBody,
-                      fontSize: 12,
+                      fontSize: "var(--font-size-base)",
                       fontWeight: 500,
                       color: T.fg,
                     }}
@@ -1379,7 +1218,7 @@ function CharacterCard({
           <p
             style={{
               fontFamily: T.fontBody,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
               lineHeight: 1.5,
               color: T.muted,
               margin: 0,
@@ -1399,7 +1238,7 @@ function CharacterCard({
           that opens the matching sidebar tab. State (current model /
           wiki count / first tones) is rendered inline so the canvas
           tells the story without the sidebar open. */}
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: "var(--space-8)" }}>
         <CharacterSlot
           icon={<BrainGlyph />}
           label="brain"
@@ -1487,7 +1326,7 @@ function CharacterSlot({
         minWidth: 0,
         display: "flex",
         alignItems: "center",
-        gap: 8,
+        gap: "var(--space-8)",
         padding: "8px 10px",
         border: `1px solid ${hovered ? "color-mix(in srgb, var(--accent-strong) 35%, var(--border))" : T.border}`,
         background: hovered
@@ -1503,7 +1342,7 @@ function CharacterSlot({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 1,
+          gap: "var(--space-1)",
           minWidth: 0,
           flex: 1,
         }}
@@ -1511,7 +1350,7 @@ function CharacterSlot({
         <span
           style={{
             fontFamily: T.fontMono,
-            fontSize: 9,
+            fontSize: "var(--font-size-2xs)",
             color: hovered ? T.accent : "var(--text-tertiary)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
@@ -1524,7 +1363,7 @@ function CharacterSlot({
         <span
           style={{
             fontFamily: T.fontMono,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: dim ? "var(--text-quaternary)" : T.fg,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -1582,6 +1421,7 @@ function EditableThumbnail({
         justifyContent: "center",
         flexShrink: 0,
         padding: 0,
+        borderRadius: "var(--radius-xl)",
         border:
           "1px solid color-mix(in srgb, var(--accent-strong) 18%, transparent)",
         cursor: "pointer",
@@ -1589,13 +1429,14 @@ function EditableThumbnail({
           ? "0 0 0 2px color-mix(in srgb, var(--accent-strong) 35%, transparent)"
           : "none",
         transition: "box-shadow 120ms ease",
+        overflow: "hidden",
       }}
     >
       {!image && (
         <span
           style={{
             fontFamily: T.fontHeading,
-            fontSize: 22,
+            fontSize: "var(--font-size-3xl)",
             fontWeight: 600,
             color: hovered ? "rgba(12,14,20,0.32)" : "rgba(12,14,20,0.78)",
             lineHeight: 1,
@@ -1677,10 +1518,88 @@ function ConfigSidebar(props: {
     { key: "limits", label: "Limits" },
   ];
 
+  /* ── Resizable width ──────────────────────────────────────────
+   * 480px is the floor (the previous fixed width — anything narrower
+   * starts clipping the section cards inside the tabs). Cap at 720px
+   * so the sidebar can't crowd the canvas when the user drags out too
+   * far. Width persists per browser via localStorage so reopening the
+   * page keeps the user's preference. */
+  const SIDEBAR_MIN_WIDTH = 480;
+  const SIDEBAR_MAX_WIDTH = 720;
+  const SIDEBAR_WIDTH_KEY = "character-config-sidebar-width";
+
+  const [sidebarWidth, setSidebarWidth] = useState<number>(SIDEBAR_MIN_WIDTH);
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLElement | null>(null);
+
+  /* Restore saved width on mount. `useLayoutEffect` would avoid a
+   * flash, but the sidebar starts at the min so the worst case is one
+   * frame at the minimum width before expanding — acceptable. */
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(SIDEBAR_WIDTH_KEY);
+      if (saved) {
+        const n = Number.parseInt(saved, 10);
+        if (Number.isFinite(n)) {
+          setSidebarWidth(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, n)));
+        }
+      }
+    } catch {
+      /* localStorage can throw in private modes; non-fatal. */
+    }
+  }, []);
+
+  /* Drag handler. Captures the pointer so the drag survives the
+   * cursor leaving the 6px handle. Computes new width from the
+   * sidebar's *right* edge minus the pointer's clientX — the handle
+   * is on the *left* edge, so dragging left grows the sidebar. */
+  const onResizeStart = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const aside = sidebarRef.current;
+      if (!aside) return;
+      const rect = aside.getBoundingClientRect();
+      const rightEdge = rect.right;
+      const target = e.currentTarget;
+      target.setPointerCapture(e.pointerId);
+      setIsResizing(true);
+
+      const onMove = (ev: PointerEvent) => {
+        const next = Math.min(
+          SIDEBAR_MAX_WIDTH,
+          Math.max(SIDEBAR_MIN_WIDTH, rightEdge - ev.clientX),
+        );
+        setSidebarWidth(next);
+      };
+      const onUp = (ev: PointerEvent) => {
+        target.releasePointerCapture?.(ev.pointerId);
+        target.removeEventListener("pointermove", onMove);
+        target.removeEventListener("pointerup", onUp);
+        target.removeEventListener("pointercancel", onUp);
+        setIsResizing(false);
+        try {
+          /* Persist the final width — not every intermediate value, so
+           * localStorage doesn't churn during the drag. */
+          setSidebarWidth((w) => {
+            window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(Math.round(w)));
+            return w;
+          });
+        } catch {
+          /* non-fatal */
+        }
+      };
+      target.addEventListener("pointermove", onMove);
+      target.addEventListener("pointerup", onUp);
+      target.addEventListener("pointercancel", onUp);
+    },
+    [],
+  );
+
   return (
     <aside
+      ref={sidebarRef}
       style={{
-        width: 480,
+        width: sidebarWidth,
         flexShrink: 0,
         position: "sticky",
         top: 0,
@@ -1688,12 +1607,44 @@ function ConfigSidebar(props: {
         // Admin shell's top header is 48px — sticky sidebar fits below it.
         height: "calc(100vh - 48px)",
         background: "rgba(255,255,255,0.02)",
-        borderLeft: `1px solid ${T.border}`,
+        /* Softer subtle border that flips with the theme, matching the
+         * card chrome on /voices and /characters. */
+        borderLeft:
+          "1px solid var(--ink-fill)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        /* Disable width transitions during the drag so the bar follows
+         * the cursor 1:1 — re-enable when idle so collapse/expand from
+         * other code paths animates smoothly. */
+        transition: isResizing ? "none" : "width 160ms ease",
       }}
     >
+      {/* Resize handle on the left edge. 6px wide hit area, transparent
+       * by default; the cursor + the accent-tinted highlight while
+       * dragging tell the user what's happening. */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        onPointerDown={onResizeStart}
+        style={{
+          position: "absolute",
+          left: -3,
+          top: 0,
+          bottom: 0,
+          width: 6,
+          cursor: "ew-resize",
+          background: isResizing
+            ? "color-mix(in srgb, var(--accent-strong) 35%, transparent)"
+            : "transparent",
+          transition: isResizing ? "none" : "background 120ms ease",
+          zIndex: 2,
+          /* Touch action `none` prevents the browser from interpreting
+           * a horizontal drag as a scroll gesture on touch devices. */
+          touchAction: "none",
+        }}
+      />
       {/* sidebar header */}
       <div
         style={{
@@ -1701,14 +1652,14 @@ function ConfigSidebar(props: {
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          gap: 8,
+          gap: "var(--space-8)",
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 10,
+            gap: "var(--space-10)",
             minWidth: 0,
           }}
         >
@@ -1722,7 +1673,7 @@ function ConfigSidebar(props: {
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 1,
+              gap: "var(--space-1)",
               minWidth: 0,
             }}
           >
@@ -1732,7 +1683,7 @@ function ConfigSidebar(props: {
               ariaLabel="Character name"
               style={{
                 fontFamily: T.fontHeading,
-                fontSize: 16,
+                fontSize: "var(--font-size-xl)",
                 fontWeight: 600,
                 color: T.fg,
                 letterSpacing: "-0.01em",
@@ -1741,7 +1692,7 @@ function ConfigSidebar(props: {
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.14em",
                 textTransform: "uppercase",
                 color: "var(--text-tertiary)",
@@ -1755,56 +1706,54 @@ function ConfigSidebar(props: {
           type="button"
           aria-label="Sidebar options"
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
             width: 28,
-            height: 26,
-            border: `1px solid ${T.border}`,
+            height: 28,
+            borderRadius: "var(--radius-pill)",
+            border:
+              "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
             background: "transparent",
             color: "var(--text-tertiary)",
             cursor: "pointer",
             fontFamily: T.fontMono,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
+            lineHeight: 1,
+            transition: "border-color 120ms ease, background 120ms ease",
           }}
         >
           ⋯
         </button>
       </div>
 
-      {/* tabs */}
+      {/* Tabs — terminal-segment style (shared `TabBar` primitive).
+       * Taller bar (52px) flanked by full-bleed horizontal borders so
+       * the row reads as a clear band between the header and the tab
+       * content. Tabs offset 24px from the left edge to align with the
+       * sidebar's gutter. */}
       <div
         style={{
-          padding: "16px 24px 0",
-          borderBottom: `1px solid ${T.border}`,
           display: "flex",
-          gap: 4,
-          flexWrap: "wrap",
+          height: 34,
+          marginTop: "var(--space-20)",
+          paddingLeft: "var(--space-24)",
+          borderTop:
+            "1px solid var(--ink-fill)",
+          borderBottom:
+            "1px solid var(--ink-fill)",
         }}
       >
-        {tabs.map((t) => {
-          const active = t.key === props.tab;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => props.onTabChange(t.key)}
-              style={{
-                padding: "8px 14px",
-                marginBottom: -1,
-                border: "none",
-                borderBottom: `2px solid ${active ? T.accent : "transparent"}`,
-                background: "transparent",
-                color: active ? T.accent : "var(--text-tertiary)",
-                fontFamily: T.fontMono,
-                fontSize: 11,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                fontWeight: active ? 600 : 400,
-                cursor: "pointer",
-              }}
-            >
-              {t.label}
-            </button>
-          );
-        })}
+        <TabBar
+          items={
+            tabs.map((t) => ({
+              key: t.key,
+              label: t.label,
+              onClick: () => props.onTabChange(t.key),
+            })) as TabItem<TabKey>[]
+          }
+          active={props.tab}
+        />
       </div>
 
       {/* tab content (scroll) */}
@@ -1855,6 +1804,7 @@ function ConfigSidebar(props: {
             voiceId={props.voiceId}
             voiceOptions={props.voiceOptions}
             onVoiceIdChange={props.onVoiceIdChange}
+            initialVoiceSettings={props.character.voiceSettings}
           />
         )}
         {props.tab === "limits" && (
@@ -1908,9 +1858,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
       <SectionHeader title={title} hint={hint} status={status} info={info} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
         {children}
       </div>
     </section>
@@ -1959,21 +1909,21 @@ function SectionHeader({
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
-          gap: 8,
+          gap: "var(--space-8)",
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "baseline",
-            gap: 8,
+            gap: "var(--space-8)",
             minWidth: 0,
           }}
         >
           <h3
             style={{
               fontFamily: T.fontHeading,
-              fontSize: 18,
+              fontSize: "var(--font-size-2xl)",
               fontWeight: 600,
               color: T.fg,
               margin: 0,
@@ -1995,10 +1945,11 @@ function SectionHeader({
                 width: 16,
                 height: 16,
                 border: `1px solid ${open ? T.accent : T.border}`,
+                borderRadius: "var(--radius-pill)",
                 background: open ? T.accentSoft : "transparent",
                 color: open ? T.accent : "var(--text-tertiary)",
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 cursor: "pointer",
                 flexShrink: 0,
                 padding: 0,
@@ -2012,7 +1963,7 @@ function SectionHeader({
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.14em",
                 textTransform: "uppercase",
                 color: "var(--text-tertiary)",
@@ -2050,13 +2001,15 @@ function InfoCard({
         left: 0,
         right: 0,
         zIndex: 20,
-        background: "var(--card)",
+        backgroundColor: "var(--background)",
+        backgroundImage: "none",
         border: `1px solid ${T.border}`,
+        borderRadius: "var(--radius-2xl)",
         padding: "14px 16px 12px",
         boxShadow: "0 16px 40px var(--shadow, rgba(0,0,0,0.40))",
         display: "flex",
         flexDirection: "column",
-        gap: 12,
+        gap: "var(--space-12)",
         fontFamily: T.fontBody,
         color: T.fg,
       }}
@@ -2067,14 +2020,14 @@ function InfoCard({
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
-          gap: 8,
+          gap: "var(--space-8)",
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "baseline",
-            gap: 8,
+            gap: "var(--space-8)",
             minWidth: 0,
           }}
         >
@@ -2091,7 +2044,7 @@ function InfoCard({
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: T.muted,
               letterSpacing: "0.04em",
             }}
@@ -2101,18 +2054,18 @@ function InfoCard({
         </div>
         {info.tokens && (
           <span
-            style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}
+            style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}
           >
             {info.tokens}
           </span>
         )}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
         <span
           style={{
             fontFamily: T.fontMono,
-            fontSize: 9,
+            fontSize: "var(--font-size-2xs)",
             color: T.muted,
             letterSpacing: "0.08em",
             textTransform: "uppercase",
@@ -2124,7 +2077,7 @@ function InfoCard({
           style={{
             margin: 0,
             fontFamily: T.fontBody,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             lineHeight: 1.55,
             color: T.fg,
           }}
@@ -2134,11 +2087,11 @@ function InfoCard({
       </div>
 
       {info.promptShape && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 9,
+              fontSize: "var(--font-size-2xs)",
               color: T.muted,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -2152,8 +2105,9 @@ function InfoCard({
               padding: "10px 12px",
               background: "var(--background)",
               border: `1px solid var(--border)`,
+              borderRadius: "var(--radius-md)",
               fontFamily: T.fontMono,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               lineHeight: 1.5,
               color: "var(--foreground)",
               whiteSpace: "pre-wrap",
@@ -2171,16 +2125,16 @@ function InfoCard({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 8,
-            paddingTop: 4,
+            gap: "var(--space-8)",
+            paddingTop: "var(--space-4)",
             borderTop: `1px solid ${T.border}`,
-            marginTop: 2,
+            marginTop: "var(--space-2)",
           }}
         >
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: T.muted,
               letterSpacing: "0.02em",
               lineHeight: 1.4,
@@ -2196,7 +2150,7 @@ function InfoCard({
               background: "transparent",
               color: T.muted,
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               cursor: "pointer",
               padding: 0,
             }}
@@ -2282,9 +2236,9 @@ function StatusDot({ status }: { status: "set" | "tuned" | "empty" }) {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 6,
+        gap: "var(--space-6)",
         fontFamily: T.fontMono,
-        fontSize: 9,
+        fontSize: "var(--font-size-2xs)",
         color: isOn ? T.accent : "var(--text-tertiary)",
         letterSpacing: "0.18em",
         textTransform: "uppercase",
@@ -2342,6 +2296,7 @@ function VoiceTab({
   voiceId,
   voiceOptions,
   onVoiceIdChange,
+  initialVoiceSettings,
 }: {
   characterId: string;
   voiceStyle: CharacterVoiceStyle | null;
@@ -2349,6 +2304,7 @@ function VoiceTab({
   voiceId: string | null;
   voiceOptions: PickerVoice[];
   onVoiceIdChange: (next: string | null) => void;
+  initialVoiceSettings: VoiceSettingsOverride | null;
 }) {
   return (
     <>
@@ -2359,6 +2315,7 @@ function VoiceTab({
         voiceId={voiceId}
         voiceOptions={voiceOptions}
         onVoiceIdChange={onVoiceIdChange}
+        initialVoiceSettings={initialVoiceSettings}
       />
     </>
   );
@@ -2413,7 +2370,7 @@ function IdentitySection({
       />
 
       <FieldLabel>defining traits</FieldLabel>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
         {traits.map((t, i) => (
           <TraitCard
             key={i}
@@ -2442,7 +2399,7 @@ function IdentitySection({
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: T.muted,
               letterSpacing: "0.02em",
             }}
@@ -2577,9 +2534,9 @@ function AddTraitOverlay({
         background: "color-mix(in srgb, var(--background) 70%, transparent)",
         backdropFilter: "blur(4px)",
         display: "flex",
-        alignItems: "flex-start",
+        alignItems: "safe center",
         justifyContent: "center",
-        padding: "10vh 24px",
+        padding: "24px",
         overflow: "auto",
       }}
     >
@@ -2588,11 +2545,14 @@ function AddTraitOverlay({
         style={{
           width: "100%",
           maxWidth: 480,
-          background: "var(--card)",
+          backgroundColor: "var(--background)",
+          backgroundImage: "none",
           border: `1px solid ${T.border}`,
+          borderRadius: "var(--radius-3xl)",
           boxShadow: "0 24px 60px var(--shadow, rgba(0,0,0,0.40))",
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
         }}
       >
         {/* Header */}
@@ -2602,14 +2562,14 @@ function AddTraitOverlay({
             display: "flex",
             alignItems: "flex-start",
             justifyContent: "space-between",
-            gap: 12,
+            gap: "var(--space-12)",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
                 color: T.accent,
@@ -2620,7 +2580,7 @@ function AddTraitOverlay({
             <span
               style={{
                 fontFamily: T.fontHeading,
-                fontSize: 16,
+                fontSize: "var(--font-size-xl)",
                 fontWeight: 600,
                 letterSpacing: "-0.01em",
                 color: T.fg,
@@ -2640,7 +2600,7 @@ function AddTraitOverlay({
               background: "transparent",
               color: T.muted,
               cursor: "pointer",
-              fontSize: 18,
+              fontSize: "var(--font-size-2xl)",
               lineHeight: 1,
               padding: 0,
             }}
@@ -2655,7 +2615,7 @@ function AddTraitOverlay({
             padding: "0 20px 14px",
             display: "flex",
             flexDirection: "column",
-            gap: 8,
+            gap: "var(--space-8)",
           }}
         >
           <div
@@ -2663,13 +2623,13 @@ function AddTraitOverlay({
               display: "flex",
               alignItems: "baseline",
               justifyContent: "space-between",
-              gap: 8,
+              gap: "var(--space-8)",
             }}
           >
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: T.muted,
                 letterSpacing: "0.04em",
               }}
@@ -2679,7 +2639,7 @@ function AddTraitOverlay({
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 9,
+                fontSize: "var(--font-size-2xs)",
                 color: T.muted,
                 opacity: 0.7,
               }}
@@ -2687,7 +2647,7 @@ function AddTraitOverlay({
               curated · generic
             </span>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
             {SUGGESTED_TRAITS.map((s) => {
               const taken = existingNames.has(s.name.toLowerCase());
               const selected =
@@ -2702,10 +2662,11 @@ function AddTraitOverlay({
                   style={{
                     padding: "5px 11px",
                     border: `1px solid ${selected ? T.accent : T.border}`,
+                    borderRadius: "var(--radius-pill)",
                     background: selected ? T.accentSoft : "transparent",
                     color: selected ? T.accent : T.fg,
                     fontFamily: T.fontMono,
-                    fontSize: 11,
+                    fontSize: "var(--font-size-sm)",
                     cursor: taken ? "not-allowed" : "pointer",
                     opacity: taken ? 0.4 : 1,
                   }}
@@ -2724,7 +2685,7 @@ function AddTraitOverlay({
             borderTop: `1px solid ${T.border}`,
             display: "flex",
             flexDirection: "column",
-            gap: 10,
+            gap: "var(--space-10)",
           }}
         >
           <div
@@ -2732,13 +2693,13 @@ function AddTraitOverlay({
               display: "flex",
               alignItems: "baseline",
               justifyContent: "space-between",
-              gap: 8,
+              gap: "var(--space-8)",
             }}
           >
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: T.muted,
                 letterSpacing: "0.04em",
               }}
@@ -2747,7 +2708,7 @@ function AddTraitOverlay({
             </span>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
             <FieldLabel>name</FieldLabel>
             <input
               ref={nameRef}
@@ -2767,7 +2728,7 @@ function AddTraitOverlay({
               <span
                 style={{
                   fontFamily: T.fontMono,
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   color: T.danger,
                 }}
               >
@@ -2776,7 +2737,7 @@ function AddTraitOverlay({
             )}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
             <FieldLabel>describe</FieldLabel>
             <textarea
               value={description}
@@ -2790,7 +2751,7 @@ function AddTraitOverlay({
               placeholder="a one-line interpretation of how this trait shows up in their speech…"
               rows={2}
               maxLength={280}
-              style={{ ...textareaStyle, fontSize: 12 }}
+              style={{ ...textareaStyle, fontSize: "var(--font-size-base)" }}
             />
           </div>
         </div>
@@ -2803,30 +2764,31 @@ function AddTraitOverlay({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 12,
+            gap: "var(--space-12)",
           }}
         >
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: T.muted,
               letterSpacing: "0.04em",
             }}
           >
             <KeyChip>↵</KeyChip> saves · <KeyChip>esc</KeyChip> cancels
           </span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: "var(--space-8)" }}>
             <button
               type="button"
               onClick={onCancel}
               style={{
                 padding: "7px 16px",
                 border: `1px solid ${T.border}`,
+                borderRadius: "var(--radius-pill)",
                 background: "transparent",
                 color: T.fg,
                 fontFamily: T.fontHeading,
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 fontWeight: 500,
                 cursor: "pointer",
               }}
@@ -2840,10 +2802,11 @@ function AddTraitOverlay({
               style={{
                 padding: "7px 18px",
                 border: `1px solid ${canSave ? T.accent : "var(--border)"}`,
+                borderRadius: "var(--radius-pill)",
                 background: canSave ? T.accent : "var(--card-hover)",
                 color: canSave ? "var(--background)" : "var(--text-tertiary)",
                 fontFamily: T.fontHeading,
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 fontWeight: 600,
                 cursor: canSave ? "pointer" : "not-allowed",
               }}
@@ -2872,10 +2835,10 @@ function TraitCard({
       <div
         style={{
           ...cardShell,
-          padding: 12,
+          padding: "var(--space-12)",
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: "var(--space-8)",
         }}
       >
         <input
@@ -2892,9 +2855,9 @@ function TraitCard({
           placeholder="one-sentence justification"
           rows={2}
           maxLength={280}
-          style={{ ...textareaStyle, fontSize: 12 }}
+          style={{ ...textareaStyle, fontSize: "var(--font-size-base)" }}
         />
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-8)" }}>
           <button type="button" onClick={onRemove} style={ghostButtonStyle}>
             remove
           </button>
@@ -2917,7 +2880,7 @@ function TraitCard({
         padding: "12px 14px",
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: "var(--space-4)",
       }}
     >
       <div
@@ -2930,12 +2893,12 @@ function TraitCard({
         <span
           style={{
             fontFamily: T.fontHeading,
-            fontSize: 14,
+            fontSize: "var(--font-size-lg)",
             fontWeight: 600,
             color: T.fg,
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
           }}
         >
           {trait.name}
@@ -2961,7 +2924,7 @@ function TraitCard({
         <span
           style={{
             fontFamily: T.fontBody,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             color: T.muted,
             lineHeight: 1.5,
           }}
@@ -3048,7 +3011,7 @@ function ExamplesSection({
         {atCap ? ` · cap ${EXEMPLAR_CAP}` : ""}
       </FieldLabel>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
         {exemplars.map((ex, i) => (
           <ExemplarCard
             key={i}
@@ -3071,7 +3034,7 @@ function ExamplesSection({
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: T.muted,
               lineHeight: 1.5,
             }}
@@ -3124,7 +3087,7 @@ function ExemplarCard({
         padding: "12px 14px",
         display: "flex",
         flexDirection: "column",
-        gap: 6,
+        gap: "var(--space-6)",
       }}
     >
       <div
@@ -3132,13 +3095,13 @@ function ExemplarCard({
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          gap: 8,
+          gap: "var(--space-8)",
         }}
       >
         <span
           style={{
             fontFamily: T.fontBody,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             fontWeight: 500,
             color: T.fg,
             lineHeight: 1.5,
@@ -3146,7 +3109,7 @@ function ExemplarCard({
         >
           &ldquo;{exemplar.user}&rdquo;
         </span>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: "var(--space-8)", flexShrink: 0 }}>
           <button type="button" onClick={onEdit} style={editLinkStyle}>
             edit ✏︎
           </button>
@@ -3163,7 +3126,7 @@ function ExemplarCard({
       <span
         style={{
           fontFamily: T.fontBody,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
           color: T.muted,
           lineHeight: 1.5,
         }}
@@ -3172,7 +3135,7 @@ function ExemplarCard({
       </span>
       {(exemplar.tags?.length ?? 0) > 0 && (
         <div
-          style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2 }}
+          style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", marginTop: "var(--space-2)" }}
         >
           {exemplar.tags!.map((t) => (
             <span
@@ -3181,9 +3144,9 @@ function ExemplarCard({
                 padding: "3px 8px",
                 background: T.accentSoft,
                 border:
-                  "1px solid color-mix(in srgb, var(--accent-strong) 30%, transparent)",
+                  "1px solid var(--accent-border)",
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.10em",
                 textTransform: "uppercase",
                 color: T.accent,
@@ -3277,9 +3240,9 @@ function ExampleOverlay({
         background: "color-mix(in srgb, var(--background) 70%, transparent)",
         backdropFilter: "blur(4px)",
         display: "flex",
-        alignItems: "flex-start",
+        alignItems: "safe center",
         justifyContent: "center",
-        padding: "8vh 24px",
+        padding: "24px",
         overflow: "auto",
       }}
     >
@@ -3288,11 +3251,14 @@ function ExampleOverlay({
         style={{
           width: "100%",
           maxWidth: 560,
-          background: "var(--card)",
+          backgroundColor: "var(--background)",
+          backgroundImage: "none",
           border: `1px solid ${T.border}`,
+          borderRadius: "var(--radius-3xl)",
           boxShadow: "0 24px 60px var(--shadow, rgba(0,0,0,0.40))",
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
         }}
       >
         {/* Header */}
@@ -3302,14 +3268,14 @@ function ExampleOverlay({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 12,
+            gap: "var(--space-12)",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
                 color: T.accent,
@@ -3320,7 +3286,7 @@ function ExampleOverlay({
             <span
               style={{
                 fontFamily: T.fontHeading,
-                fontSize: 16,
+                fontSize: "var(--font-size-xl)",
                 fontWeight: 600,
                 letterSpacing: "-0.01em",
                 color: T.fg,
@@ -3340,7 +3306,7 @@ function ExampleOverlay({
               background: "transparent",
               color: T.muted,
               cursor: "pointer",
-              fontSize: 18,
+              fontSize: "var(--font-size-2xl)",
               lineHeight: 1,
               padding: 0,
             }}
@@ -3355,10 +3321,10 @@ function ExampleOverlay({
             padding: "0 20px 14px",
             display: "flex",
             flexDirection: "column",
-            gap: 14,
+            gap: "var(--space-14)",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
             <div
               style={{
                 display: "flex",
@@ -3369,7 +3335,7 @@ function ExampleOverlay({
               <span
                 style={{
                   fontFamily: T.fontMono,
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   color: T.muted,
                   letterSpacing: "0.04em",
                 }}
@@ -3380,7 +3346,7 @@ function ExampleOverlay({
               <span
                 style={{
                   fontFamily: T.fontMono,
-                  fontSize: 9,
+                  fontSize: "var(--font-size-2xs)",
                   color: T.muted,
                   opacity: 0.7,
                 }}
@@ -3394,11 +3360,11 @@ function ExampleOverlay({
               onChange={(e) => setUser(e.target.value)}
               placeholder='e.g. "How did you know it was God?"'
               rows={2}
-              style={{ ...textareaStyle, fontSize: 13 }}
+              style={{ ...textareaStyle, fontSize: "var(--font-size-md)" }}
             />
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
             <div
               style={{
                 display: "flex",
@@ -3409,7 +3375,7 @@ function ExampleOverlay({
               <span
                 style={{
                   fontFamily: T.fontMono,
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   color: T.muted,
                   letterSpacing: "0.04em",
                 }}
@@ -3422,7 +3388,7 @@ function ExampleOverlay({
               <span
                 style={{
                   fontFamily: T.fontMono,
-                  fontSize: 9,
+                  fontSize: "var(--font-size-2xs)",
                   color: T.muted,
                   opacity: 0.7,
                 }}
@@ -3435,15 +3401,15 @@ function ExampleOverlay({
               onChange={(e) => setYou(e.target.value)}
               placeholder="I didn't. I went anyway."
               rows={3}
-              style={{ ...textareaStyle, fontSize: 13 }}
+              style={{ ...textareaStyle, fontSize: "var(--font-size-md)" }}
             />
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: T.muted,
                 letterSpacing: "0.04em",
               }}
@@ -3459,15 +3425,15 @@ function ExampleOverlay({
               placeholder="Refuses to claim certainty. Owns the ambiguity instead of explaining it away."
               rows={2}
               maxLength={400}
-              style={{ ...textareaStyle, fontSize: 12 }}
+              style={{ ...textareaStyle, fontSize: "var(--font-size-base)" }}
             />
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: T.muted,
                 letterSpacing: "0.04em",
               }}
@@ -3476,20 +3442,20 @@ function ExampleOverlay({
               &nbsp;topics this example covers · feeds the character&rsquo;s
               scope at runtime
             </span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
               {tags.map((t) => (
                 <span
                   key={t}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 6,
+                    gap: "var(--space-6)",
                     padding: "3px 10px",
                     background: T.accentSoft,
                     border:
-                      "1px solid color-mix(in srgb, var(--accent-strong) 30%, transparent)",
+                      "1px solid var(--accent-border)",
                     fontFamily: T.fontMono,
-                    fontSize: 10,
+                    fontSize: "var(--font-size-xs)",
                     letterSpacing: "0.10em",
                     textTransform: "uppercase",
                     color: T.accent,
@@ -3506,7 +3472,7 @@ function ExampleOverlay({
                       color: T.accent,
                       cursor: "pointer",
                       fontFamily: T.fontMono,
-                      fontSize: 10,
+                      fontSize: "var(--font-size-xs)",
                       padding: 0,
                     }}
                   >
@@ -3529,14 +3495,14 @@ function ExampleOverlay({
                   ...inputStyle,
                   width: 100,
                   padding: "3px 8px",
-                  fontSize: 11,
+                  fontSize: "var(--font-size-sm)",
                 }}
               />
               {unusedSuggestion && draftTag.length === 0 && (
                 <span
                   style={{
                     fontFamily: T.fontMono,
-                    fontSize: 10,
+                    fontSize: "var(--font-size-xs)",
                     color: T.muted,
                     alignSelf: "center",
                   }}
@@ -3550,7 +3516,7 @@ function ExampleOverlay({
                       background: "transparent",
                       color: T.fg,
                       fontFamily: T.fontMono,
-                      fontSize: 10,
+                      fontSize: "var(--font-size-xs)",
                       cursor: "pointer",
                       padding: 0,
                       textDecoration: "underline",
@@ -3573,30 +3539,31 @@ function ExampleOverlay({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 12,
+            gap: "var(--space-12)",
           }}
         >
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: T.muted,
               letterSpacing: "0.04em",
             }}
           >
             <KeyChip>⌘ ↵</KeyChip> saves · <KeyChip>esc</KeyChip> cancels
           </span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: "var(--space-8)" }}>
             <button
               type="button"
               onClick={onCancel}
               style={{
                 padding: "7px 16px",
                 border: `1px solid ${T.border}`,
+                borderRadius: "var(--radius-pill)",
                 background: "transparent",
                 color: T.fg,
                 fontFamily: T.fontHeading,
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 fontWeight: 500,
                 cursor: "pointer",
               }}
@@ -3610,10 +3577,11 @@ function ExampleOverlay({
               style={{
                 padding: "7px 18px",
                 border: `1px solid ${canSave ? T.accent : "var(--border)"}`,
+                borderRadius: "var(--radius-pill)",
                 background: canSave ? T.accent : "var(--card-hover)",
                 color: canSave ? "var(--background)" : "var(--text-tertiary)",
                 fontFamily: T.fontHeading,
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 fontWeight: 600,
                 cursor: canSave ? "pointer" : "not-allowed",
               }}
@@ -3651,6 +3619,7 @@ function VoiceStyleSection({
   voiceId,
   voiceOptions,
   onVoiceIdChange,
+  initialVoiceSettings,
 }: {
   characterId: string;
   voiceStyle: CharacterVoiceStyle | null;
@@ -3658,8 +3627,21 @@ function VoiceStyleSection({
   voiceId: string | null;
   voiceOptions: PickerVoice[];
   onVoiceIdChange: (next: string | null) => void;
+  initialVoiceSettings: VoiceSettingsOverride | null;
 }) {
   const [draftTone, setDraftTone] = useState("");
+  const [draftProsody, setDraftProsody] = useState("");
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSettingsOverride | null>(
+    initialVoiceSettings,
+  );
+
+  const saveVoiceSettings = useCallback(
+    async (next: VoiceSettingsOverride | null) => {
+      setVoiceSettings(next);
+      await updateCharacterVoiceSettings(characterId, next);
+    },
+    [characterId],
+  );
 
   const persist = useDebouncedSave(async (next: CharacterVoiceStyle) => {
     await fetch(`/api/characters/${characterId}/voice-style`, {
@@ -3669,10 +3651,6 @@ function VoiceStyleSection({
     });
   });
 
-  // voiceId + voiceOptions are owned by CharacterConfig — keeping them
-  // there means the canvas voice pill and the sidebar picker share a
-  // source of truth and update together. The PATCH persistence lives
-  // here so the section is the single owner of network writes for it.
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
   const saveVoiceId = useCallback(
@@ -3703,179 +3681,938 @@ function VoiceStyleSection({
   );
 
   const tones = voiceStyle?.tone ?? [];
+  const prosody = voiceStyle?.prosody ?? [];
   const brevity = voiceStyle?.brevity ?? "short";
   const formality = voiceStyle?.register?.formality ?? 0;
   const warmth = voiceStyle?.register?.warmth ?? 0;
+  const decision = voiceStyle?.decision ?? "";
+  const referenceClipUrl = voiceStyle?.referenceClipUrl ?? "";
 
-  const status = tones.length > 0 ? "set" : "empty";
+  const bound = voiceId
+    ? voiceOptions.find((v) => v.id === voiceId) ?? null
+    : null;
+
+  const ttsStatus: SegmentStatus = bound
+    ? { tone: "active", label: "ready" }
+    : { tone: "muted", label: "unbound" };
+
+  const promptHasContent =
+    tones.length > 0 ||
+    prosody.length > 0 ||
+    !!decision.trim() ||
+    formality !== 0 ||
+    warmth !== 0;
+  const promptStatus: SegmentStatus = promptHasContent
+    ? { tone: "active", label: "set" }
+    : { tone: "muted", label: "empty" };
 
   return (
-    <Section
-      title="Voice & Style"
-      hint="tone, length, register"
-      status={status}
-      info={SECTION_INFO.voiceStyle}
-    >
-      <FieldLabel>how they sound · {tones.length} chips</FieldLabel>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {tones.map((t) => (
-          <span
-            key={t}
+    <section style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      {/* ── Segment B · TTS ────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+        <SegmentHeader
+          label="tts"
+          hint="what comes out of the speaker"
+          status={ttsStatus}
+        />
+
+        <VoiceLibraryPicker
+          currentVoiceId={voiceId}
+          voices={voiceOptions}
+          onChange={saveVoiceId}
+        />
+        {voiceError && (
+          <div
             style={{
-              padding: "3px 10px",
-              background: T.accentSoft,
+              padding: "8px 10px",
+              background:
+                "var(--critical-wash)",
               border:
-                "1px solid color-mix(in srgb, var(--accent-strong) 30%, transparent)",
+                "1px solid var(--critical-border)",
+              color: "var(--status-error)",
               fontFamily: T.fontMono,
-              fontSize: 10,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-              color: T.accent,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
+              fontSize: "var(--font-size-sm)",
             }}
           >
-            {t}
-            <button
-              type="button"
-              onClick={() =>
-                save({
-                  ...(voiceStyle ?? {}),
-                  tone: tones.filter((x) => x !== t),
-                })
-              }
-              style={{
-                border: "none",
-                background: "transparent",
-                color: T.accent,
-                cursor: "pointer",
-                fontFamily: T.fontMono,
-                fontSize: 10,
-                padding: 0,
-              }}
-              aria-label={`Remove ${t}`}
-            >
-              ×
-            </button>
-          </span>
-        ))}
-        {tones.length < 4 && (
-          <input
-            value={draftTone}
-            onChange={(e) => setDraftTone(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && draftTone.trim()) {
-                e.preventDefault();
-                const next = [...tones, draftTone.trim()].slice(0, 4);
-                save({ ...(voiceStyle ?? {}), tone: next });
-                setDraftTone("");
-              }
-            }}
-            placeholder="+ add (Enter)"
-            style={{
-              ...inputStyle,
-              width: 110,
-              padding: "3px 8px",
-              fontSize: 11,
-            }}
+            {voiceError}
+          </div>
+        )}
+
+        {bound && bound.provider === "elevenlabs" && (
+          <ElevenLabsOverridePanel
+            base={bound.providerConfig ?? {}}
+            value={voiceSettings}
+            onChange={saveVoiceSettings}
           />
         )}
+        {bound && bound.provider && bound.provider !== "elevenlabs" && (
+          <InheritsNote provider={bound.provider} />
+        )}
+
+        <FieldLabel>voice prompt</FieldLabel>
+        <textarea
+          value={voiceStyle?.voicePrompt ?? ""}
+          onChange={(e) =>
+            save({ ...(voiceStyle ?? {}), voicePrompt: e.target.value })
+          }
+          placeholder="older man, weathered by long travel; unhurried cadence; soft consonants"
+          rows={4}
+          style={{ ...textareaStyle, minHeight: 96 }}
+        />
+
+        <FieldLabel>prosody · {prosody.length} chips</FieldLabel>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
+          {prosody.map((p) => (
+            <span
+              key={p}
+              style={prosodyChipStyle}
+            >
+              {p}
+              <button
+                type="button"
+                onClick={() =>
+                  save({
+                    ...(voiceStyle ?? {}),
+                    prosody: prosody.filter((x) => x !== p),
+                  })
+                }
+                style={chipRemoveButtonStyle}
+                aria-label={`Remove ${p}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {prosody.length < 6 && (
+            <input
+              value={draftProsody}
+              onChange={(e) => setDraftProsody(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && draftProsody.trim()) {
+                  e.preventDefault();
+                  const next = [...prosody, draftProsody.trim()].slice(0, 6);
+                  save({ ...(voiceStyle ?? {}), prosody: next });
+                  setDraftProsody("");
+                }
+              }}
+              placeholder="+ add (Enter)"
+              style={addChipInputStyle}
+            />
+          )}
+        </div>
+
+        <FieldLabel>reference clip · voice cloning</FieldLabel>
+        <input
+          type="url"
+          value={referenceClipUrl}
+          onChange={(e) =>
+            save({
+              ...(voiceStyle ?? {}),
+              referenceClipUrl: e.target.value,
+            })
+          }
+          placeholder="paste a URL to an audio sample"
+          style={inputStyle}
+        />
       </div>
 
-      <FieldLabel>brevity</FieldLabel>
-      <div style={{ display: "flex", gap: 4 }}>
-        {BREVITY_VALUES.map((v) => {
-          const active = brevity === v;
-          return (
-            <button
-              key={v}
-              type="button"
-              onClick={() => save({ ...(voiceStyle ?? {}), brevity: v })}
+      <SegmentDivider />
+
+      {/* ── Segment A · Prompt-driven ─────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+        <SegmentHeader
+          label="prompt-driven"
+          hint="what the model reads"
+          status={promptStatus}
+        />
+
+        <FieldLabel>how they sound · {tones.length} chips</FieldLabel>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
+          {tones.map((t) => (
+            <span
+              key={t}
               style={{
-                flex: 1,
-                padding: "6px 8px",
-                border: `1px solid ${active ? T.accent : T.border}`,
-                background: active ? T.accentSoft : "transparent",
-                color: active ? T.accent : "var(--text-tertiary)",
+                padding: "4px 10px",
+                borderRadius: "var(--radius-pill)",
+                background: T.accentSoft,
+                border:
+                  "1px solid var(--accent-border)",
                 fontFamily: T.fontMono,
-                fontSize: 10,
-                letterSpacing: "0.14em",
+                fontSize: "var(--font-size-xs)",
+                letterSpacing: "0.10em",
                 textTransform: "uppercase",
-                cursor: "pointer",
+                color: T.accent,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "var(--space-6)",
+                lineHeight: 1.2,
               }}
             >
-              {BREVITY_LABELS[v]}
-            </button>
-          );
-        })}
-      </div>
-
-      <FieldLabel>
-        register · formality {fmtSigned(formality)} · warmth {fmtSigned(warmth)}
-      </FieldLabel>
-      <Slider
-        label="formality"
-        rightLabel={
-          formality < 0 ? "casual" : formality > 0 ? "formal" : "neutral"
-        }
-        min={-1}
-        max={1}
-        step={0.1}
-        value={formality}
-        onChange={(v) =>
-          save({ ...(voiceStyle ?? {}), register: { formality: v, warmth } })
-        }
-      />
-      <Slider
-        label="warmth"
-        rightLabel={warmth < 0 ? "cool" : warmth > 0 ? "warm" : "neutral"}
-        min={-1}
-        max={1}
-        step={0.1}
-        value={warmth}
-        onChange={(v) =>
-          save({ ...(voiceStyle ?? {}), register: { formality, warmth: v } })
-        }
-      />
-
-      <VoiceLibraryPicker
-        currentVoiceId={voiceId}
-        voices={voiceOptions}
-        onChange={saveVoiceId}
-      />
-      {voiceError && (
-        <div
-          style={{
-            padding: "8px 10px",
-            background: "rgba(232,160,160,0.06)",
-            border: "1px solid rgba(232,160,160,0.30)",
-            color: "#E8A0A0",
-            fontFamily: T.fontMono,
-            fontSize: 11,
-          }}
-        >
-          {voiceError}
+              {t}
+              <button
+                type="button"
+                onClick={() =>
+                  save({
+                    ...(voiceStyle ?? {}),
+                    tone: tones.filter((x) => x !== t),
+                  })
+                }
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: T.accent,
+                  cursor: "pointer",
+                  fontFamily: T.fontMono,
+                  fontSize: "var(--font-size-xs)",
+                  padding: 0,
+                }}
+                aria-label={`Remove ${t}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {tones.length < 4 && (
+            <input
+              value={draftTone}
+              onChange={(e) => setDraftTone(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && draftTone.trim()) {
+                  e.preventDefault();
+                  const next = [...tones, draftTone.trim()].slice(0, 4);
+                  save({ ...(voiceStyle ?? {}), tone: next });
+                  setDraftTone("");
+                }
+              }}
+              placeholder="+ add (Enter)"
+              style={addChipInputStyle}
+            />
+          )}
         </div>
-      )}
 
-      <FieldLabel>voice prompt (TTS)</FieldLabel>
-      <textarea
-        value={voiceStyle?.voicePrompt ?? ""}
-        onChange={(e) =>
-          save({ ...(voiceStyle ?? {}), voicePrompt: e.target.value })
-        }
-        placeholder="older man, weathered by long travel; unhurried cadence; soft consonants"
-        rows={2}
-        style={textareaStyle}
-      />
-    </Section>
+        <FieldLabel>brevity</FieldLabel>
+        <div style={{ display: "flex", gap: "var(--space-4)" }}>
+          {BREVITY_VALUES.map((v) => {
+            const active = brevity === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => save({ ...(voiceStyle ?? {}), brevity: v })}
+                style={{
+                  flex: 1,
+                  padding: "6px 8px",
+                  border: `1px solid ${active ? T.accent : T.border}`,
+                  borderRadius: "var(--radius-pill)",
+                  background: active ? T.accentSoft : "transparent",
+                  color: active ? T.accent : "var(--text-tertiary)",
+                  fontFamily: T.fontMono,
+                  fontSize: "var(--font-size-xs)",
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                {BREVITY_LABELS[v]}
+              </button>
+            );
+          })}
+        </div>
+
+        <FieldLabel>
+          register · formality {fmtSigned(formality)} · warmth {fmtSigned(warmth)}
+        </FieldLabel>
+        <Slider
+          label="formality"
+          rightLabel={
+            formality < 0 ? "casual" : formality > 0 ? "formal" : "neutral"
+          }
+          min={-1}
+          max={1}
+          step={0.1}
+          value={formality}
+          onChange={(v) =>
+            save({ ...(voiceStyle ?? {}), register: { formality: v, warmth } })
+          }
+        />
+        <Slider
+          label="warmth"
+          rightLabel={warmth < 0 ? "cool" : warmth > 0 ? "warm" : "neutral"}
+          min={-1}
+          max={1}
+          step={0.1}
+          value={warmth}
+          onChange={(v) =>
+            save({ ...(voiceStyle ?? {}), register: { formality, warmth: v } })
+          }
+        />
+
+        <FieldLabel>decision style · impulsive ↔ paralyzed</FieldLabel>
+        <input
+          type="text"
+          value={decision}
+          onChange={(e) =>
+            save({ ...(voiceStyle ?? {}), decision: e.target.value })
+          }
+          placeholder="deliberate · invokes precedent"
+          style={inputStyle}
+        />
+      </div>
+    </section>
   );
 }
+
+type SegmentStatus = {
+  tone: "active" | "muted";
+  label: string;
+};
+
+function SegmentHeader({
+  label,
+  hint,
+  status,
+}: {
+  label: string;
+  hint: string;
+  status: SegmentStatus;
+}) {
+  const active = status.tone === "active";
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        gap: "var(--space-8)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: "var(--space-10)",
+          minWidth: 0,
+        }}
+      >
+        <span
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: "50%",
+            background: T.accent,
+            boxShadow: `0 0 6px ${T.accent}`,
+            transform: "translateY(-2px)",
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            fontFamily: T.fontMono,
+            fontSize: "var(--font-size-xs)",
+            fontWeight: 600,
+            letterSpacing: "0.20em",
+            textTransform: "uppercase",
+            color: T.accent,
+          }}
+        >
+          {label}
+        </span>
+        <span
+          style={{
+            fontFamily: T.fontBody,
+            fontSize: "var(--font-size-base)",
+            color: "var(--text-tertiary)",
+          }}
+        >
+          {hint}
+        </span>
+      </div>
+      <span
+        style={{
+          fontFamily: T.fontMono,
+          fontSize: "var(--font-size-2xs)",
+          fontWeight: 500,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: active ? T.accent : "var(--text-tertiary)",
+        }}
+      >
+        {status.label}
+      </span>
+    </div>
+  );
+}
+
+function SegmentDivider() {
+  return (
+    <div
+      style={{
+        height: 1,
+        background:
+          "linear-gradient(to right, transparent 0%, rgba(255,255,255,0.06) 8%, rgba(255,255,255,0.06) 92%, transparent 100%)",
+      }}
+    />
+  );
+}
+
+function InheritsNote({ provider }: { provider: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-10)",
+        padding: "10px 14px",
+        borderRadius: "var(--radius-lg)",
+        background: "rgba(255,255,255,0.02)",
+        border: `1px solid ${T.border}`,
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          fontFamily: T.fontMono,
+          fontSize: "var(--font-size-base)",
+          color: T.muted,
+          flexShrink: 0,
+        }}
+      >
+        ⓘ
+      </span>
+      <span
+        style={{
+          fontFamily: T.fontBody,
+          fontSize: "var(--font-size-base)",
+          color: "var(--text-tertiary)",
+          lineHeight: 1.5,
+        }}
+      >
+        This voice uses{" "}
+        <span style={{ fontFamily: T.fontMono, color: T.fg }}>{provider}</span>{" "}
+        — runtime tuning is baked into the voice.{" "}
+        <span style={{ color: "var(--text-quaternary)" }}>
+          No per-character overrides.
+        </span>
+      </span>
+    </div>
+  );
+}
+
+const addChipInputStyle: React.CSSProperties = {
+  width: 130,
+  padding: "4px 10px",
+  borderRadius: "var(--radius-pill)",
+  border: `1px solid ${T.border}`,
+  background: "transparent",
+  color: T.fg,
+  fontFamily: T.fontMono,
+  fontSize: "var(--font-size-xs)",
+  letterSpacing: "0.06em",
+  lineHeight: 1.2,
+  outline: "none",
+};
+
+const prosodyChipStyle: React.CSSProperties = {
+  padding: "4px 10px",
+  borderRadius: "var(--radius-pill)",
+  background: "rgba(255,255,255,0.02)",
+  border: `1px solid ${T.border}`,
+  fontFamily: T.fontMono,
+  fontSize: "var(--font-size-xs)",
+  letterSpacing: "0.06em",
+  color: "var(--text-primary)",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "var(--space-6)",
+  lineHeight: 1.2,
+};
+
+const chipRemoveButtonStyle: React.CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: T.muted,
+  cursor: "pointer",
+  fontFamily: T.fontMono,
+  fontSize: "var(--font-size-xs)",
+  padding: 0,
+};
 
 function fmtSigned(n: number): string {
   if (n === 0) return "0.0";
   return (n > 0 ? "+" : "") + n.toFixed(1);
+}
+
+/* ── ElevenLabs override panel ────────────────────────────────────
+ *
+ * Renders only when the character's bound voice is an ElevenLabs voice.
+ * Lets the user override the voice row's runtime tuning per-character,
+ * so one voice can power multiple characters with different feels (e.g.
+ * the same Calliope voice, but a stoic character pins low style/high
+ * stability while an emotive one cranks both). Saves to
+ * characters.voice_settings via the updateCharacterVoiceSettings action;
+ * the engine resolver in audio.ts overlays this on top of providerConfig
+ * at synth time, leaving voiceId untouched.
+ */
+
+const ELEVENLABS_MODEL_OPTIONS = [
+  "eleven_multilingual_v2",
+  "eleven_turbo_v2_5",
+  "eleven_flash_v2_5",
+  "eleven_monolingual_v1",
+] as const;
+
+type ElevenLabsOverrideField =
+  | "modelId"
+  | "stability"
+  | "similarityBoost"
+  | "style"
+  | "speakerBoost";
+
+function ElevenLabsOverridePanel({
+  base,
+  value,
+  onChange,
+}: {
+  base: Record<string, unknown>;
+  value: VoiceSettingsOverride | null;
+  onChange: (next: VoiceSettingsOverride | null) => void | Promise<void>;
+}) {
+  // Narrow the override to the ElevenLabs branch; treat any mismatched
+  // shape as "no overrides yet" so a stale Cartesia override after a
+  // re-bind to ElevenLabs doesn't blow up the panel.
+  const eleven =
+    value && value.provider === "elevenlabs"
+      ? (value as Extract<VoiceSettingsOverride, { provider: "elevenlabs" }>)
+      : null;
+
+  const baseModelId =
+    typeof base.modelId === "string" ? base.modelId : "eleven_multilingual_v2";
+  const baseStability = typeof base.stability === "number" ? base.stability : 0.5;
+  const baseSimilarity =
+    typeof base.similarityBoost === "number" ? base.similarityBoost : 0.75;
+  const baseStyle = typeof base.style === "number" ? base.style : 0;
+  const baseSpeakerBoost =
+    typeof base.speakerBoost === "boolean" ? base.speakerBoost : true;
+
+  function patch(
+    field: ElevenLabsOverrideField,
+    fieldValue: number | string | boolean | undefined,
+  ) {
+    const next = { provider: "elevenlabs" as const, ...(eleven ?? {}) };
+    if (fieldValue === undefined) {
+      delete (next as Record<string, unknown>)[field];
+    } else {
+      (next as Record<string, unknown>)[field] = fieldValue;
+    }
+    // If every override field has been cleared, drop the whole row to null
+    // so the character cleanly inherits the voice defaults again.
+    const hasAnyOverride =
+      next.modelId !== undefined ||
+      next.stability !== undefined ||
+      next.similarityBoost !== undefined ||
+      next.style !== undefined ||
+      next.speakerBoost !== undefined;
+    void onChange(hasAnyOverride ? next : null);
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-10)",
+        padding: "var(--space-14)",
+        background: "color-mix(in srgb, var(--accent-strong) 4%, transparent)",
+        border:
+          "1px solid color-mix(in srgb, var(--accent-strong) 18%, transparent)",
+        borderRadius: "var(--radius-lg)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: T.fontMono,
+            fontSize: "var(--font-size-xs)",
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "var(--accent-strong)",
+          }}
+        >
+          ElevenLabs overrides
+        </span>
+        {eleven && (
+          <button
+            type="button"
+            onClick={() => void onChange(null)}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: "var(--text-tertiary)",
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              letterSpacing: "0.06em",
+              cursor: "pointer",
+            }}
+          >
+            reset all
+          </button>
+        )}
+      </div>
+
+      <OverrideRowDropdown
+        label="model"
+        baseValue={baseModelId}
+        overrideValue={eleven?.modelId}
+        options={ELEVENLABS_MODEL_OPTIONS as unknown as string[]}
+        onSet={(v) => patch("modelId", v)}
+        onClear={() => patch("modelId", undefined)}
+      />
+      <OverrideRowSlider
+        label="stability"
+        baseValue={baseStability}
+        overrideValue={eleven?.stability}
+        min={0}
+        max={1}
+        step={0.05}
+        onSet={(v) => patch("stability", v)}
+        onClear={() => patch("stability", undefined)}
+      />
+      <OverrideRowSlider
+        label="similarity boost"
+        baseValue={baseSimilarity}
+        overrideValue={eleven?.similarityBoost}
+        min={0}
+        max={1}
+        step={0.05}
+        onSet={(v) => patch("similarityBoost", v)}
+        onClear={() => patch("similarityBoost", undefined)}
+      />
+      <OverrideRowSlider
+        label="style"
+        baseValue={baseStyle}
+        overrideValue={eleven?.style}
+        min={0}
+        max={1}
+        step={0.05}
+        onSet={(v) => patch("style", v)}
+        onClear={() => patch("style", undefined)}
+      />
+      <OverrideRowToggle
+        label="speaker boost"
+        hint="enhance similarity to the source clip"
+        baseValue={baseSpeakerBoost}
+        overrideValue={eleven?.speakerBoost}
+        onSet={(v) => patch("speakerBoost", v)}
+        onClear={() => patch("speakerBoost", undefined)}
+      />
+    </div>
+  );
+}
+
+function OverrideRowToggle({
+  label,
+  hint,
+  baseValue,
+  overrideValue,
+  onSet,
+  onClear,
+}: {
+  label: string;
+  hint?: string;
+  baseValue: boolean;
+  overrideValue: boolean | undefined;
+  onSet: (v: boolean) => void;
+  onClear: () => void;
+}) {
+  const customized = overrideValue !== undefined;
+  const effective = overrideValue ?? baseValue;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "var(--space-12)",
+        paddingTop: "var(--space-4)",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", minWidth: 0 }}>
+        <span
+          style={{
+            fontFamily: T.fontMono,
+            fontSize: "var(--font-size-xs)",
+            letterSpacing: "0.06em",
+            color: customized ? "var(--text-primary)" : "var(--text-tertiary)",
+          }}
+        >
+          {label}
+        </span>
+        {hint && (
+          <span
+            style={{
+              fontFamily: T.fontBody,
+              fontSize: "var(--font-size-sm)",
+              color: "var(--text-tertiary)",
+            }}
+          >
+            {hint}
+          </span>
+        )}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+        {customized ? (
+          <button
+            type="button"
+            onClick={onClear}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: "var(--text-tertiary)",
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              cursor: "pointer",
+            }}
+          >
+            reset · inherits {baseValue ? "on" : "off"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onSet(!baseValue)}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: "var(--accent-strong)",
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              cursor: "pointer",
+            }}
+          >
+            customize · inherits {baseValue ? "on" : "off"}
+          </button>
+        )}
+        <Toggle on={effective} onChange={onSet} />
+      </div>
+    </div>
+  );
+}
+
+function OverrideRowSlider({
+  label,
+  baseValue,
+  overrideValue,
+  min,
+  max,
+  step,
+  onSet,
+  onClear,
+}: {
+  label: string;
+  baseValue: number;
+  overrideValue: number | undefined;
+  min: number;
+  max: number;
+  step: number;
+  onSet: (v: number) => void;
+  onClear: () => void;
+}) {
+  const customized = overrideValue !== undefined;
+  const effective = overrideValue ?? baseValue;
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-6)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: "var(--space-8)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: T.fontMono,
+            fontSize: "var(--font-size-xs)",
+            letterSpacing: "0.06em",
+            color: customized ? "var(--text-primary)" : "var(--text-tertiary)",
+          }}
+        >
+          {label}
+        </span>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: "var(--space-10)",
+            fontFamily: T.fontMono,
+            fontSize: "var(--font-size-xs)",
+          }}
+        >
+          <span
+            style={{
+              color: customized ? "var(--accent-strong)" : "var(--text-tertiary)",
+            }}
+          >
+            {customized ? `customized · ${effective.toFixed(2)}` : `inherits · ${baseValue.toFixed(2)}`}
+          </span>
+          {customized ? (
+            <button
+              type="button"
+              onClick={onClear}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "var(--text-tertiary)",
+                fontFamily: T.fontMono,
+                fontSize: "var(--font-size-xs)",
+                cursor: "pointer",
+              }}
+            >
+              reset
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onSet(baseValue)}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "var(--accent-strong)",
+                fontFamily: T.fontMono,
+                fontSize: "var(--font-size-xs)",
+                cursor: "pointer",
+              }}
+            >
+              customize
+            </button>
+          )}
+        </div>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={effective}
+        disabled={!customized}
+        onChange={(e) => onSet(parseFloat(e.target.value))}
+        style={{
+          width: "100%",
+          accentColor: "var(--accent-strong)",
+          opacity: customized ? 1 : 0.45,
+        }}
+      />
+    </div>
+  );
+}
+
+function OverrideRowDropdown({
+  label,
+  baseValue,
+  overrideValue,
+  options,
+  onSet,
+  onClear,
+}: {
+  label: string;
+  baseValue: string;
+  overrideValue: string | undefined;
+  options: string[];
+  onSet: (v: string) => void;
+  onClear: () => void;
+}) {
+  const customized = overrideValue !== undefined;
+  const effective = overrideValue ?? baseValue;
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-6)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: "var(--space-8)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: T.fontMono,
+            fontSize: "var(--font-size-xs)",
+            letterSpacing: "0.06em",
+            color: customized ? "var(--text-primary)" : "var(--text-tertiary)",
+          }}
+        >
+          {label}
+        </span>
+        {customized ? (
+          <button
+            type="button"
+            onClick={onClear}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: "var(--text-tertiary)",
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              cursor: "pointer",
+            }}
+          >
+            reset · inherits {baseValue}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onSet(baseValue)}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: "var(--accent-strong)",
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              cursor: "pointer",
+            }}
+          >
+            customize · inherits {baseValue}
+          </button>
+        )}
+      </div>
+      {customized && (
+        <Menu
+          value={effective}
+          onChange={onSet}
+          items={options.map((opt) => ({ value: opt, label: opt }))}
+          ariaLabel={label}
+          triggerStyle={{
+            width: "100%",
+            justifyContent: "space-between",
+            padding: "8px 10px",
+            background: "var(--input-bg)",
+            border: "1px solid var(--input-border)",
+            borderRadius: "var(--radius-sm)",
+            color: "var(--text-primary)",
+            fontFamily: T.fontMono,
+            fontSize: "var(--font-size-base)",
+          }}
+        />
+      )}
+    </div>
+  );
 }
 
 function Slider({
@@ -3900,10 +4637,11 @@ function Slider({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 6,
+        gap: "var(--space-6)",
         padding: "10px 12px",
         background: T.panel,
         border: `1px solid ${T.border}`,
+        borderRadius: "var(--radius-lg)",
       }}
     >
       <div
@@ -3916,14 +4654,14 @@ function Slider({
         <span
           style={{
             fontFamily: T.fontMono,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: T.muted,
             letterSpacing: "0.04em",
           }}
         >
           {label}
         </span>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
           {rightLabel}
         </span>
       </div>
@@ -4091,7 +4829,7 @@ function ModelCard({ model }: { model: ModelOption }) {
         padding: "14px 16px",
         display: "flex",
         flexDirection: "column",
-        gap: 8,
+        gap: "var(--space-8)",
       }}
     >
       <div
@@ -4099,7 +4837,7 @@ function ModelCard({ model }: { model: ModelOption }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 8,
+          gap: "var(--space-8)",
         }}
       >
         <span
@@ -4116,16 +4854,18 @@ function ModelCard({ model }: { model: ModelOption }) {
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 6,
-            padding: "3px 10px",
+            gap: "var(--space-6)",
+            padding: "4px 10px",
+            borderRadius: "var(--radius-pill)",
             background: T.accentSoft,
             border:
-              "1px solid color-mix(in srgb, var(--accent-strong) 30%, transparent)",
+              "1px solid var(--accent-border)",
             fontFamily: T.fontMono,
-            fontSize: 9,
+            fontSize: "var(--font-size-2xs)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             color: T.accent,
+            lineHeight: 1.2,
           }}
         >
           <span
@@ -4143,7 +4883,7 @@ function ModelCard({ model }: { model: ModelOption }) {
       <span
         style={{
           fontFamily: T.fontMono,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           color: T.muted,
           letterSpacing: "0.04em",
         }}
@@ -4151,7 +4891,7 @@ function ModelCard({ model }: { model: ModelOption }) {
         {model.provider}
         {model.label ? ` · ${model.label}` : ""}
       </span>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)" }}>
         {model.contextWindow && (
           <MetaChip>ctx {Math.round(model.contextWindow / 1000)}k</MetaChip>
         )}
@@ -4177,28 +4917,63 @@ function ModelPicker({
   onChange: (id: string) => void;
   allowEmpty?: boolean;
 }) {
+  const items: MenuItem<string>[] = [
+    ...(allowEmpty
+      ? [{ value: "", label: "— inherit chat model —" } as MenuItem<string>]
+      : []),
+    ...models.map((m) => ({ value: m.id, label: m.id, meta: m.provider })),
+  ];
   return (
-    <select
+    <Menu
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={{
-        padding: "9px 12px",
-        border: `1px solid ${T.border}`,
-        background: "var(--card)",
-        color: T.fg,
-        fontFamily: T.fontMono,
-        fontSize: 12,
+      onChange={onChange}
+      items={items}
+      ariaLabel="Model"
+      renderTrigger={(current) => (
+        <span
+          style={{
+            flex: 1,
+            display: "inline-flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "var(--space-12)",
+            minWidth: 0,
+          }}
+        >
+          <span
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {current?.label ?? (allowEmpty ? "— inherit chat model —" : "Select model")}
+          </span>
+          {current?.meta && (
+            <span
+              style={{
+                fontFamily: T.fontMono,
+                fontSize: "var(--font-size-2xs)",
+                fontWeight: 500,
+                color: T.muted,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                flexShrink: 0,
+              }}
+            >
+              {current.meta}
+            </span>
+          )}
+        </span>
+      )}
+      triggerStyle={{
         width: "100%",
-        cursor: "pointer",
+        padding: "9px 12px",
+        background: "var(--card)",
+        fontFamily: T.fontMono,
+        fontSize: "var(--font-size-base)",
       }}
-    >
-      {allowEmpty && <option value="">— inherit chat model —</option>}
-      {models.map((m) => (
-        <option key={m.id} value={m.id}>
-          {m.id} · {m.provider}
-        </option>
-      ))}
-    </select>
+    />
   );
 }
 
@@ -4227,7 +5002,7 @@ function BudgetCard({
         padding: "14px 16px",
         display: "flex",
         flexDirection: "column",
-        gap: 10,
+        gap: "var(--space-10)",
       }}
     >
       <div
@@ -4237,7 +5012,7 @@ function BudgetCard({
           alignItems: "baseline",
         }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-8)" }}>
           <span
             style={{
               fontFamily: T.fontHeading,
@@ -4253,7 +5028,7 @@ function BudgetCard({
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               letterSpacing: "0.14em",
               textTransform: "uppercase",
               color: "var(--text-tertiary)",
@@ -4265,7 +5040,8 @@ function BudgetCard({
       </div>
       <div
         style={{
-          height: 3,
+          height: 4,
+          borderRadius: "var(--radius-pill)",
           background: "var(--card-hover)",
           overflow: "hidden",
         }}
@@ -4274,6 +5050,7 @@ function BudgetCard({
           style={{
             width: `${pct}%`,
             height: "100%",
+            borderRadius: "var(--radius-pill)",
             background: T.accent,
           }}
         />
@@ -4281,7 +5058,7 @@ function BudgetCard({
       <span
         style={{
           fontFamily: T.fontMono,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           color: "var(--text-tertiary)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
@@ -4292,7 +5069,7 @@ function BudgetCard({
       <span
         style={{
           fontFamily: T.fontMono,
-          fontSize: 9,
+          fontSize: "var(--font-size-2xs)",
           color: "var(--text-quaternary)",
           letterSpacing: "0.10em",
           textTransform: "uppercase",
@@ -4311,8 +5088,9 @@ function MetaChip({ children }: { children: React.ReactNode }) {
         padding: "3px 8px",
         background: "var(--card-hover)",
         border: `1px solid ${T.border}`,
+        borderRadius: "var(--radius-pill)",
         fontFamily: T.fontMono,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         letterSpacing: "0.08em",
         color: "var(--text-tertiary)",
       }}
@@ -4406,7 +5184,7 @@ function KnowledgeTab({
         >
           <span>+ Bind another graph</span>
           <span
-            style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}
+            style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}
           >
             browse library ↗
           </span>
@@ -4414,10 +5192,10 @@ function KnowledgeTab({
         <span
           style={{
             fontFamily: T.fontMono,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: T.muted,
             lineHeight: 1.5,
-            marginTop: 4,
+            marginTop: "var(--space-4)",
           }}
         >
           Graphs are shared resources. Edit them in the Knowledge library.
@@ -4465,7 +5243,7 @@ function BindingCard({
         padding: "14px 16px",
         display: "flex",
         flexDirection: "column",
-        gap: 10,
+        gap: "var(--space-10)",
       }}
     >
       <div
@@ -4473,7 +5251,7 @@ function BindingCard({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 8,
+          gap: "var(--space-8)",
         }}
       >
         <Link
@@ -4481,11 +5259,11 @@ function BindingCard({
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 10,
+            gap: "var(--space-10)",
             color: T.fg,
             textDecoration: "none",
             fontFamily: T.fontHeading,
-            fontSize: 14,
+            fontSize: "var(--font-size-lg)",
             fontWeight: 600,
             minWidth: 0,
           }}
@@ -4499,6 +5277,7 @@ function BindingCard({
               width: 28,
               height: 28,
               border: `1px solid ${color.border}`,
+              borderRadius: "var(--radius-md)",
               background: color.bg,
               flexShrink: 0,
             }}
@@ -4519,33 +5298,29 @@ function BindingCard({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
             flexShrink: 0,
           }}
         >
-          <select
+          <Menu<BindingPriority>
             value={binding.priority}
-            onChange={(e) =>
-              onPriorityChange(e.target.value as BindingPriority)
-            }
-            style={{
+            onChange={onPriorityChange}
+            items={PRIORITY_OPTIONS.map((p) => ({ value: p, label: p }))}
+            ariaLabel="Binding priority"
+            align="right"
+            showChevron={false}
+            triggerStyle={{
               padding: "3px 8px",
               border: `1px solid ${color.border}`,
+              borderRadius: "var(--radius-pill)",
               background: color.bg,
               color: color.fg,
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
-              cursor: "pointer",
             }}
-          >
-            {PRIORITY_OPTIONS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+          />
           <Toggle on={binding.isActive} onChange={onActiveChange} />
         </div>
       </div>
@@ -4553,9 +5328,9 @@ function BindingCard({
         style={{
           display: "flex",
           flexWrap: "wrap",
-          gap: 12,
+          gap: "var(--space-12)",
           fontFamily: T.fontMono,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           color: T.muted,
         }}
       >
@@ -4594,7 +5369,7 @@ function Toggle({
       style={{
         width: 30,
         height: 16,
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         border: `1px solid ${on ? "rgba(140,231,210,0.40)" : T.border}`,
         background: on ? T.accentSoft : "transparent",
         position: "relative",
@@ -4660,23 +5435,25 @@ function LimitsTab({
         info={SECTION_INFO.topicRefusals}
       >
         <FieldLabel>topics · soft-decline at runtime</FieldLabel>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
           {refusals.map((r) => (
             <span
               key={r}
               style={{
-                padding: "3px 10px",
+                padding: "4px 10px",
+                borderRadius: "var(--radius-pill)",
                 background: T.dangerSoft,
                 border:
                   "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.10em",
                 textTransform: "uppercase",
                 color: T.danger,
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 6,
+                gap: "var(--space-6)",
+                lineHeight: 1.2,
               }}
             >
               {r}
@@ -4697,7 +5474,7 @@ function LimitsTab({
                   color: T.danger,
                   cursor: "pointer",
                   fontFamily: T.fontMono,
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   padding: 0,
                 }}
                 aria-label={`Remove ${r}`}
@@ -4723,18 +5500,13 @@ function LimitsTab({
               }
             }}
             placeholder="+ add a topic"
-            style={{
-              ...inputStyle,
-              width: 140,
-              padding: "3px 8px",
-              fontSize: 11,
-            }}
+            style={{ ...addChipInputStyle, width: 150 }}
           />
         </div>
         <span
           style={{
             fontFamily: T.fontBody,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: T.muted,
             lineHeight: 1.5,
           }}
@@ -4763,13 +5535,13 @@ function LimitsTab({
               padding: "10px 14px",
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              gap: "var(--space-10)",
             }}
           >
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: T.muted,
                 width: 22,
                 textAlign: "center",
@@ -4781,7 +5553,7 @@ function LimitsTab({
             <span
               style={{
                 fontFamily: T.fontBody,
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 color: T.fg,
                 flex: 1,
               }}
@@ -4843,7 +5615,7 @@ function AddRule({ onAdd }: { onAdd: (text: string) => void }) {
         ...inputStyle,
         padding: "9px 12px",
         fontFamily: T.fontBody,
-        fontSize: 12,
+        fontSize: "var(--font-size-base)",
         background: "rgba(140,231,210,0.04)",
         borderColor: "rgba(140,231,210,0.20)",
       }}
@@ -4883,16 +5655,16 @@ function SystemPromptFooter({
         borderTop: `1px solid ${T.border}`,
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
       }}
     >
       <div
-        style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}
+        style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-6)" }}
       >
         <span
           style={{
             fontFamily: T.fontMono,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: "var(--text-tertiary)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
@@ -4927,6 +5699,7 @@ function SystemPromptFooter({
           height: 32,
           padding: 0,
           border: `1px solid ${T.border}`,
+          borderRadius: "var(--radius-md)",
           background: "transparent",
           color: "var(--text-tertiary)",
           cursor: "pointer",
@@ -5070,11 +5843,14 @@ function PromptPreviewOverlay({
         style={{
           width: "100%",
           maxWidth: 880,
-          background: "var(--card)",
+          backgroundColor: "var(--background)",
+          backgroundImage: "none",
           border: `1px solid ${T.border}`,
+          borderRadius: "var(--radius-3xl)",
           boxShadow: "0 24px 60px var(--shadow, rgba(0,0,0,0.40))",
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
           maxHeight: "calc(100vh - 96px)",
         }}
       >
@@ -5085,7 +5861,7 @@ function PromptPreviewOverlay({
             display: "flex",
             alignItems: "flex-start",
             justifyContent: "space-between",
-            gap: 12,
+            gap: "var(--space-12)",
             borderBottom: `1px solid ${T.border}`,
           }}
         >
@@ -5093,14 +5869,14 @@ function PromptPreviewOverlay({
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 6,
+              gap: "var(--space-6)",
               minWidth: 0,
             }}
           >
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
                 color: T.accent,
@@ -5111,7 +5887,7 @@ function PromptPreviewOverlay({
             <span
               style={{
                 fontFamily: T.fontHeading,
-                fontSize: 18,
+                fontSize: "var(--font-size-2xl)",
                 fontWeight: 600,
                 letterSpacing: "-0.01em",
                 color: T.fg,
@@ -5122,7 +5898,7 @@ function PromptPreviewOverlay({
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: "var(--text-tertiary)",
                 letterSpacing: "0.10em",
               }}
@@ -5132,11 +5908,11 @@ function PromptPreviewOverlay({
                 : "abstract template · slot markers + conditionals"}
             </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-16)" }}>
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
                 letterSpacing: "0.14em",
                 textTransform: "uppercase",
                 color: "var(--text-tertiary)",
@@ -5155,10 +5931,11 @@ function PromptPreviewOverlay({
                 width: 26,
                 height: 24,
                 border: `1px solid ${T.border}`,
+                borderRadius: "var(--radius-pill)",
                 background: "transparent",
                 color: "var(--text-tertiary)",
                 cursor: "pointer",
-                fontSize: 16,
+                fontSize: "var(--font-size-xl)",
                 lineHeight: 1,
                 padding: 0,
               }}
@@ -5174,7 +5951,7 @@ function PromptPreviewOverlay({
             padding: "14px 24px 0",
             display: "flex",
             alignItems: "center",
-            gap: 14,
+            gap: "var(--space-14)",
           }}
         >
           <div
@@ -5182,6 +5959,8 @@ function PromptPreviewOverlay({
               display: "inline-flex",
               padding: 0,
               border: `1px solid ${T.border}`,
+              borderRadius: "var(--radius-pill)",
+              overflow: "hidden",
             }}
           >
             {(["rendered", "schema"] as const).map((v) => {
@@ -5197,7 +5976,7 @@ function PromptPreviewOverlay({
                     background: active ? T.accentSoft : "transparent",
                     color: active ? T.accent : "var(--text-tertiary)",
                     fontFamily: T.fontMono,
-                    fontSize: 11,
+                    fontSize: "var(--font-size-sm)",
                     letterSpacing: "0.14em",
                     textTransform: "uppercase",
                     fontWeight: active ? 600 : 400,
@@ -5210,7 +5989,7 @@ function PromptPreviewOverlay({
             })}
           </div>
           <span
-            style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}
+            style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}
           >
             {view === "rendered"
               ? "click a section to jump back to its source ↗"
@@ -5227,7 +6006,7 @@ function PromptPreviewOverlay({
             padding: "16px 24px",
             display: "flex",
             flexDirection: "column",
-            gap: 10,
+            gap: "var(--space-10)",
           }}
         >
           {sections.map((s) => (
@@ -5244,14 +6023,14 @@ function PromptPreviewOverlay({
               display: "flex",
               alignItems: "center",
               flexWrap: "wrap",
-              gap: 8,
+              gap: "var(--space-8)",
               padding: "10px 4px 4px",
             }}
           >
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: T.muted,
                 letterSpacing: "0.02em",
               }}
@@ -5275,13 +6054,13 @@ function PromptPreviewOverlay({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 12,
+            gap: "var(--space-12)",
           }}
         >
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: T.muted,
               letterSpacing: "0.04em",
             }}
@@ -5289,25 +6068,26 @@ function PromptPreviewOverlay({
             <KeyChip>⌘ C</KeyChip> {copied ? "copied" : "copies"} ·{" "}
             <KeyChip>esc</KeyChip> closes
           </span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: "var(--space-8)" }}>
             <button
               type="button"
               onClick={copyPrompt}
               style={{
                 padding: "7px 16px",
                 border: `1px solid ${T.border}`,
+                borderRadius: "var(--radius-pill)",
                 background: "transparent",
                 color: T.fg,
                 fontFamily: T.fontHeading,
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 fontWeight: 500,
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 6,
+                gap: "var(--space-6)",
               }}
             >
-              <span style={{ fontFamily: T.fontMono, fontSize: 11 }}>
+              <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)" }}>
                 {copied ? "✓" : "⧉"}
               </span>
               {copied ? "Copied" : "Copy prompt"}
@@ -5318,10 +6098,11 @@ function PromptPreviewOverlay({
               style={{
                 padding: "7px 18px",
                 border: `1px solid ${T.accent}`,
+                borderRadius: "var(--radius-pill)",
                 background: T.accent,
                 color: "var(--background)",
                 fontFamily: T.fontHeading,
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -5353,7 +6134,7 @@ function PreviewSectionCard({
         padding: "12px 14px",
         display: "flex",
         flexDirection: "column",
-        gap: 8,
+        gap: "var(--space-8)",
         cursor: jumpable ? "pointer" : "default",
       }}
     >
@@ -5362,26 +6143,26 @@ function PreviewSectionCard({
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
-          gap: 8,
+          gap: "var(--space-8)",
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "baseline",
-            gap: 8,
+            gap: "var(--space-8)",
             minWidth: 0,
           }}
         >
           <span
-            style={{ fontFamily: T.fontMono, fontSize: 11, color: T.muted }}
+            style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.muted }}
           >
             —
           </span>
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               fontWeight: 600,
               color: T.fg,
             }}
@@ -5391,7 +6172,7 @@ function PreviewSectionCard({
           <span
             style={{
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: T.muted,
               letterSpacing: "0.02em",
             }}
@@ -5403,12 +6184,12 @@ function PreviewSectionCard({
           style={{
             display: "flex",
             alignItems: "baseline",
-            gap: 10,
+            gap: "var(--space-10)",
             flexShrink: 0,
           }}
         >
           <span
-            style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}
+            style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}
           >
             {section.tokens} tokens
           </span>
@@ -5416,7 +6197,7 @@ function PreviewSectionCard({
             <span
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 color: T.muted,
                 letterSpacing: "0.02em",
               }}
@@ -5431,7 +6212,7 @@ function PreviewSectionCard({
           style={{
             margin: 0,
             fontFamily: T.fontMono,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             lineHeight: 1.55,
             color: T.fg,
             whiteSpace: "pre-wrap",
@@ -5450,11 +6231,11 @@ function NotInPromptChip({ children }: { children: React.ReactNode }) {
     <span
       style={{
         padding: "3px 10px",
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         background: "var(--card-hover)",
         border: `1px solid ${T.border}`,
         fontFamily: T.fontMono,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         color: T.muted,
       }}
     >
@@ -5469,11 +6250,11 @@ function KeyChip({ children }: { children: React.ReactNode }) {
       style={{
         display: "inline-block",
         padding: "1px 6px",
-        borderRadius: 4,
+        borderRadius: "var(--radius-xs)",
         border: `1px solid ${T.border}`,
         background: "var(--card-hover)",
         fontFamily: T.fontMono,
-        fontSize: 9,
+        fontSize: "var(--font-size-2xs)",
         color: T.fg,
         letterSpacing: "0.04em",
         margin: "0 1px",
@@ -5798,7 +6579,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
     <span
       style={{
         fontFamily: T.fontMono,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         color: "var(--text-tertiary)",
         letterSpacing: "0.18em",
         textTransform: "uppercase",
@@ -5822,7 +6603,7 @@ function EmptyHint({ children }: { children: React.ReactNode }) {
       <span
         style={{
           fontFamily: T.fontBody,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
           color: T.muted,
           lineHeight: 1.5,
         }}
@@ -5833,18 +6614,24 @@ function EmptyHint({ children }: { children: React.ReactNode }) {
   );
 }
 
+/* Shared shell + control styles. Adding `borderRadius` at the
+ * primitive level cascades through every consumer (InfoCard, inputs,
+ * textareas, action buttons), so the sidebar reads consistently
+ * rounded without touching every call site. */
 const cardShell: React.CSSProperties = {
   background: T.panel,
   border: `1px solid ${T.border}`,
+  borderRadius: "var(--radius-xl)",
 };
 
 const inputStyle: React.CSSProperties = {
   padding: "9px 12px",
   border: `1px solid ${T.border}`,
+  borderRadius: "var(--radius-md)",
   background: "var(--card)",
   color: T.fg,
   fontFamily: T.fontBody,
-  fontSize: 13,
+  fontSize: "var(--font-size-md)",
   width: "100%",
   outline: "none",
 };
@@ -5852,7 +6639,7 @@ const inputStyle: React.CSSProperties = {
 const textareaStyle: React.CSSProperties = {
   ...inputStyle,
   fontFamily: T.fontBody,
-  fontSize: 13,
+  fontSize: "var(--font-size-md)",
   lineHeight: 1.5,
   resize: "vertical",
 };
@@ -5860,10 +6647,11 @@ const textareaStyle: React.CSSProperties = {
 const addButtonStyle: React.CSSProperties = {
   padding: "10px 14px",
   border: `1px solid ${T.border}`,
+  borderRadius: "var(--radius-lg)",
   background: "color-mix(in srgb, var(--accent-strong) 4%, transparent)",
   color: T.fg,
   fontFamily: T.fontBody,
-  fontSize: 13,
+  fontSize: "var(--font-size-md)",
   fontWeight: 500,
   cursor: "pointer",
   width: "100%",
@@ -5873,10 +6661,11 @@ const addButtonStyle: React.CSSProperties = {
 const primaryButtonStyle: React.CSSProperties = {
   padding: "7px 16px",
   border: `1px solid ${T.accent}`,
+  borderRadius: "var(--radius-pill)",
   background: T.accent,
   color: "var(--background)",
   fontFamily: T.fontHeading,
-  fontSize: 12,
+  fontSize: "var(--font-size-base)",
   fontWeight: 600,
   cursor: "pointer",
 };
@@ -5884,10 +6673,11 @@ const primaryButtonStyle: React.CSSProperties = {
 const ghostButtonStyle: React.CSSProperties = {
   padding: "6px 12px",
   border: `1px solid ${T.border}`,
+  borderRadius: "var(--radius-pill)",
   background: "transparent",
   color: "var(--text-tertiary)",
   fontFamily: T.fontMono,
-  fontSize: 10,
+  fontSize: "var(--font-size-xs)",
   letterSpacing: "0.14em",
   textTransform: "uppercase",
   cursor: "pointer",
@@ -5898,7 +6688,7 @@ const editLinkStyle: React.CSSProperties = {
   background: "transparent",
   color: "var(--text-tertiary)",
   fontFamily: T.fontMono,
-  fontSize: 10,
+  fontSize: "var(--font-size-xs)",
   letterSpacing: "0.10em",
   textTransform: "uppercase",
   cursor: "pointer",

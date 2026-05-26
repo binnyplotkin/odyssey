@@ -16,7 +16,7 @@ const T = {
   border: "#FFFFFF14",
   borderSoft: "#FFFFFF0F",
   borderFaint: "#FFFFFF0A",
-  accent: "#8CE7D2",
+  accent: "#8FD1CB",
   accentInk: "#04231E",
   green: "#6FCFA0",
   amber: "#F5C26B",
@@ -119,7 +119,7 @@ export function ResetPasswordModal({ open, target, onClose, onSaved }: Props) {
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
         display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 16,
+        padding: "var(--space-16)",
         backgroundColor: T.backdrop,
         animation: "userModalFade 140ms ease-out",
       }}
@@ -132,8 +132,8 @@ export function ResetPasswordModal({ open, target, onClose, onSaved }: Props) {
         style={{
           width: 440, maxWidth: "100%",
           background: T.panel, border: `1px solid ${T.border}`,
-          borderRadius: 16, overflow: "hidden",
-          boxShadow: "0 32px 64px -16px rgba(0,0,0,0.7)",
+          borderRadius: "var(--radius-3xl)", overflow: "hidden",
+          boxShadow: "var(--elevation-modal)",
           animation: "userModalRise 180ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
@@ -142,20 +142,20 @@ export function ResetPasswordModal({ open, target, onClose, onSaved }: Props) {
           display: "flex", alignItems: "flex-start", justifyContent: "space-between",
           padding: "22px 24px 18px 24px",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
             <span style={{
-              width: 36, height: 36, flexShrink: 0, borderRadius: 10,
+              width: 36, height: 36, flexShrink: 0, borderRadius: "var(--radius-lg)",
               background: "rgba(255,255,255,0.04)", border: `1px solid ${T.border}`,
               display: "flex", alignItems: "center", justifyContent: "center",
               color: T.accent,
             }}>
               <KeyIcon />
             </span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
               <div style={{ fontFamily: T.fontHeading, fontSize: 17, fontWeight: 600, color: T.fg, lineHeight: "22px" }}>
                 Reset password
               </div>
-              <div style={{ fontFamily: T.fontMono, fontSize: 10, color: T.faint, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              <div style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.faint, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 Admin override · Takes effect immediately
               </div>
             </div>
@@ -165,27 +165,27 @@ export function ResetPasswordModal({ open, target, onClose, onSaved }: Props) {
 
         {/* User card */}
         <div style={{
-          display: "flex", alignItems: "center", gap: 12,
+          display: "flex", alignItems: "center", gap: "var(--space-12)",
           margin: "0 24px",
           padding: "12px 14px",
-          background: T.panelInner, border: `1px solid ${T.borderFaint}`, borderRadius: 10,
+          background: T.panelInner, border: `1px solid ${T.borderFaint}`, borderRadius: "var(--radius-lg)",
         }}>
           <Avatar email={target.email} name={target.name} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: T.fontBody, fontSize: 13, fontWeight: 600, color: T.fg }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600, color: T.fg }}>
               {target.name ?? target.email}
             </div>
             <div style={{
-              fontFamily: T.fontMono, fontSize: 11, color: T.meta,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.meta,
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {target.email}
             </div>
           </div>
           <span style={{
-            display: "flex", alignItems: "center", gap: 5,
-            padding: "4px 8px", background: "rgba(255,255,255,0.04)", borderRadius: 6,
-            fontFamily: T.fontMono, fontSize: 10, color: T.meta, letterSpacing: "0.06em",
+            display: "flex", alignItems: "center", gap: "var(--space-5)",
+            padding: "4px 8px", background: "rgba(255,255,255,0.04)", borderRadius: "var(--radius-sm)",
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.meta, letterSpacing: "0.06em",
           }}>
             <LockIcon />
             {target.authMethods.includes("password") ? "PASSWORD" : "NEW PASSWORD"}
@@ -193,9 +193,9 @@ export function ResetPasswordModal({ open, target, onClose, onSaved }: Props) {
         </div>
 
         {/* New password */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "18px 24px 0 24px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)", padding: "18px 24px 0 24px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
               New password
             </span>
             <button type="button" onClick={handleGenerate} style={generateButtonStyle()}>
@@ -215,8 +215,8 @@ export function ResetPasswordModal({ open, target, onClose, onSaved }: Props) {
         </div>
 
         {/* Confirm */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "14px 24px 0 24px" }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)", padding: "14px 24px 0 24px" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Confirm password
           </span>
           <PasswordInput
@@ -234,11 +234,11 @@ export function ResetPasswordModal({ open, target, onClose, onSaved }: Props) {
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "14px 24px",
         }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <div style={{ fontFamily: T.fontBody, fontSize: 13, fontWeight: 500, color: T.fg }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500, color: T.fg }}>
               Sign user out everywhere
             </div>
-            <div style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "16px" }}>
+            <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: "16px" }}>
               Forces re-login on all active sessions.
             </div>
           </div>
@@ -249,10 +249,10 @@ export function ResetPasswordModal({ open, target, onClose, onSaved }: Props) {
           <div style={{
             margin: "0 24px 12px 24px",
             padding: "10px 14px",
-            borderRadius: 10,
+            borderRadius: "var(--radius-lg)",
             background: "rgba(243,114,114,0.08)",
             border: "1px solid rgba(243,114,114,0.20)",
-            fontFamily: T.fontBody, fontSize: 12, color: "#F4A8A8",
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: "#F4A8A8",
           }}>
             {error}
           </div>
@@ -260,7 +260,7 @@ export function ResetPasswordModal({ open, target, onClose, onSaved }: Props) {
 
         {/* Footer */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8,
+          display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "var(--space-8)",
           padding: "18px 24px",
           borderTop: `1px solid ${T.borderFaint}`,
           background: "rgba(255,255,255,0.015)",
@@ -297,8 +297,8 @@ function PasswordInput({
 }) {
   return (
     <div style={{
-      display: "flex", alignItems: "center", padding: "11px 14px", gap: 10,
-      background: T.panelInner, border: `1px solid ${T.border}`, borderRadius: 10,
+      display: "flex", alignItems: "center", padding: "11px 14px", gap: "var(--space-10)",
+      background: T.panelInner, border: `1px solid ${T.border}`, borderRadius: "var(--radius-lg)",
     }}>
       <input
         ref={inputRef}
@@ -308,7 +308,7 @@ function PasswordInput({
         placeholder={placeholder}
         style={{
           flex: 1, border: "none", background: "transparent", outline: "none",
-          fontFamily: T.fontMono, fontSize: 14, color: T.fg, letterSpacing: visible ? "0.05em" : "0.2em",
+          fontFamily: T.fontMono, fontSize: "var(--font-size-lg)", color: T.fg, letterSpacing: visible ? "0.05em" : "0.2em",
         }}
       />
       <IconButton onClick={onToggleVisible} aria-label={visible ? "Hide password" : "Show password"}>
@@ -338,13 +338,13 @@ function StrengthMeter({
 }) {
   const color = scoreColor(score, tooShort);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 2 }}>
-      <div style={{ display: "flex", gap: 4 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", paddingTop: "var(--space-2)" }}>
+      <div style={{ display: "flex", gap: "var(--space-4)" }}>
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
             style={{
-              flex: 1, height: 3, borderRadius: 2,
+              flex: 1, height: 3, borderRadius: "var(--radius-2xs)",
               background: i < score ? color : "rgba(255,255,255,0.08)",
             }}
           />
@@ -352,13 +352,13 @@ function StrengthMeter({
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{
-          fontFamily: T.fontBody, fontSize: 11, fontWeight: 500,
+          fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500,
           color: tooShort ? T.amber : score > 0 ? color : T.muted,
         }}>
           {tooShort ? `Too short (need ${MIN_LENGTH}+)` : score > 0 ? label : "Enter a password"}
         </span>
         <span style={{
-          fontFamily: T.fontMono, fontSize: 10, color: T.faint,
+          fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.faint,
           letterSpacing: "0.06em", textTransform: "uppercase",
         }}>
           {hint}
@@ -371,25 +371,25 @@ function StrengthMeter({
 function MatchHint({ pwd, confirm }: { pwd: string; confirm: string }) {
   if (!confirm) {
     return (
-      <div style={{ fontFamily: T.fontBody, fontSize: 11, color: T.faint }}>
+      <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.faint }}>
         Re-enter the password to confirm.
       </div>
     );
   }
   const match = pwd === confirm;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
       {match ? (
         <>
           <CheckIcon stroke={T.green} />
-          <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.green, fontWeight: 500 }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.green, fontWeight: 500 }}>
             Passwords match
           </span>
         </>
       ) : (
         <>
           <XSmallIcon stroke={T.red} />
-          <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.red, fontWeight: 500 }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.red, fontWeight: 500 }}>
             Passwords don't match
           </span>
         </>
@@ -405,9 +405,9 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
       onClick={() => onChange(!on)}
       aria-pressed={on}
       style={{
-        width: 32, height: 18, padding: 2, border: "none",
+        width: 32, height: 18, padding: "var(--space-2)", border: "none",
         background: on ? T.accent : "rgba(255,255,255,0.12)",
-        borderRadius: 9,
+        borderRadius: "var(--radius-md)",
         display: "flex",
         justifyContent: on ? "flex-end" : "flex-start",
         cursor: "pointer",
@@ -415,7 +415,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
       }}
     >
       <span style={{
-        width: 14, height: 14, borderRadius: 7,
+        width: 14, height: 14, borderRadius: "var(--radius-md)",
         background: on ? T.accentInk : "#FFFFFF",
         transition: "transform 120ms",
       }} />
@@ -427,8 +427,8 @@ function Avatar({ email, name }: { email: string; name: string | null }) {
   const ch = (name?.trim() || email).charAt(0).toUpperCase();
   return (
     <div style={{
-      width: 36, height: 36, flexShrink: 0, borderRadius: 18,
-      background: "linear-gradient(135deg, #8CE7D2 0%, #4FB8A8 100%)",
+      width: 36, height: 36, flexShrink: 0, borderRadius: "var(--radius-3xl)",
+      background: "linear-gradient(135deg, #8FD1CB 0%, #4FB8A8 100%)",
       display: "flex", alignItems: "center", justifyContent: "center",
       fontFamily: T.fontHeading, fontSize: 15, fontWeight: 600, color: T.accentInk,
     }}>
@@ -474,7 +474,7 @@ function CloseButton({ onClick, disabled }: { onClick: () => void; disabled?: bo
       style={{
         width: 28, height: 28,
         display: "flex", alignItems: "center", justifyContent: "center",
-        borderRadius: 8, border: "none",
+        borderRadius: "var(--radius-md)", border: "none",
         background: "rgba(255,255,255,0.03)",
         color: "#FFFFFF99", cursor: disabled ? "not-allowed" : "pointer",
       }}
@@ -488,18 +488,18 @@ function CloseButton({ onClick, disabled }: { onClick: () => void; disabled?: bo
 
 function generateButtonStyle(): React.CSSProperties {
   return {
-    display: "flex", alignItems: "center", gap: 6,
+    display: "flex", alignItems: "center", gap: "var(--space-6)",
     border: "none", background: "transparent",
-    fontFamily: T.fontBody, fontSize: 11, fontWeight: 500,
+    fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500,
     color: T.accent, cursor: "pointer",
   };
 }
 
 function ghostButtonStyle(disabled: boolean): React.CSSProperties {
   return {
-    padding: "9px 16px", borderRadius: 9,
+    padding: "9px 16px", borderRadius: "var(--radius-md)",
     border: `1px solid ${T.border}`, background: "transparent",
-    fontFamily: T.fontBody, fontSize: 13, fontWeight: 500,
+    fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500,
     color: T.fgDim,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
@@ -508,10 +508,10 @@ function ghostButtonStyle(disabled: boolean): React.CSSProperties {
 
 function primaryButtonStyle(disabled: boolean): React.CSSProperties {
   return {
-    display: "flex", alignItems: "center", gap: 8,
-    padding: "9px 18px", borderRadius: 9,
+    display: "flex", alignItems: "center", gap: "var(--space-8)",
+    padding: "9px 18px", borderRadius: "var(--radius-md)",
     border: "none", background: T.accent,
-    fontFamily: T.fontBody, fontSize: 13, fontWeight: 600,
+    fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
     color: T.accentInk,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.5 : 1,

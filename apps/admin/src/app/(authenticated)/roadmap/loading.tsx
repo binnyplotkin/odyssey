@@ -3,7 +3,7 @@ import { Skeleton } from "@odyssey/ui";
 const CARD: React.CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--card-border)",
-  borderRadius: 12,
+  borderRadius: "var(--radius-xl)",
 };
 
 const BAR_LANES = [
@@ -18,10 +18,10 @@ const BAR_LANES = [
 
 export default function RoadmapLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)", height: "100%" }}>
       {/* Header: tabs + actions */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: "var(--space-6)" }}>
           {[64, 76, 64].map((w, i) => (
             <Skeleton key={i} width={w} height={28} radius={8} static />
           ))}
@@ -30,9 +30,9 @@ export default function RoadmapLoading() {
       </div>
 
       {/* Gantt frame */}
-      <div style={{ ...CARD, padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ ...CARD, padding: "var(--space-16)", display: "flex", flexDirection: "column", gap: "var(--space-14)" }}>
         {/* Time axis */}
-        <div style={{ display: "flex", gap: 10, paddingLeft: 160 }}>
+        <div style={{ display: "flex", gap: "var(--space-10)", paddingLeft: 160 }}>
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} width={64} height={11} static />
           ))}
@@ -40,7 +40,7 @@ export default function RoadmapLoading() {
 
         {/* Lanes */}
         {BAR_LANES.map((lane, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
             <Skeleton width={140} height={13} />
             <div
               style={{
@@ -48,7 +48,7 @@ export default function RoadmapLoading() {
                 flex: 1,
                 height: 24,
                 background: "var(--panel)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-sm)",
               }}
             >
               <div

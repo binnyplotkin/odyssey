@@ -23,12 +23,12 @@ const T = {
 };
 
 const TYPE_COLOR: Record<WikiPageType, string> = {
-  entity:         "#FBA7C0",
-  event:          "#FACC15",
-  concept:        "#A88CFF",
-  relationship:   "#8CE7D2",
-  timeline:       "#94A3B8",
-  voice_identity: "#E879A0",
+  entity:         "var(--active-teal)",
+  event:          "var(--warning-amber)",
+  concept:        "var(--event-violet)",
+  relationship:   "var(--emissive-mint)",
+  timeline:       "var(--status-archived)",
+  voice_identity: "var(--critical-crimson)",
 };
 
 /* ── Edge styling per kind ─────────────────────────────────────── */
@@ -147,23 +147,26 @@ export function WikiGraph({
   return (
     <div style={{
       display: "flex", flexDirection: "column",
-      background: T.panel, border: `1px solid ${T.border}`,
-      borderRadius: 14, overflow: "hidden",
+      background: "var(--surface-material, var(--panel))",
+      border: "1px solid var(--border-subtle, var(--border))",
+      borderRadius: "var(--radius-panel, 20px)",
+      boxShadow: "var(--elevation-surface)",
+      overflow: "hidden",
     }}>
       {/* Toolbar */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "10px 16px", borderBottom: `1px solid ${T.border}`,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Graph
           </span>
-          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted }}>
             {pages.length} nodes · {edges.length} edges
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
           <TypePill active={typeFilter === "all"} onClick={() => setTypeFilter("all")} label="All" count={typeCounts.all} />
           {(Object.keys(TYPE_COLOR) as WikiPageType[]).map((t) => {
             if (typeCounts[t] === 0) return null;
@@ -184,12 +187,12 @@ export function WikiGraph({
       {/* Canvas */}
       <div style={{
         position: "relative",
-        background: "radial-gradient(circle at 50% 40%, rgba(255,255,255,0.02) 0%, rgba(0,0,0,0.15) 100%)",
+        background: "var(--canvas-background)",
       }}>
         {!hasData ? (
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            height: H, color: T.muted, fontFamily: T.fontBody, fontSize: 13,
+            height: H, color: T.muted, fontFamily: T.fontBody, fontSize: "var(--font-size-md)",
           }}>
             No pages to plot yet.
           </div>
@@ -218,8 +221,8 @@ export function WikiGraph({
                       x={col.center} y={HEADER_H / 2 + 3}
                       textAnchor="middle"
                       style={{
-                        fontFamily: T.fontMono, fontSize: 10, fontWeight: 600,
-                        fill: "#8CE7D2", letterSpacing: "0.1em",
+                        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600,
+                        fill: "var(--accent-strong)", letterSpacing: "0.1em",
                       }}
                     >
                       {col.title.toUpperCase()}
@@ -228,7 +231,7 @@ export function WikiGraph({
                       x={col.center} y={HEADER_H / 2 + 16}
                       textAnchor="middle"
                       style={{
-                        fontFamily: T.fontMono, fontSize: 9,
+                        fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)",
                         fill: "rgba(140,231,210,0.6)", letterSpacing: "0.06em",
                       }}
                     >
@@ -240,7 +243,7 @@ export function WikiGraph({
                     x={col.center} y={HEADER_H / 2 + 3}
                     textAnchor="middle"
                     style={{
-                      fontFamily: T.fontMono, fontSize: 10, fontWeight: 600,
+                      fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600,
                       fill: "rgba(255,255,255,0.35)", letterSpacing: "0.1em",
                     }}
                   >
@@ -262,7 +265,7 @@ export function WikiGraph({
                 <text
                   x={SIDE_PAD} y={H - TIMELESS_H + 18}
                   style={{
-                    fontFamily: T.fontMono, fontSize: 9, fontWeight: 500,
+                    fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 500,
                     fill: "rgba(255,255,255,0.3)", letterSpacing: "0.1em",
                   }}
                 >
@@ -285,20 +288,36 @@ export function WikiGraph({
                 const opacity = !focusId ? 1 : adjacent ? 1 : 0.15;
 
                 return (
-                  <line
-                    key={edge.id}
-                    x1={fromN.x} y1={fromN.y}
-                    x2={toN.x} y2={toN.y}
-                    stroke={style.stroke}
-                    strokeWidth={adjacent && focusId ? style.width * 1.5 : style.width}
-                    strokeDasharray={style.dash}
-                    strokeLinecap="round"
-                    style={{
-                      opacity,
-                      transition: "opacity 120ms, stroke-width 120ms",
-                      pointerEvents: "none",
-                    }}
-                  />
+                  <g key={edge.id}>
+                    <line
+                      x1={fromN.x} y1={fromN.y}
+                      x2={toN.x} y2={toN.y}
+                      stroke={style.stroke}
+                      strokeWidth={adjacent && focusId ? style.width * 1.5 : style.width}
+                      strokeDasharray={style.dash}
+                      strokeLinecap="round"
+                      style={{
+                        opacity,
+                        transition: "opacity 180ms, stroke-width 180ms",
+                        pointerEvents: "none",
+                      }}
+                    />
+                    {adjacent && focusId && (
+                      <line
+                        x1={fromN.x} y1={fromN.y}
+                        x2={toN.x} y2={toN.y}
+                        stroke="var(--emissive-mint)"
+                        strokeWidth="1"
+                        strokeDasharray="2 12"
+                        strokeLinecap="round"
+                        style={{
+                          opacity: 0.72,
+                          pointerEvents: "none",
+                          animation: "odyssey-signal-flow 1.8s linear infinite",
+                        }}
+                      />
+                    )}
+                  </g>
                 );
               })}
             </g>
@@ -335,9 +354,11 @@ export function WikiGraph({
         {/* Legend */}
         <div style={{
           position: "absolute", bottom: 8, right: 12,
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "4px 10px", borderRadius: 999,
-          background: "var(--background)", border: `1px solid ${T.border}`,
+          display: "flex", alignItems: "center", gap: "var(--space-10)",
+          padding: "4px 10px", borderRadius: "var(--radius-pill)",
+          background: "color-mix(in srgb, var(--background) 80%, transparent)",
+          border: `1px solid ${T.border}`,
+          backdropFilter: "blur(14px)",
           pointerEvents: "none",
         }}>
           <LegendEntry kind="relates_to" />
@@ -382,15 +403,19 @@ function NodeDot({
     >
       {/* Selection glow */}
       {selected && (
-        <circle r={r + 8} fill="none" stroke="#8CE7D2" strokeWidth="1.5" opacity="0.35" />
+        <circle r={r + 8} fill="none" stroke="var(--emissive-mint)" strokeWidth="1.5" opacity="0.35" />
       )}
+      <circle r={r + 6} fill={color} opacity={selected || hover ? 0.14 : 0.075} />
       {/* Fill */}
       <circle
         r={r}
         fill={color}
-        stroke={selected ? "#8CE7D2" : "var(--background)"}
+        stroke={selected ? "var(--emissive-mint)" : "var(--background)"}
         strokeWidth={selected ? 2 : 2}
-        style={{ transition: "r 120ms" }}
+        style={{
+          filter: selected || hover ? "drop-shadow(0 0 10px color-mix(in srgb, var(--emissive-mint) 42%, transparent))" : undefined,
+          transition: "r 180ms, filter 180ms",
+        }}
       />
       {/* Label */}
       <text
@@ -399,7 +424,7 @@ function NodeDot({
         style={{
           fontFamily: T.fontBody, fontSize: 10.5,
           fontWeight: selected ? 600 : 500,
-          fill: selected ? "#FFFFFFEE" : "rgba(255,255,255,0.85)",
+          fill: selected ? "var(--text-primary)" : "var(--text-secondary)",
           opacity: labelOpacity,
           pointerEvents: "none",
           userSelect: "none",
@@ -420,12 +445,12 @@ function TypePill({
     <button
       type="button" onClick={onClick}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 5,
-        padding: "3px 10px", borderRadius: 999,
+        display: "inline-flex", alignItems: "center", gap: "var(--space-5)",
+        padding: "3px 10px", borderRadius: "var(--radius-xl)",
         border: active ? "none" : `1px solid ${T.border}`,
-        background: active ? "rgba(140,231,210,0.1)" : "transparent",
-        color: active ? "#8CE7D2" : T.muted,
-        fontFamily: T.fontBody, fontSize: 11, fontWeight: active ? 500 : 400,
+        background: active ? "var(--accent-soft)" : "transparent",
+        color: active ? "var(--accent-strong)" : T.muted,
+        fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: active ? 500 : 400,
         cursor: "pointer", whiteSpace: "nowrap",
       }}
     >
@@ -439,11 +464,11 @@ function TypePill({
 function LegendEntry({ kind }: { kind: EdgeKind }) {
   const s = EDGE_STYLE[kind];
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-5)" }}>
       <svg width="20" height="6" style={{ display: "block" }}>
         <line x1="0" y1="3" x2="20" y2="3" stroke={s.stroke} strokeWidth={s.width} strokeDasharray={s.dash} strokeLinecap="round" />
       </svg>
-      <span style={{ fontFamily: T.fontMono, fontSize: 9, color: T.muted, letterSpacing: "0.04em" }}>
+      <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: T.muted, letterSpacing: "0.04em" }}>
         {kind.replace(/_/g, " ")}
       </span>
     </span>

@@ -49,14 +49,14 @@ const T = {
 /* ── Avatar palette ────────────────────────────────────────── */
 
 const AVATAR_PALETTE: Array<{ bg: string; fg: string }> = [
-  { bg: "#4D3A28", fg: "#E8B87A" },
-  { bg: "#4D2828", fg: "#E89090" },
-  { bg: "#342D4D", fg: "#B49DE8" },
-  { bg: "#28384D", fg: "#7AB0E8" },
-  { bg: "#28422D", fg: "#8AD09A" },
-  { bg: "#402836", fg: "#E89BC0" },
-  { bg: "#334D28", fg: "#A8D07A" },
-  { bg: "#34394D", fg: "#A8AEC4" },
+  { bg: "color-mix(in srgb, var(--warning-amber) 16%, transparent)", fg: "var(--warning-amber)" },
+  { bg: "var(--critical-fill)", fg: "var(--status-error)" },
+  { bg: "color-mix(in srgb, var(--event-violet) 16%, transparent)", fg: "var(--event-violet)" },
+  { bg: "color-mix(in srgb, var(--signal-blue) 15%, transparent)", fg: "var(--signal-blue)" },
+  { bg: "color-mix(in srgb, var(--status-live) 14%, transparent)", fg: "var(--status-live)" },
+  { bg: "color-mix(in srgb, var(--active-teal) 14%, transparent)", fg: "var(--active-teal)" },
+  { bg: "color-mix(in srgb, var(--emissive-mint) 12%, transparent)", fg: "var(--emissive-mint)" },
+  { bg: "color-mix(in srgb, var(--status-archived) 14%, transparent)", fg: "var(--status-archived)" },
 ];
 
 function hashString(str: string): number {
@@ -84,11 +84,11 @@ function formatRelative(iso: string | null): { label: string; dotColor: string |
   const diffMs = Date.now() - then;
   const mins = Math.floor(diffMs / 60000);
 
-  if (mins < 2) return { label: "Active now", dotColor: "#4ADE80" };
-  if (mins < 60) return { label: `${mins}m ago`, dotColor: "#4ADE80" };
+  if (mins < 2) return { label: "Active now", dotColor: "var(--status-live)" };
+  if (mins < 60) return { label: `${mins}m ago`, dotColor: "var(--status-live)" };
 
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return { label: `${hours}h ago`, dotColor: "#FACC15" };
+  if (hours < 24) return { label: `${hours}h ago`, dotColor: "var(--status-draft)" };
 
   const days = Math.floor(hours / 24);
   if (days < 7) return { label: `${days}d ago`, dotColor: "var(--muted)" };
@@ -319,14 +319,22 @@ export function UsersTable({ users, currentUserId }: Props) {
 
   useEffect(() => {
     setContent(
-      <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          gap: "var(--space-12)",
+          minWidth: 0,
+        }}
+      >
         <h1
           style={{
-            fontSize: 16,
+            fontSize: "var(--font-size-xl)",
             fontWeight: 700,
             color: "var(--foreground)",
             marginTop: 0,
-            marginRight: 12,
+            marginRight: 0,
             marginBottom: 0,
             marginLeft: 0,
             whiteSpace: "nowrap",
@@ -337,7 +345,7 @@ export function UsersTable({ users, currentUserId }: Props) {
         </h1>
 
         {/* Filter pills */}
-        <div ref={filterRef} className="admin-table-header-filters" style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
+        <div ref={filterRef} className="admin-table-header-filters" style={{ display: "flex", gap: "var(--space-6)", whiteSpace: "nowrap" }}>
           {FILTER_PILLS.map((pill) => {
             const activeValue = filters[pill.key];
             const isActive = !!activeValue;
@@ -348,15 +356,17 @@ export function UsersTable({ users, currentUserId }: Props) {
             return (
               <div key={pill.key} style={{ position: "relative" }}>
                 <button
+                  className="odyssey-filter-pill"
+                  data-active={isActive}
                   type="button"
                   onClick={() => setOpenFilterRef.current(isOpen ? null : pill.key)}
                   style={{
                     padding: "5px 12px",
-                    borderRadius: 8,
-                    border: `1px solid ${isActive ? "rgba(140, 231, 210, 0.3)" : "var(--border)"}`,
-                    background: isActive ? "rgba(140, 231, 210, 0.08)" : "transparent",
-                    color: isActive ? "#8CE7D2" : "var(--muted)",
-                    fontSize: 11,
+                    borderRadius: "var(--radius-md)",
+                    border: `1px solid ${isActive ? "var(--border-active)" : "var(--border)"}`,
+                    background: isActive ? "var(--accent-soft)" : "transparent",
+                    color: isActive ? "var(--accent-strong)" : "var(--muted)",
+                    fontSize: "var(--font-size-sm)",
                     fontWeight: 500,
                     cursor: "pointer",
                     fontFamily: "inherit",
@@ -364,7 +374,7 @@ export function UsersTable({ users, currentUserId }: Props) {
                   }}
                 >
                   {pill.label}
-                  {isActive && <span style={{ marginLeft: 4, opacity: 0.7 }}>{activeLabel}</span>}
+                  {isActive && <span style={{ marginLeft: "var(--space-4)", opacity: 0.7 }}>{activeLabel}</span>}
                 </button>
                 {isOpen && (
                   <FilterDropdown
@@ -380,8 +390,9 @@ export function UsersTable({ users, currentUserId }: Props) {
 
         <div style={{ flex: 1 }} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
           <button
+            className="odyssey-icon-button"
             type="button"
             onClick={() => clearAllFiltersRef.current()}
             style={{
@@ -390,12 +401,12 @@ export function UsersTable({ users, currentUserId }: Props) {
               justifyContent: "center",
               width: 30,
               height: 30,
-              borderRadius: 8,
+              borderRadius: "var(--radius-md)",
               border: "1px solid var(--border)",
               background: "transparent",
               color: "var(--muted)",
               cursor: "pointer",
-              fontSize: 14,
+              fontSize: "var(--font-size-lg)",
             }}
             title="Reset filters"
           >
@@ -403,17 +414,18 @@ export function UsersTable({ users, currentUserId }: Props) {
           </button>
 
           <button
+            className="odyssey-primary-button"
             type="button"
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 4,
+              gap: "var(--space-4)",
               padding: "6px 14px",
-              borderRadius: 8,
+              borderRadius: "var(--radius-md)",
               border: "none",
-              background: "#8CE7D2",
-              color: "#000",
-              fontSize: 11,
+              background: "var(--emissive-mint)",
+              color: "#07100E",
+              fontSize: "var(--font-size-sm)",
               fontWeight: 600,
               cursor: "pointer",
               fontFamily: "inherit",
@@ -423,7 +435,7 @@ export function UsersTable({ users, currentUserId }: Props) {
             + Invite User
           </button>
         </div>
-      </>,
+      </div>,
     );
     return () => setContent(null);
   }, [filters, openFilter, setContent]);
@@ -431,13 +443,13 @@ export function UsersTable({ users, currentUserId }: Props) {
   /* ── Body ─────────────────────────────────────────────────── */
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)" }}>
       {/* Toolbar */}
-      <div className="admin-table-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div className="admin-table-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div className="admin-table-search" style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "0.5rem 0.75rem", borderRadius: 10,
+      <div className="admin-table-toolbar odyssey-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-16)", flexWrap: "wrap" }}>
+        <div className="admin-table-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: "var(--space-16)" }}>
+          <div className="admin-table-search odyssey-search" style={{
+            display: "flex", alignItems: "center", gap: "var(--space-8)",
+            padding: "0.5rem 0.75rem", borderRadius: "var(--radius-lg)",
             background: T.panel, border: `1px solid ${T.border}`,
             width: 320,
           }}>
@@ -464,10 +476,10 @@ export function UsersTable({ users, currentUserId }: Props) {
           </span>
         </div>
 
-        <div className="admin-table-toolbar-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "0.4rem 0.75rem", borderRadius: 9999,
+        <div className="admin-table-toolbar-actions" style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+          <div className="odyssey-select-shell" style={{
+            display: "flex", alignItems: "center", gap: "var(--space-6)",
+            padding: "0.4rem 0.75rem", borderRadius: "var(--radius-button, 12px)",
             border: `1px solid ${T.border}`,
             fontSize: "0.75rem", color: T.muted, fontFamily: T.fontBody,
           }}>
@@ -488,10 +500,11 @@ export function UsersTable({ users, currentUserId }: Props) {
             </select>
           </div>
           <button
+            className="odyssey-ghost-button"
             type="button"
             style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "0.4rem 0.75rem", borderRadius: 9999,
+              display: "flex", alignItems: "center", gap: "var(--space-6)",
+              padding: "0.4rem 0.75rem", borderRadius: "var(--radius-button, 12px)",
               border: `1px solid ${T.border}`, background: "transparent",
               color: T.muted, fontSize: "0.75rem", cursor: "pointer",
               fontFamily: T.fontBody,
@@ -514,7 +527,7 @@ export function UsersTable({ users, currentUserId }: Props) {
           minWidth: 920,
           background: T.panel,
           border: `1px solid ${T.border}`,
-          borderRadius: 14,
+          borderRadius: "var(--radius-2xl)",
           overflow: "hidden",
         }}>
           <HeaderRow />
@@ -602,12 +615,12 @@ function ActionErrorBanner({ message, onDismiss }: { message: string; onDismiss:
       role="status"
       style={{
         position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
-        padding: "10px 14px", borderRadius: 10,
+        padding: "10px 14px", borderRadius: "var(--radius-lg)",
         background: "rgba(243,114,114,0.10)",
         border: "1px solid rgba(243,114,114,0.32)",
-        color: "#F4A8A8",
-        fontFamily: T.fontBody, fontSize: 12,
-        boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
+        color: "var(--status-error)",
+        fontFamily: T.fontBody, fontSize: "var(--font-size-base)",
+        boxShadow: "var(--elevation-card)",
         zIndex: 1100,
       }}
       onClick={onDismiss}
@@ -630,6 +643,7 @@ function FilterDropdown({
 }) {
   return (
     <div
+      className="odyssey-dropdown"
       style={{
         position: "absolute",
         top: "calc(100% + 6px)",
@@ -637,28 +651,30 @@ function FilterDropdown({
         minWidth: 160,
         background: "var(--dropdown-bg, var(--panel))",
         border: "1px solid var(--border)",
-        borderRadius: 8,
+        borderRadius: "var(--radius-md)",
         padding: "4px 0",
         zIndex: 100,
-        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+        boxShadow: "var(--elevation-card)",
       }}
     >
       {options.map((opt) => (
         <button
+          className="odyssey-dropdown-item"
+          data-active={active === opt.value}
           key={opt.value}
           type="button"
           onClick={() => onSelect(opt.value)}
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
             width: "100%",
             padding: "6px 12px",
-            background: active === opt.value ? "rgba(140, 231, 210, 0.08)" : "none",
+            background: active === opt.value ? "var(--accent-soft)" : "none",
             border: "none",
             cursor: "pointer",
-            color: active === opt.value ? "#8CE7D2" : "var(--muted)",
-            fontSize: 11,
+            color: active === opt.value ? "var(--accent-strong)" : "var(--muted)",
+            fontSize: "var(--font-size-sm)",
             fontFamily: "var(--font-mono, ui-monospace, monospace)",
             textAlign: "left",
           }}
@@ -680,19 +696,19 @@ function HeaderRow() {
   };
   return (
     <div className="admin-table-header-row" style={{
-      display: "flex", alignItems: "center", gap: 20,
+      display: "flex", alignItems: "center", gap: "var(--space-20)",
       padding: "12px 20px",
       borderBottom: `1px solid ${T.border}`,
       background: T.cardHover,
     }}>
-      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
+      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: "var(--radius-xs)" }} />
       <span style={{ ...headerStyle, flex: 1, minWidth: 0 }}>User</span>
       <span style={{ ...headerStyle, width: 110 }}>Role</span>
       <span style={{ ...headerStyle, width: 170 }}>Auth</span>
       <span style={{ ...headerStyle, width: 80, textAlign: "right" }}>Sessions</span>
       <span style={{ ...headerStyle, width: 130 }}>Last active</span>
       <span style={{ ...headerStyle, width: 110 }}>Joined</span>
-      <div style={{ width: 24, flexShrink: 0 }} />
+      <div style={{ width: 72, flexShrink: 0 }} />
     </div>
   );
 }
@@ -716,7 +732,7 @@ function UserDataRow({
     <div
       className="admin-table-data-row"
       style={{
-        display: "flex", alignItems: "center", gap: 20,
+        display: "flex", alignItems: "center", gap: "var(--space-20)",
         padding: "14px 20px",
         borderBottom: `1px solid ${T.border}`,
         transition: "background 100ms",
@@ -725,12 +741,12 @@ function UserDataRow({
       onMouseEnter={(e) => { e.currentTarget.style.background = T.cardHover; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
-      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: 4 }} />
+      <div className="admin-table-row-check" style={{ width: 20, height: 20, flexShrink: 0, border: `1.25px solid ${T.border}`, borderRadius: "var(--radius-xs)" }} />
 
-      <div className="admin-table-primary-cell" style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+      <div className="admin-table-primary-cell" style={{ display: "flex", alignItems: "center", gap: "var(--space-12)", flex: 1, minWidth: 0 }}>
         <Avatar user={user} isCurrent={isCurrent} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
             <span style={{
               fontFamily: T.fontHeading, fontSize: "0.875rem", fontWeight: 500,
               color: "var(--foreground)", lineHeight: "18px",
@@ -742,7 +758,7 @@ function UserDataRow({
               <span style={{
                 fontFamily: T.fontMono, fontSize: "0.5625rem", fontWeight: 600,
                 color: T.accentStrong, background: T.accentSoft,
-                padding: "2px 6px", borderRadius: 4,
+                padding: "2px 6px", borderRadius: "var(--radius-xs)",
                 letterSpacing: "0.08em", textTransform: "uppercase",
               }}>
                 You
@@ -762,7 +778,7 @@ function UserDataRow({
       <div className="admin-table-mobile-fields">
         <MobileField label="Role"><RoleBadge role={user.role} /></MobileField>
         <MobileField label="Auth">
-          <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", minWidth: 0 }}>
             <AuthIcons methods={user.authMethods} />
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {user.authMethods.length === 0 ? "None" : user.authMethods.map(authLabel).join(" / ")}
@@ -771,7 +787,7 @@ function UserDataRow({
         </MobileField>
         <MobileField label="Sessions">{user.sessionCount}</MobileField>
         <MobileField label="Last active">
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
             {active.dotColor && (
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: active.dotColor, display: "block" }} />
             )}
@@ -785,7 +801,7 @@ function UserDataRow({
         <RoleBadge role={user.role} />
       </div>
 
-      <div className="admin-table-desktop-cell" style={{ width: 170, flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+      <div className="admin-table-desktop-cell" style={{ width: 170, flexShrink: 0, display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
         <AuthIcons methods={user.authMethods} />
         <span style={{ fontFamily: T.fontBody, fontSize: "0.75rem", color: "var(--foreground)", lineHeight: "15px" }}>
           {user.authMethods.length === 0 ? "None" : user.authMethods.map(authLabel).join(" · ")}
@@ -800,7 +816,7 @@ function UserDataRow({
         {user.sessionCount}
       </span>
 
-      <div className="admin-table-desktop-cell" style={{ width: 130, flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+      <div className="admin-table-desktop-cell" style={{ width: 130, flexShrink: 0, display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
         {active.dotColor && (
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: active.dotColor, display: "block" }} />
         )}
@@ -816,30 +832,90 @@ function UserDataRow({
         {formatJoinDate(user.createdAt)}
       </span>
 
-      <button
-        className="admin-table-row-menu"
-        type="button"
-        onClick={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          onOpenMenu(user, { top: rect.bottom + 6, left: rect.right });
-        }}
-        disabled={busy}
+      <div
+        className="admin-table-row-actions"
         style={{
-          width: 24, height: 24, flexShrink: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          border: "none", background: "transparent",
-          cursor: busy ? "not-allowed" : "pointer",
-          color: T.muted, borderRadius: 4,
+          width: 72,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: "var(--space-6)",
         }}
-        aria-label="User actions"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="5" cy="12" r="1.75" />
-          <circle cx="12" cy="12" r="1.75" />
-          <circle cx="19" cy="12" r="1.75" />
-        </svg>
-      </button>
+        <CopyUserIdButton userId={user.id} disabled={busy} />
+        <button
+          className="admin-table-row-menu"
+          type="button"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            onOpenMenu(user, { top: rect.bottom + 6, left: rect.right });
+          }}
+          disabled={busy}
+          style={{
+            width: 24, height: 24, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "none", background: "transparent",
+            cursor: busy ? "not-allowed" : "pointer",
+            color: T.muted, borderRadius: "var(--radius-xs)",
+          }}
+          aria-label="User actions"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="5" cy="12" r="1.75" />
+            <circle cx="12" cy="12" r="1.75" />
+            <circle cx="19" cy="12" r="1.75" />
+          </svg>
+        </button>
+      </div>
     </div>
+  );
+}
+
+function CopyUserIdButton({ userId, disabled }: { userId: string; disabled: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const id = window.setTimeout(() => setCopied(false), 1400);
+    return () => window.clearTimeout(id);
+  }, [copied]);
+
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        if (disabled) return;
+        try {
+          await navigator.clipboard.writeText(userId);
+          setCopied(true);
+        } catch {
+          setCopied(false);
+        }
+      }}
+      disabled={disabled}
+      style={{
+        width: 34,
+        height: 24,
+        flexShrink: 0,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "var(--radius-xs)",
+        border: "1px solid var(--border)",
+        background: copied ? "var(--accent-soft)" : "transparent",
+        color: copied ? "var(--accent-strong)" : T.muted,
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontFamily: T.fontMono,
+        fontSize: "0.625rem",
+        fontWeight: 600,
+        letterSpacing: "0.04em",
+      }}
+      aria-label={`Copy user id ${userId}`}
+      title={copied ? "Copied user ID" : "Copy user ID"}
+    >
+      {copied ? "OK" : "ID"}
+    </button>
   );
 }
 
@@ -875,7 +951,7 @@ function Avatar({ user, isCurrent }: { user: UserRow; isCurrent: boolean }) {
     return (
       <div style={{
         width: 36, height: 36, flexShrink: 0, borderRadius: "50%",
-        background: "linear-gradient(135deg, #8CE7D2 0%, #4FB8A8 100%)",
+        background: "linear-gradient(135deg, var(--emissive-mint) 0%, var(--active-teal) 100%)",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         <span style={{ fontFamily: T.fontHeading, fontSize: "0.875rem", fontWeight: 600, color: "#0C0E14", lineHeight: "16px" }}>
@@ -903,10 +979,10 @@ function RoleBadge({ role }: { role: "admin" | "user" }) {
   const admin = role === "admin";
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", gap: 6,
+      display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
       padding: "4px 10px",
       background: admin ? T.accentSoft : T.cardHover,
-      borderRadius: 9999,
+      borderRadius: "var(--radius-button, 12px)",
       fontFamily: T.fontMono, fontSize: "0.625rem", fontWeight: 600,
       color: admin ? T.accentStrong : T.muted,
       letterSpacing: "0.08em", textTransform: "uppercase",
@@ -931,7 +1007,7 @@ function authLabel(method: AuthMethod): string {
 function AuthIcons({ methods }: { methods: AuthMethod[] }) {
   const stroke = "var(--muted)";
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
       {methods.includes("password") && (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Password">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />

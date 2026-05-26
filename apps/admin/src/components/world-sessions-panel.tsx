@@ -31,9 +31,9 @@ export function WorldSessionsPanel({ world, sessions }: Props) {
   const completeCount = sessions.filter((s) => s.status === "complete").length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: T.fontBody }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)", fontFamily: T.fontBody }}>
       <header style={{
-        display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16,
+        display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "var(--space-16)",
       }}>
         <div>
           <h1 style={{
@@ -43,7 +43,7 @@ export function WorldSessionsPanel({ world, sessions }: Props) {
             Sessions
           </h1>
           <p style={{
-            fontFamily: T.fontMono, fontSize: 11, fontWeight: 400,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", fontWeight: 400,
             letterSpacing: "0.08em", textTransform: "uppercase",
             color: T.dim, margin: "6px 0 0",
           }}>
@@ -54,7 +54,7 @@ export function WorldSessionsPanel({ world, sessions }: Props) {
 
       {/* Stats row */}
       <section style={{
-        display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12,
+        display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "var(--space-12)",
       }}>
         <StatCard label="Total" value={sessions.length} />
         <StatCard label="Active" value={activeCount} color="#7DD3A1" />
@@ -64,16 +64,16 @@ export function WorldSessionsPanel({ world, sessions }: Props) {
       {/* Table */}
       <section style={{
         background: T.panel, border: `1px solid ${T.border}`,
-        borderRadius: 12, overflow: "hidden",
+        borderRadius: "var(--radius-xl)", overflow: "hidden",
       }}>
         <div style={{
           display: "grid",
           gridTemplateColumns: "minmax(120px, 1fr) 140px 110px 140px 110px",
-          gap: 16,
+          gap: "var(--space-16)",
           padding: "12px 20px",
           background: "rgba(255,255,255,0.02)",
           borderBottom: `1px solid ${T.border}`,
-          fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+          fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
           letterSpacing: "0.08em", textTransform: "uppercase",
           color: T.dim,
         }}>
@@ -93,44 +93,44 @@ export function WorldSessionsPanel({ world, sessions }: Props) {
               <div key={session.id} style={{
                 display: "grid",
                 gridTemplateColumns: "minmax(120px, 1fr) 140px 110px 140px 110px",
-                gap: 16,
+                gap: "var(--space-16)",
                 padding: "14px 20px",
                 borderBottom: `1px solid ${T.border}`,
                 alignItems: "center",
               }}>
                 <span style={{
-                  fontFamily: T.fontMono, fontSize: 11, color: T.fg,
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.fg,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
                   {session.id}
                 </span>
                 <span style={{
-                  fontFamily: T.fontBody, fontSize: 12, color: T.muted,
+                  fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted,
                 }}>
                   {session.roleId}
                 </span>
                 <span>
                   <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    padding: "2px 10px", borderRadius: 9999,
+                    display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+                    padding: "2px 10px", borderRadius: "var(--radius-pill)",
                     background: "rgba(255,255,255,0.04)",
-                    fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+                    fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
                     letterSpacing: "0.08em", textTransform: "uppercase",
                     color: status.color,
                   }}>
                     <span style={{
-                      width: 6, height: 6, borderRadius: 9999, background: status.dot,
+                      width: 6, height: 6, borderRadius: "var(--radius-pill)", background: status.dot,
                     }} />
                     {session.status}
                   </span>
                 </span>
                 <span style={{
-                  fontFamily: T.fontMono, fontSize: 11, color: T.muted,
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.muted,
                 }}>
                   {relativeTime(session.lastActiveAt)}
                 </span>
                 <span style={{
-                  fontFamily: T.fontMono, fontSize: 11, color: T.dim, textAlign: "right",
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.dim, textAlign: "right",
                 }}>
                   v{session.currentStateVersion}
                 </span>
@@ -144,7 +144,7 @@ export function WorldSessionsPanel({ world, sessions }: Props) {
         <Link
           href="/sessions"
           style={{
-            fontFamily: T.fontBody, fontSize: 12, color: T.muted,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted,
             textDecoration: "none",
           }}
         >
@@ -159,8 +159,8 @@ function StatCard({ label, value, color }: { label: string; value: number; color
   return (
     <div style={{
       background: T.panel, border: `1px solid ${T.border}`,
-      borderRadius: 12, padding: "18px 20px",
-      display: "flex", flexDirection: "column", gap: 4,
+      borderRadius: "var(--radius-xl)", padding: "18px 20px",
+      display: "flex", flexDirection: "column", gap: "var(--space-4)",
     }}>
       <div style={{
         fontFamily: T.fontHeading, fontSize: 32, fontWeight: 300,
@@ -170,7 +170,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
         {value}
       </div>
       <div style={{
-        fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
         letterSpacing: "0.1em", textTransform: "uppercase",
         color: T.dim,
       }}>
@@ -184,7 +184,7 @@ function EmptyRow() {
   return (
     <div style={{
       padding: "40px 24px", textAlign: "center",
-      fontFamily: T.fontBody, fontSize: 13, color: T.muted,
+      fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.muted,
     }}>
       No sessions for this world yet.
     </div>

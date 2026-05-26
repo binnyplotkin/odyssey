@@ -16,12 +16,12 @@ import { MODELS, type ModelId } from "@odyssey/wiki-ingest";
  * the wiki-ingest MODELS registry (read-only, for the model sub-detail).
  */
 
-const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
+const FONT_MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
-const ACCENT_LINE = "color-mix(in srgb, var(--accent-strong) 40%, transparent)";
+const ACCENT_LINE = "var(--accent-glow)";
 const ACCENT_FILL = "var(--accent-soft)";
 
-const PROMPT_DOT = "#8CE7D2";
+const PROMPT_DOT = "#8FD1CB";
 const MODEL_DOT = "#A48CE7";
 const EMBED_DOT = "#E7CB8C";
 
@@ -58,20 +58,20 @@ export function PipelineSection({
   const modelDetail = `$${modelMeta.inPerMTok} / Mtok · ${Math.round(modelMeta.context / 1000)}k context`;
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)" }}>
       <header
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 22,
-          paddingBottom: 8,
+          paddingBottom: "var(--space-8)",
         }}
       >
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             color: ACCENT,
@@ -87,7 +87,7 @@ export function PipelineSection({
             padding: "3px 8px",
             border: "1px solid var(--border)",
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.12em",
             textTransform: "uppercase",
             color: "var(--text-tertiary)",
@@ -102,7 +102,7 @@ export function PipelineSection({
         style={{
           display: "grid",
           gridTemplateColumns: "1.4fr 1fr 1.4fr",
-          gap: 14,
+          gap: "var(--space-14)",
           alignItems: "start",
         }}
       >
@@ -111,7 +111,7 @@ export function PipelineSection({
           shortcut="⌘P"
           detail={`${promptTokens} tokens · ${promptVersion}`}
         >
-          <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "stretch", gap: "var(--space-8)" }}>
             <div style={{ flex: 1 }}>
               <PickerVisual
                 dot={PROMPT_DOT}
@@ -148,14 +148,14 @@ function Column({
   children: ReactNode;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
       <div
         style={{
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
           fontFamily: FONT_MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
         }}
@@ -169,7 +169,7 @@ function Column({
       <span
         style={{
           fontFamily: FONT_MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           color: "var(--text-tertiary)",
         }}
       >
@@ -182,7 +182,7 @@ function Column({
 function PickerVisual({ dot, value }: { dot: string; value: string }) {
   return (
     <div style={pickerStyle()}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-10)" }}>
         <Dot color={dot} />
         <span
           style={{
@@ -215,7 +215,7 @@ function EditButton({ onClick }: { onClick: () => void }) {
         color: ACCENT,
         cursor: "pointer",
         fontFamily: FONT_MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         letterSpacing: "0.12em",
         textTransform: "uppercase",
         flexShrink: 0,
@@ -235,7 +235,7 @@ function Dot({ color, glow = false }: { color: string; glow?: boolean }) {
         display: "inline-block",
         width: 6,
         height: 6,
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         background: color,
         boxShadow: glow ? `0 0 6px ${color}` : undefined,
         flexShrink: 0,
@@ -292,7 +292,7 @@ function pickerStyle(): CSSProperties {
     border: "1px solid var(--border)",
     background: "var(--card)",
     fontFamily: FONT_MONO,
-    fontSize: 12,
+    fontSize: "var(--font-size-base)",
     color: "var(--text-primary)",
     overflow: "hidden",
   };

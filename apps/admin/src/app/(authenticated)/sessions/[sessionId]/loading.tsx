@@ -3,13 +3,13 @@ import { Skeleton } from "@odyssey/ui";
 const CARD: React.CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--card-border)",
-  borderRadius: 12,
+  borderRadius: "var(--radius-xl)",
 };
 
 export default function SessionDetailLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-18)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
         <Skeleton width={28} height={28} radius={6} />
         <Skeleton width={180} height={20} />
         <Skeleton width={140} height={12} />
@@ -22,11 +22,11 @@ export default function SessionDetailLoading() {
           padding: "16px 20px",
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-          gap: 16,
+          gap: "var(--space-16)",
         }}
       >
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <div key={i} style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
             <Skeleton width={64} height={10} />
             <Skeleton width={80} height={18} />
           </div>
@@ -39,7 +39,7 @@ export default function SessionDetailLoading() {
         <Skeleton width={56} height={11} />
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
@@ -48,10 +48,10 @@ export default function SessionDetailLoading() {
               padding: "16px 18px",
               display: "flex",
               flexDirection: "column",
-              gap: 12,
+              gap: "var(--space-12)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
               <Skeleton width={32} height={18} radius={999} static />
               <Skeleton width={56} height={11} />
               <div style={{ flex: 1 }} />
@@ -61,11 +61,11 @@ export default function SessionDetailLoading() {
             <Skeleton width="60%" height={13} />
             <div
               style={{
-                paddingTop: 10,
+                paddingTop: "var(--space-10)",
                 borderTop: "1px solid var(--card-border)",
                 display: "flex",
                 flexDirection: "column",
-                gap: 6,
+                gap: "var(--space-6)",
               }}
             >
               <Skeleton width="80%" height={12} />

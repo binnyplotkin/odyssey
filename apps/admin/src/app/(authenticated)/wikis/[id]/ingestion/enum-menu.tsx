@@ -27,12 +27,23 @@ import {
  * Dismissal: Esc, click-outside, or selecting a row.
  */
 
-const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
+const FONT_BODY = "var(--font-body, Inter), system-ui, sans-serif";
 const ACCENT = "var(--accent-strong)";
-const ACCENT_LINE = "color-mix(in srgb, var(--accent-strong) 50%, transparent)";
+const ACCENT_LINE =
+  "color-mix(in srgb, var(--accent-strong) 30%, transparent)";
 const ACCENT_FILL = "var(--accent-soft)";
 const ACCENT_TOP = "color-mix(in srgb, var(--accent-strong) 20%, transparent)";
 const HOVER_BG = "var(--card-hover)";
+const ACTIVE_RING =
+  "0 0 0 3px color-mix(in srgb, var(--accent-strong) 22%, transparent)";
+
+const ENUM_FOCUS_CSS = `
+  [data-ingestion-enum-trigger]:focus-visible,
+  [data-ingestion-enum-trigger][aria-expanded="true"] {
+    border-color: var(--accent-border) !important;
+    box-shadow: var(--ring-shadow-selected);
+  }
+`;
 
 export type EnumMenuOption<K extends string> = {
   value: K;
@@ -156,7 +167,9 @@ export function EnumMenu<K extends string>({
       onKeyDown={onKeyDown}
       style={{ position: "relative", width: "100%" }}
     >
+      <style>{ENUM_FOCUS_CSS}</style>
       <button
+        data-ingestion-enum-trigger
         ref={triggerRef}
         type="button"
         role="combobox"
@@ -172,7 +185,7 @@ export function EnumMenu<K extends string>({
         onBlur={() => setFocused(false)}
         style={triggerStyle(showAccent, open, disabled)}
       >
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-10)" }}>
           <Dot color={current?.dot ?? ACCENT} glow={showAccent} />
           {current?.label ?? value}
         </span>
@@ -202,14 +215,14 @@ export function EnumMenu<K extends string>({
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 10,
+                    gap: "var(--space-10)",
                   }}
                 >
                   <Dot color={opt.dot ?? ACCENT} />
                   {opt.label}
                 </span>
                 {isSelected && (
-                  <span style={{ fontSize: 12, color: ACCENT }}>✓</span>
+                  <span style={{ fontSize: "var(--font-size-base)", color: ACCENT }}>✓</span>
                 )}
               </div>
             );
@@ -233,20 +246,25 @@ function triggerStyle(
     justifyContent: "space-between",
     width: "100%",
     padding: "8px 12px",
-    border: `1px solid ${accent ? ACCENT_LINE : "var(--border)"}`,
-    background: accent ? ACCENT_FILL : "var(--card)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderTopColor: accent ? ACCENT_LINE : "var(--input-border)",
+    borderRightColor: accent ? ACCENT_LINE : "var(--input-border)",
+    borderBottomColor: accent ? ACCENT_LINE : "var(--input-border)",
+    borderLeftColor: accent ? ACCENT_LINE : "var(--input-border)",
+    borderRadius: open
+      ? "var(--radius-md) var(--radius-md) 0 0"
+      : "var(--radius-md)",
+    background: accent ? ACCENT_FILL : "var(--input-bg)",
     color: accent ? "var(--text-primary)" : "var(--text-secondary)",
-    fontFamily: FONT_MONO,
-    fontSize: 12,
+    fontFamily: FONT_BODY,
+    fontSize: "var(--font-size-base)",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.5 : 1,
     outline: "none",
-    // Bottom border merges with the menu's top, matching the Paper open state.
-    borderBottomColor: open
-      ? "transparent"
-      : accent
-        ? ACCENT_LINE
-        : "var(--border)",
+    boxShadow: accent ? ACTIVE_RING : undefined,
+    transition: "border-color 140ms ease, box-shadow 140ms ease, background 140ms ease",
+    ...(open ? { borderBottomColor: "transparent" } : null),
   };
 }
 
@@ -261,8 +279,9 @@ function menuStyle(): CSSProperties {
     flexDirection: "column",
     border: `1px solid ${ACCENT_LINE}`,
     borderTop: `1px solid ${ACCENT_TOP}`,
+    borderRadius: "0 0 var(--radius-md) var(--radius-md)",
     background: "var(--background)",
-    boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
+    boxShadow: "var(--elevation-panel)",
   };
 }
 
@@ -280,8 +299,8 @@ function optionStyle(isSelected: boolean, isActive: boolean): CSSProperties {
       : isActive
         ? "var(--text-primary)"
         : "var(--text-secondary)",
-    fontFamily: FONT_MONO,
-    fontSize: 12,
+    fontFamily: FONT_BODY,
+    fontSize: "var(--font-size-base)",
     cursor: "pointer",
   };
 }
@@ -296,7 +315,7 @@ function Dot({ color, glow = false }: { color: string; glow?: boolean }) {
         display: "inline-block",
         width: 6,
         height: 6,
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         background: color,
         boxShadow: glow ? `0 0 6px ${color}` : undefined,
         flexShrink: 0,

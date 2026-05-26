@@ -12,7 +12,7 @@ export function StatCard({
       style={{
         background: "var(--panel)",
         border: "1px solid var(--border)",
-        borderRadius: "0.75rem",
+        borderRadius: "var(--radius-xl)",
         padding: "1.25rem 1.5rem",
         minWidth: 160,
       }}

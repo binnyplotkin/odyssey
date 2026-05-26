@@ -7,6 +7,8 @@ import {
 } from "@odyssey/db";
 import { runIngestion, isKnownModel } from "@odyssey/wiki-ingest";
 import { embedText, EMBEDDING_MODEL } from "@odyssey/engine";
+import { invalidateCharactersList } from "@/lib/characters-cache";
+import { invalidateCharacterDetail } from "@/lib/character-detail-cache";
 
 /**
  * POST /api/characters/:id/ingest
@@ -125,6 +127,13 @@ export async function POST(
         );
       } finally {
         controller.close();
+        // Ingestion runs change pageCount / lastIngestAt / ingestionStatus
+        // for the character — all surfaced on the /characters list AND
+        // the per-character detail payload (knowledge.pageCount, binding
+        // counts via the wiki). Fire both invalidations in `finally` so
+        // success + failure + abort all refresh on the next visit.
+        invalidateCharactersList();
+        invalidateCharacterDetail(id);
       }
     },
   });

@@ -14,11 +14,17 @@ const TEXT_IDLE = "var(--text-tertiary)";
 const BG_ACTIVE = "var(--accent-soft)";
 const BG_HOVER = "var(--card-hover)";
 
+/**
+ * A tab item is either route-based (provides `href` — rendered as a
+ * `<Link>` for sibling-page nav like the world editor tabs) or
+ * state-based (provides `onClick` — rendered as a `<button>` for
+ * in-place section switching like the character-config sidebar). Both
+ * share the same terminal-segment chrome.
+ */
 export type TabItem<K extends string = string> = {
   key: K;
   label: string;
-  href: string;
-};
+} & ({ href: string; onClick?: never } | { href?: never; onClick: () => void });
 
 /**
  * Terminal-style tab nav. Each tab sits inside a segment with a
@@ -66,44 +72,63 @@ export function TabBar<K extends string>({
         const isHovered = !isActive && hoveredKey === tab.key;
         const showAccent = isActive || isHovered;
 
+        const segmentStyle: React.CSSProperties = {
+          display: "inline-flex",
+          alignItems: "center",
+          alignSelf: "stretch",
+          padding: "0 18px",
+          borderRight: `1px solid ${DIVIDER}`,
+          // 2px under-bar lights up on active or hover; idle keeps a
+          // transparent 2px so the row's height stays steady when
+          // selection / pointer moves.
+          borderBottom: `2px solid ${showAccent ? ACCENT : "transparent"}`,
+          background: isActive
+            ? BG_ACTIVE
+            : isHovered
+              ? BG_HOVER
+              : "transparent",
+          fontFamily: MONO,
+          fontSize: "var(--font-size-base)",
+          fontWeight: isActive ? 600 : 500,
+          color: isActive
+            ? TEXT_ACTIVE
+            : isHovered
+              ? TEXT_HOVER
+              : TEXT_IDLE,
+          textDecoration: "none",
+          transition:
+            "background 120ms ease, color 120ms ease, border-color 120ms ease",
+        };
+
+        const handleEnter = () => setHoveredKey(tab.key);
+        const handleLeave = () =>
+          setHoveredKey((cur) => (cur === tab.key ? null : cur));
+
+        if (tab.href !== undefined) {
+          return (
+            <Link
+              key={tab.key}
+              href={tab.href}
+              onMouseEnter={handleEnter}
+              onMouseLeave={handleLeave}
+              style={segmentStyle}
+            >
+              {tab.label}
+            </Link>
+          );
+        }
+
         return (
-          <Link
+          <button
             key={tab.key}
-            href={tab.href}
-            onMouseEnter={() => setHoveredKey(tab.key)}
-            onMouseLeave={() =>
-              setHoveredKey((cur) => (cur === tab.key ? null : cur))
-            }
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              alignSelf: "stretch",
-              padding: "0 18px",
-              borderRight: `1px solid ${DIVIDER}`,
-              // 2px under-bar lights up on active or hover; idle keeps a
-              // transparent 2px so the row's height stays steady when
-              // selection / pointer moves.
-              borderBottom: `2px solid ${showAccent ? ACCENT : "transparent"}`,
-              background: isActive
-                ? BG_ACTIVE
-                : isHovered
-                  ? BG_HOVER
-                  : "transparent",
-              fontFamily: MONO,
-              fontSize: 12,
-              fontWeight: isActive ? 600 : 500,
-              color: isActive
-                ? TEXT_ACTIVE
-                : isHovered
-                  ? TEXT_HOVER
-                  : TEXT_IDLE,
-              textDecoration: "none",
-              transition:
-                "background 120ms ease, color 120ms ease, border-color 120ms ease",
-            }}
+            type="button"
+            onClick={tab.onClick}
+            onMouseEnter={handleEnter}
+            onMouseLeave={handleLeave}
+            style={{ ...segmentStyle, borderTop: "none", borderLeft: "none", cursor: "pointer" }}
           >
             {tab.label}
-          </Link>
+          </button>
         );
       })}
       {trailing}

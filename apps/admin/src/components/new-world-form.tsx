@@ -63,27 +63,34 @@ export function NewWorldForm() {
   const { setContent } = useHeaderContent();
   useEffect(() => {
     setContent(
-      <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
         <Link
           href="/worlds"
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            width: 28, height: 28, borderRadius: 6,
+            width: 28, height: 28, borderRadius: "var(--radius-sm)",
             border: `1px solid ${T.border}`, background: "transparent",
-            color: T.muted, textDecoration: "none", marginRight: 12,
+            color: T.muted, textDecoration: "none", marginRight: "var(--space-12)",
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
         </Link>
         <h1 style={{
-          fontSize: 16, fontWeight: 700, color: T.fg,
-          margin: 0, marginRight: 12, whiteSpace: "nowrap", fontFamily: T.fontHeading,
+          fontSize: "var(--font-size-xl)", fontWeight: 700, color: T.fg,
+          margin: 0, marginRight: "var(--space-12)", whiteSpace: "nowrap", fontFamily: T.fontHeading,
         }}>
           New World
         </h1>
-        <div style={{ width: 1, height: 16, background: T.border, marginRight: 12 }} />
+        <div style={{ width: 1, height: 16, background: T.border, marginRight: "var(--space-12)" }} />
         <div style={{
-          fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+          fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
           letterSpacing: "0.12em", textTransform: "uppercase", color: T.dim,
         }}>
           Worlds · {phase === "describe" ? "Describe" : "Review draft"}
@@ -92,15 +99,15 @@ export function NewWorldForm() {
         <Link
           href="/worlds"
           style={{
-            padding: "6px 14px", borderRadius: 6,
+            padding: "6px 14px", borderRadius: "var(--radius-sm)",
             border: `1px solid ${T.border}`, background: "transparent",
             color: T.fg, textDecoration: "none",
-            fontFamily: T.fontBody, fontSize: 12, fontWeight: 500,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500,
           }}
         >
           Cancel
         </Link>
-      </>,
+      </div>,
     );
     return () => setContent(null);
   }, [setContent, phase]);
@@ -181,13 +188,13 @@ function DescribePhase({
   return (
     <div style={{
       maxWidth: 760, margin: "0 auto", display: "flex",
-      flexDirection: "column", gap: 24, paddingTop: 32, fontFamily: T.fontBody,
+      flexDirection: "column", gap: "var(--space-24)", paddingTop: "var(--space-32)", fontFamily: T.fontBody,
     }}>
       {/* Hero */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
         <span style={{
-          display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start",
-          padding: "3px 10px 3px 8px", borderRadius: 9999,
+          display: "inline-flex", alignItems: "center", gap: "var(--space-6)", alignSelf: "flex-start",
+          padding: "3px 10px 3px 8px", borderRadius: "var(--radius-pill)",
           background: "rgba(143, 209, 203, 0.10)",
           border: "1px solid rgba(143, 209, 203, 0.25)",
         }}>
@@ -195,7 +202,7 @@ function DescribePhase({
             <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
           </svg>
           <span style={{
-            fontFamily: T.fontMono, fontSize: 9, fontWeight: 500,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 500,
             letterSpacing: "0.12em", textTransform: "uppercase", color: T.accent,
           }}>
             AI draft
@@ -217,7 +224,7 @@ function DescribePhase({
       {/* Prompt card */}
       <div style={{
         display: "flex", flexDirection: "column",
-        padding: 20, borderRadius: 14,
+        padding: "var(--space-20)", borderRadius: "var(--radius-2xl)",
         background: T.panel, border: `1px solid ${T.border}`,
         boxShadow: "0 0 0 6px rgba(143, 209, 203, 0.05)",
       }}>
@@ -232,17 +239,17 @@ function DescribePhase({
           style={{
             width: "100%", border: "none", outline: "none", resize: "vertical",
             padding: 0, background: "transparent", color: T.fg,
-            fontFamily: T.fontBody, fontSize: 14, lineHeight: "22px",
+            fontFamily: T.fontBody, fontSize: "var(--font-size-lg)", lineHeight: "22px",
             boxSizing: "border-box", minHeight: 120,
           }}
         />
         <div style={{
-          display: "flex", alignItems: "center", gap: 12,
-          marginTop: 18, paddingTop: 16, borderTop: `1px solid ${T.border}`,
+          display: "flex", alignItems: "center", gap: "var(--space-12)",
+          marginTop: "var(--space-18)", paddingTop: "var(--space-16)", borderTop: `1px solid ${T.border}`,
         }}>
           <div style={{
-            display: "flex", alignItems: "center", gap: 6,
-            fontFamily: T.fontBody, fontSize: 12, color: T.muted,
+            display: "flex", alignItems: "center", gap: "var(--space-6)",
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted,
           }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
@@ -251,7 +258,7 @@ function DescribePhase({
           </div>
           <div style={{ flex: 1 }} />
           <div style={{
-            fontFamily: T.fontMono, fontSize: 11, color: T.dim,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.dim,
           }}>
             <span style={{ color: charCount > 1800 ? "#F87171" : T.muted }}>{charCount}</span>
             <span style={{ color: T.dim }}> / 2000</span>
@@ -261,11 +268,11 @@ function DescribePhase({
             disabled={!canDraft}
             onClick={onDraft}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 10,
-              padding: "8px 14px", borderRadius: 8, border: "none",
+              display: "inline-flex", alignItems: "center", gap: "var(--space-10)",
+              padding: "8px 14px", borderRadius: "var(--radius-md)", border: "none",
               background: canDraft ? T.accent : "var(--card-hover)",
               color: canDraft ? "#0C0E14" : T.muted,
-              fontFamily: T.fontBody, fontSize: 13, fontWeight: 600,
+              fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
               cursor: canDraft ? "pointer" : "not-allowed",
             }}
           >
@@ -275,10 +282,10 @@ function DescribePhase({
             {drafting ? "Drafting…" : "Draft with AI"}
             {!drafting && (
               <span style={{
-                display: "inline-flex", alignItems: "center", gap: 2,
-                padding: "2px 6px", borderRadius: 4,
+                display: "inline-flex", alignItems: "center", gap: "var(--space-2)",
+                padding: "2px 6px", borderRadius: "var(--radius-xs)",
                 background: "rgba(12, 14, 20, 0.15)",
-                fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+                fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
                 color: canDraft ? "rgba(12, 14, 20, 0.65)" : T.dim,
               }}>
                 ⌘ Enter
@@ -291,10 +298,10 @@ function DescribePhase({
       {error && <ErrorBlock message={error} />}
 
       {/* Starting points */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
         <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+          display: "flex", alignItems: "center", gap: "var(--space-8)",
+          fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
           letterSpacing: "0.12em", textTransform: "uppercase", color: T.dim,
         }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -302,23 +309,23 @@ function DescribePhase({
           </svg>
           Or try a starting point
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-10)" }}>
           {STARTING_POINTS.map((sp) => (
             <button
               key={sp.label}
               type="button"
               onClick={() => setPrompt(sp.prompt)}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 10,
-                padding: "8px 14px", borderRadius: 9999,
+                display: "inline-flex", alignItems: "center", gap: "var(--space-10)",
+                padding: "8px 14px", borderRadius: "var(--radius-pill)",
                 border: `1px solid ${T.border}`, background: T.panel,
-                fontFamily: T.fontBody, fontSize: 13, color: T.muted,
+                fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.muted,
                 cursor: "pointer", textAlign: "left",
                 maxWidth: 480,
               }}
             >
               <span style={{
-                fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+                fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
                 letterSpacing: "0.08em", textTransform: "uppercase",
                 color: sp.color,
               }}>
@@ -362,22 +369,22 @@ function ReviewPhase({
   return (
     <div style={{
       display: "grid", gridTemplateColumns: "minmax(0, 760px) minmax(0, 1fr)",
-      gap: 32, paddingTop: 24, fontFamily: T.fontBody,
+      gap: "var(--space-32)", paddingTop: "var(--space-24)", fontFamily: T.fontBody,
     }}>
       {/* Form column */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)" }}>
         {/* Prompt recap */}
         <div style={{
-          display: "flex", flexDirection: "column", gap: 12,
-          padding: "18px 20px", borderRadius: 12,
+          display: "flex", flexDirection: "column", gap: "var(--space-12)",
+          padding: "18px 20px", borderRadius: "var(--radius-xl)",
           background: T.panel, border: `1px solid ${T.border}`,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
             </svg>
             <div style={{
-              fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
               letterSpacing: "0.12em", textTransform: "uppercase", color: T.dim,
             }}>
               Your prompt
@@ -387,10 +394,10 @@ function ReviewPhase({
               type="button"
               onClick={onBack}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "5px 10px", borderRadius: 6,
+                display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+                padding: "5px 10px", borderRadius: "var(--radius-sm)",
                 border: `1px solid ${T.border}`, background: "transparent",
-                fontFamily: T.fontBody, fontSize: 11, fontWeight: 500, color: T.muted,
+                fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500, color: T.muted,
                 cursor: "pointer",
               }}
             >
@@ -401,7 +408,7 @@ function ReviewPhase({
             </button>
           </div>
           <div style={{
-            fontFamily: T.fontBody, fontSize: 13, lineHeight: "20px", color: T.muted,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-md)", lineHeight: "20px", color: T.muted,
           }}>
             {prompt}
           </div>
@@ -410,16 +417,16 @@ function ReviewPhase({
         {/* Drafted fields */}
         <div style={{
           display: "flex", flexDirection: "column",
-          padding: 24, borderRadius: 12,
+          padding: "var(--space-24)", borderRadius: "var(--radius-xl)",
           background: T.panel, border: `1px solid ${T.border}`,
         }}>
           <div style={{
-            display: "flex", alignItems: "center", gap: 10,
-            paddingBottom: 18, borderBottom: `1px solid ${T.border}`,
+            display: "flex", alignItems: "center", gap: "var(--space-10)",
+            paddingBottom: "var(--space-18)", borderBottom: `1px solid ${T.border}`,
           }}>
             <span style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "3px 8px 3px 7px", borderRadius: 9999,
+              display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+              padding: "3px 8px 3px 7px", borderRadius: "var(--radius-pill)",
               background: "rgba(143, 209, 203, 0.10)",
               border: "1px solid rgba(143, 209, 203, 0.25)",
             }}>
@@ -427,13 +434,13 @@ function ReviewPhase({
                 <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
               </svg>
               <span style={{
-                fontFamily: T.fontMono, fontSize: 9, fontWeight: 500,
+                fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 500,
                 letterSpacing: "0.12em", textTransform: "uppercase", color: T.accent,
               }}>
                 Drafted
               </span>
             </span>
-            <span style={{ fontFamily: T.fontBody, fontSize: 13, color: T.muted }}>
+            <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.muted }}>
               Odyssey drafted 4 fields. Edit any value inline, then create the world.
             </span>
           </div>
@@ -451,9 +458,9 @@ function ReviewPhase({
               }}
             />
             <div style={{
-              display: "flex", alignItems: "center", gap: 8, paddingTop: 6,
+              display: "flex", alignItems: "center", gap: "var(--space-8)", paddingTop: "var(--space-6)",
             }}>
-              <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.dim }}>SLUG</span>
+              <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.dim }}>SLUG</span>
               <input
                 type="text"
                 value={draft.slug}
@@ -461,7 +468,7 @@ function ReviewPhase({
                 style={{
                   flex: 1, border: "none", outline: "none",
                   padding: 0, background: "transparent",
-                  fontFamily: T.fontMono, fontSize: 11, color: T.muted,
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.muted,
                 }}
               />
             </div>
@@ -497,7 +504,7 @@ function ReviewPhase({
 
         {/* Action bar */}
         <div style={{
-          display: "flex", alignItems: "center", gap: 12, paddingTop: 4,
+          display: "flex", alignItems: "center", gap: "var(--space-12)", paddingTop: "var(--space-4)",
         }}>
           <div style={{ flex: 1 }} />
           <button
@@ -505,21 +512,21 @@ function ReviewPhase({
             disabled={!canCreate}
             onClick={onCreate}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 10,
-              padding: "10px 18px", borderRadius: 8,
+              display: "inline-flex", alignItems: "center", gap: "var(--space-10)",
+              padding: "10px 18px", borderRadius: "var(--radius-md)",
               background: canCreate ? T.accent : "var(--card-hover)",
               color: canCreate ? "#0C0E14" : T.muted, border: "none",
-              fontFamily: T.fontBody, fontSize: 13, fontWeight: 600,
+              fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
               cursor: canCreate ? "pointer" : "not-allowed",
             }}
           >
             {creating ? "Creating…" : "Create world"}
             {!creating && (
               <span style={{
-                display: "inline-flex", alignItems: "center", gap: 2,
-                padding: "2px 5px", borderRadius: 4,
+                display: "inline-flex", alignItems: "center", gap: "var(--space-2)",
+                padding: "2px 5px", borderRadius: "var(--radius-xs)",
                 background: "rgba(12, 14, 20, 0.15)",
-                fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+                fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
                 color: canCreate ? "rgba(12, 14, 20, 0.65)" : T.dim,
               }}>
                 ⌘ Enter
@@ -530,10 +537,10 @@ function ReviewPhase({
       </div>
 
       {/* Preview column */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
           <span style={{
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
             letterSpacing: "0.12em", textTransform: "uppercase", color: T.dim,
           }}>
             Live preview
@@ -543,7 +550,7 @@ function ReviewPhase({
 
         <div style={{
           display: "flex", flexDirection: "column",
-          borderRadius: 16, border: `1px solid ${T.border}`,
+          borderRadius: "var(--radius-3xl)", border: `1px solid ${T.border}`,
           background: T.panel, overflow: "hidden",
         }}>
           <div style={{
@@ -551,29 +558,29 @@ function ReviewPhase({
             background: "linear-gradient(135deg, #2B3848 0%, #1A2230 50%, #0F1520 100%)",
           }}>
             <span style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "4px 10px", borderRadius: 9999,
+              display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+              padding: "4px 10px", borderRadius: "var(--radius-pill)",
               background: "rgba(245, 198, 122, 0.14)",
               border: "1px solid rgba(245, 198, 122, 0.3)",
             }}>
-              <span style={{ width: 6, height: 6, borderRadius: 9999, background: "#F5C67A" }} />
+              <span style={{ width: 6, height: 6, borderRadius: "var(--radius-pill)", background: "#F5C67A" }} />
               <span style={{
-                fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+                fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
                 letterSpacing: "0.12em", textTransform: "uppercase", color: "#F5C67A",
               }}>
                 Draft
               </span>
             </span>
           </div>
-          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ padding: "var(--space-20)", display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
             <div style={{
-              fontFamily: T.fontHeading, fontSize: 22, fontWeight: 600,
+              fontFamily: T.fontHeading, fontSize: "var(--font-size-3xl)", fontWeight: 600,
               letterSpacing: "-0.02em", color: T.fg,
             }}>
               {draft.title || "Untitled world"}
             </div>
             <div style={{
-              fontFamily: T.fontBody, fontSize: 13, lineHeight: "20px", color: T.muted,
+              fontFamily: T.fontBody, fontSize: "var(--font-size-md)", lineHeight: "20px", color: T.muted,
             }}>
               {draft.setting || "—"}
             </div>
@@ -581,24 +588,24 @@ function ReviewPhase({
         </div>
 
         <div style={{
-          display: "flex", flexDirection: "column", gap: 6,
-          padding: "14px 16px", borderRadius: 10,
+          display: "flex", flexDirection: "column", gap: "var(--space-6)",
+          padding: "14px 16px", borderRadius: "var(--radius-lg)",
           background: "rgba(143, 209, 203, 0.04)",
           border: "1px solid rgba(143, 209, 203, 0.15)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
             </svg>
             <div style={{
-              fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
               letterSpacing: "0.12em", textTransform: "uppercase", color: T.accent,
             }}>
               After create
             </div>
           </div>
           <div style={{
-            fontFamily: T.fontBody, fontSize: 12, lineHeight: "18px", color: T.muted,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", lineHeight: "18px", color: T.muted,
           }}>
             You&rsquo;ll land on the world page where you can add characters, roles, and event templates.
           </div>
@@ -620,12 +627,12 @@ function FieldRow({
 }) {
   return (
     <div style={{
-      display: "flex", flexDirection: "column", gap: 8,
+      display: "flex", flexDirection: "column", gap: "var(--space-8)",
       padding: "20px 0",
       borderBottom: last || !bordered ? "none" : `1px solid ${T.border}`,
     }}>
       <div style={{
-        fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
         letterSpacing: "0.12em", textTransform: "uppercase", color: T.dim,
       }}>
         {label}
@@ -649,9 +656,9 @@ function TextArea({
       onChange={(e) => onChange(e.target.value)}
       rows={rows}
       style={{
-        width: "100%", padding: "12px 14px", borderRadius: 8,
+        width: "100%", padding: "12px 14px", borderRadius: "var(--radius-md)",
         border: `1px solid ${T.border}`, background: "rgba(255, 255, 255, 0.015)",
-        color: T.fg, fontFamily: T.fontBody, fontSize: 14, lineHeight: "22px",
+        color: T.fg, fontFamily: T.fontBody, fontSize: "var(--font-size-lg)", lineHeight: "22px",
         fontStyle: italic ? "italic" : "normal",
         outline: "none", resize: "vertical", boxSizing: "border-box",
       }}
@@ -660,20 +667,20 @@ function TextArea({
 }
 
 const titleInputStyle: React.CSSProperties = {
-  width: "100%", padding: "10px 12px", borderRadius: 8,
+  width: "100%", padding: "10px 12px", borderRadius: "var(--radius-md)",
   border: `1px solid ${T.border}`, background: "rgba(255, 255, 255, 0.015)",
   color: T.fg, outline: "none",
-  fontFamily: T.fontHeading, fontSize: 22, fontWeight: 600,
+  fontFamily: T.fontHeading, fontSize: "var(--font-size-3xl)", fontWeight: 600,
   letterSpacing: "-0.02em", boxSizing: "border-box",
 };
 
 function ErrorBlock({ message }: { message: string }) {
   return (
     <div style={{
-      padding: "10px 14px", borderRadius: 10,
+      padding: "10px 14px", borderRadius: "var(--radius-lg)",
       background: "rgba(248, 113, 113, 0.08)",
       border: "1px solid rgba(248, 113, 113, 0.3)",
-      color: "#F87171", fontFamily: T.fontBody, fontSize: 13,
+      color: "#F87171", fontFamily: T.fontBody, fontSize: "var(--font-size-md)",
     }}>
       {message}
     </div>

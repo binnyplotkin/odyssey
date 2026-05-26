@@ -1,29 +1,13 @@
 "use client";
 
 /**
- * MissionControl — live telemetry-board summary that replaces the old "plan"
- * card during the running phase. Anatomy (per Paper V4):
- *
- *   ┌──────────────────────────────────────────────────────────────────┐
- *   │ Plan                                            ● LIVE · 02:24   │
- *   ├──────────────────────────────────────┬───────────────────────────┤
- *   │ OP QUEUE                             │ TOKENS / SEC      1,027   │
- *   │ 3 / 8         ~4s remaining          │ ▁▂▃▂▄▅▇▅▆▇▆▇             │
- *   │ ───────────                          │ last 20s · 2,418 tok used │
- *   ├───────┬───────┬───────┬───────┬──────┴───────────────────────────┤
- *   │ Create│ Update│ Pages │ Edges │ Flagged                          │
- *   │   5   │   3   │  +2   │  +7   │   1                              │
- *   ├───────┴───────┴───────┴───────┴──────────────────────────────────┤
- *   │ Now ▸ embed · §22:1–22:5 · claude-sonnet-4-5 · writing → pages   │
- *   └──────────────────────────────────────────────────────────────────┘
- *
- * Self-contained: only depends on CSS variables from the admin theme.
- * All derivations (sparkline samples, op counts, rate) are caller-side
- * concerns — the component just renders what it's given.
+ * MissionControl — calm running-state summary. The footer owns commands and
+ * final telemetry; this panel shows only the current operation and traceable
+ * progress inside the body.
  */
 
-const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
-const FONT_HEAD = "'Inter', system-ui, sans-serif";
+const FONT_MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
+const FONT_HEAD = "var(--font-body, Inter), system-ui, sans-serif";
 const ACCENT = "var(--accent-strong)";
 const AMBER = "#FACC15";
 
@@ -93,7 +77,7 @@ export function MissionControl({
     SPARK_H - (lastSample / sparkMax) * (SPARK_H - 4) - 2;
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
       <style>{ANIM_CSS}</style>
 
       <header
@@ -101,37 +85,38 @@ export function MissionControl({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 22,
-          paddingBottom: 8,
+          gap: "var(--space-18)",
         }}
       >
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             color: ACCENT,
           }}
         >
-          plan
+          run console
         </span>
         <span
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 7,
-            padding: "3px 8px",
-            border: "1px solid color-mix(in srgb, var(--accent) 35%, transparent)",
+            gap: "var(--space-10)",
+            padding: "3px 12px",
+            border: "1px solid var(--accent-border)",
+            borderRadius: "var(--radius-pill)",
+            background: "var(--accent-soft)",
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.12em",
             textTransform: "uppercase",
             color: ACCENT,
           }}
         >
           <PulseDot color={ACCENT} />
-          LIVE · {formatElapsed(elapsedMs)} elapsed
+          live · {formatElapsed(elapsedMs)}
         </span>
       </header>
 
@@ -139,8 +124,9 @@ export function MissionControl({
         style={{
           display: "flex",
           flexDirection: "column",
-          border: "1px solid var(--border)",
-          background: "#070707",
+          border: "1px solid var(--input-border)",
+          borderRadius: "var(--radius-lg)",
+          background: "var(--input-bg)",
           overflow: "hidden",
         }}
       >
@@ -157,16 +143,15 @@ export function MissionControl({
               flex: "1.6 1 0",
               display: "flex",
               flexDirection: "column",
-              gap: 8,
-              padding: "24px 28px",
+              gap: "var(--space-10)",
+              padding: "18px 22px",
               borderRight: "1px solid var(--divider)",
-              background: "color-mix(in srgb, var(--accent) 4%, transparent)",
             }}
           >
             <span
               style={{
                 fontFamily: FONT_MONO,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.20em",
                 textTransform: "uppercase",
                 color: "var(--text-tertiary)",
@@ -174,13 +159,13 @@ export function MissionControl({
             >
               Op queue
             </span>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-14)" }}>
               <span
                 style={{
                   fontFamily: FONT_HEAD,
-                  fontSize: 54,
+                  fontSize: 38,
                   fontWeight: 600,
-                  letterSpacing: "-0.03em",
+                  letterSpacing: 0,
                   color: "var(--text-primary)",
                   lineHeight: 1,
                 }}
@@ -190,9 +175,9 @@ export function MissionControl({
               <span
                 style={{
                   fontFamily: FONT_HEAD,
-                  fontSize: 24,
+                  fontSize: "var(--font-size-2xl)",
                   color: "var(--text-tertiary)",
-                  letterSpacing: "-0.01em",
+                  letterSpacing: 0,
                 }}
               >
                 / {opsTotal || "—"}
@@ -201,10 +186,10 @@ export function MissionControl({
                 style={{
                   marginLeft: "auto",
                   fontFamily: FONT_MONO,
-                  fontSize: 11,
+                  fontSize: "var(--font-size-sm)",
                   letterSpacing: "0.12em",
                   textTransform: "uppercase",
-                  color: "var(--text-secondary)",
+                  color: "var(--text-tertiary)",
                 }}
               >
                 {etaSec !== null ? `~${etaSec}s remaining` : "estimating…"}
@@ -213,9 +198,10 @@ export function MissionControl({
             <div
               style={{
                 position: "relative",
-                height: 4,
-                marginTop: 4,
+                height: 3,
                 background: "rgba(255, 255, 255, 0.06)",
+                borderRadius: "var(--radius-pill)",
+                overflow: "hidden",
               }}
             >
               <div
@@ -224,7 +210,7 @@ export function MissionControl({
                   top: 0,
                   left: 0,
                   width: `${(progressFraction * 100).toFixed(1)}%`,
-                  height: 4,
+                  height: 3,
                   background: ACCENT,
                   boxShadow:
                     "0 0 10px color-mix(in srgb, var(--accent) 55%, transparent)",
@@ -239,8 +225,8 @@ export function MissionControl({
               flex: "1.4 1 0",
               display: "flex",
               flexDirection: "column",
-              gap: 8,
-              padding: "24px 28px",
+              gap: "var(--space-8)",
+              padding: "18px 22px",
               minWidth: 0,
             }}
           >
@@ -254,7 +240,7 @@ export function MissionControl({
               <span
                 style={{
                   fontFamily: FONT_MONO,
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   letterSpacing: "0.20em",
                   textTransform: "uppercase",
                   color: "var(--text-tertiary)",
@@ -265,10 +251,10 @@ export function MissionControl({
               <span
                 style={{
                   fontFamily: FONT_HEAD,
-                  fontSize: 24,
+                  fontSize: "var(--font-size-2xl)",
                   fontWeight: 600,
                   color: "var(--text-primary)",
-                  letterSpacing: "-0.02em",
+                  letterSpacing: 0,
                 }}
               >
                 {tokensPerSec === null
@@ -278,16 +264,16 @@ export function MissionControl({
             </div>
             <svg
               width="100%"
-              height={SPARK_H}
+                height={SPARK_H}
               viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
               preserveAspectRatio="none"
-              style={{ display: "block" }}
+              style={{ display: "block", opacity: 0.78 }}
               aria-hidden
             >
               <defs>
                 <linearGradient id="mc-spark-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8CE7D2" stopOpacity="0.30" />
-                  <stop offset="100%" stopColor="#8CE7D2" stopOpacity="0" />
+                  <stop offset="0%" stopColor="#8FD1CB" stopOpacity="0.30" />
+                  <stop offset="100%" stopColor="#8FD1CB" stopOpacity="0" />
                 </linearGradient>
               </defs>
               {sparklinePath && (
@@ -314,7 +300,7 @@ export function MissionControl({
                 alignItems: "center",
                 justifyContent: "space-between",
                 fontFamily: FONT_MONO,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.10em",
                 color: "var(--text-tertiary)",
               }}
@@ -352,11 +338,11 @@ export function MissionControl({
           style={{
             display: "flex",
             alignItems: "center",
-            padding: "10px 22px",
+            padding: "11px 18px",
             fontFamily: FONT_MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: "var(--text-secondary)",
-            background: "rgba(0, 0, 0, 0.30)",
+            background: "color-mix(in srgb, var(--background) 42%, transparent)",
             gap: 0,
             overflow: "hidden",
             whiteSpace: "nowrap",
@@ -365,7 +351,7 @@ export function MissionControl({
           <span
             style={{
               color: "var(--text-tertiary)",
-              marginRight: 14,
+              marginRight: "var(--space-14)",
               letterSpacing: "0.14em",
               textTransform: "uppercase",
             }}
@@ -375,7 +361,7 @@ export function MissionControl({
           <span style={{ color: ACCENT }}>▸</span>
           <span
             style={{
-              marginLeft: 8,
+              marginLeft: "var(--space-8)",
               overflow: "hidden",
               textOverflow: "ellipsis",
             }}
@@ -401,7 +387,7 @@ export function MissionControl({
               marginLeft: "auto",
               color: "var(--text-tertiary)",
               flexShrink: 0,
-              paddingLeft: 12,
+              paddingLeft: "var(--space-12)",
             }}
           >
             {formatShortElapsed(elapsedMs)}
@@ -439,15 +425,15 @@ function Counter({
         flex: 1,
         display: "flex",
         flexDirection: "column",
-        gap: 3,
-        padding: "14px 22px",
+        gap: "var(--space-4)",
+        padding: "11px 18px",
         borderRight: last ? "none" : "1px solid var(--divider)",
       }}
     >
       <span
         style={{
           fontFamily: FONT_MONO,
-          fontSize: 9,
+          fontSize: "var(--font-size-2xs)",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
           color: labelColor,
@@ -458,7 +444,7 @@ function Counter({
       <span
         style={{
           fontFamily: FONT_HEAD,
-          fontSize: 18,
+          fontSize: "var(--font-size-lg)",
           fontWeight: 600,
           color: valueColor,
         }}
@@ -483,7 +469,7 @@ function PulseDot({ color }: { color: string }) {
         display: "inline-block",
         width: 6,
         height: 6,
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         background: color,
         boxShadow: `0 0 8px ${color}`,
         animation: "mc-pulse 1.1s ease-in-out infinite",
