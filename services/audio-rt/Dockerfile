@@ -25,6 +25,16 @@ COPY . /app
 # HF_TOKEN must be set as a Railway env var (gated repo: kyutai/pocket-tts).
 ENV HF_HOME=/app/.cache/huggingface
 ENV PORT=8080
+ENV POCKET_TTS_FIRST_AUDIO_TIMEOUT_SECONDS=12
+ENV POCKET_TTS_TOTAL_TIMEOUT_SECONDS=120
+ENV POCKET_TTS_RESTART_ON_STALL=1
+# Worker count for uvicorn. Each worker is its own Python process with its
+# own Pocket TTS / Whisper model instances, so concurrent /speak requests
+# parallelize across workers (the in-process generate lock keeps each
+# worker's streaming state safe). 2 is a reasonable demo default — bump
+# via Railway env if more concurrency is needed. Memory cost is ~400MB per
+# warmed worker.
+ENV UVICORN_WORKERS=2
 EXPOSE 8080
 
-CMD ["sh", "-c", "uvicorn gateway:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "uvicorn gateway:app --host 0.0.0.0 --port ${PORT} --workers ${UVICORN_WORKERS}"]

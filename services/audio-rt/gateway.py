@@ -5,6 +5,7 @@ import itertools
 import json
 import math
 import os
+import queue
 import shutil
 import subprocess
 import tempfile
@@ -34,6 +35,8 @@ VOICES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voices")
 REMOTE_VOICES_DIR = os.path.join(VOICES_DIR, "_remote")
 os.makedirs(REMOTE_VOICES_DIR, exist_ok=True)
 DEFAULT_VOICE_ID = "abraham"
+DEFAULT_TTS_FIRST_AUDIO_TIMEOUT_SECONDS = 12.0
+DEFAULT_TTS_TOTAL_TIMEOUT_SECONDS = 120.0
 
 
 class TranscribeRequest(BaseModel):
@@ -320,6 +323,42 @@ class PocketTtsRuntime:
 
 
 tts_runtime = PocketTtsRuntime()
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw not in {"0", "false", "no", "off"}
+
+
+def _schedule_worker_restart(reason: str) -> None:
+    if not _env_bool("POCKET_TTS_RESTART_ON_STALL", True):
+        return
+
+    delay = _env_float("POCKET_TTS_RESTART_DELAY_SECONDS", 1.0)
+
+    def restart() -> None:
+        time.sleep(delay)
+        print(f"[pocket-tts] restarting worker after stalled generation: {reason}", flush=True)
+        os._exit(75)
+
+    threading.Thread(
+        target=restart,
+        name="pocket-tts-stall-restart",
+        daemon=True,
+    ).start()
 
 
 class WhisperStreamingRuntime:
@@ -676,6 +715,86 @@ def speak(payload: SpeakRequest):
 
     def event_stream():
         first_chunk_at: float | None = None
+        first_audio_timeout = _env_float(
+            "POCKET_TTS_FIRST_AUDIO_TIMEOUT_SECONDS",
+            DEFAULT_TTS_FIRST_AUDIO_TIMEOUT_SECONDS,
+        )
+        total_timeout = _env_float(
+            "POCKET_TTS_TOTAL_TIMEOUT_SECONDS",
+            DEFAULT_TTS_TOTAL_TIMEOUT_SECONDS,
+        )
+        chunks: queue.Queue[tuple[str, bytes | Exception | None]] = queue.Queue()
+        state_lock = Lock()
+        state = {
+            "chunks": 0,
+            "done": False,
+            "firstAudioAt": None,
+            "timeout": None,
+        }
+
+        def mark_done() -> None:
+            with state_lock:
+                state["done"] = True
+
+        def mark_timeout(message: str) -> bool:
+            with state_lock:
+                if state["done"] or state["timeout"]:
+                    return False
+                state["timeout"] = message
+            print(f"[/speak] {message}", flush=True)
+            chunks.put(("error", RuntimeError(message)))
+            _schedule_worker_restart(message)
+            return True
+
+        def monitor_generation() -> None:
+            while True:
+                time.sleep(0.25)
+                elapsed = time.time() - handler_entered_at
+                with state_lock:
+                    if state["done"] or state["timeout"]:
+                        return
+                    first_audio_at = state["firstAudioAt"]
+                    generated_chunks = int(state["chunks"])
+
+                if first_audio_at is None and elapsed >= first_audio_timeout:
+                    mark_timeout(
+                        f"Pocket TTS first audio timed out after "
+                        f"{int(elapsed * 1000)}ms "
+                        f"(voice={voice_id}, chars={len(text)}, chunks={generated_chunks})",
+                    )
+                    return
+
+                if first_audio_at is not None and elapsed >= total_timeout:
+                    mark_timeout(
+                        f"Pocket TTS total generation timed out after "
+                        f"{int(elapsed * 1000)}ms "
+                        f"(voice={voice_id}, chars={len(text)}, chunks={generated_chunks})",
+                    )
+                    return
+
+        def generate() -> None:
+            try:
+                for pcm in tts_runtime.stream_pcm_chunks(text, voice_id, voice_url):
+                    chunks.put(("audio", pcm))
+                chunks.put(("done", None))
+            except Exception as error:  # noqa: BLE001
+                chunks.put(("error", error))
+            finally:
+                with state_lock:
+                    if state["timeout"] is None:
+                        state["done"] = True
+
+        threading.Thread(
+            target=generate,
+            name=f"pocket-tts-generate-{voice_id}",
+            daemon=True,
+        ).start()
+        threading.Thread(
+            target=monitor_generation,
+            name=f"pocket-tts-watchdog-{voice_id}",
+            daemon=True,
+        ).start()
+
         try:
             yield sse_event("meta", {
                 "sampleRate": tts_runtime._sample_rate,
@@ -685,9 +804,28 @@ def speak(payload: SpeakRequest):
                 "elapsedMs": int((setup_done_at - handler_entered_at) * 1000),
             })
             index = 0
-            for pcm in tts_runtime.stream_pcm_chunks(text, voice_id, voice_url):
+            while True:
+                try:
+                    kind, value = chunks.get(timeout=1.0)
+                except queue.Empty:
+                    continue
+
+                if kind == "done":
+                    mark_done()
+                    break
+                if kind == "error":
+                    mark_done()
+                    raise value if isinstance(value, Exception) else RuntimeError(str(value))
+
+                pcm = value
+                if not isinstance(pcm, bytes):
+                    raise RuntimeError("Pocket TTS returned a non-bytes audio chunk")
                 if first_chunk_at is None:
                     first_chunk_at = time.time()
+                    with state_lock:
+                        state["firstAudioAt"] = first_chunk_at
+                with state_lock:
+                    state["chunks"] = index + 1
                 yield sse_event("audio", {
                     "index": index,
                     "chunk": base64.b64encode(pcm).decode("ascii"),

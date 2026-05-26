@@ -64,6 +64,16 @@ its own model, so concurrent `/speak` requests fan out across workers.
   Dockerfile; set in Railway env to override. Memory cost ≈ 400MB per
   warmed worker (Pocket TTS + Whisper + Silero). Bump up if more than a
   couple of concurrent voice sessions are expected.
+- `POCKET_TTS_FIRST_AUDIO_TIMEOUT_SECONDS` — `/speak` watchdog for a
+  stalled Pocket generation before the first PCM frame. Defaults to `12`,
+  below the admin client's default first-audio timeout so the service can
+  emit a structured SSE `error` first.
+- `POCKET_TTS_TOTAL_TIMEOUT_SECONDS` — `/speak` watchdog after audio has
+  started. Defaults to `120`.
+- `POCKET_TTS_RESTART_ON_STALL` — defaults to `1`. When a Pocket stream
+  stalls, the endpoint emits an SSE `error` and exits that uvicorn worker;
+  uvicorn's worker supervisor starts a clean replacement so the generation
+  lock cannot stay wedged.
 
 ## Local dev
 
