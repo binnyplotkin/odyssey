@@ -19,6 +19,8 @@ export {
   changelogEntriesTable,
   charactersTable,
   voicesTable,
+  voicePreviewsTable,
+  voiceExtractionAttemptsTable,
   worldNodesTable,
   worldEdgesTable,
   wikisTable,
@@ -52,6 +54,7 @@ export type {
   RecordContextBuildInput,
   UpsertWorldSessionTurnInput,
   AppendWorldSessionEventInput,
+  UpdateWorldSessionSceneInput,
   AddWorldSessionAudioArtifactInput,
 } from "./world-session-store";
 export { getWorldRepository } from "./repository";
@@ -70,14 +73,24 @@ export type { ChangelogStore, ChangelogEntryRecord, CreateChangelogEntryInput, U
 export { getCharacterStore } from "./character-store";
 export type { CharacterStore } from "./character-store";
 
-export { getVoiceStore } from "./voice-store";
+export { getVoiceStore, VOICE_STATUS_FROM_ATTEMPT } from "./voice-store";
 export type {
   VoiceStore,
   VoiceRecord,
   VoiceStatus,
+  VoiceProvider,
+  VoiceProviderConfig,
+  VoiceSettingsOverride,
+  VoiceAttemptStatus,
   CreateVoiceInput,
   UpdateVoiceInput,
+  ListVoicesOptions,
+  VoicePreviewRecord,
+  CreatePreviewInput,
+  VoiceExtractionAttemptRecord,
+  FinishAttemptInput,
   BoundCharacterSummary,
+  BoundCharacterPreview,
 } from "./voice-store";
 
 export { getCharacterVersionStore } from "./character-version-store";

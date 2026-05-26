@@ -80,7 +80,7 @@ export type ChatResponse = {
 
 export interface ChatProvider {
   /** Provider name, matches `ProviderId` from the registry. */
-  readonly id: "anthropic" | "openai" | "cerebras";
+  readonly id: "anthropic" | "openai" | "cerebras" | "groq";
 
   /** Single-shot completion — used by the evals runner. Internally may use
    * the SDK's non-streaming endpoint, or wrap stream() and accumulate. */

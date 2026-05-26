@@ -1,9 +1,36 @@
+import { createRequire } from "node:module";
+import type * as WSModule from "ws";
+// Avoid a broken optional `bufferutil` native binding from taking down
+// ElevenLabs streaming sends. `ws` falls back to its pure-JS masking path.
+process.env.WS_NO_BUFFER_UTIL ??= "1";
+process.env.WS_NO_UTF_8_VALIDATE ??= "1";
+const require = createRequire(import.meta.url);
+const WebSocket = (require("ws") as typeof WSModule).WebSocket;
 import { getOpenAIClient } from "./openai-client";
-import { SpeechToTextAdapter, TextToSpeechAdapter } from "./interfaces";
+import {
+  SpeechToTextAdapter,
+  StreamingTextToSpeechAdapter,
+  StreamingTtsChunk,
+  TextToSpeechAdapter,
+  VoiceContext,
+} from "./interfaces";
 
 export type SttProvider = "openai" | "kyutai";
 export type TtsProvider = "openai" | "elevenlabs";
+
+// Live-harness providers — adapters that can stream audio per-chunk for the
+// /voice-stream route. Mirrors VoiceProvider in @odyssey/db (kept as a
+// string-literal union here so this package stays db-independent).
+export type StreamingTtsProvider =
+  | "pocket_tts"
+  | "elevenlabs"
+  | "openai"
+  | "cartesia";
+
 export const ELEVENLABS_DEFAULT_MODEL_ID = "eleven_flash_v2_5";
+export const POCKET_TTS_PUBLIC_BASE_URL = "https://audio-rt-production.up.railway.app";
+export const POCKET_TTS_SAMPLE_RATE = 24000;
+const DEFAULT_TTS_FIRST_AUDIO_TIMEOUT_MS = 15_000;
 
 function getKyutaiSttBaseUrl(): string | null {
   const raw = (process.env.KYUTAI_BASE_URL ?? "").trim().replace(/\/+$/, "");
@@ -228,6 +255,522 @@ export function createTextToSpeechAdapter(provider?: string): {
   }
 
   return { provider: resolved, adapter: new OpenAITextToSpeechAdapter() };
+}
+
+// ── Streaming TTS adapters (live harness) ─────────────────────────────
+//
+// `synthesize`-style adapters above return a single payload — fine for
+// previews and /api/audio/speak. The live /voice-stream route needs
+// per-frame streaming so audio starts playing before the LLM is done.
+//
+// All streaming adapters yield Float32 LE base64 PCM (the browser decoder
+// has consumed this format since the original Moshi pipeline). Adapters
+// that emit int16 (Pocket) or mp3 (ElevenLabs default) convert in-adapter
+// so consumers don't have to know.
+
+export function getPocketTtsBaseUrl(): string {
+  return ((process.env.KYUTAI_TTS_BASE_URL ?? "").trim().replace(/\/+$/, "") ||
+    POCKET_TTS_PUBLIC_BASE_URL);
+}
+
+function getTtsFirstAudioTimeoutMs(): number {
+  const raw = Number(process.env.TTS_FIRST_AUDIO_TIMEOUT_MS ?? "");
+  return Number.isFinite(raw) && raw > 0
+    ? Math.round(raw)
+    : DEFAULT_TTS_FIRST_AUDIO_TIMEOUT_MS;
+}
+
+function int16Base64ToFloat32Base64(input: string): {
+  base64: string;
+  samples: number;
+} {
+  const int16Bytes = Buffer.from(input, "base64");
+  const samples = (int16Bytes.byteLength / 2) | 0;
+  const float32 = new Float32Array(samples);
+  const view = new DataView(
+    int16Bytes.buffer,
+    int16Bytes.byteOffset,
+    int16Bytes.byteLength,
+  );
+  for (let i = 0; i < samples; i += 1) {
+    float32[i] = view.getInt16(i * 2, true) / 32768;
+  }
+  return {
+    base64: Buffer.from(
+      float32.buffer,
+      float32.byteOffset,
+      float32.byteLength,
+    ).toString("base64"),
+    samples,
+  };
+}
+
+export class PocketTtsStreamingAdapter implements StreamingTextToSpeechAdapter {
+  constructor(private readonly baseUrl: string = getPocketTtsBaseUrl()) {}
+
+  async *stream({
+    text,
+    voice,
+    signal,
+  }: {
+    text: string;
+    voice: VoiceContext;
+    signal?: AbortSignal;
+  }): AsyncIterable<StreamingTtsChunk> {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    const abort = new AbortController();
+    const onAbort = () => abort.abort(signal?.reason);
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    const resp = await fetch(`${this.baseUrl}/speak`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: trimmed,
+        voice: voice.slug,
+        voiceUrl: voice.embeddingUrl ?? null,
+      }),
+      signal: abort.signal,
+    }).finally(() => {
+      signal?.removeEventListener("abort", onAbort);
+    });
+
+    if (!resp.ok || !resp.body) {
+      const detail = await resp.text().catch(() => "");
+      yield {
+        type: "error",
+        message: `Pocket TTS ${resp.status}: ${detail.slice(0, 300) || "no body"}`,
+      };
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let receivedAudio = false;
+    const firstAudioTimeoutMs = getTtsFirstAudioTimeoutMs();
+
+    while (true) {
+      const next = receivedAudio
+        ? reader.read()
+        : readWithTimeout(reader, firstAudioTimeoutMs);
+      const { done, value } = await next.catch(async (err) => {
+        await reader.cancel().catch(() => undefined);
+        throw err;
+      });
+      if (done) break;
+      if (signal?.aborted) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let frameEnd: number;
+      while ((frameEnd = buffer.indexOf("\n\n")) !== -1) {
+        const raw = buffer.slice(0, frameEnd);
+        buffer = buffer.slice(frameEnd + 2);
+        let eventName: string | null = null;
+        let dataLine = "";
+        for (const line of raw.split("\n")) {
+          if (line.startsWith("event: ")) eventName = line.slice(7).trim();
+          else if (line.startsWith("data: ")) dataLine += line.slice(6);
+        }
+        if (!eventName || !dataLine) continue;
+
+        if (eventName === "audio") {
+          receivedAudio = true;
+          const payload = JSON.parse(dataLine) as { chunk: string };
+          const { base64, samples } = int16Base64ToFloat32Base64(payload.chunk);
+          yield {
+            type: "audio",
+            pcmFloat32Base64: base64,
+            samples,
+            sampleRate: POCKET_TTS_SAMPLE_RATE,
+          };
+        } else if (eventName === "error") {
+          const payload = JSON.parse(dataLine) as { message?: string };
+          yield {
+            type: "error",
+            message: `Pocket TTS error: ${payload.message ?? "unknown"}`,
+          };
+          return;
+        }
+        // "meta" and "done" are absorbed: caller emits its own done frame
+        // once all chunks have drained.
+      }
+    }
+  }
+}
+
+async function readWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs: number,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      reader.read(),
+      new Promise<ReadableStreamReadResult<Uint8Array>>((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error(`TTS first audio timed out after ${timeoutMs}ms.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+// ── ElevenLabs streaming adapter ──────────────────────────────────────
+//
+// Uses ElevenLabs's `/v1/text-to-speech/{id}/stream-input` websocket
+// (one socket per sentence chunk — matches our LLM-token-aware dispatch
+// in voice-stream/route.ts). We request `output_format=pcm_24000` so we
+// can reuse the same int16→Float32 conversion as Pocket and skip MP3
+// decoding entirely. (PCM outputs are a paid-tier feature on
+// ElevenLabs; free-tier accounts must use the batch /api/audio/speak
+// path with the MP3 default.)
+//
+// Voice settings (stability, similarity_boost, style) come from the
+// voices row's `providerConfig`. Adding the voice via the "+ new voice"
+// flow (PR2) is where those values are captured.
+
+export interface ElevenLabsVoiceProviderConfig {
+  voiceId: string;
+  modelId?: string;
+  stability?: number;
+  similarityBoost?: number;
+  style?: number;
+}
+
+/**
+ * Resolves the effective ElevenLabs config by overlaying a per-binding
+ * override (from `characters.voice_settings`) on top of the voice row's
+ * `providerConfig`. The override is a sparse jsonb tagged with its
+ * provider; we only apply it when the tag matches, so re-binding a
+ * character to a different-provider voice silently ignores stale
+ * overrides instead of mangling the synth call.
+ *
+ * `voiceId` is intentionally never overrideable — that's the voice's
+ * identity, not a tuning knob.
+ */
+export function resolveElevenLabsConfig(
+  base: Partial<ElevenLabsVoiceProviderConfig>,
+  override: Record<string, unknown> | null | undefined,
+): Partial<ElevenLabsVoiceProviderConfig> {
+  if (!override || override.provider !== "elevenlabs") return base;
+  const pickNum = (k: string): number | undefined => {
+    const v = override[k];
+    return typeof v === "number" ? v : undefined;
+  };
+  const pickStr = (k: string): string | undefined => {
+    const v = override[k];
+    return typeof v === "string" && v.length > 0 ? v : undefined;
+  };
+  return {
+    voiceId: base.voiceId,
+    modelId: pickStr("modelId") ?? base.modelId,
+    stability: pickNum("stability") ?? base.stability,
+    similarityBoost: pickNum("similarityBoost") ?? base.similarityBoost,
+    style: pickNum("style") ?? base.style,
+  };
+}
+
+export class ElevenLabsStreamingAdapter
+  implements StreamingTextToSpeechAdapter
+{
+  async *stream({
+    text,
+    voice,
+    signal,
+  }: {
+    text: string;
+    voice: VoiceContext;
+    signal?: AbortSignal;
+  }): AsyncIterable<StreamingTtsChunk> {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) {
+      yield {
+        type: "error",
+        message: "ELEVENLABS_API_KEY is not configured.",
+      };
+      return;
+    }
+
+    const baseConfig = (voice.providerConfig ?? {}) as Partial<ElevenLabsVoiceProviderConfig>;
+    const config = resolveElevenLabsConfig(baseConfig, voice.voiceSettings);
+    if (!config.voiceId) {
+      yield {
+        type: "error",
+        message: `ElevenLabs voice "${voice.slug}" is missing providerConfig.voiceId.`,
+      };
+      return;
+    }
+
+    // Reuse the existing pricing guard. modelId override on the voice
+    // row wins over the env default; both pass through the same check.
+    let modelId: string;
+    try {
+      modelId = config.modelId ?? resolveElevenLabsModelId();
+      if (config.modelId) {
+        // Re-validate the per-voice override against the pricing guard.
+        const guard = getElevenLabsPricingGuardInfo();
+        if (guard.enforceNormalPricing &&
+            !guard.allowedModelIds.includes(config.modelId)) {
+          yield {
+            type: "error",
+            message: `Model ${config.modelId} is blocked by ELEVENLABS_ENFORCE_NORMAL_PRICING.`,
+          };
+          return;
+        }
+      }
+    } catch (guardErr) {
+      yield {
+        type: "error",
+        message: guardErr instanceof Error ? guardErr.message : String(guardErr),
+      };
+      return;
+    }
+
+    const url =
+      `wss://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(config.voiceId)}/stream-input` +
+      `?model_id=${encodeURIComponent(modelId)}` +
+      `&output_format=pcm_24000`;
+
+    // ws supports custom headers; ElevenLabs accepts xi-api-key as a
+    // header (cleaner than the query-param alternative since the key
+    // won't leak into proxy logs).
+    const ws = new WebSocket(url, { headers: { "xi-api-key": apiKey } });
+
+    // Bridge ws events into an async generator. Three sources push
+    // chunks into `pending`; the consumer loop drains it. `streamEnded`
+    // becomes true on close, error, abort, or isFinal — once it's true
+    // and `pending` is empty we return.
+    const pending: StreamingTtsChunk[] = [];
+    let pendingResolve: (() => void) | null = null;
+    let streamEnded = false;
+
+    const wake = () => {
+      if (pendingResolve) {
+        const r = pendingResolve;
+        pendingResolve = null;
+        r();
+      }
+    };
+    const push = (chunk: StreamingTtsChunk) => {
+      pending.push(chunk);
+      wake();
+    };
+    const end = () => {
+      streamEnded = true;
+      wake();
+    };
+
+    ws.on("message", (data: unknown) => {
+      try {
+        const raw = Buffer.isBuffer(data) ? data.toString("utf-8") : String(data);
+        const payload = JSON.parse(raw) as {
+          audio?: string;
+          isFinal?: boolean;
+          error?: string;
+          message?: string;
+        };
+        if (payload.error) {
+          push({
+            type: "error",
+            message: `ElevenLabs: ${payload.error}${payload.message ? ` — ${payload.message}` : ""}`,
+          });
+          end();
+          return;
+        }
+        if (payload.audio) {
+          const { base64, samples } = int16Base64ToFloat32Base64(payload.audio);
+          push({
+            type: "audio",
+            pcmFloat32Base64: base64,
+            samples,
+            sampleRate: 24000,
+          });
+        }
+        if (payload.isFinal) end();
+      } catch (parseErr) {
+        push({
+          type: "error",
+          message: `ElevenLabs WS parse failed: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
+        });
+        end();
+      }
+    });
+
+    ws.on("error", (err: unknown) => {
+      push({
+        type: "error",
+        message: `ElevenLabs WebSocket error: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      end();
+    });
+
+    ws.on("close", () => end());
+
+    const onAbort = () => {
+      try {
+        ws.close(1000, "client aborted");
+      } catch {
+        /* socket may already be closing */
+      }
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    // Wait for the socket to open (or reject on early error/close).
+    try {
+      await new Promise<void>((resolve, reject) => {
+        ws.once("open", () => resolve());
+        ws.once("error", (err: unknown) =>
+          reject(err instanceof Error ? err : new Error(String(err))),
+        );
+        // If the server closes before "open" (e.g. 401) we'd never resolve.
+        ws.once("close", (code: number, reason: Buffer) => {
+          reject(
+            new Error(
+              `ElevenLabs WS closed before open: ${code}${reason?.length ? ` ${reason.toString("utf-8")}` : ""}`,
+            ),
+          );
+        });
+      });
+    } catch (openErr) {
+      signal?.removeEventListener("abort", onAbort);
+      yield {
+        type: "error",
+        message:
+          openErr instanceof Error ? openErr.message : String(openErr),
+      };
+      return;
+    }
+
+    // Three-frame send protocol:
+    //   1. initial config: opening whitespace + voice_settings
+    //   2. the actual text with try_trigger_generation so synthesis
+    //      starts immediately instead of waiting for the EOS
+    //   3. empty text = EOS marker so the server flushes and closes
+    try {
+      ws.send(
+        JSON.stringify({
+          text: " ",
+          voice_settings: {
+            stability: config.stability ?? 0.5,
+            similarity_boost: config.similarityBoost ?? 0.75,
+            style: config.style ?? 0,
+          },
+        }),
+      );
+      ws.send(
+        JSON.stringify({
+          text: trimmed,
+          try_trigger_generation: true,
+        }),
+      );
+      ws.send(JSON.stringify({ text: "" }));
+    } catch (sendErr) {
+      signal?.removeEventListener("abort", onAbort);
+      yield {
+        type: "error",
+        message: `ElevenLabs WS send failed: ${sendErr instanceof Error ? sendErr.message : String(sendErr)}`,
+      };
+      try {
+        ws.close();
+      } catch {
+        /* noop */
+      }
+      return;
+    }
+
+    // Drain: yield queued chunks, sleep when empty until the next
+    // message event wakes us, exit once the stream has ended AND
+    // the queue is drained.
+    try {
+      while (true) {
+        while (pending.length > 0) {
+          const chunk = pending.shift()!;
+          yield chunk;
+          if (chunk.type === "error") return;
+        }
+        if (streamEnded) return;
+        await new Promise<void>((resolve) => {
+          pendingResolve = resolve;
+        });
+      }
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+      try {
+        ws.close();
+      } catch {
+        /* noop */
+      }
+    }
+  }
+}
+
+/**
+ * Voice-level descriptor sufficient to dispatch to the right streaming
+ * adapter. Constructed by the route from a `voices` row (+ a signed URL
+ * for Pocket).
+ */
+export interface VoiceForRouting {
+  provider: StreamingTtsProvider;
+  slug: string;
+  embeddingUrl?: string | null;
+  providerConfig?: Record<string, unknown>;
+  /** Per-binding tuning overlay; see VoiceContext.voiceSettings. */
+  voiceSettings?: Record<string, unknown> | null;
+}
+
+/**
+ * Returns `{ provider, adapter, voiceContext }` for a voice row. The
+ * caller passes `voiceContext` straight into `adapter.stream()`. Throws
+ * if the provider has no streaming adapter wired up yet.
+ */
+export function createStreamingTtsAdapterForVoice(voice: VoiceForRouting): {
+  provider: StreamingTtsProvider;
+  adapter: StreamingTextToSpeechAdapter;
+  voiceContext: VoiceContext;
+} {
+  switch (voice.provider) {
+    case "pocket_tts": {
+      return {
+        provider: "pocket_tts",
+        adapter: new PocketTtsStreamingAdapter(),
+        voiceContext: {
+          slug: voice.slug,
+          embeddingUrl: voice.embeddingUrl ?? null,
+        },
+      };
+    }
+    case "elevenlabs": {
+      return {
+        provider: "elevenlabs",
+        adapter: new ElevenLabsStreamingAdapter(),
+        voiceContext: {
+          slug: voice.slug,
+          providerConfig: voice.providerConfig,
+          voiceSettings: voice.voiceSettings ?? null,
+        },
+      };
+    }
+    // Other hosted providers — adapters land here as they're built out.
+    case "openai":
+    case "cartesia":
+      throw new Error(
+        `Streaming TTS adapter for "${voice.provider}" is not implemented yet.`,
+      );
+    default: {
+      // Exhaustiveness check — if a new provider gets added to
+      // StreamingTtsProvider without a case here, TS surfaces it.
+      const _exhaustive: never = voice.provider;
+      throw new Error(`Unknown voice provider: ${String(_exhaustive)}`);
+    }
+  }
 }
 
 export function getAudioRuntimeConfig(requestedProvider?: string) {

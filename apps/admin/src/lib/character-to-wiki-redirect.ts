@@ -30,6 +30,12 @@ export async function redirectToWiki(
   searchParams?: URLSearchParams,
 ): Promise<never> {
   const wikiId = await resolveWikiIdForCharacter(slug);
+  const wikiSegment =
+    segment === "wiki"
+      ? "pages"
+      : segment.startsWith("wiki/")
+        ? `pages/${segment.slice("wiki/".length)}`
+        : segment;
   const qs = searchParams?.toString();
-  redirect(`/wikis/${wikiId}/${segment}${qs ? `?${qs}` : ""}`);
+  redirect(`/wikis/${wikiId}/${wikiSegment}${qs ? `?${qs}` : ""}`);
 }

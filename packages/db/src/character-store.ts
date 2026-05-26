@@ -12,6 +12,7 @@ import type {
   EraConfig,
   UpdateCharacterInput,
 } from "./wiki-types";
+import type { VoiceSettingsOverride } from "./voice-store";
 
 /* ── Shared helpers ─────────────────────────────────────────────── */
 
@@ -62,6 +63,7 @@ function normalize(row: typeof charactersTable.$inferSelect): CharacterRecord {
     brainModel: (row.brainModel as CharacterBrainModel | null) ?? null,
     directive: (row.directive as CharacterDirective | null) ?? null,
     voiceId: row.voiceId ?? null,
+    voiceSettings: (row.voiceSettings as VoiceSettingsOverride | null) ?? null,
     createdAt: row.createdAt instanceof Date ? toIso(row.createdAt) : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? toIso(row.updatedAt) : String(row.updatedAt),
   };

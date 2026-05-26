@@ -2,6 +2,7 @@ import { providerFor } from "../model-registry";
 import { AnthropicChatProvider } from "./anthropic-provider";
 import { OpenAIChatProvider } from "./openai-provider";
 import { CerebrasChatProvider } from "./cerebras-provider";
+import { GroqChatProvider } from "./groq-provider";
 import type { ChatProvider } from "./types";
 
 /**
@@ -14,16 +15,16 @@ import type { ChatProvider } from "./types";
  * That keeps "which SDK does GPT-5 use" in one place (the registry's
  * `provider` field).
  *
- * Cerebras is voice-only today and doesn't have a chat provider here.
- * If we ever ship it as a chat option, add a CerebrasChatProvider and
- * wire the case below — the registry already supports it.
+ * Cerebras and Groq both use OpenAI-compatible Chat Completions providers,
+ * so low-latency voice models share the same provider-neutral interface as
+ * Anthropic and OpenAI.
  */
 
 const cache = new Map<string, ChatProvider>();
 
 /** Provider ids that have a ChatProvider implementation. Update the union
  * + the switch below in lockstep when a new provider is wired. */
-export type ChatCapableProvider = "anthropic" | "openai" | "cerebras";
+export type ChatCapableProvider = "anthropic" | "openai" | "cerebras" | "groq";
 
 export function getChatProvider(provider: ChatCapableProvider): ChatProvider {
   const cached = cache.get(provider);
@@ -40,6 +41,9 @@ export function getChatProvider(provider: ChatCapableProvider): ChatProvider {
     case "cerebras":
       instance = new CerebrasChatProvider();
       break;
+    case "groq":
+      instance = new GroqChatProvider();
+      break;
     default:
       // Exhaustiveness — if we ever add another chat-capable provider
       // to the ChatCapableProvider union, this throws until it's wired.
@@ -52,7 +56,12 @@ export function getChatProvider(provider: ChatCapableProvider): ChatProvider {
 /** Resolve a chat provider from a model id via the shared registry. */
 export function getChatProviderForModel(modelId: string): ChatProvider {
   const provider = providerFor(modelId, "anthropic");
-  if (provider !== "anthropic" && provider !== "openai" && provider !== "cerebras") {
+  if (
+    provider !== "anthropic" &&
+    provider !== "openai" &&
+    provider !== "cerebras" &&
+    provider !== "groq"
+  ) {
     throw new Error(
       `model ${modelId} belongs to provider ${provider} which has no chat provider wired`,
     );
@@ -71,3 +80,4 @@ export type {
 export { AnthropicChatProvider } from "./anthropic-provider";
 export { OpenAIChatProvider } from "./openai-provider";
 export { CerebrasChatProvider } from "./cerebras-provider";
+export { GroqChatProvider } from "./groq-provider";
