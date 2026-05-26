@@ -35,5 +35,9 @@
     "@dnd-kit/utilities": "^3.2.2",
     "react-feather": "^2.0.10",
     "tsx": "^4.22.3"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-linux-x64-gnu": "^4.2.1",
+    "@tailwindcss/oxide-linux-x64-musl": "^4.2.1"
   }
 }
