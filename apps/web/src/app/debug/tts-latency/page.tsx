@@ -44,6 +44,12 @@ const VOICES = {
   openai: ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
 };
 
+function uint8ArrayToBlobPart(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 export default function TTSLatencyPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [phase, setPhase] = useState("");
@@ -113,7 +119,7 @@ export default function TTSLatencyPage() {
           const totalTime = performance.now() - startTime;
 
           // Try to play audio
-          const blob = new Blob(chunks, { type: contentType });
+          const blob = new Blob(chunks.map(uint8ArrayToBlobPart), { type: contentType });
           const url = URL.createObjectURL(blob);
 
           if (audioRef.current) {
