@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import {
   getCharacterStore,
   getVoiceStore,
@@ -7,17 +6,41 @@ import {
   getWikisStore,
   getWorldSessionStore,
 } from "@odyssey/db";
-import { embedText } from "@odyssey/engine";
-import { curate } from "@odyssey/wiki-curator";
+import {
+  createStreamingTtsAdapterForVoice,
+  DEFAULT_VOICE_MODEL,
+  embedText,
+  getChatProviderForModel,
+  modelMetaFor,
+  POCKET_TTS_SAMPLE_RATE,
+  type ChatSystemBlock,
+  type ProviderId,
+  type StreamingTtsProvider,
+  type VoiceForRouting,
+} from "@odyssey/engine";
+import { curate, type Scene as CuratorScene, type SemanticSeed } from "@odyssey/wiki-curator";
 import { TraceEnvelope } from "@/lib/voice-trace";
-import { buildVoiceSystemPrompt } from "@odyssey/engine";
+import { VOICE_STREAM_SSE_EVENT_NAMES } from "@/lib/voice-stream-events";
+import { buildVoicePromptPlan } from "@odyssey/orchestration/server";
 import {
   shouldSkipRetrieval,
   getRecentTurnSummaries,
   formatRecentConversation,
   summarizeTurnInBackground,
 } from "@/lib/voice-context-helpers";
+import {
+  buildAndStoreSandboxVoiceContextCache,
+  getOrWaitSandboxVoiceContextCache,
+  sandboxVoiceContextCacheKeyForDebug,
+} from "@/lib/sandbox-voice-context-cache";
+import {
+  getCachedVoiceAckAudio,
+  voiceAckAudioCacheKey,
+  type CachedVoiceAckAudio,
+} from "@/lib/voice-ack-audio-cache";
+import { isAckLaneEnabled, selectVoiceAck } from "@/lib/voice-ack-lane";
 import { createEmbeddingSignedUrl } from "@/lib/voices-storage";
+import { estimateSessionTurnCost } from "@/lib/session-cost";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,21 +48,24 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/characters/:id/voice-stream
  *
- * Pipes the LLM into Kyutai Pocket TTS (CPU, 100M, hosted on Railway) and
- * returns ONE merged SSE stream containing both:
+ * Pipes the LLM into a streaming TTS adapter and returns ONE merged SSE
+ * stream containing both:
  *   - LLM tokens for live transcript display ("token" events)
  *   - Base64-encoded Float32 PCM frames as TTS produces them ("audio" events)
  *
- * Wire format toward the browser is unchanged from the previous Moshi-WS
- * pipeline (Float32 PCM base64); this route translates int16 from the
- * Pocket TTS HTTP/SSE gateway into Float32 to preserve that contract.
+ * Provider routing: the character's bound voice (via `character.voiceId`)
+ * names a provider in the voices table. createStreamingTtsAdapterForVoice
+ * dispatches on that — Pocket today, ElevenLabs/Cartesia/OpenAI as their
+ * adapters land. All adapters normalize to Float32 LE PCM base64 so the
+ * browser decoder stays a single code path (legacy contract from Moshi-WS).
  *
- * Pocket TTS doesn't accept streaming text input the way Moshi did, but we
+ * Live-harness chunking: TTS doesn't accept streaming text input, but we
  * still want first-audio to land as soon as possible. Strategy: detect
- * sentence boundaries inside the LLM token stream and fire one /speak per
- * sentence the moment it completes. Fetches run in parallel; audio events
- * are forwarded to the browser in dispatch order via a serial drain chain
- * so chunks always play in sequence. For multi-sentence replies this drops
+ * sentence boundaries inside the LLM token stream and dispatch one TTS
+ * chunk per sentence the moment it completes. Chunks stream in parallel
+ * via separate adapter.stream() invocations; audio frames are forwarded
+ * to the browser in dispatch order via a serial drain chain so chunks
+ * always play in sequence. For multi-sentence replies this drops
  * first-audio from "LLM total + TTS first chunk" to roughly "LLM first
  * sentence + TTS first chunk".
  *
@@ -47,12 +73,13 @@ export const dynamic = "force-dynamic";
  *   event: "trace"        TraceEnvelope JSON
  *   event: "token"        { delta: string }
  *   event: "first-audio"  { latencyMs: number }
- *   event: "audio"        { pcm: base64<Float32>, samples: number, sampleRate: 24000 }
+ *   event: "audio"        { pcm: base64<Float32>, samples: number, sampleRate: number }
  *   event: "done"         { ... }
  *   event: "error"        { message: string }
  */
 
-type LlmProvider = "cerebras" | "anthropic";
+type LlmProvider = ProviderId;
+type StreamingTtsRouting = ReturnType<typeof createStreamingTtsAdapterForVoice>;
 
 type VoiceStreamBody = {
   sessionId?: string;
@@ -60,19 +87,37 @@ type VoiceStreamBody = {
   promptChunk?: string;
   message?: string;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
+  scene?: CuratorScene;
   provider?: LlmProvider;
   model?: string;
   maxTokens?: number;
   voice?: string;
+  ackMode?: "auto" | "off";
 };
 
-const CEREBRAS_DEFAULT_MODEL = "qwen-3-235b-a22b-instruct-2507";
 const ANTHROPIC_DEFAULT_MODEL = "claude-haiku-4-5";
+const OPENAI_DEFAULT_MODEL = "gpt-5-nano";
+const GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_MAX_TOKENS = 1024;
-const TTS_DEFAULT_VOICE = "abraham";
-const TTS_SAMPLE_RATE = 24000;
-const TTS_PUBLIC_BASE_URL = "https://audio-rt-production.up.railway.app";
+// Fallback chain when no voice is bound: the legacy hardcoded Pocket slug
+// kept the harness alive before voices were a first-class table. Once the
+// migration backfills `provider='pocket_tts'` on every existing row, this
+// only fires for the synthetic `abraham-fallback` character path.
+const TTS_DEFAULT_VOICE_SLUG = "abraham";
+const TTS_DEFAULT_PROVIDER: StreamingTtsProvider = "pocket_tts";
 const TTS_MAX_CHUNK_CHARS = 220;
+const TTS_FIRST_CHUNK_TARGET_CHARS = 80;
+const VOICE_CONTEXT_TOKEN_BUDGET = 2500;
+const VOICE_CONTEXT_PREP_WAIT_MS = 100;
+type CurateOutput = Awaited<ReturnType<typeof curate>>;
+const EMPTY_CURATOR_TRACE: CurateOutput["trace"] = {
+  totalPages: 0,
+  seeds: [],
+  edges: [],
+  timelineFiltered: [],
+  scoreDropped: [],
+  budgetDropped: [],
+};
 
 // Abbreviations where a "." doesn't terminate a sentence. Tiny allow-list —
 // false negatives ("Dr. Smith" → split into two chunks) sound only slightly
@@ -107,18 +152,23 @@ function findTtsBoundary(text: string, fromIndex: number): number {
   return -1;
 }
 
-function findForceFlushBoundary(text: string, fromIndex: number): number {
+function findForceFlushBoundary(
+  text: string,
+  fromIndex: number,
+  maxChunkChars = TTS_MAX_CHUNK_CHARS,
+): number {
   // If the unsent tail exceeds TTS_MAX_CHUNK_CHARS with no sentence boundary
   // in sight, cut at the latest comma or whitespace within the window so the
   // chunk lands on a natural prosodic break. Returns -1 if we should wait.
   const tail = text.length - fromIndex;
-  if (tail < TTS_MAX_CHUNK_CHARS) return -1;
-  const slice = text.slice(fromIndex, fromIndex + TTS_MAX_CHUNK_CHARS);
+  if (tail < maxChunkChars) return -1;
+  const slice = text.slice(fromIndex, fromIndex + maxChunkChars);
+  const minBreak = Math.min(60, Math.max(24, Math.floor(maxChunkChars * 0.45)));
   const lastComma = slice.lastIndexOf(",");
-  if (lastComma >= 60) return fromIndex + lastComma + 1;
+  if (lastComma >= minBreak) return fromIndex + lastComma + 1;
   const lastSpace = slice.lastIndexOf(" ");
-  if (lastSpace >= 60) return fromIndex + lastSpace + 1;
-  return fromIndex + TTS_MAX_CHUNK_CHARS;
+  if (lastSpace >= minBreak) return fromIndex + lastSpace + 1;
+  return fromIndex + maxChunkChars;
 }
 
 export async function POST(
@@ -136,7 +186,7 @@ export async function POST(
   const message = body.message?.trim();
   if (!message) return jsonError(400, "message is required");
 
-  const promptChunk = body.promptChunk ?? "";
+  const sandboxPromptChunk = body.promptChunk ?? "";
 
   const fallbackCharacter =
     id === "abraham-fallback"
@@ -158,76 +208,101 @@ export async function POST(
   // the wavefield UI's live picker is the highest-priority signal so a
   // developer can swap models mid-session without re-saving L04.
   const voiceCfg = character.brainModel?.voice;
-  const characterVoiceProvider: LlmProvider | undefined =
-    voiceCfg?.provider === "anthropic" || voiceCfg?.provider === "cerebras"
-      ? voiceCfg.provider
-      : character.brainModel?.provider === "anthropic" || character.brainModel?.provider === "cerebras"
-        ? (character.brainModel.provider as LlmProvider)
-        : undefined;
-  const characterVoiceModel: string | undefined = voiceCfg?.model ?? character.brainModel?.model;
-  const characterVoiceMaxTokens: number | undefined =
-    voiceCfg?.maxTokens ?? character.brainModel?.maxTokens;
-
-  // Hardcoded fallback when neither body nor character specify a provider:
-  // "cerebras" wins because voice latency budget favors it.
-  const requestedProvider: LlmProvider = body.provider ?? characterVoiceProvider ?? "cerebras";
-  const hasCerebras = Boolean(process.env.CEREBRAS_API_KEY?.trim());
-  const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
-  const provider: LlmProvider =
-    requestedProvider === "cerebras"
-      ? hasCerebras
-        ? "cerebras"
-        : hasAnthropic
-          ? "anthropic"
-          : "cerebras"
-      : hasAnthropic
-        ? "anthropic"
-        : hasCerebras
-          ? "cerebras"
-          : "anthropic";
+  const requestedProvider = normalizeProvider(
+    body.provider ?? voiceCfg?.provider ?? character.brainModel?.provider,
+  );
+  const modelId =
+    body.model?.trim() ||
+    voiceCfg?.model?.trim() ||
+    character.brainModel?.model?.trim() ||
+    defaultVoiceModelForProvider(requestedProvider ?? "cerebras");
+  const modelMeta = modelMetaFor(modelId);
+  if (!modelMeta) return jsonError(400, `unknown model "${modelId}"`);
+  const provider: LlmProvider = modelMeta.provider;
+  const characterVoiceMaxTokens = voiceCfg?.maxTokens ?? character.brainModel?.maxTokens;
   const maxTokens = Math.max(
     64,
     Math.min(1024, body.maxTokens ?? characterVoiceMaxTokens ?? DEFAULT_MAX_TOKENS),
   );
   // Voice resolution priority:
-  //   1. body.voice explicit override (caller knows the slug)
-  //   2. character.voiceId binding → resolve to slug + signed embedding URL
-  //   3. fallback default
-  // The signed URL is passed alongside the slug so audio-rt can fetch
-  // Supabase-managed voices that aren't baked into its Docker image.
-  // URL is one-shot per request — 1h TTL is plenty for the longest voice
-  // session.
-  let voice: string;
-  let voiceUrl: string | null = null;
-  if (body.voice) {
-    voice = body.voice;
-  } else if (
+  //   1. character.voiceId binding → load the voices row, then dispatch to
+  //      its provider via createStreamingTtsAdapterForVoice
+  //   2. body.voice explicit Pocket slug fallback for static/authored scenes
+  //      whose character has no ready voice binding yet
+  //   3. fallback to a baked Pocket slug
+  //
+  // For Pocket voices the signed URL is generated alongside the slug so
+  // audio-rt can fetch Supabase-managed embeddings; the URL is one-shot
+  // (1h TTL) and only used for this request.
+  let voiceForRouting: VoiceForRouting;
+  if (
     "voiceId" in character &&
     typeof character.voiceId === "string" &&
     character.voiceId
   ) {
     const bound = await getVoiceStore().getById(character.voiceId);
-    if (bound?.status === "ready" && bound.embeddingPath) {
-      voice = bound.slug;
-      voiceUrl = await createEmbeddingSignedUrl(bound.embeddingPath).catch(
-        () => null,
-      );
+    if (bound?.status === "ready") {
+      const embeddingUrl =
+        bound.provider === "pocket_tts" && bound.embeddingPath
+          ? await createEmbeddingSignedUrl(bound.embeddingPath).catch(() => null)
+          : null;
+      voiceForRouting = {
+        provider: bound.provider as StreamingTtsProvider,
+        slug: bound.slug,
+        embeddingUrl,
+        providerConfig: bound.providerConfig,
+        // Per-binding tuning overlay (jsonb on the character row). The
+        // engine resolver merges this on top of providerConfig at synth
+        // time and silently ignores it if the provider tags don't match
+        // (e.g. stale override after a re-bind to a different provider).
+        voiceSettings:
+          (character.voiceSettings as Record<string, unknown> | null) ?? null,
+      };
     } else {
-      voice = character.slug ?? TTS_DEFAULT_VOICE;
+      voiceForRouting = {
+        provider: TTS_DEFAULT_PROVIDER,
+        slug: body.voice ?? character.slug ?? TTS_DEFAULT_VOICE_SLUG,
+        embeddingUrl: null,
+      };
     }
+  } else if (body.voice) {
+    voiceForRouting = {
+      provider: "pocket_tts",
+      slug: body.voice,
+      embeddingUrl: null,
+    };
   } else {
-    voice = TTS_DEFAULT_VOICE;
+    voiceForRouting = {
+      provider: TTS_DEFAULT_PROVIDER,
+      slug: TTS_DEFAULT_VOICE_SLUG,
+      embeddingUrl: null,
+    };
   }
 
-  if (!hasCerebras && !hasAnthropic) {
+  // Resolve the streaming adapter up front so misconfiguration (an
+  // unimplemented provider, e.g. a character bound to an ElevenLabs voice
+  // before that adapter ships) surfaces as a clean 4xx instead of a
+  // mid-stream throw after the LLM has already started spending tokens.
+  let ttsRouting: StreamingTtsRouting | null = null;
+  try {
+    ttsRouting = createStreamingTtsAdapterForVoice(voiceForRouting);
+  } catch (routingErr) {
     return jsonError(
-      500,
-      "No LLM provider key configured. Set CEREBRAS_API_KEY or ANTHROPIC_API_KEY.",
+      501,
+      routingErr instanceof Error ? routingErr.message : String(routingErr),
     );
   }
+  const ttsVoiceContext = ttsRouting.voiceContext;
+  const ttsProvider = ttsRouting.provider;
+  const ttsFallbackRouting = await resolveVoiceStreamTtsFallback({
+    primaryProvider: ttsProvider,
+    primaryVoiceSlug: ttsVoiceContext.slug,
+  });
 
-  const ttsBaseUrl = ((process.env.KYUTAI_TTS_BASE_URL ?? "").trim().replace(/\/+$/, "") ||
-    TTS_PUBLIC_BASE_URL);
+  const missingProviderReason = missingProviderKeyReason(provider);
+  if (missingProviderReason) {
+    return jsonError(500, missingProviderReason);
+  }
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -237,7 +312,7 @@ export async function POST(
       serverTrace.mark("server.request.received", {
         requestedProvider,
         chosenProvider: provider,
-        model: body.model ?? null,
+        model: modelId,
       });
       let closed = false;
 
@@ -262,7 +337,8 @@ export async function POST(
         }
       };
 
-      // Abort the downstream TTS fetch if the client disconnects (barge-in).
+      // Abort any in-flight adapter.stream() calls if the client disconnects
+      // (barge-in). Adapters wire this through to their underlying fetch.
       const ttsAbort = new AbortController();
       const onAbort = () => {
         ttsAbort.abort();
@@ -274,7 +350,90 @@ export async function POST(
       let totalSamples = 0;
       let inputTokens = 0;
       let outputTokens = 0;
-      let modelId = "";
+      let replyText = "";
+      let emittedAnyToken = false;
+      let brainFirstTokenAt: number | null = null;
+      let ackFirstAudioAt: number | null = null;
+      let ttsCursor = 0;
+      let ttsChunkCount = 0;
+      let drainChain: Promise<void> = Promise.resolve();
+      let ackText: string | null = null;
+      let cachedAckAudio: CachedVoiceAckAudio | null = null;
+      let mainTokenGateOpen = true;
+      const queuedMainTokenDeltas: string[] = [];
+
+      const emitMainTokenDelta = (delta: string) => {
+        if (!mainTokenGateOpen) {
+          queuedMainTokenDeltas.push(delta);
+          return;
+        }
+        sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.token, { delta });
+      };
+
+      const releaseMainTokenGate = () => {
+        if (mainTokenGateOpen) return;
+        mainTokenGateOpen = true;
+        while (queuedMainTokenDeltas.length > 0) {
+          sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.token, {
+            delta: queuedMainTokenDeltas.shift()!,
+          });
+        }
+      };
+
+      const dispatchCachedAckAudio = (cached: CachedVoiceAckAudio): void => {
+        const chunkIdx = ttsChunkCount++;
+        serverTrace.mark("server.ack.audio_cache.dispatched", {
+          chunkIdx,
+          frames: cached.frames.length,
+          samples: cached.totalSamples,
+        });
+        serverTrace.mark("server.tts.chunk.dispatched", {
+          chunkIdx,
+          kind: "ack",
+          chars: cached.ackText.length,
+          cachedAudio: true,
+        });
+        drainChain = drainChain.then(async () => {
+          for (const frame of cached.frames) {
+            if (req.signal.aborted) break;
+            totalSamples += frame.samples;
+            if (ackFirstAudioAt === null) {
+              ackFirstAudioAt = performance.now();
+              serverTrace.mark("server.ack.tts.first-audio", {
+                latencyMs: Math.round(ackFirstAudioAt - startedAt),
+                provider: ttsProvider,
+                attempt: "cache",
+              });
+              sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.token, { delta: `${cached.ackText} ` });
+              releaseMainTokenGate();
+            }
+            if (firstAudioAt === null) {
+              firstAudioAt = performance.now();
+              serverTrace.mark("server.tts.first-audio", {
+                latencyMs: Math.round(firstAudioAt - startedAt),
+                chunkIdx,
+                kind: "ack",
+                provider: ttsProvider,
+                attempt: "cache",
+              });
+              sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.firstAudio, {
+                latencyMs: Math.round(firstAudioAt - startedAt),
+              });
+            }
+            sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.audio, {
+              pcm: frame.pcmFloat32Base64,
+              samples: frame.samples,
+              sampleRate: frame.sampleRate,
+            });
+          }
+          serverTrace.mark("server.tts.chunk.drained", {
+            chunkIdx,
+            kind: "ack",
+            provider: ttsProvider,
+            attempt: "cache",
+          });
+        });
+      };
 
       try {
         if (req.signal.aborted) return;
@@ -292,82 +451,94 @@ export async function POST(
         // of breaking the user's turn.
 
         const skipDecision = shouldSkipRetrieval(message);
-        let augmentedChunk = "";
+        let wikiPromptChunk = "";
         let semanticHitCount = 0;
+        let semanticSeeds: SemanticSeed[] = [];
+        let contextCacheHit = false;
+        let contextCacheScope: "session" | "character" | null = null;
+        let contextCacheBuiltAt: string | null = null;
+        const contextCacheKey = sandboxVoiceContextCacheKeyForDebug({
+          characterId: character.id,
+          sessionId: body.sessionId,
+          scene: body.scene,
+          tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
+        });
         // Hoisted so we can persist these on the contextBuild record below
         // (the workbench's KnowledgeGraphPanel reads `selectedPages` to render
         // which wiki pages were pulled in for this turn).
-        let curatorSelectedPages: unknown = null;
-        let curatorTrace: unknown = null;
+        let curatorSelectedPages: CurateOutput["pages"] = [];
+        let curatorTrace: CurateOutput["trace"] = EMPTY_CURATOR_TRACE;
         let curatorTokensUsed: number | null = null;
         let curatorTokensBudget: number | null = null;
 
         // Run summary-fetch in parallel with retrieval — both read-only,
         // independent. Promise.all keeps the latency floor at max(both).
         const summariesPromise = getRecentTurnSummaries(body.sessionId, 3);
+        const cachedContext = await getOrWaitSandboxVoiceContextCache({
+          characterId: character.id,
+          sessionId: body.sessionId,
+          scene: body.scene,
+          tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
+        }, VOICE_CONTEXT_PREP_WAIT_MS);
 
-        if (skipDecision.skip) {
+        if (cachedContext) {
+          contextCacheHit = true;
+          contextCacheScope = cachedContext.cacheScope;
+          contextCacheBuiltAt = cachedContext.builtAt;
+          wikiPromptChunk = cachedContext.promptChunk;
+          curatorSelectedPages = cachedContext.pages;
+          curatorTrace = cachedContext.trace;
+          curatorTokensUsed = cachedContext.tokensUsed;
+          curatorTokensBudget = cachedContext.tokensBudget;
+          serverTrace.mark("server.context.cache.hit", {
+            scope: cachedContext.cacheScope,
+            selectedPages: cachedContext.pages.length,
+            tokensUsed: cachedContext.tokensUsed,
+            sourceQuery: cachedContext.sourceQuery,
+            builtAt: cachedContext.builtAt,
+          });
+        } else if (skipDecision.skip) {
           serverTrace.mark("server.retrieval.skipped", { reason: skipDecision.reason });
+        } else if (process.env.VOICE_SEMANTIC_RETRIEVAL === "0") {
+          serverTrace.mark("server.retrieval.skipped", { reason: "disabled" });
         } else {
           try {
-            if (process.env.VOICE_SEMANTIC_RETRIEVAL !== "0") {
-              serverTrace.mark("server.retrieval.start");
+            serverTrace.mark("server.retrieval.start");
 
-              // Fold the most recent turn summary into the embedding query
-              // so pronoun-y referential utterances ("tell me more about
-              // that", "what about her?") still hit relevant pages instead
-              // of embedding the bare 4-word fragment. The summary fetch
-              // was already kicked off in parallel above; awaiting it here
-              // is sub-50ms and adds nothing to the critical path beyond
-              // what the embedding API call already takes.
-              const summariesForQuery = await summariesPromise;
-              const lastSummary = summariesForQuery[summariesForQuery.length - 1];
-              const embedQuery = lastSummary
-                ? `Previous turn: ${lastSummary}\nUser now asks: ${message}`
-                : message;
-              const queryEmbedding = await embedText(embedQuery);
-              if (queryEmbedding) {
-                const activeWikiIds = (await getWikisStore().listWikisForCharacter(character.id))
-                  .filter((wiki) => wiki.binding.isActive)
-                  .map((wiki) => wiki.id);
-                const hits = await getWikiStore().searchPagesByEmbeddingForWikis(
-                  activeWikiIds,
-                  queryEmbedding,
-                  { topK: 5, minSimilarity: 0.5 },
-                );
-                semanticHitCount = hits.length;
-                if (hits.length > 0) {
-                  const augmented = await curate({
-                    characterId: character.id,
-                    query: message,
-                    semanticSeeds: hits.map((h) => ({
-                      pageId: h.pageId,
-                      slug: h.slug,
-                      similarity: h.similarity,
-                    })),
-                    tokenBudget: 1500,
-                  });
-                  augmentedChunk = augmented.promptChunk;
-                  curatorSelectedPages = augmented.pages;
-                  curatorTrace = augmented.trace;
-                  curatorTokensUsed = augmented.tokensUsed;
-                  curatorTokensBudget = augmented.tokensBudget ?? 1500;
-                  serverTrace.mark("server.retrieval.done", {
-                    hits: semanticHitCount,
-                    selectedPages: augmented.pages.length,
-                    tokensUsed: augmented.tokensUsed,
-                    curatorMs: augmented.elapsedMs,
-                    embedQueryAware: Boolean(lastSummary),
-                  });
-                } else {
-                  serverTrace.mark("server.retrieval.done", {
-                    hits: 0,
-                    embedQueryAware: Boolean(lastSummary),
-                  });
-                }
-              } else {
-                serverTrace.mark("server.retrieval.skipped", { reason: "no-embedding" });
-              }
+            // Fold the most recent turn summary into the embedding query
+            // so pronoun-y referential utterances ("tell me more about
+            // that", "what about her?") still hit relevant pages instead
+            // of embedding the bare 4-word fragment. The summary fetch
+            // was already kicked off in parallel above; awaiting it here
+            // is sub-50ms and adds nothing to the critical path beyond
+            // what the embedding API call already takes.
+            const summariesForQuery = await summariesPromise;
+            const lastSummary = summariesForQuery[summariesForQuery.length - 1];
+            const embedQuery = lastSummary
+              ? `Previous turn: ${lastSummary}\nUser now asks: ${message}`
+              : message;
+            const queryEmbedding = await embedText(embedQuery);
+            if (queryEmbedding) {
+              const activeWikiIds = (await getWikisStore().listWikisForCharacter(character.id))
+                .filter((wiki) => wiki.binding.isActive)
+                .map((wiki) => wiki.id);
+              const hits = await getWikiStore().searchPagesByEmbeddingForWikis(
+                activeWikiIds,
+                queryEmbedding,
+                { topK: 5, minSimilarity: 0.5 },
+              );
+              semanticHitCount = hits.length;
+              semanticSeeds = hits.map((h) => ({
+                pageId: h.pageId,
+                slug: h.slug,
+                similarity: h.similarity,
+              }));
+              serverTrace.mark("server.retrieval.done", {
+                hits: semanticHitCount,
+                embedQueryAware: Boolean(lastSummary),
+              });
+            } else {
+              serverTrace.mark("server.retrieval.skipped", { reason: "no-embedding" });
             }
           } catch (retrievalErr) {
             serverTrace.mark("server.retrieval.error", {
@@ -376,28 +547,129 @@ export async function POST(
           }
         }
 
+        if (!cachedContext) {
+          try {
+            serverTrace.mark("server.curator.start", {
+              hasScene: Boolean(body.scene?.activeEntities?.length || body.scene?.location),
+              semanticSeeds: semanticSeeds.length,
+            });
+            const curated = await buildAndStoreSandboxVoiceContextCache({
+              characterId: character.id,
+              sessionId: body.sessionId,
+              query: message,
+              scene: body.scene,
+              semanticSeeds,
+              tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
+            });
+            wikiPromptChunk = curated.promptChunk;
+            curatorSelectedPages = curated.pages;
+            curatorTrace = curated.trace;
+            curatorTokensUsed = curated.tokensUsed;
+            curatorTokensBudget = curated.tokensBudget;
+            contextCacheScope = curated.cacheScope;
+            contextCacheBuiltAt = curated.builtAt;
+            serverTrace.mark("server.curator.done", {
+              selectedPages: curated.pages.length,
+              tokensUsed: curated.tokensUsed,
+              tokensBudget: curated.tokensBudget,
+              curatorMs: curated.elapsedMs,
+              cachedForNextTurn: true,
+            });
+          } catch (curatorErr) {
+            serverTrace.mark("server.curator.error", {
+              message: curatorErr instanceof Error ? curatorErr.message : String(curatorErr),
+            });
+          }
+        }
+
+        const activeContextCacheKey = cachedContext?.key ?? contextCacheKey;
+        const ackEnabled =
+          contextCacheHit &&
+          body.ackMode !== "off" &&
+          isAckLaneEnabled();
+        ackText = selectVoiceAck({
+          enabled: ackEnabled,
+          characterTitle: character.title,
+          message,
+          selectedPages: curatorSelectedPages,
+        });
+        if (ackText) {
+          mainTokenGateOpen = false;
+          serverTrace.mark("server.ack.selected", {
+            text: ackText,
+            selectedPages: curatorSelectedPages.map((selected) => selected.page.slug),
+          });
+          cachedAckAudio = getCachedVoiceAckAudio(voiceAckAudioCacheKey({
+            contextCacheKey: activeContextCacheKey,
+            ttsProvider,
+            ttsVoice: ttsVoiceContext.slug,
+            ackText,
+          }));
+          serverTrace.mark(
+            cachedAckAudio ? "server.ack.audio_cache.hit" : "server.ack.audio_cache.miss",
+            {
+              provider: ttsProvider,
+              voice: ttsVoiceContext.slug,
+              text: ackText,
+              frames: cachedAckAudio?.frames.length ?? 0,
+              samples: cachedAckAudio?.totalSamples ?? 0,
+            },
+          );
+          if (cachedAckAudio) {
+            dispatchCachedAckAudio(cachedAckAudio);
+          }
+        }
+
         const recentSummaries = await summariesPromise;
         const recentSection = formatRecentConversation(recentSummaries);
-        const augmentedSection = augmentedChunk
-          ? `\n\n## Relevant context for this turn\n${augmentedChunk}`
-          : "";
-        const composedPromptChunk = `${promptChunk}${recentSection}${augmentedSection}`;
-        const systemPrompt = buildVoiceSystemPrompt(character.title, composedPromptChunk);
+        const composedPromptChunk = [
+          sandboxPromptChunk.trim(),
+          recentSection.trim(),
+          wikiPromptChunk ? `## Relevant knowledge\n${wikiPromptChunk}` : "",
+        ].filter(Boolean).join("\n\n");
+        const promptPlan = await buildVoicePromptPlan(
+          {
+            characterId: character.id,
+            character,
+            mode: "voice-turn",
+            promptKind: "voice",
+            curatedContext: {
+              promptChunk: composedPromptChunk,
+              pages: curatorSelectedPages,
+              trace: curatorTrace,
+              tokensUsed: curatorTokensUsed ?? 0,
+              tokensBudget: curatorTokensBudget ?? 0,
+              elapsedMs: 0,
+            },
+          },
+          {
+            getCharacterById: (characterId) => getCharacterStore().getById(characterId),
+            curate,
+          },
+        );
+        const systemPrompt = promptPlan.systemPrompt;
         serverTrace.mark("server.context.attached", {
           characterId: character.id,
           sessionId: body.sessionId ?? null,
           turnId: body.turnId ?? null,
-          promptChunkChars: promptChunk.length,
-          augmentedChunkChars: augmentedChunk.length,
+          promptChunkChars: sandboxPromptChunk.length,
+          wikiPromptChunkChars: wikiPromptChunk.length,
           semanticHits: semanticHitCount,
+          selectedPages: curatorSelectedPages.length,
           retrievalSkipped: skipDecision.skip,
           retrievalSkipReason: skipDecision.skip ? skipDecision.reason : null,
           recentSummaries: recentSummaries.length,
           systemPromptChars: systemPrompt.length,
           historyTurns: body.history?.length ?? 0,
           messageChars: message.length,
+          contextCacheHit,
+          contextCacheScope,
+          contextCacheBuiltAt,
+          ackEnabled,
+          ackSelected: Boolean(ackText),
+          ackAudioCacheHit: Boolean(cachedAckAudio),
         });
-        sendEvent("trace", serverTrace.toJSON());
+        sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.trace, serverTrace.toJSON());
 
         // Persist the assembled context + turn-start record so the session
         // workbench can render exactly what the LLM saw on this turn. Both
@@ -425,6 +697,7 @@ export async function POST(
               mode: "voice",
               promptKind: "voice",
               query: message,
+              scene: body.scene,
               tokenBudget: curatorTokensBudget,
               tokensUsed: curatorTokensUsed,
               tokensBudget: curatorTokensBudget,
@@ -437,7 +710,16 @@ export async function POST(
                 retrievalSkipped: skipDecision.skip,
                 retrievalSkipReason: skipDecision.skip ? skipDecision.reason : null,
                 recentSummaries: recentSummaries.length,
-                augmentedChunkChars: augmentedChunk.length,
+                wikiPromptChunkChars: wikiPromptChunk.length,
+                pageSlugs: curatorSelectedPages.map((selected) => selected.page.slug),
+                contextCacheHit,
+                contextCacheKey: activeContextCacheKey,
+                contextCacheScope,
+                contextCacheBuiltAt,
+                realtimeLane: contextCacheHit,
+                ackEnabled,
+                ackText,
+                ackAudioCacheHit: Boolean(cachedAckAudio),
               },
             });
           } catch (ctxErr) {
@@ -460,77 +742,110 @@ export async function POST(
         // dispatch order via `drainChain` so chunks never play out of
         // sequence. The fetches themselves run in parallel, gated only by
         // Pocket TTS's own concurrency on the gateway side.
-        let replyText = "";
-        let emittedAnyToken = false;
-        let ttsCursor = 0;
-        let ttsChunkCount = 0;
-        let drainChain: Promise<void> = Promise.resolve();
-
         const drainOneChunk = async (
           chunkIdx: number,
-          fetchPromise: Promise<Response>,
+          chunkText: string,
+          kind: "ack" | "main",
         ): Promise<void> => {
           if (req.signal.aborted) return;
-          const ttsResp = await fetchPromise;
-          if (chunkIdx === 0) {
-            serverTrace.mark("server.tts.fetch.opened", { status: ttsResp.status });
-          }
-          if (!ttsResp.ok || !ttsResp.body) {
-            const detail = await ttsResp.text().catch(() => "");
-            throw new Error(
-              `Pocket TTS ${ttsResp.status}: ${detail.slice(0, 300) || "no body"}`,
-            );
-          }
-          const reader = ttsResp.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (req.signal.aborted) break;
-            buffer += decoder.decode(value, { stream: true });
-
-            let frameEnd: number;
-            while ((frameEnd = buffer.indexOf("\n\n")) !== -1) {
-              const raw = buffer.slice(0, frameEnd);
-              buffer = buffer.slice(frameEnd + 2);
-              let eventName: string | null = null;
-              let dataLine = "";
-              for (const line of raw.split("\n")) {
-                if (line.startsWith("event: ")) eventName = line.slice(7).trim();
-                else if (line.startsWith("data: ")) dataLine += line.slice(6);
+          const drainWithRouting = async (
+            routing: StreamingTtsRouting,
+            attempt: "primary" | "fallback",
+          ) => {
+            let openedTraced = false;
+            for await (const frame of routing.adapter.stream({
+              text: chunkText,
+              voice: routing.voiceContext,
+              signal: ttsAbort.signal,
+            })) {
+              if (req.signal.aborted) break;
+              if (!openedTraced) {
+                serverTrace.mark("server.tts.fetch.opened", {
+                  provider: routing.provider,
+                  chunkIdx,
+                  kind,
+                  attempt,
+                });
+                openedTraced = true;
               }
-              if (!eventName || !dataLine) continue;
-
-              if (eventName === "audio") {
-                const payload = JSON.parse(dataLine) as { chunk: string };
-                const float32B64 = int16Base64ToFloat32Base64(payload.chunk);
-                const samples = (Buffer.from(float32B64, "base64").byteLength / 4) | 0;
-                totalSamples += samples;
+              if (frame.type === "audio") {
+                totalSamples += frame.samples;
+                if (kind === "ack" && ackFirstAudioAt === null) {
+                  ackFirstAudioAt = performance.now();
+                  serverTrace.mark("server.ack.tts.first-audio", {
+                    latencyMs: Math.round(ackFirstAudioAt - startedAt),
+                    provider: routing.provider,
+                    attempt,
+                  });
+                  if (ackText) {
+                    sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.token, { delta: `${ackText} ` });
+                  }
+                  releaseMainTokenGate();
+                }
                 if (firstAudioAt === null) {
                   firstAudioAt = performance.now();
                   serverTrace.mark("server.tts.first-audio", {
                     latencyMs: Math.round(firstAudioAt - startedAt),
                     chunkIdx,
+                    kind,
+                    provider: routing.provider,
+                    attempt,
                   });
-                  sendEvent("first-audio", {
+                  sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.firstAudio, {
                     latencyMs: Math.round(firstAudioAt - startedAt),
                   });
                 }
-                sendEvent("audio", {
-                  pcm: float32B64,
-                  samples,
-                  sampleRate: TTS_SAMPLE_RATE,
+                sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.audio, {
+                  pcm: frame.pcmFloat32Base64,
+                  samples: frame.samples,
+                  sampleRate: frame.sampleRate,
                 });
-              } else if (eventName === "error") {
-                const payload = JSON.parse(dataLine) as { message?: string };
-                throw new Error(`Pocket TTS error: ${payload.message ?? "unknown"}`);
+              } else if (frame.type === "error") {
+                throw new Error(frame.message);
               }
-              // "meta" and "done" from /speak are absorbed; we emit our own
-              // browser-facing "done" below with combined LLM+TTS metrics.
             }
+            serverTrace.mark("server.tts.chunk.drained", {
+              chunkIdx,
+              kind,
+              provider: routing.provider,
+              attempt,
+            });
+          };
+
+          try {
+            await drainWithRouting(ttsRouting!, "primary");
+          } catch (primaryErr) {
+            if (!ttsFallbackRouting || req.signal.aborted) throw primaryErr;
+            const message =
+              primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+            serverTrace.mark("server.tts.fallback", {
+              chunkIdx,
+              kind,
+              fromProvider: ttsProvider,
+              toProvider: ttsFallbackRouting.provider,
+              toVoice: ttsFallbackRouting.voiceContext.slug,
+              reason: message,
+            });
+            if (body.sessionId) {
+              await getWorldSessionStore().appendEvent({
+                sessionId: body.sessionId,
+                turnId: body.turnId ?? null,
+                type: "tts.provider_fallback",
+                source: "system",
+                payload: {
+                  chunkIdx,
+                  fromProvider: ttsProvider,
+                  fromVoice: ttsVoiceContext.slug,
+                  toProvider: ttsFallbackRouting.provider,
+                  toVoice: ttsFallbackRouting.voiceContext.slug,
+                  reason: message,
+                },
+              }).catch((eventErr) => {
+                console.error("[voice-stream] fallback event failed", eventErr);
+              });
+            }
+            await drainWithRouting(ttsFallbackRouting, "fallback");
           }
-          serverTrace.mark("server.tts.chunk.drained", { chunkIdx });
         };
 
         const dispatchTtsChunk = (text: string): void => {
@@ -539,36 +854,53 @@ export async function POST(
           const chunkIdx = ttsChunkCount++;
           if (chunkIdx === 0) {
             serverTrace.mark("server.tts.fetch.requested", {
-              voice,
+              provider: ttsProvider,
+              voice: ttsVoiceContext.slug,
               firstChunkChars: trimmed.length,
             });
           }
           serverTrace.mark("server.tts.chunk.dispatched", {
             chunkIdx,
+            kind: "main",
             chars: trimmed.length,
           });
-          const fetchPromise = fetch(`${ttsBaseUrl}/speak`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: trimmed, voice, voiceUrl }),
-            signal: ttsAbort.signal,
+          drainChain = drainChain.then(() => drainOneChunk(chunkIdx, trimmed, "main"));
+        };
+
+        const dispatchAckChunk = (text: string): void => {
+          const trimmed = text.trim();
+          if (!trimmed) return;
+          const chunkIdx = ttsChunkCount++;
+          serverTrace.mark("server.ack.tts.requested", {
+            provider: ttsProvider,
+            voice: ttsVoiceContext.slug,
+            chars: trimmed.length,
           });
-          // Attach a no-op rejection handler in case the drain chain rejects
-          // upstream and this fetch's failure is never observed by an awaiter
-          // — otherwise it surfaces as an unhandled promise rejection.
-          fetchPromise.catch(() => null);
-          drainChain = drainChain.then(() => drainOneChunk(chunkIdx, fetchPromise));
+          serverTrace.mark("server.tts.chunk.dispatched", {
+            chunkIdx,
+            kind: "ack",
+            chars: trimmed.length,
+          });
+          drainChain = drainChain
+            .then(() => drainOneChunk(chunkIdx, trimmed, "ack"))
+            .catch((ackErr) => {
+              serverTrace.mark("server.ack.tts.failed", {
+                message: ackErr instanceof Error ? ackErr.message : String(ackErr),
+              });
+              releaseMainTokenGate();
+            });
         };
 
         const onToken = (delta: string) => {
           if (req.signal.aborted) return;
           if (!delta) return;
           if (!emittedAnyToken) {
+            brainFirstTokenAt = performance.now();
             serverTrace.mark("server.llm.first-token");
             emittedAnyToken = true;
           }
           replyText += delta;
-          sendEvent("token", { delta });
+          emitMainTokenDelta(delta);
 
           // Flush every sentence boundary visible in the new tail. One token
           // can include multiple boundaries (rare but possible — "Yes. Why?").
@@ -580,90 +912,57 @@ export async function POST(
           }
           // Runaway-sentence guard: force-flush if the unsent tail crosses
           // TTS_MAX_CHUNK_CHARS without a terminator.
-          const forced = findForceFlushBoundary(replyText, ttsCursor);
+          const forced = findForceFlushBoundary(
+            replyText,
+            ttsCursor,
+            ttsChunkCount === 0 ? TTS_FIRST_CHUNK_TARGET_CHARS : TTS_MAX_CHUNK_CHARS,
+          );
           if (forced > 0) {
             dispatchTtsChunk(replyText.slice(ttsCursor, forced));
             ttsCursor = forced;
           }
         };
 
-        // Cerebras-only with retry-once on rate-limit / queue-exceeded.
-        // No Anthropic fallback — voice latency budget makes Anthropic Haiku
-        // (~600ms TTFT) slower than just surfacing a clean error to the UI.
-        let chosenProvider: LlmProvider | null = null;
-        if (provider === "cerebras" && !hasCerebras) {
-          throw new Error("CEREBRAS_API_KEY is not configured.");
+        if (ackText && !cachedAckAudio) {
+          dispatchAckChunk(ackText);
         }
-        if (provider === "anthropic") {
-          // Explicit override — keep Anthropic available when caller asks for it.
-          // Priority: body.model → character voice/chat model → hardcoded Anthropic default.
-          // Only honor the character's model when it's actually an Anthropic-side model;
-          // a character pinned to a Cerebras model shouldn't bleed into the Anthropic
-          // fallback branch (which only fires when env steers us here anyway).
-          const characterAnthropicModel =
-            characterVoiceProvider === "anthropic" && characterVoiceModel
-              ? characterVoiceModel
-              : undefined;
-          modelId = body.model ?? characterAnthropicModel ?? ANTHROPIC_DEFAULT_MODEL;
-          serverTrace.mark("server.llm.attempt", { provider: "anthropic" });
-          ({ inputTokens, outputTokens } = await streamFromAnthropic({
-            apiKey: process.env.ANTHROPIC_API_KEY!.trim(),
-            model: modelId,
-            systemPrompt,
-            history,
-            message,
-            maxTokens,
-            onToken,
-          }));
-          chosenProvider = "anthropic";
-          serverTrace.mark("server.llm.succeeded", { provider: "anthropic", model: modelId });
-        } else {
-          // Same priority order as the Anthropic branch — body wins, then
-          // character pref (when Cerebras-side), then hardcoded default.
-          const characterCerebrasModel =
-            characterVoiceProvider === "cerebras" && characterVoiceModel
-              ? characterVoiceModel
-              : undefined;
-          modelId = body.model ?? characterCerebrasModel ?? CEREBRAS_DEFAULT_MODEL;
-          for (let attempt = 1; attempt <= 2; attempt += 1) {
-            serverTrace.mark("server.llm.attempt", { provider: "cerebras", attempt });
-            try {
-              ({ inputTokens, outputTokens } = await streamFromCerebras({
-                apiKey: process.env.CEREBRAS_API_KEY!.trim(),
-                model: modelId,
-                systemPrompt,
-                history,
-                message,
-                maxTokens,
-                onToken,
-                abortSignal: req.signal,
-              }));
-              chosenProvider = "cerebras";
-              serverTrace.mark("server.llm.succeeded", { provider: "cerebras", model: modelId, attempt });
-              break;
-            } catch (providerErr) {
-              serverTrace.mark("server.llm.failed", {
-                provider: "cerebras",
-                attempt,
-                message: providerErr instanceof Error ? providerErr.message : String(providerErr),
-              });
-              const text =
-                providerErr instanceof Error ? providerErr.message.toLowerCase() : String(providerErr).toLowerCase();
-              const rateLimited =
-                text.includes("429") ||
-                text.includes("queue_exceeded") ||
-                text.includes("too_many_requests") ||
-                text.includes("rate limit") ||
-                text.includes("rate_limit");
-              // Retry once on rate-limit-like errors, only if no tokens have
-              // been emitted yet (otherwise the user already sees a partial
-              // reply and a retry would duplicate it).
-              if (rateLimited && attempt < 2 && !emittedAnyToken && !req.signal.aborted) {
-                await new Promise((resolve) => setTimeout(resolve, 200));
-                continue;
-              }
-              throw providerErr;
+
+        let chosenProvider: LlmProvider | null = null;
+        const attempts = provider === "cerebras" || provider === "groq" ? 2 : 1;
+        for (let attempt = 1; attempt <= attempts; attempt += 1) {
+          serverTrace.mark("server.llm.attempt", { provider, model: modelId, attempt });
+          try {
+            ({ inputTokens, outputTokens } = await streamFromCharacterModel({
+              model: modelId,
+              systemPromptParts: promptPlan.systemPromptParts,
+              history,
+              message,
+              maxTokens,
+              temperature: voiceCfg?.temperature ?? character.brainModel?.temperature,
+              topP: voiceCfg?.topP ?? character.brainModel?.topP,
+              signal: req.signal,
+              onToken,
+            }));
+            chosenProvider = provider;
+            serverTrace.mark("server.llm.succeeded", {
+              provider,
+              model: modelId,
+              attempt,
+            });
+            break;
+          } catch (providerErr) {
+            serverTrace.mark("server.llm.failed", {
+              provider,
+              model: modelId,
+              attempt,
+              message: providerErr instanceof Error ? providerErr.message : String(providerErr),
+            });
+            const rateLimited = isRateLimitError(providerErr);
+            if (rateLimited && attempt < attempts && !emittedAnyToken && !req.signal.aborted) {
+              await new Promise((resolve) => setTimeout(resolve, 200));
+              continue;
             }
+            throw providerErr;
           }
         }
 
@@ -695,12 +994,30 @@ export async function POST(
         // browser. Errors from any chunk surface here. On success, the
         // browser has already received every audio frame.
         await drainChain;
+        releaseMainTokenGate();
 
         serverTrace.mark("server.tts.done", {
           audioSamples: totalSamples,
           chunks: ttsChunkCount,
         });
+        const deliveredAckText = ackFirstAudioAt !== null ? ackText : null;
+        const assistantText = [deliveredAckText, replyText].filter(Boolean).join(" ").trim();
+        const ackFirstAudioMs =
+          ackFirstAudioAt !== null ? Math.round(ackFirstAudioAt - startedAt) : null;
+        const brainFirstTokenMs =
+          brainFirstTokenAt !== null ? Math.round(brainFirstTokenAt - startedAt) : null;
+        const ackDelivered = Boolean(deliveredAckText);
         if (body.sessionId) {
+          const firstAudioMs =
+            firstAudioAt !== null
+              ? Math.round(firstAudioAt - startedAt)
+              : -1;
+          const totalMs = Math.round(performance.now() - startedAt);
+          const durationMs = Math.round((totalSamples / POCKET_TTS_SAMPLE_RATE) * 1000);
+          const cost = estimateSessionTurnCost(modelId, {
+            inputTokens,
+            outputTokens,
+          });
           await getWorldSessionStore().appendEvent({
             sessionId: body.sessionId,
             turnId: body.turnId ?? null,
@@ -712,11 +1029,16 @@ export async function POST(
               inputTokens,
               outputTokens,
               audioSamples: totalSamples,
-              firstAudioMs:
-                firstAudioAt !== null
-                  ? Math.round(firstAudioAt - startedAt)
-                  : -1,
-              totalMs: Math.round(performance.now() - startedAt),
+              durationMs,
+              firstAudioMs,
+              totalMs,
+              estimatedCostUsd: cost.estimatedCostUsd,
+              ackEnabled,
+              ackText,
+              ackDelivered,
+              ackFirstAudioMs,
+              brainFirstTokenMs,
+              ackAudioCacheHit: Boolean(cachedAckAudio),
               serverTrace: serverTrace.toJSON(),
             },
           });
@@ -730,30 +1052,59 @@ export async function POST(
                 sessionId: body.sessionId,
                 inputMode: "voice",
                 userText: message,
-                assistantText: replyText,
+                assistantText,
                 provider: chosenProvider,
                 model: modelId,
                 status: "completed",
                 startedAt: new Date(startedAt).toISOString(),
                 completedAt: new Date().toISOString(),
                 tokenUsage: {
+                  input: inputTokens,
+                  output: outputTokens,
                   inputTokens,
                   outputTokens,
                   totalTokens: inputTokens + outputTokens,
+                  estimatedCostUsd: cost.estimatedCostUsd,
                 },
                 audioMetrics: {
                   audioSamples: totalSamples,
-                  durationMs: Math.round((totalSamples / TTS_SAMPLE_RATE) * 1000),
+                  durationMs,
+                  sampleRate: POCKET_TTS_SAMPLE_RATE,
                 },
                 latencySummary: {
-                  firstAudioMs: firstAudioAt !== null ? Math.round(firstAudioAt - startedAt) : -1,
-                  totalMs: Math.round(performance.now() - startedAt),
+                  firstAudioMs,
+                  totalMs,
+                  ackFirstAudioMs,
+                  brainFirstTokenMs,
                 },
                 trace: serverTrace.toJSON(),
+                metadata: {
+                  source: "character-sandbox",
+                  cost,
+                  ttsProvider,
+                  ttsVoice: ttsVoiceContext.slug,
+                  ackEnabled,
+                  ackText,
+                  ackDelivered,
+                  ackFirstAudioMs,
+                  brainFirstTokenMs,
+                  ackAudioCacheHit: Boolean(cachedAckAudio),
+                },
               });
             } catch (turnErr) {
               console.error("[voice-stream] upsertTurn (complete) failed", turnErr);
             }
+          }
+
+          if (contextCacheHit) {
+            refreshSandboxVoiceContextCacheInBackground({
+              characterId: character.id,
+              sessionId: body.sessionId,
+              turnId: body.turnId ?? null,
+              query: message,
+              scene: body.scene,
+              tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
+            });
           }
 
           // Background: summarize this turn into ≤30 words and persist as a
@@ -765,19 +1116,19 @@ export async function POST(
               turnId: body.turnId ?? null,
               characterTitle: character.title,
               userMessage: message,
-              agentReply: replyText,
+              agentReply: assistantText,
               cerebrasApiKey: process.env.CEREBRAS_API_KEY.trim(),
-              cerebrasModel: CEREBRAS_DEFAULT_MODEL,
+              cerebrasModel: DEFAULT_VOICE_MODEL,
             });
           }
         }
 
-        sendEvent("done", {
+        sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.done, {
           inputTokens,
           outputTokens,
           totalTokens: inputTokens + outputTokens,
           audioSamples: totalSamples,
-          durationMs: Math.round((totalSamples / TTS_SAMPLE_RATE) * 1000),
+          durationMs: Math.round((totalSamples / POCKET_TTS_SAMPLE_RATE) * 1000),
           firstAudioMs:
             firstAudioAt !== null
               ? Math.round(firstAudioAt - startedAt)
@@ -785,6 +1136,16 @@ export async function POST(
           totalMs: Math.round(performance.now() - startedAt),
           provider: chosenProvider,
           model: modelId,
+          ackEnabled,
+          ackText,
+          ackDelivered,
+          ackFirstAudioMs,
+          brainFirstTokenMs,
+          ackAudioCacheHit: Boolean(cachedAckAudio),
+          estimatedCostUsd: estimateSessionTurnCost(modelId, {
+            inputTokens,
+            outputTokens,
+          }).estimatedCostUsd,
           serverTrace: serverTrace.toJSON(),
         });
       } catch (err: unknown) {
@@ -802,12 +1163,11 @@ export async function POST(
             },
           });
         }
-        sendEvent("error", { message: msg });
+        sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.error, { message: msg });
       } finally {
-        // Cancel any /speak fetches that may still be in flight — relevant
-        // when a chunk's drain threw and later chunks' requests are now
-        // orphaned (no consumer reads their body). On success this is a
-        // no-op since every chunk has already completed.
+        // Cancel any in-flight adapter.stream() reads — relevant when a
+        // chunk's drain threw and later chunks are still mid-iteration.
+        // On success this is a no-op since every chunk has already drained.
         if (!ttsAbort.signal.aborted) ttsAbort.abort();
         req.signal.removeEventListener("abort", onAbort);
         closeStream();
@@ -825,134 +1185,222 @@ export async function POST(
   });
 }
 
-/* ── int16 → Float32 PCM conversion ─────────────────────────────── */
+function refreshSandboxVoiceContextCacheInBackground(args: {
+  characterId: string;
+  sessionId: string;
+  turnId: string | null;
+  query: string;
+  scene?: CuratorScene;
+  tokenBudget: number;
+}): void {
+  void (async () => {
+    const startedAt = performance.now();
+    const refreshed = await buildAndStoreSandboxVoiceContextCache({
+      characterId: args.characterId,
+      sessionId: args.sessionId,
+      query: args.query,
+      scene: args.scene,
+      tokenBudget: args.tokenBudget,
+    });
+    await getWorldSessionStore().appendEvent({
+      sessionId: args.sessionId,
+      turnId: args.turnId,
+      type: "context.cache_refreshed",
+      source: "system",
+      payload: {
+        characterId: args.characterId,
+        cacheKey: refreshed.key,
+        cacheScope: refreshed.cacheScope,
+        sourceQuery: refreshed.sourceQuery,
+        selectedPages: refreshed.pages.map((selected) => selected.page.slug),
+        tokensUsed: refreshed.tokensUsed,
+        tokensBudget: refreshed.tokensBudget,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      },
+    });
+  })().catch((err) => {
+    console.error("[voice-stream] context cache refresh failed", err);
+  });
+}
 
-// Pocket TTS gateway sends int16 little-endian base64. The browser decoder
-// expects Float32 little-endian base64 (legacy contract from the Moshi WS
-// pipeline). Convert in one allocation per chunk.
-function int16Base64ToFloat32Base64(input: string): string {
-  const int16Bytes = Buffer.from(input, "base64");
-  const sampleCount = int16Bytes.byteLength / 2;
-  const float32 = new Float32Array(sampleCount);
-  const view = new DataView(int16Bytes.buffer, int16Bytes.byteOffset, int16Bytes.byteLength);
-  for (let i = 0; i < sampleCount; i += 1) {
-    float32[i] = view.getInt16(i * 2, true) / 32768;
+/* ── TTS fallback helpers ───────────────────────────────────────── */
+
+async function resolveVoiceStreamTtsFallback(input: {
+  primaryProvider: StreamingTtsProvider;
+  primaryVoiceSlug: string;
+}): Promise<StreamingTtsRouting | null> {
+  if (input.primaryProvider === "elevenlabs") return null;
+
+  const requested = normalizeStreamingTtsProvider(
+    process.env.VOICE_STREAM_TTS_FALLBACK_PROVIDER ??
+      process.env.TTS_PROVIDER,
+  );
+  if (requested !== "elevenlabs") return null;
+  if (!process.env.ELEVENLABS_API_KEY?.trim()) return null;
+
+  const selector =
+    process.env.ELEVENLABS_FALLBACK_VOICE_ID?.trim() ??
+    process.env.ELEVENLABS_FALLBACK_VOICE_SLUG?.trim() ??
+    "";
+  const voices = await getVoiceStore().list().catch((err) => {
+    console.error("[voice-stream] fallback voice list failed", err);
+    return [];
+  });
+  const fallback = voices.find((voice) => {
+    if (voice.provider !== "elevenlabs" || voice.status !== "ready") return false;
+    if (!selector) return voice.slug !== input.primaryVoiceSlug;
+    const providerVoiceId =
+      typeof voice.providerConfig?.voiceId === "string"
+        ? voice.providerConfig.voiceId
+        : "";
+    return (
+      voice.id === selector ||
+      voice.slug === selector ||
+      providerVoiceId === selector
+    );
+  });
+  if (!fallback) return null;
+
+  return createStreamingTtsAdapterForVoice({
+    provider: "elevenlabs",
+    slug: fallback.slug,
+    providerConfig: fallback.providerConfig,
+  });
+}
+
+function normalizeStreamingTtsProvider(value?: string | null): StreamingTtsProvider | null {
+  const normalized = value?.trim().toLowerCase();
+  if (
+    normalized === "pocket_tts" ||
+    normalized === "elevenlabs" ||
+    normalized === "openai" ||
+    normalized === "cartesia"
+  ) {
+    return normalized;
   }
-  return Buffer.from(float32.buffer, float32.byteOffset, float32.byteLength).toString("base64");
+  return null;
 }
 
 /* ── LLM streaming helpers ──────────────────────────────────────── */
 
-async function streamFromAnthropic(opts: {
-  apiKey: string;
+async function streamFromCharacterModel(opts: {
   model: string;
-  systemPrompt: string;
+  systemPromptParts: { cached: string; perTurn: string };
   history: Array<{ role: "user" | "assistant"; content: string }>;
   message: string;
   maxTokens: number;
+  temperature?: number;
+  topP?: number;
+  signal: AbortSignal;
   onToken: (delta: string) => void;
 }): Promise<{ inputTokens: number; outputTokens: number }> {
-  const anthropic = new Anthropic({ apiKey: opts.apiKey });
+  const provider = getChatProviderForModel(opts.model);
+  const system = buildSystemBlocks(opts.systemPromptParts);
   const messages = [
     ...opts.history.map((m) => ({ role: m.role, content: m.content })),
     { role: "user" as const, content: opts.message },
   ];
 
-  const resp = anthropic.messages.stream({
-    model: opts.model,
-    system: opts.systemPrompt,
-    messages,
-    max_tokens: opts.maxTokens,
-  });
-
-  let outputTokens = 0;
   let inputTokens = 0;
-  for await (const ev of resp) {
-    if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
-      opts.onToken(ev.delta.text);
-    }
-    if (ev.type === "message_start" && ev.message.usage) {
-      inputTokens = ev.message.usage.input_tokens ?? 0;
-    }
-    if (ev.type === "message_delta" && ev.usage) {
-      outputTokens = ev.usage.output_tokens ?? 0;
-    }
+  let outputTokens = 0;
+  let errorMessage: string | null = null;
+  let completed = false;
+
+  await provider.stream(
+    {
+      model: opts.model,
+      system,
+      messages,
+      maxTokens: opts.maxTokens,
+      signal: opts.signal,
+      ...(typeof opts.temperature === "number" ? { temperature: opts.temperature } : {}),
+      ...(typeof opts.topP === "number" ? { topP: opts.topP } : {}),
+    },
+    (ev) => {
+      if (ev.type === "token") {
+        opts.onToken(ev.delta);
+      } else if (ev.type === "done") {
+        inputTokens = ev.inputTokens;
+        outputTokens = ev.outputTokens;
+        completed = true;
+      } else if (ev.type === "error") {
+        errorMessage = ev.message;
+      }
+    },
+  );
+
+  if (errorMessage) {
+    throw new Error(errorMessage);
+  }
+  if (!completed) {
+    throw new Error("LLM stream ended before completion.");
   }
   return { inputTokens, outputTokens };
 }
 
-async function streamFromCerebras(opts: {
-  apiKey: string;
-  model: string;
-  systemPrompt: string;
-  history: Array<{ role: "user" | "assistant"; content: string }>;
-  message: string;
-  maxTokens: number;
-  onToken: (delta: string) => void;
-  abortSignal: AbortSignal;
-}): Promise<{ inputTokens: number; outputTokens: number }> {
-  const messages = [
-    { role: "system", content: opts.systemPrompt },
-    ...opts.history.map((m) => ({ role: m.role, content: m.content })),
-    { role: "user", content: opts.message },
-  ];
+function buildSystemBlocks(parts: { cached: string; perTurn: string }): ChatSystemBlock[] {
+  const blocks: ChatSystemBlock[] = [];
+  if (parts.cached.trim()) blocks.push({ type: "text", text: parts.cached });
+  if (parts.perTurn.trim()) blocks.push({ type: "text", text: parts.perTurn });
+  return blocks.length > 0 ? blocks : [{ type: "text", text: " " }];
+}
 
-  const resp = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${opts.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: opts.model,
-      messages,
-      stream: true,
-      max_completion_tokens: opts.maxTokens,
-    }),
-    signal: opts.abortSignal,
-  });
-
-  if (!resp.ok || !resp.body) {
-    const text = await resp.text().catch(() => "");
-    throw new Error(`Cerebras ${resp.status}: ${text.slice(0, 300) || "no body"}`);
+function normalizeProvider(value?: string | null): ProviderId | null {
+  const normalized = value?.trim().toLowerCase();
+  if (
+    normalized === "anthropic" ||
+    normalized === "openai" ||
+    normalized === "cerebras" ||
+    normalized === "groq"
+  ) {
+    return normalized;
   }
+  return null;
+}
 
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let inputTokens = 0;
-  let outputTokens = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (opts.abortSignal.aborted) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    let lineEnd: number;
-    while ((lineEnd = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, lineEnd).trim();
-      buffer = buffer.slice(lineEnd + 1);
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      try {
-        const event = JSON.parse(payload) as {
-          choices?: Array<{ delta?: { content?: string } }>;
-          usage?: { prompt_tokens?: number; completion_tokens?: number };
-        };
-        const delta = event.choices?.[0]?.delta?.content;
-        if (delta) opts.onToken(delta);
-        if (event.usage) {
-          inputTokens = event.usage.prompt_tokens ?? inputTokens;
-          outputTokens = event.usage.completion_tokens ?? outputTokens;
-        }
-      } catch {
-        /* skip malformed frames */
-      }
-    }
+function defaultVoiceModelForProvider(provider: ProviderId): string {
+  switch (provider) {
+    case "anthropic":
+      return ANTHROPIC_DEFAULT_MODEL;
+    case "openai":
+      return OPENAI_DEFAULT_MODEL;
+    case "groq":
+      return GROQ_DEFAULT_MODEL;
+    case "cerebras":
+      return DEFAULT_VOICE_MODEL;
   }
-  return { inputTokens, outputTokens };
+}
+
+function missingProviderKeyReason(provider: ProviderId): string | null {
+  switch (provider) {
+    case "anthropic":
+      return process.env.ANTHROPIC_API_KEY?.trim()
+        ? null
+        : "ANTHROPIC_API_KEY is not configured.";
+    case "openai":
+      return process.env.OPENAI_API_KEY?.trim()
+        ? null
+        : "OPENAI_API_KEY is not configured.";
+    case "cerebras":
+      return process.env.CEREBRAS_API_KEY?.trim()
+        ? null
+        : "CEREBRAS_API_KEY is not configured.";
+    case "groq":
+      return process.env.GROQ_API_KEY?.trim()
+        ? null
+        : "GROQ_API_KEY is not configured.";
+  }
+}
+
+function isRateLimitError(err: unknown): boolean {
+  const text = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+  return (
+    text.includes("429") ||
+    text.includes("queue_exceeded") ||
+    text.includes("too_many_requests") ||
+    text.includes("rate limit") ||
+    text.includes("rate_limit")
+  );
 }
 
 function jsonError(status: number, message: string) {

@@ -13,6 +13,7 @@
     "@odyssey/auth": "*",
     "@odyssey/db": "*",
     "@odyssey/engine": "*",
+    "@odyssey/orchestration": "*",
     "@odyssey/types": "*",
     "@odyssey/ui": "*",
     "@odyssey/utils": "*",

@@ -1,5 +1,6 @@
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "./client";
+import { retryRead } from "./retry";
 import {
   usersTable,
   worldSessionAudioArtifactsTable,
@@ -181,6 +182,11 @@ export type AppendWorldSessionEventInput = {
   createdAt?: string;
 };
 
+export type UpdateWorldSessionSceneInput = {
+  sessionId: string;
+  currentScene: unknown;
+};
+
 export type AddWorldSessionAudioArtifactInput = {
   id?: string;
   sessionId: string;
@@ -202,6 +208,7 @@ export interface WorldSessionStore {
   listSessions(limit?: number): Promise<WorldSessionRecord[]>;
   listSessionSummaries(limit?: number): Promise<WorldSessionSummaryRecord[]>;
   getSessionDetail(id: string): Promise<WorldSessionDetailRecord | null>;
+  updateCurrentScene(input: UpdateWorldSessionSceneInput): Promise<void>;
   recordContextBuild(input: RecordContextBuildInput): Promise<void>;
   upsertTurn(input: UpsertWorldSessionTurnInput): Promise<void>;
   appendEvent(input: AppendWorldSessionEventInput): Promise<void>;
@@ -477,6 +484,15 @@ function memoryStore(): WorldSessionStore {
         audioArtifacts: memory.audioArtifacts.filter((row) => row.sessionId === id),
       };
     },
+    async updateCurrentScene(input) {
+      const current = memory.sessions.get(input.sessionId);
+      if (!current) return;
+      memory.sessions.set(input.sessionId, {
+        ...current,
+        currentScene: input.currentScene,
+        lastActiveAt: new Date().toISOString(),
+      });
+    },
     async recordContextBuild(input) {
       memory.contexts.push(input);
     },
@@ -577,11 +593,13 @@ function neonStore(): WorldSessionStore {
 
     async getSession(id) {
       try {
-        const [row] = await db
-          .select()
-          .from(worldSessionsTable)
-          .where(eq(worldSessionsTable.id, id))
-          .limit(1);
+        const [row] = await retryRead(() =>
+          db
+            .select()
+            .from(worldSessionsTable)
+            .where(eq(worldSessionsTable.id, id))
+            .limit(1),
+        );
         return row ? normalizeSession(row) : null;
       } catch (error) {
         if (isMissingTableError(error)) return null;
@@ -591,11 +609,13 @@ function neonStore(): WorldSessionStore {
 
     async listSessions(limit = 50) {
       try {
-        const rows = await db
-          .select()
-          .from(worldSessionsTable)
-          .orderBy(desc(worldSessionsTable.lastActiveAt))
-          .limit(limit);
+        const rows = await retryRead(() =>
+          db
+            .select()
+            .from(worldSessionsTable)
+            .orderBy(desc(worldSessionsTable.lastActiveAt))
+            .limit(limit),
+        );
         return rows.map(normalizeSession);
       } catch (error) {
         if (isMissingTableError(error)) return [];
@@ -610,32 +630,40 @@ function neonStore(): WorldSessionStore {
           new Set(sessions.map((session) => session.userId).filter((userId): userId is string => !!userId)),
         );
         const users = userIds.length > 0
-          ? await db
-              .select({
-                id: usersTable.id,
-                name: usersTable.name,
-                email: usersTable.email,
-                image: usersTable.image,
-              })
-              .from(usersTable)
-              .where(inArray(usersTable.id, userIds))
+          ? await retryRead(() =>
+              db
+                .select({
+                  id: usersTable.id,
+                  name: usersTable.name,
+                  email: usersTable.email,
+                  image: usersTable.image,
+                })
+                .from(usersTable)
+                .where(inArray(usersTable.id, userIds)),
+            )
           : [];
         const usersById = new Map(users.map((user) => [user.id, normalizeUser(user)]));
 
         return Promise.all(
           sessions.map(async (session) => {
-            const [contextRow] = await db
-              .select({ count: sql<number>`count(*)::int` })
-              .from(worldSessionContextBuildsTable)
-              .where(eq(worldSessionContextBuildsTable.sessionId, session.id));
-            const [turnRow] = await db
-              .select({ count: sql<number>`count(*)::int` })
-              .from(worldSessionTurnsTable)
-              .where(eq(worldSessionTurnsTable.sessionId, session.id));
-            const [eventRow] = await db
-              .select({ count: sql<number>`count(*)::int` })
-              .from(worldSessionEventsTable)
-              .where(eq(worldSessionEventsTable.sessionId, session.id));
+            const [contextRow] = await retryRead(() =>
+              db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(worldSessionContextBuildsTable)
+                .where(eq(worldSessionContextBuildsTable.sessionId, session.id)),
+            );
+            const [turnRow] = await retryRead(() =>
+              db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(worldSessionTurnsTable)
+                .where(eq(worldSessionTurnsTable.sessionId, session.id)),
+            );
+            const [eventRow] = await retryRead(() =>
+              db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(worldSessionEventsTable)
+                .where(eq(worldSessionEventsTable.sessionId, session.id)),
+            );
             return {
               ...session,
               user: session.userId ? usersById.get(session.userId) ?? null : null,
@@ -655,39 +683,50 @@ function neonStore(): WorldSessionStore {
       try {
         const session = await this.getSession(id);
         if (!session) return null;
+        const userId = session.userId;
         const [contexts, turns, events, audioArtifacts, users] = await Promise.all([
-          db
-            .select()
-            .from(worldSessionContextBuildsTable)
-            .where(eq(worldSessionContextBuildsTable.sessionId, id))
-            .orderBy(asc(worldSessionContextBuildsTable.createdAt)),
-          db
-            .select()
-            .from(worldSessionTurnsTable)
-            .where(eq(worldSessionTurnsTable.sessionId, id))
-            .orderBy(asc(worldSessionTurnsTable.startedAt)),
-          db
-            .select()
-            .from(worldSessionEventsTable)
-            .where(eq(worldSessionEventsTable.sessionId, id))
-            .orderBy(asc(worldSessionEventsTable.createdAt)),
-          db
-            .select()
-            .from(worldSessionAudioArtifactsTable)
-            .where(eq(worldSessionAudioArtifactsTable.sessionId, id))
-            .orderBy(asc(worldSessionAudioArtifactsTable.createdAt)),
-          session.userId
-            ? db
-                .select({
-                  id: usersTable.id,
-                  name: usersTable.name,
-                  email: usersTable.email,
-                  image: usersTable.image,
-                })
-                .from(usersTable)
-                .where(eq(usersTable.id, session.userId))
-                .limit(1)
-            : Promise.resolve([]),
+          retryRead(() =>
+            db
+              .select()
+              .from(worldSessionContextBuildsTable)
+              .where(eq(worldSessionContextBuildsTable.sessionId, id))
+              .orderBy(asc(worldSessionContextBuildsTable.createdAt)),
+          ),
+          retryRead(() =>
+            db
+              .select()
+              .from(worldSessionTurnsTable)
+              .where(eq(worldSessionTurnsTable.sessionId, id))
+              .orderBy(asc(worldSessionTurnsTable.startedAt)),
+          ),
+          retryRead(() =>
+            db
+              .select()
+              .from(worldSessionEventsTable)
+              .where(eq(worldSessionEventsTable.sessionId, id))
+              .orderBy(asc(worldSessionEventsTable.createdAt)),
+          ),
+          retryRead(() =>
+            db
+              .select()
+              .from(worldSessionAudioArtifactsTable)
+              .where(eq(worldSessionAudioArtifactsTable.sessionId, id))
+              .orderBy(asc(worldSessionAudioArtifactsTable.createdAt)),
+          ),
+          userId
+            ? retryRead(() =>
+                db
+                  .select({
+                    id: usersTable.id,
+                    name: usersTable.name,
+                    email: usersTable.email,
+                    image: usersTable.image,
+                  })
+                  .from(usersTable)
+                  .where(eq(usersTable.id, userId))
+                  .limit(1),
+              )
+            : Promise.resolve([] as Array<{ id: string; name: string | null; email: string; image: string | null }>),
         ]);
         return {
           session,
@@ -700,6 +739,20 @@ function neonStore(): WorldSessionStore {
       } catch (error) {
         if (isMissingTableError(error)) return null;
         throw error;
+      }
+    },
+
+    async updateCurrentScene(input) {
+      try {
+        await db
+          .update(worldSessionsTable)
+          .set({
+            currentScene: input.currentScene,
+            lastActiveAt: new Date(),
+          })
+          .where(eq(worldSessionsTable.id, input.sessionId));
+      } catch (error) {
+        if (!isMissingTableError(error)) throw error;
       }
     },
 
@@ -819,11 +872,13 @@ function neonStore(): WorldSessionStore {
 
     async listAudioArtifacts(sessionId) {
       try {
-        const rows = await db
-          .select()
-          .from(worldSessionAudioArtifactsTable)
-          .where(eq(worldSessionAudioArtifactsTable.sessionId, sessionId))
-          .orderBy(asc(worldSessionAudioArtifactsTable.createdAt));
+        const rows = await retryRead(() =>
+          db
+            .select()
+            .from(worldSessionAudioArtifactsTable)
+            .where(eq(worldSessionAudioArtifactsTable.sessionId, sessionId))
+            .orderBy(asc(worldSessionAudioArtifactsTable.createdAt)),
+        );
         return rows.map(normalizeAudioArtifact);
       } catch (error) {
         if (isMissingTableError(error)) return [];
@@ -833,11 +888,13 @@ function neonStore(): WorldSessionStore {
 
     async getAudioArtifact(sessionId, artifactId) {
       try {
-        const [row] = await db
-          .select()
-          .from(worldSessionAudioArtifactsTable)
-          .where(eq(worldSessionAudioArtifactsTable.id, artifactId))
-          .limit(1);
+        const [row] = await retryRead(() =>
+          db
+            .select()
+            .from(worldSessionAudioArtifactsTable)
+            .where(eq(worldSessionAudioArtifactsTable.id, artifactId))
+            .limit(1),
+        );
         if (!row || row.sessionId !== sessionId) return null;
         return normalizeAudioArtifact(row);
       } catch (error) {

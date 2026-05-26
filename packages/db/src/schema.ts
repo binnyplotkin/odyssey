@@ -379,6 +379,13 @@ export const charactersTable = pgTable(
     // to the audio-rt default voice (abraham). Set via the /voices admin
     // surface; many characters can share the same voice row.
     voiceId: text("voice_id"),
+    // Per-binding override of the bound voice's runtime tuning knobs (e.g.
+    // ElevenLabs stability/style/modelId). `null` means inherit the voice
+    // row's `providerConfig` as-is; otherwise this provider-keyed sparse
+    // object overlays specific fields at synth time. The `voiceId` (voice
+    // identity) is never overrideable here — only the performance knobs.
+    // Shape: see VoiceSettingsOverride in voice-store.ts.
+    voiceSettings: jsonb("voice_settings"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -386,22 +393,31 @@ export const charactersTable = pgTable(
 
 // ── Voices (global library) ───────────────────────────────────────────
 //
-// A voice = a Pocket TTS speaker embedding (kvcache state) exported from a
-// short audio clip and stored as .safetensors. The source clip lives in
-// the Supabase `voice-sources` bucket; the .safetensors lives in
-// `voice-embeddings`. audio-rt loads the embedding on first /speak call
-// for that voice and caches it in-process.
+// A voice = a bindable speaker identity that the live harness routes to a
+// specific TTS provider at synth time. The `provider` discriminator names
+// the backend; `providerConfig` carries provider-specific settings (e.g.
+// ElevenLabs `voiceId`/`modelId`/`stability`). The legacy Pocket-specific
+// columns (`sourcePath`, `embeddingPath`, extraction lifecycle) stay
+// populated only for `provider='pocket_tts'` rows.
+//
+// Pocket TTS voices: a speaker embedding (kvcache state) exported from a
+// short audio clip and stored as .safetensors. Source clip in the
+// `voice-sources` bucket; .safetensors in `voice-embeddings`. audio-rt
+// loads the embedding on first /speak call and caches it in-process.
 //
 // Slug is the stable address used by audio-rt's /speak payload (e.g.
 // "abraham"). For voices baked into the audio-rt Docker image (legacy)
 // only the slug matters; for Supabase-managed voices both id and slug
 // resolve to the same embedding via the lookup path inside audio-rt.
 //
-// Status lifecycle:
-//   uploaded   — row exists, source clip in storage, no embedding yet
-//   processing — audio-rt is running export-voice
-//   ready      — embedding_path set, voice is usable
-//   failed     — extraction errored; statusError holds the message
+// Hosted providers (ElevenLabs, OpenAI, Cartesia, …): no extraction step;
+// rows insert directly as `status='ready'` once `providerConfig` validates.
+//
+// Status lifecycle (semantics depend on provider):
+//   uploaded   — Pocket only: source in storage, no embedding yet
+//   processing — Pocket only: audio-rt is running export-voice
+//   ready      — voice is usable (default for hosted providers)
+//   failed     — provider error; statusError holds the message
 export const voicesTable = pgTable(
   "voices",
   {
@@ -409,26 +425,100 @@ export const voicesTable = pgTable(
     slug: text("slug").notNull().unique(),
     name: text("name").notNull(),
     description: text("description"),
+    // Discriminator for the live-harness routing. New providers add a
+    // value here + an adapter in @odyssey/engine/audio.ts. Bound voices
+    // route by THIS field; the env-driven TTS_PROVIDER is only consulted
+    // for anonymous /api/audio/speak calls with no voice attached.
+    provider: text("provider").notNull().default("pocket_tts"),
+    // Provider-specific settings as JSON. Shape is validated at the API
+    // layer (Zod) since Postgres can't enforce a discriminated union.
+    //   pocket_tts:  {} (uses the legacy source_path / embedding_path columns)
+    //   elevenlabs:  { voiceId, modelId?, stability?, similarityBoost?, style? }
+    //   openai:      { voice: 'alloy'|'echo'|'fable'|'onyx'|'nova'|'shimmer' }
+    //   cartesia:    { voiceId, modelId? }
+    providerConfig: jsonb("provider_config").notNull().default(sql`'{}'::jsonb`),
     status: text("status").notNull().default("uploaded"),
     statusError: text("status_error"),
     // Path within the voice-sources Supabase bucket. WAV (or whatever the
-    // user uploaded — Pocket TTS accepts wav and mp3). Null only if the
-    // voice was seeded directly without an upload (e.g. legacy bake).
+    // user uploaded — Pocket TTS accepts wav and mp3). Pocket-only; null
+    // for hosted providers (their source lives provider-side).
     sourcePath: text("source_path"),
-    // Path within the voice-embeddings Supabase bucket. Null until
-    // extraction succeeds.
+    // Path within the voice-embeddings Supabase bucket. Pocket-only;
+    // null until extraction succeeds (and always null for hosted providers).
     embeddingPath: text("embedding_path"),
-    // Optional smoke-test sample synthesized after extraction so the UI
-    // can A/B without re-running synthesis on every page load.
+    // Canonical smoke-test sample synthesized after extraction. Additional
+    // takes live in `voice_previews` (one-to-many child table).
     previewPath: text("preview_path"),
     durationS: real("duration_s"),
     sampleRate: integer("sample_rate"),
+    // Curation metadata — free-form, surfaced on the /voices library UI.
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    language: text("language"),            // BCP-47 (e.g. "en-US")
+    gender: text("gender"),                 // masc | fem | neutral | other (free text)
+    license: text("license"),               // "internal" | "CC-BY 4.0" | …
+    attribution: text("attribution"),       // human-readable credit string
+    // Soft-delete. List queries filter `archivedAt IS NULL` by default;
+    // characters still bound to an archived voice keep playing normally
+    // (the row is intact), the library UI just hides it.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdBy: text("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+    updatedBy: text("updated_by").references(() => usersTable.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("voices_status_idx").on(t.status),
+    index("voices_archived_at_idx").on(t.archivedAt),
+    index("voices_provider_idx").on(t.provider),
+  ],
+);
+
+// ── Voice previews (gallery of additional takes) ──────────────────────
+//
+// `voices.previewPath` holds the canonical sample. This child table is
+// for the post-MVP "preview gallery" — multiple takes labeled by mood
+// ("calm reading", "energetic", "whisper") that the admin UI can A/B.
+export const voicePreviewsTable = pgTable(
+  "voice_previews",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    voiceId: text("voice_id").notNull().references(() => voicesTable.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    path: text("path").notNull(),           // within voice-embeddings bucket
+    /** Text the voice was asked to speak when this take was synthesized.
+     * Null for legacy / imported takes that came in via the {label, path}
+     * payload (no synth call, no prompt to record). */
+    prompt: text("prompt"),
+    durationS: real("duration_s"),
+    sampleRate: integer("sample_rate"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("voice_previews_voice_id_idx").on(t.voiceId),
+  ],
+);
+
+// ── Voice extraction attempts (journal) ───────────────────────────────
+//
+// One row per export-voice run. The current run's outcome is mirrored to
+// `voices.status` / `voices.statusError` so single-row reads stay cheap;
+// this table is the history for debugging recurring failures.
+//
+// `attemptNumber` is per-voice monotonic (1, 2, 3 …) — `MAX + 1` at start.
+export const voiceExtractionAttemptsTable = pgTable(
+  "voice_extraction_attempts",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    voiceId: text("voice_id").notNull().references(() => voicesTable.id, { onDelete: "cascade" }),
+    attemptNumber: integer("attempt_number").notNull(),
+    status: text("status").notNull(),       // processing | succeeded | failed
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("voice_extraction_attempts_unique_idx").on(t.voiceId, t.attemptNumber),
+    index("voice_extraction_attempts_voice_id_idx").on(t.voiceId),
   ],
 );
 

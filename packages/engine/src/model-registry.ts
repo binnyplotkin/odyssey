@@ -2,7 +2,7 @@
  * Single source of truth for the LLM models the engine knows about.
  * Consumed by:
  *   - apps/admin's chat route (model validation + provider routing)
- *   - apps/admin's voice route (Cerebras + Anthropic streaming)
+ *   - apps/admin's voice route (model-id based provider streaming)
  *   - apps/admin's L04 Brain / Model editor (picker UI)
  *   - packages/evals' runner (cost estimation, provider routing)
  *
@@ -18,7 +18,7 @@
  * 2024 but we don't use it yet).
  */
 
-export type ProviderId = "anthropic" | "openai" | "cerebras";
+export type ProviderId = "anthropic" | "openai" | "cerebras" | "groq";
 
 /** Where this model can be used. */
 export type ModelMode = "chat" | "voice";
@@ -255,6 +255,40 @@ export const MODEL_REGISTRY: ModelOption[] = [
     capabilities: { promptCache: false, streaming: true, tools: false, vision: false, structuredOutput: false, temperature: true, topP: true },
     latencyTier: "instant",
     qualityTier: "production",
+  },
+
+  // ── Groq — OpenAI-compatible ultra-low-latency inference ─────
+  {
+    id: "openai/gpt-oss-120b",
+    label: "GPT-OSS 120B (Groq)",
+    description: "OpenAI open-weight MoE on Groq. Strong voice latency with high-capability reasoning.",
+    provider: "groq",
+    modes: ["chat", "voice"],
+    contextWindow: 131_072,
+    maxOutputTokens: 65_536,
+    pricing: { input: 0.15, output: 0.6, cacheRead: 0.075 },
+    capabilities: {
+      promptCache: true, streaming: true, tools: true, vision: false,
+      structuredOutput: true, temperature: true, topP: true,
+    },
+    latencyTier: "instant",
+    qualityTier: "production",
+  },
+  {
+    id: "openai/gpt-oss-20b",
+    label: "GPT-OSS 20B (Groq)",
+    description: "Compact GPT-OSS on Groq. Very fast, inexpensive voice/chat turns.",
+    provider: "groq",
+    modes: ["chat", "voice"],
+    contextWindow: 131_072,
+    maxOutputTokens: 65_536,
+    pricing: { input: 0.075, output: 0.3, cacheRead: 0.0375 },
+    capabilities: {
+      promptCache: true, streaming: true, tools: true, vision: false,
+      structuredOutput: true, temperature: true, topP: true,
+    },
+    latencyTier: "instant",
+    qualityTier: "budget",
   },
 ];
 

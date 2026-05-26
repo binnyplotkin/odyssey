@@ -1,9 +1,8 @@
 import type { Scene } from "@odyssey/types";
 
-// Static scene registry. For Phase 1 scenes are authored in code; once
-// the workflow stabilizes we'll promote to a `scenes` table + an authoring
-// UI. Keeping them here means the orchestrator can resolve a scene
-// definition without a DB round-trip on every turn.
+// Static scene registry. For this phase, scenes are authored in code.
+// The orchestration package owns scene meaning and turn planning; later
+// this registry can be backed by persisted scene definitions.
 
 const ABRAHAMS_TENT: Scene = {
   id: "abrahams-tent",
@@ -14,9 +13,8 @@ const ABRAHAMS_TENT: Scene = {
     {
       characterSlug: "abraham",
       displayName: "Abraham",
-      // sarah.safetensors doesn't exist yet — both characters share Abraham's
-      // voice until a distinct voice is authored. Swap to "sarah" once the
-      // safetensors is generated via pocket-tts export-voice.
+      // sarah.safetensors may not exist in every local audio runtime yet.
+      // Keep Abraham on the baked voice slug until voice binding resolves it.
       voice: "abraham",
       blurb:
         "Old shepherd-patriarch. Plainspoken. Just heard from three strangers that Sarah will bear a son. Caught between awe and the embarrassment of his wife's laughter.",
@@ -32,9 +30,7 @@ const ABRAHAMS_TENT: Scene = {
   openingBeat:
     "The strangers have just left. Sarah's laughter still hangs in the air. The user has arrived at the camp.",
   defaultAmbience: "tent-evening",
-  // Routed through OpenAI TTS (see scene-runner.playNarration). "fable"
-  // is a measured, story-teller tone — close to the voice you'd expect
-  // for a narrator of the Hebrew Bible.
+  // Routed through OpenAI TTS in the current scene runner.
   narratorVoice: "fable",
 };
 

@@ -33,6 +33,7 @@ import type {
   CharacterVoiceStyle,
   EraConfig,
 } from "./wiki-types";
+import type { VoiceSettingsOverride } from "./voice-store";
 
 function requireDb() {
   const db = getDb();
@@ -122,6 +123,7 @@ function normalizeCharacter(row: typeof charactersTable.$inferSelect): Character
     image: row.image,
     thumbnailColor: row.thumbnailColor,
     voiceId: row.voiceId ?? null,
+    voiceSettings: (row.voiceSettings as VoiceSettingsOverride | null) ?? null,
     eras: (row.eras as EraConfig[]) ?? [],
     ingestionPrompt: row.ingestionPrompt,
     identity: (row.identity as CharacterIdentity | null) ?? null,

@@ -28,7 +28,6 @@ export {
 export { getOpenAIClient } from "./openai-client";
 export { embedText, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS } from "./embedding";
 export { AudioCommunicationSimulationEngine } from "./communication";
-export { getScene, listScenes } from "./scenes";
 export {
   generateCommunicationScenario,
   HeuristicKnowledgeTransformer,
@@ -51,15 +50,27 @@ export {
   OpenAITextToSpeechAdapter,
   ElevenLabsTextToSpeechAdapter,
   KyutaiSpeechToTextAdapter,
+  PocketTtsStreamingAdapter,
+  ElevenLabsStreamingAdapter,
   createSpeechToTextAdapter,
   createTextToSpeechAdapter,
+  createStreamingTtsAdapterForVoice,
   resolveSttProvider,
   resolveTtsProvider,
   resolveTtsAttemptOrder,
   getAudioRuntimeConfig,
   getElevenLabsPricingGuardInfo,
+  getPocketTtsBaseUrl,
+  POCKET_TTS_SAMPLE_RATE,
+  POCKET_TTS_PUBLIC_BASE_URL,
 } from "./audio";
-export type { SttProvider, TtsProvider } from "./audio";
+export type {
+  SttProvider,
+  TtsProvider,
+  StreamingTtsProvider,
+  VoiceForRouting,
+  ElevenLabsVoiceProviderConfig,
+} from "./audio";
 export {
   getVoiceDiscoveryDebugInfo,
   getNarratorVoiceProfile,
@@ -72,6 +83,9 @@ export type {
   SpeechToTextAdapter,
   TextGenerationAdapter,
   TextToSpeechAdapter,
+  StreamingTextToSpeechAdapter,
+  StreamingTtsChunk,
+  VoiceContext,
   TextGenerationProvider,
   WorldLoader,
   EventSelector,
@@ -141,6 +155,7 @@ export {
   AnthropicChatProvider,
   OpenAIChatProvider,
   CerebrasChatProvider,
+  GroqChatProvider,
 } from "./chat-providers";
 export type {
   ChatProvider,
