@@ -33,7 +33,7 @@ const BORDER_STRONG = "rgba(255, 255, 255, 0.12)";
 const DIVIDER = "rgba(255, 255, 255, 0.06)";
 const INPUT_BG = "rgba(255, 255, 255, 0.02)";
 
-const ACCENT = "#8CE7D2";
+const ACCENT = "#8FD1CB";
 const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
 const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
 
@@ -46,7 +46,7 @@ const DANGER_SOFT = "rgba(248, 113, 113, 0.06)";
 const DANGER_RING = "rgba(248, 113, 113, 0.4)";
 
 const TYPE_COLOR: Record<WikiPageType, string> = {
-  entity: "#8CE7D2",
+  entity: "#8FD1CB",
   event: "#60A5FA",
   concept: "#A78BFA",
   relationship: "#FACC15",
@@ -136,16 +136,22 @@ function pagesTouchedByRun(
 ): WikiPageRecord[] {
   if (!run) return [];
   // Refs don't currently carry a runId, so we approximate using time window
-  // between this run and the previous one.
+  // between this run and the previous one. A single page may be backed by
+  // multiple refs (different passages from the same source), so dedupe by
+  // page id.
   const at = new Date(run.startedAt).getTime();
-  return refs
-    .filter((r) => {
-      const t = new Date(r.createdAt).getTime();
-      // Within 6 hours of the run start
-      return t >= at - 6 * 3600_000 && t <= at + 6 * 3600_000;
-    })
-    .map((r) => pageById.get(r.pageId))
-    .filter((p): p is WikiPageRecord => Boolean(p));
+  const seen = new Set<string>();
+  const out: WikiPageRecord[] = [];
+  for (const r of refs) {
+    const t = new Date(r.createdAt).getTime();
+    if (t < at - 6 * 3600_000 || t > at + 6 * 3600_000) continue;
+    if (seen.has(r.pageId)) continue;
+    const page = pageById.get(r.pageId);
+    if (!page) continue;
+    seen.add(r.pageId);
+    out.push(page);
+  }
+  return out;
 }
 
 /* ── Root ──────────────────────────────────────────────────────── */
@@ -236,7 +242,7 @@ export function WikiSourceDetailView({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 20,
+          gap: "var(--space-20)",
           padding: "32px 32px 0",
           minWidth: 0,
         }}
@@ -309,9 +315,9 @@ function TopEyebrow({
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          gap: 14,
+          gap: "var(--space-14)",
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: 500,
           letterSpacing: "0.18em",
           textTransform: "uppercase",
@@ -345,7 +351,7 @@ function TopEyebrow({
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          gap: 14,
+          gap: "var(--space-14)",
           fontFamily: MONO,
           fontSize: 10.5,
           fontWeight: 500,
@@ -384,7 +390,7 @@ function HeaderBar({
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          gap: 14,
+          gap: "var(--space-14)",
         }}
       >
         <div
@@ -392,7 +398,7 @@ function HeaderBar({
             display: "inline-flex",
             flexDirection: "row",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "7px 12px",
             background: ACCENT_SOFT,
             borderTop: `1px solid ${ACCENT_RING}`,
@@ -405,7 +411,7 @@ function HeaderBar({
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               fontWeight: 600,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
@@ -418,7 +424,7 @@ function HeaderBar({
         <span
           style={{
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             fontWeight: 400,
             letterSpacing: "0.18em",
             textTransform: "uppercase",
@@ -433,7 +439,7 @@ function HeaderBar({
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
         }}
       >
         <GhostBtn label="OPEN RAW" trailing="↗" />
@@ -457,7 +463,7 @@ function GhostBtn({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
+        gap: "var(--space-8)",
         padding: "9px 14px",
         background: "transparent",
         borderTop: `1px solid ${BORDER_STRONG}`,
@@ -465,7 +471,7 @@ function GhostBtn({
         borderBottom: `1px solid ${BORDER_STRONG}`,
         borderLeft: `1px solid ${BORDER_STRONG}`,
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         fontWeight: 600,
         letterSpacing: "0.16em",
         textTransform: "uppercase",
@@ -492,7 +498,7 @@ function PrimaryBtn({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
+        gap: "var(--space-8)",
         padding: "9px 14px",
         background: ACCENT,
         borderTop: `1px solid ${ACCENT}`,
@@ -500,7 +506,7 @@ function PrimaryBtn({
         borderBottom: `1px solid ${ACCENT}`,
         borderLeft: `1px solid ${ACCENT}`,
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         fontWeight: 700,
         letterSpacing: "0.16em",
         textTransform: "uppercase",
@@ -530,7 +536,7 @@ function IconBtn({ label }: { label: string }) {
         borderBottom: `1px solid ${BORDER_STRONG}`,
         borderLeft: `1px solid ${BORDER_STRONG}`,
         fontFamily: MONO,
-        fontSize: 13,
+        fontSize: "var(--font-size-md)",
         fontWeight: 600,
         color: TEXT_MUTED,
         cursor: "pointer",
@@ -554,7 +560,7 @@ function HeroBlock({ source }: { source: WikiSourceRecord }) {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 14,
+        gap: "var(--space-14)",
         padding: "36px 40px 12px",
       }}
     >
@@ -577,7 +583,7 @@ function HeroBlock({ source }: { source: WikiSourceRecord }) {
             margin: 0,
             maxWidth: 760,
             fontFamily: BODY,
-            fontSize: 16,
+            fontSize: "var(--font-size-xl)",
             fontWeight: 400,
             lineHeight: "26px",
             color: TEXT_SECONDARY,
@@ -620,7 +626,7 @@ function MetaStrip({
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
-        gap: 32,
+        gap: "var(--space-32)",
         padding: "8px 40px 0",
         flexWrap: "wrap",
       }}
@@ -650,11 +656,11 @@ function MetaCell({
   accent?: boolean;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <span
         style={{
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           fontWeight: 500,
           letterSpacing: "0.18em",
           textTransform: "uppercase",
@@ -715,7 +721,7 @@ function RunHistoryStrip({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 14,
+          gap: "var(--space-14)",
           padding: "10px 14px",
           background: "transparent",
           borderTop: `1px solid ${BORDER}`,
@@ -734,13 +740,13 @@ function RunHistoryStrip({
             display: "flex",
             flexDirection: "row",
             alignItems: "center",
-            gap: 14,
+            gap: "var(--space-14)",
           }}
         >
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               fontWeight: 500,
               letterSpacing: "0.2em",
               textTransform: "uppercase",
@@ -760,7 +766,7 @@ function RunHistoryStrip({
             {shortRunId(activeRun.id)}
           </span>
           <span
-            style={{ fontFamily: MONO, fontSize: 11, color: TEXT_MUTED }}
+            style={{ fontFamily: MONO, fontSize: "var(--font-size-sm)", color: TEXT_MUTED }}
           >
             {relative(activeRun.startedAt)}
           </span>
@@ -783,7 +789,7 @@ function RunHistoryStrip({
             display: "flex",
             flexDirection: "row",
             alignItems: "center",
-            gap: 10,
+            gap: "var(--space-10)",
           }}
         >
           {!isLatest && (
@@ -900,7 +906,7 @@ function CompactRunRow({
           width: 80,
           flexShrink: 0,
           fontFamily: MONO,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
           fontWeight: 500,
           color: TEXT_PRIMARY,
         }}
@@ -912,7 +918,7 @@ function CompactRunRow({
           width: 110,
           flexShrink: 0,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           color: TEXT_MUTED,
         }}
       >
@@ -937,7 +943,7 @@ function CompactRunRow({
           flex: 1,
           minWidth: 0,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           color: TEXT_SECONDARY,
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -951,7 +957,7 @@ function CompactRunRow({
           width: 140,
           flexShrink: 0,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           color: TEXT_FADED,
           textAlign: "right",
         }}
@@ -1000,13 +1006,13 @@ function PipelineHeader({ run }: { run: WikiIngestionLogRecord }) {
           display: "flex",
           flexDirection: "row",
           alignItems: "baseline",
-          gap: 18,
+          gap: "var(--space-18)",
         }}
       >
         <span
           style={{
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             fontWeight: 600,
             letterSpacing: "0.2em",
             textTransform: "uppercase",
@@ -1018,7 +1024,7 @@ function PipelineHeader({ run }: { run: WikiIngestionLogRecord }) {
         <span
           style={{
             fontFamily: DISPLAY,
-            fontSize: 24,
+            fontSize: "var(--font-size-4xl)",
             fontWeight: 500,
             letterSpacing: "-0.01em",
             color: FG,
@@ -1029,7 +1035,7 @@ function PipelineHeader({ run }: { run: WikiIngestionLogRecord }) {
         <span
           style={{
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             fontWeight: 400,
             color: TEXT_FADED,
           }}
@@ -1043,7 +1049,7 @@ function PipelineHeader({ run }: { run: WikiIngestionLogRecord }) {
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          gap: 18,
+          gap: "var(--space-18)",
         }}
       >
         <HeaderStat label="DURATION" value={duration} />
@@ -1063,7 +1069,7 @@ function PipelineHeader({ run }: { run: WikiIngestionLogRecord }) {
             display: "inline-flex",
             flexDirection: "row",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "7px 12px",
             background: statusBg,
             borderTop: `1px solid ${statusColor}`,
@@ -1076,7 +1082,7 @@ function PipelineHeader({ run }: { run: WikiIngestionLogRecord }) {
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               fontWeight: 600,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
@@ -1097,7 +1103,7 @@ function HeaderStat({ label, value }: { label: string; value: string }) {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 3,
+        gap: "var(--space-3)",
         alignItems: "flex-end",
       }}
     >
@@ -1175,7 +1181,7 @@ function PaneShell({
           borderRight: `1px solid ${DIVIDER}`,
           borderBottom: 0,
           borderLeft: 0,
-          gap: 14,
+          gap: "var(--space-14)",
         }}
       >
         <div
@@ -1195,7 +1201,7 @@ function PaneShell({
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               fontWeight: 700,
               color: ACCENT,
             }}
@@ -1220,7 +1226,7 @@ function PaneShell({
           display: "flex",
           flexDirection: "column",
           padding: "24px 28px 28px",
-          gap: 18,
+          gap: "var(--space-18)",
           minWidth: 0,
         }}
       >
@@ -1237,13 +1243,13 @@ function PaneShell({
               display: "flex",
               flexDirection: "row",
               alignItems: "baseline",
-              gap: 14,
+              gap: "var(--space-14)",
             }}
           >
             <span
               style={{
                 fontFamily: DISPLAY,
-                fontSize: 22,
+                fontSize: "var(--font-size-3xl)",
                 fontWeight: 500,
                 letterSpacing: "-0.01em",
                 color: FG,
@@ -1254,7 +1260,7 @@ function PaneShell({
             <span
               style={{
                 fontFamily: MONO,
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
                 fontWeight: 500,
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
@@ -1291,7 +1297,7 @@ function InputPane({
       title="Input"
       subtitle="SOURCE CONTENT"
       trailing={
-        <span style={{ fontFamily: MONO, fontSize: 11, color: TEXT_MUTED }}>
+        <span style={{ fontFamily: MONO, fontSize: "var(--font-size-sm)", color: TEXT_MUTED }}>
           ~{tokensApprox.toLocaleString()} tokens
         </span>
       }
@@ -1323,7 +1329,7 @@ function InputPane({
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          gap: 18,
+          gap: "var(--space-18)",
           padding: "0 4px",
         }}
       >
@@ -1378,7 +1384,7 @@ function PromptPane({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 6,
+              gap: "var(--space-6)",
               padding: "5px 10px",
               background: "transparent",
               borderTop: `1px solid ${BORDER_STRONG}`,
@@ -1415,7 +1421,7 @@ function PromptPane({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "18px 22px",
             flex: 1,
             borderTop: 0,
@@ -1427,7 +1433,7 @@ function PromptPane({
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               fontWeight: 500,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
@@ -1441,13 +1447,13 @@ function PromptPane({
               display: "flex",
               flexDirection: "row",
               alignItems: "baseline",
-              gap: 10,
+              gap: "var(--space-10)",
             }}
           >
             <span
               style={{
                 fontFamily: DISPLAY,
-                fontSize: 24,
+                fontSize: "var(--font-size-4xl)",
                 fontWeight: 500,
                 letterSpacing: "-0.01em",
                 color: FG,
@@ -1466,7 +1472,7 @@ function PromptPane({
                   borderBottom: `1px solid ${ACCENT_RING}`,
                   borderLeft: `1px solid ${ACCENT_RING}`,
                   fontFamily: MONO,
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   fontWeight: 600,
                   letterSpacing: "0.16em",
                   textTransform: "uppercase",
@@ -1480,7 +1486,7 @@ function PromptPane({
           <span
             style={{
               fontFamily: BODY,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
               lineHeight: "20px",
               color: TEXT_MUTED,
             }}
@@ -1493,7 +1499,7 @@ function PromptPane({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "18px 22px",
             width: 220,
             flexShrink: 0,
@@ -1502,7 +1508,7 @@ function PromptPane({
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               fontWeight: 500,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
@@ -1514,7 +1520,7 @@ function PromptPane({
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
               fontWeight: 500,
               color: TEXT_PRIMARY,
             }}
@@ -1524,7 +1530,7 @@ function PromptPane({
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               fontWeight: 400,
               color: TEXT_MUTED,
             }}
@@ -1595,7 +1601,7 @@ function OutputPane({
             borderBottom: `1px solid ${DANGER_RING}`,
             borderLeft: `2px solid ${DANGER}`,
             fontFamily: MONO,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             lineHeight: "20px",
             color: DANGER,
             whiteSpace: "pre-wrap",
@@ -1663,7 +1669,7 @@ function StatCell({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: "var(--space-4)",
         padding: "14px 18px",
         flex: 1,
         minWidth: 0,
@@ -1684,7 +1690,7 @@ function StatCell({
       <span
         style={{
           fontFamily: MONO,
-          fontSize: 14,
+          fontSize: "var(--font-size-lg)",
           fontWeight: 500,
           color,
         }}
@@ -1724,7 +1730,7 @@ function EffectsPane({
             display: "flex",
             flexDirection: "row",
             alignItems: "center",
-            gap: 14,
+            gap: "var(--space-14)",
           }}
         >
           <EffectChip label={`+${run.pagesCreated} PAGES`} tone="good" />
@@ -1750,7 +1756,7 @@ function EffectsPane({
             borderBottom: `1px dashed ${BORDER_STRONG}`,
             borderLeft: `1px dashed ${BORDER_STRONG}`,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: TEXT_MUTED,
             textAlign: "center",
           }}
@@ -1867,7 +1873,7 @@ function ColHead({
           ? { flex: 1, minWidth: 0 }
           : { width, flexShrink: 0 }),
         fontFamily: MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         fontWeight: 500,
         letterSpacing: "0.18em",
         textTransform: "uppercase",
@@ -1931,7 +1937,7 @@ function EffectRow({
               borderBottom: `1px solid ${ACCENT_RING}`,
               borderLeft: `1px solid ${ACCENT_RING}`,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               fontWeight: 700,
               letterSpacing: "0.16em",
               textTransform: "uppercase",
@@ -1948,7 +1954,7 @@ function EffectRow({
             display: "flex",
             flexDirection: "row",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
           }}
         >
           <span
@@ -1979,7 +1985,7 @@ function EffectRow({
             minWidth: 0,
             display: "flex",
             flexDirection: "column",
-            gap: 3,
+            gap: "var(--space-3)",
           }}
         >
           <span
@@ -1995,7 +2001,7 @@ function EffectRow({
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               fontWeight: 400,
               color: TEXT_MUTED,
               overflow: "hidden",
@@ -2012,7 +2018,7 @@ function EffectRow({
             flexShrink: 0,
             textAlign: "right",
             fontFamily: MONO,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             fontWeight: 500,
             color: TEXT_PRIMARY,
           }}
@@ -2025,7 +2031,7 @@ function EffectRow({
             flexShrink: 0,
             textAlign: "right",
             fontFamily: MONO,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             color: TEXT_FADED,
           }}
         >
@@ -2048,7 +2054,7 @@ function EmptyState() {
         borderBottom: `1px dashed ${BORDER_STRONG}`,
         borderLeft: `1px dashed ${BORDER_STRONG}`,
         fontFamily: MONO,
-        fontSize: 12,
+        fontSize: "var(--font-size-base)",
         color: TEXT_MUTED,
         textAlign: "center",
       }}

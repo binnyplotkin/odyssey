@@ -33,12 +33,12 @@ const T = {
 /* ── Type palette ──────────────────────────────────────────────── */
 
 const TYPE_COLORS: Record<WikiPageType, { dot: string; label: string }> = {
-  entity:         { dot: "#FBA7C0", label: "Entity" },
-  event:          { dot: "#FACC15", label: "Event" },
-  concept:        { dot: "#A88CFF", label: "Concept" },
-  relationship:   { dot: "#8CE7D2", label: "Relationship" },
-  timeline:       { dot: "#94A3B8", label: "Timeline" },
-  voice_identity: { dot: "#E879A0", label: "Voice ID" },
+  entity:         { dot: "var(--event-violet)", label: "Entity" },
+  event:          { dot: "var(--status-draft)", label: "Event" },
+  concept:        { dot: "var(--signal-blue)", label: "Concept" },
+  relationship:   { dot: "var(--accent-strong)", label: "Relationship" },
+  timeline:       { dot: "var(--status-archived)", label: "Timeline" },
+  voice_identity: { dot: "var(--status-error)", label: "Voice ID" },
 };
 
 const TYPE_ORDER: WikiPageType[] = [
@@ -58,12 +58,19 @@ type Props = {
   initialSourceRefs: WikiSourceRefRecord[];
   /** When true and a page is initially selected, mount straight into edit mode. */
   initialEditing?: boolean;
+  /**
+   * URL prefix for all in-component links and navigation. Defaults to
+   * `/characters/${characterSlug}` for back-compat. Wiki-rooted mounts pass
+   * `/wikis/${wikiId}` so links stay inside the wiki surface.
+   */
+  routeBase?: string;
 };
 
 type TypeFilter = "all" | WikiPageType;
 
 export function CharacterWiki(props: Props) {
   const { pages, edges, sources, eras, characterSlug, characterId } = props;
+  const routeBase = props.routeBase ?? `/characters/${characterSlug}`;
   const router = useRouter();
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(
@@ -204,7 +211,7 @@ export function CharacterWiki(props: Props) {
   /* ── Empty state ─────────────────────────────────────────────── */
 
   if (pages.length === 0) {
-    return <EmptyWiki characterSlug={characterSlug} />;
+    return <EmptyWiki routeBase={routeBase} />;
   }
 
   /* ── Graph visibility (persisted to localStorage) ────────────── */
@@ -242,9 +249,9 @@ export function CharacterWiki(props: Props) {
   /* ── Layout ──────────────────────────────────────────────────── */
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)", minHeight: 0 }}>
       {/* Graph band */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
         {graphVisible ? (
           <WikiGraph
             pages={pages}
@@ -259,10 +266,10 @@ export function CharacterWiki(props: Props) {
             type="button"
             onClick={toggleGraph}
             style={{
-              display: "inline-flex", alignSelf: "flex-start", alignItems: "center", gap: 6,
-              padding: "6px 12px", borderRadius: 8,
+              display: "inline-flex", alignSelf: "flex-start", alignItems: "center", gap: "var(--space-6)",
+              padding: "6px 12px", borderRadius: "var(--radius-md)",
               border: `1px solid ${T.border}`, background: "transparent",
-              color: T.muted, fontFamily: T.fontBody, fontSize: 11, cursor: "pointer",
+              color: T.muted, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", cursor: "pointer",
             }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -281,9 +288,9 @@ export function CharacterWiki(props: Props) {
             onClick={toggleGraph}
             style={{
               alignSelf: "flex-end",
-              padding: "3px 10px", borderRadius: 6,
+              padding: "3px 10px", borderRadius: "var(--radius-sm)",
               border: `1px solid ${T.border}`, background: "transparent",
-              color: T.muted, fontFamily: T.fontBody, fontSize: 10, cursor: "pointer",
+              color: T.muted, fontFamily: T.fontBody, fontSize: "var(--font-size-xs)", cursor: "pointer",
             }}
           >
             Hide graph
@@ -292,8 +299,8 @@ export function CharacterWiki(props: Props) {
       </div>
 
       {/* Browser + detail row */}
-      <div style={{ display: "flex", flexDirection: "row", gap: 20, minHeight: 0 }}>
-      <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "row", gap: "var(--space-20)", minHeight: 0 }}>
+      <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
         <BrowserCard
           pages={filteredPages}
           totalCount={pages.length}
@@ -370,19 +377,19 @@ function BrowserCard(props: {
     <div style={cardShell}>
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: 16, padding: "12px 20px", borderBottom: `1px solid ${T.border}`,
+        gap: "var(--space-16)", padding: "12px 20px", borderBottom: `1px solid ${T.border}`,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Pages
           </span>
-          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted }}>
             {props.pages.length} of {props.totalCount}
           </span>
         </div>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "5px 10px", borderRadius: 8,
+        <div className="odyssey-search" style={{
+          display: "flex", alignItems: "center", gap: "var(--space-8)",
+          padding: "5px 10px", borderRadius: "var(--radius-md)",
           background: "var(--background)", border: `1px solid ${T.border}`, width: 240,
         }}>
           <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
@@ -393,13 +400,13 @@ function BrowserCard(props: {
             type="text" value={props.search}
             onChange={(e) => props.setSearch(e.target.value)}
             placeholder="Filter pages…"
-            style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontSize: 12, color: T.fg, fontFamily: T.fontBody }}
+            style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontSize: "var(--font-size-base)", color: T.fg, fontFamily: T.fontBody }}
           />
         </div>
       </div>
 
       <div style={{
-        display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 20px",
+        display: "flex", flexWrap: "wrap", gap: "var(--space-6)", padding: "10px 20px",
         borderBottom: `1px solid ${T.border}`,
       }}>
         {filters.map((f) => {
@@ -407,14 +414,16 @@ function BrowserCard(props: {
           const count = props.typeCounts[f.key as WikiPageType | "all"];
           return (
             <button
+              className="odyssey-filter-pill"
+              data-active={active}
               key={f.key} type="button" onClick={() => props.setTypeFilter(f.key)}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 5,
-                padding: "3px 10px", borderRadius: 999,
+                display: "inline-flex", alignItems: "center", gap: "var(--space-5)",
+                padding: "3px 10px", borderRadius: "var(--radius-button, 12px)",
                 border: active ? "none" : `1px solid ${T.border}`,
-                background: active ? "rgba(140,231,210,0.1)" : "transparent",
-                color: active ? "#8CE7D2" : T.muted,
-                fontFamily: T.fontBody, fontSize: 11, fontWeight: active ? 500 : 400,
+                background: active ? "var(--accent-soft)" : "transparent",
+                color: active ? "var(--accent-strong)" : T.muted,
+                fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: active ? 500 : 400,
                 cursor: "pointer", whiteSpace: "nowrap",
               }}
             >
@@ -430,7 +439,7 @@ function BrowserCard(props: {
 
       {/* Column headers */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 14, padding: "8px 20px",
+        display: "flex", alignItems: "center", gap: "var(--space-14)", padding: "8px 20px",
         borderBottom: `1px solid ${T.border}`, background: T.cardHover,
       }}>
         <span style={{ ...colHeader, flex: 1 }}>Page</span>
@@ -441,7 +450,7 @@ function BrowserCard(props: {
       </div>
 
       {props.pages.length === 0 ? (
-        <div style={{ padding: "3rem 1rem", textAlign: "center", color: T.muted, fontSize: 13, fontFamily: T.fontBody }}>
+        <div style={{ padding: "3rem 1rem", textAlign: "center", color: T.muted, fontSize: "var(--font-size-md)", fontFamily: T.fontBody }}>
           No pages match your filters.
         </div>
       ) : (
@@ -470,28 +479,28 @@ function PageRow({
     <button
       type="button" onClick={onSelect}
       style={{
-        display: "flex", alignItems: "center", gap: 14,
+        display: "flex", alignItems: "center", gap: "var(--space-14)",
         padding: "10px 20px", border: "none", cursor: "pointer",
         textAlign: "left", width: "100%",
         borderBottom: `1px solid ${T.border}`,
-        background: selected ? "rgba(140,231,210,0.08)" : "transparent",
-        borderLeft: selected ? "2px solid #8CE7D2" : "2px solid transparent",
+        background: selected ? "var(--accent-soft)" : "transparent",
+        borderLeft: selected ? "2px solid var(--accent-strong)" : "2px solid transparent",
         fontFamily: "inherit",
       }}
       onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = T.cardHover; }}
       onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = "transparent"; }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", flex: 1, minWidth: 0 }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: typeColor.dot, flexShrink: 0 }} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", minWidth: 0 }}>
           <span style={{
-            fontFamily: T.fontHeading, fontSize: 13, fontWeight: selected ? 600 : 500, color: T.fg,
+            fontFamily: T.fontHeading, fontSize: "var(--font-size-md)", fontWeight: selected ? 600 : 500, color: T.fg,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
             {page.title}
           </span>
           <span style={{
-            fontFamily: T.fontBody, fontSize: 11, color: T.muted,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
             {page.summary ?? page.slug}
@@ -499,34 +508,34 @@ function PageRow({
         </div>
       </div>
       <span style={{
-        width: 100, flexShrink: 0, fontFamily: T.fontMono, fontSize: 10, color: T.muted,
+        width: 100, flexShrink: 0, fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted,
       }}>
         {page.type === "entity"
           ? `entity · ${(page.frontmatter as { kind?: string })?.kind ?? "—"}`
           : page.type.replace("_", " ")}
       </span>
       <span style={{
-        width: 96, flexShrink: 0, fontFamily: T.fontMono, fontSize: 10,
-        color: page.timeIndex ? "#8CE7D2" : T.muted,
+        width: 96, flexShrink: 0, fontFamily: T.fontMono, fontSize: "var(--font-size-xs)",
+        color: page.timeIndex ? "var(--accent-strong)" : T.muted,
       }}>
         {page.timeIndex ? `${page.timeIndex.era} · ${page.timeIndex.index}` : "timeless"}
       </span>
-      <div style={{ width: 54, flexShrink: 0, display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
-        <span style={{ width: 24, height: 3, background: T.cardHover, borderRadius: 2, position: "relative", overflow: "hidden", display: "block" }}>
+      <div style={{ width: 54, flexShrink: 0, display: "flex", alignItems: "center", gap: "var(--space-4)", justifyContent: "flex-end" }}>
+        <span style={{ width: 24, height: 3, background: T.cardHover, borderRadius: "var(--radius-2xs)", position: "relative", overflow: "hidden", display: "block" }}>
           <span style={{
             position: "absolute", top: 0, left: 0, height: "100%",
             width: `${Math.max(8, Math.round(page.confidence * 100))}%`,
-            background: page.confidence >= 0.85 ? "#8CE7D2" : page.confidence >= 0.7 ? "#FACC15" : "#E89090",
-            borderRadius: 2,
+            background: page.confidence >= 0.85 ? "var(--accent-strong)" : page.confidence >= 0.7 ? "var(--status-draft)" : "var(--status-error)",
+            borderRadius: "var(--radius-2xs)",
           }} />
         </span>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
           {page.confidence.toFixed(2).replace(/^0/, "")}
         </span>
       </div>
       <span style={{
         width: 52, flexShrink: 0, textAlign: "right",
-        fontFamily: T.fontMono, fontSize: 11, fontWeight: 500, color: T.fg,
+        fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", fontWeight: 500, color: T.fg,
       }}>
         {linkCount}
       </span>
@@ -602,32 +611,33 @@ function TopBar({
       display: "flex", alignItems: "center", justifyContent: "space-between",
       padding: "12px 20px", borderBottom: `1px solid ${T.border}`, background: "var(--card-hover)",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
         <span style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "3px 9px", borderRadius: 999,
-          background: `${typeColor.dot}1F`, border: `1px solid ${typeColor.dot}33`,
+          display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+          padding: "3px 9px", borderRadius: "var(--radius-button, 12px)",
+          background: `color-mix(in srgb, ${typeColor.dot} 12%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${typeColor.dot} 22%, transparent)`,
         }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: typeColor.dot }} />
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 600, color: typeColor.dot, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600, color: typeColor.dot, letterSpacing: "0.06em", textTransform: "uppercase" }}>
             {page.type === "entity" ? `entity · ${(page.frontmatter as { kind?: string })?.kind ?? ""}` : typeColor.label}
           </span>
         </span>
-        <span style={{ fontFamily: T.fontMono, fontSize: 11, color: T.muted }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.muted }}>
           {page.slug}
         </span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
           v{page.version}
         </span>
         <button
           type="button" onClick={onEdit}
           style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            padding: "4px 10px", borderRadius: 6,
+            display: "inline-flex", alignItems: "center", gap: "var(--space-5)",
+            padding: "4px 10px", borderRadius: "var(--radius-sm)",
             border: `1px solid ${T.border}`, background: "transparent",
-            color: T.fg, fontFamily: T.fontBody, fontSize: 11, cursor: "pointer",
+            color: T.fg, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", cursor: "pointer",
           }}
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -643,25 +653,25 @@ function TopBar({
 
 function TitleBlock({ page }: { page: WikiPageRecord }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "18px 20px", borderBottom: `1px solid ${T.border}` }}>
-      <h1 style={{ fontFamily: T.fontHeading, fontSize: 24, fontWeight: 700, color: T.fg, margin: 0, lineHeight: "28px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)", padding: "18px 20px", borderBottom: `1px solid ${T.border}` }}>
+      <h1 style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-4xl)", fontWeight: 700, color: T.fg, margin: 0, lineHeight: "28px" }}>
         {page.title}
       </h1>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
         <MetaChip
-          icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8CE7D2" strokeWidth="2.5" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}
+          icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--accent-strong)" strokeWidth="2.5" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}
           label={`${page.confidence.toFixed(2)} confidence`}
-          color={page.confidence >= 0.85 ? "#8CE7D2" : page.confidence >= 0.7 ? "#FACC15" : "#E89090"}
+          color={page.confidence >= 0.85 ? "var(--accent-strong)" : page.confidence >= 0.7 ? "var(--status-draft)" : "var(--status-error)"}
           tint
         />
         {page.timeIndex && (
           <MetaChip label={`${page.timeIndex.era} · ${page.timeIndex.index}`} color={T.muted} />
         )}
         {page.knowsFuture && (
-          <MetaChip label="knows future" color="#A88CFF" tint />
+          <MetaChip label="knows future" color="var(--event-violet)" tint />
         )}
         {page.contradictions.length > 0 && (
-          <MetaChip label={`${page.contradictions.length} contradiction${page.contradictions.length === 1 ? "" : "s"}`} color="#E89090" tint />
+          <MetaChip label={`${page.contradictions.length} contradiction${page.contradictions.length === 1 ? "" : "s"}`} color="var(--status-error)" tint />
         )}
       </div>
     </div>
@@ -671,11 +681,11 @@ function TitleBlock({ page }: { page: WikiPageRecord }) {
 function MetaChip({ icon, label, color, tint }: { icon?: React.ReactNode; label: string; color: string; tint?: boolean }) {
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", gap: 5,
-      padding: "3px 9px", borderRadius: 999,
-      background: tint ? `${color}14` : T.cardHover,
-      border: tint ? `1px solid ${color}33` : `1px solid ${T.border}`,
-      fontFamily: T.fontMono, fontSize: 10, color: tint ? color : T.muted, letterSpacing: "0.04em",
+      display: "inline-flex", alignItems: "center", gap: "var(--space-5)",
+      padding: "3px 9px", borderRadius: "var(--radius-button, 12px)",
+      background: tint ? `color-mix(in srgb, ${color} 8%, transparent)` : T.cardHover,
+      border: tint ? `1px solid color-mix(in srgb, ${color} 22%, transparent)` : `1px solid ${T.border}`,
+      fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: tint ? color : T.muted, letterSpacing: "0.04em",
     }}>
       {icon}
       {label}
@@ -686,7 +696,7 @@ function MetaChip({ icon, label, color, tint }: { icon?: React.ReactNode; label:
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section style={{ padding: "18px 20px", borderBottom: `1px solid ${T.border}` }}>
-      <div style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
+      <div style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "var(--space-8)" }}>
         {title}
       </div>
       {children}
@@ -695,7 +705,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 const bodyStyle: CSSProperties = {
-  fontFamily: T.fontBody, fontSize: 13, color: T.fg, lineHeight: "20px", margin: 0,
+  fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.fg, lineHeight: "20px", margin: 0,
 };
 
 /* ── Markdown body with wikilink resolution ────────────────────── */
@@ -713,7 +723,7 @@ function MarkdownBody({
   const transformed = useMemo(() => preprocessWikilinks(body), [body]);
 
   return (
-    <div className="wiki-body" style={{ fontFamily: T.fontBody, fontSize: 13, color: T.fg, lineHeight: "20px" }}>
+    <div className="wiki-body" style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.fg, lineHeight: "20px" }}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -732,9 +742,9 @@ function MarkdownBody({
                   }}
                   style={{
                     border: "none", background: "transparent", padding: 0, cursor: target ? "pointer" : "not-allowed",
-                    color: target ? "#8CE7D2" : "#E89090",
+                    color: target ? "var(--accent-strong)" : "var(--status-error)",
                     fontFamily: "inherit", fontSize: "inherit",
-                    borderBottom: `1px dashed ${target ? "rgba(140,231,210,0.4)" : "rgba(232,144,144,0.4)"}`,
+                    borderBottom: `1px dashed ${target ? "var(--accent-glow)" : "color-mix(in srgb, var(--status-error) 40%, transparent)"}`,
                   }}
                   title={target ? `→ ${target.title}` : `broken wikilink: ${wiki.slug}`}
                 >
@@ -745,21 +755,21 @@ function MarkdownBody({
             }
             // Regular link.
             return (
-              <a href={href} style={{ color: "#8CE7D2" }} target="_blank" rel="noreferrer">
+              <a href={href} style={{ color: "var(--accent-strong)" }} target="_blank" rel="noreferrer">
                 {props.children}
               </a>
             );
           },
           p: (p) => <p style={{ margin: "0 0 10px 0", lineHeight: "20px" }}>{p.children}</p>,
           h2: (p) => <h2 style={{ fontFamily: T.fontHeading, fontSize: 15, fontWeight: 600, color: T.fg, margin: "14px 0 8px 0" }}>{p.children}</h2>,
-          h3: (p) => <h3 style={{ fontFamily: T.fontHeading, fontSize: 13, fontWeight: 600, color: T.fg, margin: "12px 0 6px 0" }}>{p.children}</h3>,
+          h3: (p) => <h3 style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-md)", fontWeight: 600, color: T.fg, margin: "12px 0 6px 0" }}>{p.children}</h3>,
           ul: (p) => <ul style={{ margin: "0 0 10px 0", paddingLeft: 22 }}>{p.children}</ul>,
           ol: (p) => <ol style={{ margin: "0 0 10px 0", paddingLeft: 22 }}>{p.children}</ol>,
-          li: (p) => <li style={{ marginBottom: 4 }}>{p.children}</li>,
+          li: (p) => <li style={{ marginBottom: "var(--space-4)" }}>{p.children}</li>,
           em: (p) => <em style={{ color: T.muted }}>{p.children}</em>,
           strong: (p) => <strong style={{ color: T.fg }}>{p.children}</strong>,
-          code: (p) => <code style={{ fontFamily: T.fontMono, fontSize: 12, background: T.cardHover, padding: "1px 5px", borderRadius: 3 }}>{p.children}</code>,
-          blockquote: (p) => <blockquote style={{ margin: "10px 0", paddingLeft: 12, borderLeft: `2px solid ${T.border}`, color: T.muted }}>{p.children}</blockquote>,
+          code: (p) => <code style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-base)", background: T.cardHover, padding: "1px 5px", borderRadius: "var(--radius-xs)" }}>{p.children}</code>,
+          blockquote: (p) => <blockquote style={{ margin: "10px 0", paddingLeft: "var(--space-12)", borderLeft: `2px solid ${T.border}`, color: T.muted }}>{p.children}</blockquote>,
         }}
       >
         {transformed}
@@ -792,24 +802,24 @@ function PerspectiveBlock({ perspective }: { perspective: WikiPageRecord["perspe
   if (!knowsHow && feels.length === 0 && !stake) return null;
   return (
     <Section title="Perspective">
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
         {knowsHow && (
-          <PerspectiveRow icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8CE7D2" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-            bg="rgba(140,231,210,0.08)" label="Knows how" value={knowsHowLabel(knowsHow)} />
+          <PerspectiveRow icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--accent-strong)" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+            bg="color-mix(in srgb, var(--accent-strong) 8%, transparent)" label="Knows how" value={knowsHowLabel(knowsHow)} />
         )}
         {feels.length > 0 && (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-10)" }}>
             <span style={{
-              width: 18, height: 18, borderRadius: "50%", background: "rgba(232,121,160,0.12)",
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1,
+              width: 18, height: 18, borderRadius: "50%", background: "color-mix(in srgb, var(--status-error) 12%, transparent)",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: "var(--space-1)",
             }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="#E879A0"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="var(--status-error)"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
             </span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, color: T.fg }}>Feels</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+              <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500, color: T.fg }}>Feels</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)" }}>
                 {feels.map((f, i) => (
-                  <span key={i} style={{ padding: "2px 8px", borderRadius: 4, background: T.cardHover, fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+                  <span key={i} style={{ padding: "2px 8px", borderRadius: "var(--radius-xs)", background: T.cardHover, fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
                     {f}
                   </span>
                 ))}
@@ -818,8 +828,8 @@ function PerspectiveBlock({ perspective }: { perspective: WikiPageRecord["perspe
           </div>
         )}
         {stake && (
-          <PerspectiveRow icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#A88CFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15 8 22 9 17 14 18 21 12 18 6 21 7 14 2 9 9 8 12 2" /></svg>}
-            bg="rgba(168,140,255,0.1)" label="Stake" value={<em style={{ color: T.muted, fontStyle: "italic" }}>{`"${stake}"`}</em>} />
+          <PerspectiveRow icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--event-violet)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15 8 22 9 17 14 18 21 12 18 6 21 7 14 2 9 9 8 12 2" /></svg>}
+            bg="color-mix(in srgb, var(--event-violet) 10%, transparent)" label="Stake" value={<em style={{ color: T.muted, fontStyle: "italic" }}>{`"${stake}"`}</em>} />
         )}
       </div>
     </Section>
@@ -828,13 +838,13 @@ function PerspectiveBlock({ perspective }: { perspective: WikiPageRecord["perspe
 
 function PerspectiveRow({ icon, bg, label, value }: { icon: React.ReactNode; bg: string; label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
       <span style={{ width: 18, height: 18, borderRadius: "50%", background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {icon}
       </span>
-      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <span style={{ fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, color: T.fg }}>{label}</span>
-        <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>{value}</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500, color: T.fg }}>{label}</span>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted }}>{value}</span>
       </div>
     </div>
   );
@@ -867,9 +877,9 @@ function FrontmatterBlock({
     return (
       <button key={slug} type="button" onClick={() => onNavigate(slug)}
         style={{
-          padding: "2px 8px", borderRadius: 999,
+          padding: "2px 8px", borderRadius: "var(--radius-button, 12px)",
           background: T.cardHover, border: `1px solid ${T.border}`,
-          fontFamily: T.fontBody, fontSize: 11, color: target ? T.fg : "#E89090",
+          fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: target ? T.fg : "var(--status-error)",
           cursor: target ? "pointer" : "not-allowed",
         }}>
         {target?.title ?? `${slug}?`}
@@ -882,7 +892,7 @@ function FrontmatterBlock({
 
   if (page.type === "entity") {
     const kind = typeof fm.kind === "string" ? fm.kind : null;
-    if (kind) rows.push({ key: "Kind", value: <span style={{ fontFamily: T.fontMono, fontSize: 11, color: T.fg }}>{kind}</span> });
+    if (kind) rows.push({ key: "Kind", value: <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.fg }}>{kind}</span> });
     const aliases = stringArr(fm.aliases);
     if (aliases.length > 0) rows.push({ key: "Aliases", value: <TagRow items={aliases} /> });
   } else if (page.type === "event") {
@@ -900,7 +910,7 @@ function FrontmatterBlock({
     const kind = typeof fm.kind === "string" ? fm.kind : null;
     if (from) rows.push({ key: "From", value: slugPill(from) });
     if (to) rows.push({ key: "To", value: slugPill(to) });
-    if (kind) rows.push({ key: "Kind", value: <span style={{ fontFamily: T.fontMono, fontSize: 11, color: T.fg }}>{kind}</span> });
+    if (kind) rows.push({ key: "Kind", value: <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.fg }}>{kind}</span> });
     const evolution = stringArr(fm.evolution);
     if (evolution.length > 0) rows.push({ key: "Evolution", value: <SlugRow slugs={evolution} render={slugPill} /> });
   } else if (page.type === "concept") {
@@ -925,12 +935,12 @@ function FrontmatterBlock({
   if (rows.length === 0) return null;
   return (
     <Section title="Frontmatter">
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
         {rows.map((r) => (
-          <div key={r.key} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <div key={r.key} style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-10)" }}>
             <span style={{
-              width: 116, flexShrink: 0, fontFamily: T.fontMono, fontSize: 10, color: T.muted,
-              letterSpacing: "0.06em", textTransform: "uppercase", paddingTop: 2,
+              width: 116, flexShrink: 0, fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted,
+              letterSpacing: "0.06em", textTransform: "uppercase", paddingTop: "var(--space-2)",
             }}>
               {r.key}
             </span>
@@ -944,7 +954,7 @@ function FrontmatterBlock({
 
 function SlugRow({ slugs, render }: { slugs: string[]; render: (slug: string) => React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)" }}>
       {slugs.map((s) => render(s))}
     </div>
   );
@@ -952,13 +962,13 @@ function SlugRow({ slugs, render }: { slugs: string[]; render: (slug: string) =>
 
 function TagRow({ items, danger }: { items: string[]; danger?: boolean }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)" }}>
       {items.map((v, i) => (
         <span key={i} style={{
-          padding: "2px 8px", borderRadius: 4,
-          background: danger ? "rgba(232,144,144,0.08)" : T.cardHover,
-          fontFamily: T.fontMono, fontSize: 10,
-          color: danger ? "#E89090" : T.muted,
+          padding: "2px 8px", borderRadius: "var(--radius-xs)",
+          background: danger ? "color-mix(in srgb, var(--status-error) 8%, transparent)" : T.cardHover,
+          fontFamily: T.fontMono, fontSize: "var(--font-size-xs)",
+          color: danger ? "var(--status-error)" : T.muted,
         }}>
           {v}
         </span>
@@ -978,30 +988,30 @@ function SourcesBlock({
   if (sourceRefs.length === 0) return null;
   return (
     <Section title={`Sources · ${sourceRefs.length}`}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
         {sourceRefs.map((ref) => {
           const source = sourceById.get(ref.sourceId);
           return (
             <div key={ref.id} style={{
-              display: "flex", flexDirection: "column", gap: 4,
-              padding: "10px 12px", borderRadius: 10,
+              display: "flex", flexDirection: "column", gap: "var(--space-4)",
+              padding: "10px 12px", borderRadius: "var(--radius-lg)",
               background: "var(--card-hover)", border: `1px solid ${T.border}`,
             }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <span style={{ fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, color: T.fg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-8)" }}>
+                <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500, color: T.fg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {source?.title ?? "(deleted source)"}
                 </span>
                 {ref.passage && (
-                  <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, flexShrink: 0 }}>{ref.passage}</span>
+                  <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, flexShrink: 0 }}>{ref.passage}</span>
                 )}
               </div>
               {ref.quote && (
-                <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, fontStyle: "italic", lineHeight: "17px" }}>
+                <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, fontStyle: "italic", lineHeight: "17px" }}>
                   &ldquo;{ref.quote}&rdquo;
                 </span>
               )}
               {ref.relevanceNote && (
-                <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted, lineHeight: "15px" }}>
+                <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted, lineHeight: "15px" }}>
                   {ref.relevanceNote}
                 </span>
               )}
@@ -1025,7 +1035,7 @@ function LinksBlock({
   if (outbound.length === 0 && inbound.length === 0) return null;
   return (
     <Section title={`Links · ${outbound.length + inbound.length}`}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
         {outbound.length > 0 && (
           <LinkGroup title={`→ Outbound · ${outbound.length}`} edges={outbound} direction="out" pageById={pageById} onNavigate={onNavigate} />
         )}
@@ -1045,10 +1055,10 @@ function LinkGroup({
 }) {
   return (
     <div>
-      <div style={{ fontFamily: T.fontMono, fontSize: 9, color: T.muted, marginBottom: 6, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+      <div style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: T.muted, marginBottom: "var(--space-6)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
         {title}
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
         {edges.map((e) => {
           const target = pageById.get(direction === "out" ? e.toPageId : e.fromPageId);
           if (!target) return null;
@@ -1057,15 +1067,15 @@ function LinkGroup({
             <button
               key={e.id} type="button" onClick={() => onNavigate(target.slug)}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "3px 8px 3px 10px", borderRadius: 999,
+                display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+                padding: "3px 8px 3px 10px", borderRadius: "var(--radius-button, 12px)",
                 background: T.cardHover, border: `1px solid ${T.border}`,
-                fontFamily: T.fontBody, fontSize: 11, color: T.fg, cursor: "pointer",
+                fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.fg, cursor: "pointer",
               }}
             >
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: typeColor.dot }} />
               {target.title}
-              <span style={{ fontFamily: T.fontMono, fontSize: 9, color: T.muted, letterSpacing: "0.05em" }}>
+              <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: T.muted, letterSpacing: "0.05em" }}>
                 {e.kind.replace(/_/g, " ")}
               </span>
             </button>
@@ -1084,29 +1094,30 @@ function ContradictionsBlock({
   if (page.contradictions.length === 0) return null;
   return (
     <Section title={`Contradictions · ${page.contradictions.length}`}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
         {page.contradictions.map((c, i) => {
           const target = pageById.get(c.otherPageId);
           return (
             <div key={i} style={{
-              padding: "10px 12px", borderRadius: 10,
-              background: "rgba(232,144,144,0.06)", border: "1px solid rgba(232,144,144,0.2)",
+              padding: "10px 12px", borderRadius: "var(--radius-lg)",
+              background: "var(--critical-wash)",
+              border: "1px solid color-mix(in srgb, var(--status-error) 20%, transparent)",
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E89090" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-4)" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--status-error)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                   <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
                 </svg>
                 {target ? (
                   <button type="button" onClick={() => onNavigate(target.slug)}
-                    style={{ border: "none", background: "transparent", padding: 0, color: "#E89090", fontFamily: T.fontBody, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+                    style={{ border: "none", background: "transparent", padding: 0, color: "var(--status-error)", fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500, cursor: "pointer" }}>
                     Conflicts with {target.title}
                   </button>
                 ) : (
-                  <span style={{ color: "#E89090", fontFamily: T.fontBody, fontSize: 12, fontWeight: 500 }}>Conflicts with (unknown page)</span>
+                  <span style={{ color: "var(--status-error)", fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500 }}>Conflicts with (unknown page)</span>
                 )}
               </div>
-              <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "17px" }}>{c.note}</span>
+              <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: "17px" }}>{c.note}</span>
             </div>
           );
         })}
@@ -1117,15 +1128,15 @@ function ContradictionsBlock({
 
 /* ── Empty / prompt states ─────────────────────────────────────── */
 
-function EmptyWiki({ characterSlug }: { characterSlug: string }) {
+function EmptyWiki({ routeBase }: { routeBase: string }) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      padding: "5rem 2rem", gap: 14, textAlign: "center",
+      padding: "5rem 2rem", gap: "var(--space-14)", textAlign: "center",
     }}>
       <div style={{
         width: 56, height: 56, borderRadius: "50%",
-        background: T.panel, border: `1px solid ${T.border}`,
+        background: "var(--card-material, var(--panel))", border: "1px solid var(--border-subtle, var(--border))",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round">
@@ -1136,16 +1147,16 @@ function EmptyWiki({ characterSlug }: { characterSlug: string }) {
       <h2 style={{ fontFamily: T.fontHeading, fontSize: 20, fontWeight: 600, margin: 0, color: T.fg }}>
         Wiki is empty
       </h2>
-      <p style={{ fontFamily: T.fontBody, fontSize: 13, color: T.muted, margin: 0, maxWidth: 420, lineHeight: 1.55 }}>
+      <p style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.muted, margin: 0, maxWidth: 420, lineHeight: 1.55 }}>
         Ingest a source to populate the wiki. The LLM will generate pages, edges, and perspective blocks you can browse here.
       </p>
       <a
-        href={`/characters/${characterSlug}/ingestion`}
+        href={`${routeBase}/ingestion`}
         style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "9px 18px", borderRadius: 10, border: "none",
-          background: T.accent, color: "var(--background)",
-          fontSize: 13, fontWeight: 600, fontFamily: T.fontBody, textDecoration: "none",
+          display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+          padding: "9px 18px", borderRadius: "var(--radius-lg)", border: "none",
+          background: "var(--emissive-mint)", color: "#07100E",
+          fontSize: "var(--font-size-md)", fontWeight: 600, fontFamily: T.fontBody, textDecoration: "none",
         }}
       >
         Go to Ingestion →
@@ -1161,7 +1172,7 @@ function SelectPrompt() {
       display: "flex", alignItems: "center", justifyContent: "center",
       borderStyle: "dashed", textAlign: "center", padding: "3rem 2rem",
     }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center", maxWidth: 260 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)", alignItems: "center", maxWidth: 260 }}>
         <div style={{
           width: 48, height: 48, borderRadius: "50%", background: T.cardHover,
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -1170,10 +1181,10 @@ function SelectPrompt() {
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </div>
-        <span style={{ fontFamily: T.fontBody, fontSize: 13, fontWeight: 500, color: T.fg }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500, color: T.fg }}>
           Select a page
         </span>
-        <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: 1.55 }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: 1.55 }}>
           Pick any row from the browser to read its body, perspective, source refs, and outbound / inbound links.
         </span>
       </div>
@@ -1185,12 +1196,14 @@ function SelectPrompt() {
 
 const cardShell: React.CSSProperties = {
   display: "flex", flexDirection: "column",
-  background: T.panel, border: `1px solid ${T.border}`,
-  borderRadius: 14, overflow: "hidden",
+  background: "var(--card-material, var(--panel))",
+  border: "1px solid var(--border-subtle, var(--border))",
+  borderRadius: "var(--radius-card, 18px)",
+  boxShadow: "var(--elevation-card)",
+  overflow: "hidden",
 };
 
 const colHeader: React.CSSProperties = {
-  fontFamily: T.fontMono, fontSize: 9, fontWeight: 500, color: T.muted,
+  fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 500, color: T.muted,
   letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0,
 };
-

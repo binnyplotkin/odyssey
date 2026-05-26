@@ -48,7 +48,7 @@ const BORDER_STRONG = "rgba(255, 255, 255, 0.12)";
 const DIVIDER = "rgba(255, 255, 255, 0.06)";
 const INPUT_BG = "rgba(255, 255, 255, 0.02)";
 
-const ACCENT = "#8CE7D2";
+const ACCENT = "#8FD1CB";
 const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
 const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
 
@@ -57,7 +57,7 @@ const DANGER_SOFT = "rgba(248, 113, 113, 0.06)";
 const DANGER_RING = "rgba(248, 113, 113, 0.36)";
 
 const TYPE_COLOR: Record<WikiPageType, string> = {
-  entity: "#8CE7D2",
+  entity: "#8FD1CB",
   event: "#60A5FA",
   concept: "#A78BFA",
   relationship: "#FACC15",
@@ -263,7 +263,7 @@ function ReadView({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 24,
+        gap: "var(--space-24)",
         padding: "8px 32px 80px",
       }}
     >
@@ -288,7 +288,7 @@ function ReadView({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 14,
+          gap: "var(--space-14)",
           padding: "24px 8px 8px 8px",
         }}
       >
@@ -311,7 +311,7 @@ function ReadView({
               margin: 0,
               color: TEXT_SECONDARY,
               fontFamily: BODY,
-              fontSize: 16,
+              fontSize: "var(--font-size-xl)",
               lineHeight: "26px",
               maxWidth: 760,
             }}
@@ -332,16 +332,16 @@ function ReadView({
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) 360px",
-          gap: 32,
+          gap: "var(--space-32)",
           alignItems: "flex-start",
-          paddingTop: 12,
+          paddingTop: "var(--space-12)",
         }}
       >
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 24,
+            gap: "var(--space-24)",
             minWidth: 0,
           }}
         >
@@ -367,7 +367,7 @@ function ReadView({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 16,
+            gap: "var(--space-16)",
             position: "sticky",
             top: 24,
           }}
@@ -409,7 +409,7 @@ function HeaderBar({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         height: 44,
         padding: "0 18px",
         background: PANEL_BG,
@@ -420,13 +420,13 @@ function HeaderBar({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
           padding: "4px 10px",
           border: `1px solid ${color}4D`,
           background: `${color}14`,
           color,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           fontWeight: 500,
           letterSpacing: "0.1em",
           textTransform: "uppercase",
@@ -442,7 +442,7 @@ function HeaderBar({
         style={{
           color: TEXT_MUTED,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           letterSpacing: "0.06em",
         }}
       >
@@ -455,13 +455,13 @@ function HeaderBar({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
+          gap: "var(--space-6)",
           padding: "0 12px",
           height: 28,
           border: `1px solid rgba(255, 255, 255, 0.16)`,
           color: TEXT_PRIMARY,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           fontWeight: 500,
           letterSpacing: "0.1em",
           textTransform: "uppercase",
@@ -486,7 +486,7 @@ function HeaderBar({
           background: "transparent",
           color: TEXT_MUTED,
           fontFamily: MONO,
-          fontSize: 14,
+          fontSize: "var(--font-size-lg)",
           cursor: "pointer",
         }}
       >
@@ -514,8 +514,8 @@ function MetaStrip({
         display: "flex",
         alignItems: "center",
         flexWrap: "wrap",
-        gap: 14,
-        paddingTop: 4,
+        gap: "var(--space-14)",
+        paddingTop: "var(--space-4)",
       }}
     >
       {page.timeIndex && (
@@ -523,10 +523,10 @@ function MetaStrip({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
             color: TEXT_MUTED,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.04em",
           }}
         >
@@ -541,7 +541,7 @@ function MetaStrip({
         style={{
           color: TEXT_SECONDARY,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           letterSpacing: "0.04em",
         }}
       >
@@ -552,7 +552,7 @@ function MetaStrip({
         style={{
           color: TEXT_SECONDARY,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           letterSpacing: "0.04em",
         }}
       >
@@ -563,10 +563,10 @@ function MetaStrip({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
+          gap: "var(--space-6)",
           color: TEXT_SECONDARY,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           letterSpacing: "0.04em",
         }}
       >
@@ -593,7 +593,7 @@ function MetaStrip({
         <span>conf {(page.confidence ?? 0).toFixed(2)}</span>
       </span>
       <span style={{ color: TEXT_QUIET }}>·</span>
-      <span style={{ color: TEXT_FADED, fontFamily: MONO, fontSize: 11 }}>
+      <span style={{ color: TEXT_FADED, fontFamily: MONO, fontSize: "var(--font-size-sm)" }}>
         updated {relative(page.updatedAt)}
       </span>
     </div>
@@ -617,7 +617,7 @@ function FrontmatterCard({
           label={r.label}
           value={
             Array.isArray(r.value) ? (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
                 {r.value.map((v) => (
                   <span
                     key={v}
@@ -626,7 +626,7 @@ function FrontmatterCard({
                       border: `1px solid ${BORDER_STRONG}`,
                       color: TEXT_PRIMARY,
                       fontFamily: MONO,
-                      fontSize: 11,
+                      fontSize: "var(--font-size-sm)",
                     }}
                   >
                     {v}
@@ -634,7 +634,7 @@ function FrontmatterCard({
                 ))}
               </div>
             ) : (
-              <span style={{ color: TEXT_PRIMARY, fontFamily: MONO, fontSize: 12 }}>
+              <span style={{ color: TEXT_PRIMARY, fontFamily: MONO, fontSize: "var(--font-size-base)" }}>
                 {r.value}
               </span>
             )
@@ -686,16 +686,16 @@ function BodyCard({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           padding: "12px 20px",
           borderTop: `1px solid ${DIVIDER}`,
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.06em",
         }}
       >
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
           <span
             style={{
               width: 5,
@@ -771,18 +771,18 @@ function SourceBlock({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 8,
+        gap: "var(--space-8)",
         padding: "16px 20px",
         borderBottom: last ? "none" : `1px solid ${DIVIDER}`,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
         <span style={{ width: 6, height: 6, background: dotColor }} />
         <span
           style={{
             color: FG,
             fontFamily: BODY,
-            fontSize: 14,
+            fontSize: "var(--font-size-lg)",
             fontWeight: 500,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -796,7 +796,7 @@ function SourceBlock({
           style={{
             color: kindColor,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
           }}
@@ -807,10 +807,10 @@ function SourceBlock({
       {ref_.passage && (
         <div
           style={{
-            paddingLeft: 16,
+            paddingLeft: "var(--space-16)",
             color: TEXT_FADED,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.04em",
           }}
         >
@@ -823,10 +823,10 @@ function SourceBlock({
             margin: 0,
             paddingLeft: 26,
             borderLeft: `2px solid ${ACCENT_RING}`,
-            marginLeft: 16,
+            marginLeft: "var(--space-16)",
             color: TEXT_SECONDARY,
             fontFamily: BODY,
-            fontSize: 14,
+            fontSize: "var(--font-size-lg)",
             fontStyle: "italic",
             lineHeight: "22px",
             maxWidth: 720,
@@ -838,10 +838,10 @@ function SourceBlock({
       {ref_.relevanceNote && (
         <div
           style={{
-            paddingLeft: 16,
+            paddingLeft: "var(--space-16)",
             color: TEXT_SECONDARY,
             fontFamily: BODY,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             lineHeight: "20px",
             maxWidth: 720,
           }}
@@ -877,7 +877,7 @@ function PerspectiveCard({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "14px 16px",
             borderBottom: `1px solid ${DIVIDER}`,
           }}
@@ -886,7 +886,7 @@ function PerspectiveCard({
             style={{
               color: TEXT_FADED,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               letterSpacing: "0.12em",
               textTransform: "uppercase",
             }}
@@ -897,7 +897,7 @@ function PerspectiveCard({
             style={{
               color: TEXT_PRIMARY,
               fontFamily: BODY,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
               lineHeight: "20px",
             }}
           >
@@ -910,7 +910,7 @@ function PerspectiveCard({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "14px 16px",
             borderBottom: `1px solid ${DIVIDER}`,
           }}
@@ -919,14 +919,14 @@ function PerspectiveCard({
             style={{
               color: TEXT_FADED,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               letterSpacing: "0.12em",
               textTransform: "uppercase",
             }}
           >
             Feels
           </span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
             {feels.map((f) => (
               <span
                 key={f}
@@ -935,7 +935,7 @@ function PerspectiveCard({
                   border: `1px solid ${BORDER_STRONG}`,
                   color: TEXT_PRIMARY,
                   fontFamily: MONO,
-                  fontSize: 11,
+                  fontSize: "var(--font-size-sm)",
                 }}
               >
                 {f}
@@ -949,7 +949,7 @@ function PerspectiveCard({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "14px 16px",
           }}
         >
@@ -957,7 +957,7 @@ function PerspectiveCard({
             style={{
               color: TEXT_FADED,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               letterSpacing: "0.12em",
               textTransform: "uppercase",
             }}
@@ -968,7 +968,7 @@ function PerspectiveCard({
             style={{
               color: TEXT_PRIMARY,
               fontFamily: BODY,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
               lineHeight: "20px",
             }}
           >
@@ -1001,7 +1001,7 @@ function LinksCard({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 10,
+            gap: "var(--space-10)",
             height: 36,
             padding: "0 16px",
             borderTop: "none",
@@ -1029,7 +1029,7 @@ function LinksCard({
               flex: 1,
               color: TEXT_PRIMARY,
               fontFamily: BODY,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -1041,7 +1041,7 @@ function LinksCard({
             style={{
               color: TEXT_MUTED,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
             }}
           >
             {link.relation ? `${link.relation} · ` : ""}
@@ -1080,7 +1080,7 @@ function ContradictionsCard({
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 6,
+              gap: "var(--space-6)",
               padding: "12px 14px",
               borderLeft: `2px solid ${DANGER}`,
               background: "rgba(248, 113, 113, 0.04)",
@@ -1090,7 +1090,7 @@ function ContradictionsCard({
                   : `1px solid ${DIVIDER}`,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
               <span
                 style={{
                   width: 5,
@@ -1108,7 +1108,7 @@ function ContradictionsCard({
                     background: "transparent",
                     color: DANGER,
                     fontFamily: MONO,
-                    fontSize: 10,
+                    fontSize: "var(--font-size-xs)",
                     fontWeight: 500,
                     letterSpacing: "0.1em",
                     textTransform: "uppercase",
@@ -1123,7 +1123,7 @@ function ContradictionsCard({
                   style={{
                     color: DANGER,
                     fontFamily: MONO,
-                    fontSize: 10,
+                    fontSize: "var(--font-size-xs)",
                     fontWeight: 500,
                     letterSpacing: "0.1em",
                     textTransform: "uppercase",
@@ -1138,7 +1138,7 @@ function ContradictionsCard({
                 paddingLeft: 13,
                 color: TEXT_PRIMARY,
                 fontFamily: BODY,
-                fontSize: 13,
+                fontSize: "var(--font-size-md)",
                 lineHeight: "20px",
               }}
             >
@@ -1162,9 +1162,9 @@ function StatsCard({
     {
       label: "type",
       value: (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-6)" }}>
           <span style={{ width: 5, height: 5, background: TYPE_COLOR[page.type] }} />
-          <span style={{ color: FG, fontFamily: MONO, fontSize: 12 }}>
+          <span style={{ color: FG, fontFamily: MONO, fontSize: "var(--font-size-base)" }}>
             {page.type === "voice_identity" ? "voice" : page.type}
             {kind ? ` · ${kind}` : ""}
           </span>
@@ -1174,7 +1174,7 @@ function StatsCard({
     {
       label: "embedded",
       value: (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-6)" }}>
           <span
             style={{
               width: 5,
@@ -1183,7 +1183,7 @@ function StatsCard({
               background: ACCENT,
             }}
           />
-          <span style={{ color: FG, fontFamily: MONO, fontSize: 12 }}>yes</span>
+          <span style={{ color: FG, fontFamily: MONO, fontSize: "var(--font-size-base)" }}>yes</span>
         </span>
       ),
     },
@@ -1192,7 +1192,7 @@ function StatsCard({
     rows.push({
       label: "era",
       value: (
-        <span style={{ color: FG, fontFamily: MONO, fontSize: 12 }}>
+        <span style={{ color: FG, fontFamily: MONO, fontSize: "var(--font-size-base)" }}>
           {page.timeIndex.era} · t={pad2(page.timeIndex.index)}
         </span>
       ),
@@ -1201,7 +1201,7 @@ function StatsCard({
   rows.push({
     label: "updated",
     value: (
-      <span style={{ color: FG, fontFamily: MONO, fontSize: 12 }}>
+      <span style={{ color: FG, fontFamily: MONO, fontSize: "var(--font-size-base)" }}>
         {relative(page.updatedAt)}
       </span>
     ),
@@ -1226,7 +1226,7 @@ function StatsCard({
               flex: 1,
               color: TEXT_MUTED,
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
             }}
           >
             {r.label}
@@ -1313,7 +1313,7 @@ function MarkdownBody({
               style={{
                 margin: "8px 0 12px 0",
                 fontFamily: DISPLAY,
-                fontSize: 18,
+                fontSize: "var(--font-size-2xl)",
                 fontWeight: 500,
                 color: FG,
                 lineHeight: "26px",
@@ -1327,7 +1327,7 @@ function MarkdownBody({
               style={{
                 margin: "20px 0 6px 0",
                 fontFamily: DISPLAY,
-                fontSize: 16,
+                fontSize: "var(--font-size-xl)",
                 fontWeight: 500,
                 color: FG,
               }}
@@ -1340,7 +1340,7 @@ function MarkdownBody({
               style={{
                 margin: "16px 0 4px 0",
                 fontFamily: DISPLAY,
-                fontSize: 14,
+                fontSize: "var(--font-size-lg)",
                 fontWeight: 500,
                 color: FG,
               }}
@@ -1358,14 +1358,14 @@ function MarkdownBody({
               {p.children}
             </ol>
           ),
-          li: (p) => <li style={{ marginBottom: 4 }}>{p.children}</li>,
+          li: (p) => <li style={{ marginBottom: "var(--space-4)" }}>{p.children}</li>,
           em: (p) => <em style={{ color: TEXT_SECONDARY }}>{p.children}</em>,
           strong: (p) => <strong style={{ color: FG }}>{p.children}</strong>,
           code: (p) => (
             <code
               style={{
                 fontFamily: MONO,
-                fontSize: 13,
+                fontSize: "var(--font-size-md)",
                 background: "rgba(255, 255, 255, 0.04)",
                 padding: "1px 6px",
               }}
@@ -1377,7 +1377,7 @@ function MarkdownBody({
             <blockquote
               style={{
                 margin: "16px 0",
-                paddingLeft: 14,
+                paddingLeft: "var(--space-14)",
                 borderLeft: `2px solid ${ACCENT_RING}`,
                 color: TEXT_SECONDARY,
                 fontStyle: "italic",
@@ -1562,7 +1562,7 @@ function EditView({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 24,
+        gap: "var(--space-24)",
         padding: "8px 0 80px",
       }}
     >
@@ -1589,16 +1589,16 @@ function EditView({
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) 360px",
-          gap: 32,
+          gap: "var(--space-32)",
           alignItems: "flex-start",
-          paddingTop: 12,
+          paddingTop: "var(--space-12)",
         }}
       >
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 20,
+            gap: "var(--space-20)",
             minWidth: 0,
           }}
         >
@@ -1644,13 +1644,13 @@ function EditView({
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 10,
+                gap: "var(--space-10)",
                 padding: "10px 14px",
                 border: `1px solid ${DANGER_RING}`,
                 background: DANGER_SOFT,
                 color: DANGER,
                 fontFamily: MONO,
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
                 letterSpacing: "0.04em",
               }}
             >
@@ -1671,7 +1671,7 @@ function EditView({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 16,
+            gap: "var(--space-16)",
             position: "sticky",
             top: 24,
           }}
@@ -1730,7 +1730,7 @@ function SaveBar({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         height: 48,
         padding: "0 18px",
         background: PANEL_BG,
@@ -1742,13 +1742,13 @@ function SaveBar({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
           padding: "4px 10px",
           border: `1px solid ${ACCENT_RING}`,
           background: ACCENT_SOFT,
           color: statusColor,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           fontWeight: 600,
           letterSpacing: "0.12em",
           textTransform: "uppercase",
@@ -1768,7 +1768,7 @@ function SaveBar({
         style={{
           color: TEXT_SECONDARY,
           fontFamily: DISPLAY,
-          fontSize: 14,
+          fontSize: "var(--font-size-lg)",
           fontWeight: 500,
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -1782,7 +1782,7 @@ function SaveBar({
         style={{
           color: TEXT_GHOST,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
         }}
       >
         /{segment}/{slug}
@@ -1792,10 +1792,10 @@ function SaveBar({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
           color: TEXT_MUTED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.06em",
         }}
       >
@@ -1819,14 +1819,14 @@ function SaveBar({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
+          gap: "var(--space-6)",
           padding: "0 14px",
           height: 30,
           border: `1px solid rgba(255, 255, 255, 0.16)`,
           background: "transparent",
           color: TEXT_PRIMARY,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: 500,
           letterSpacing: "0.1em",
           textTransform: "uppercase",
@@ -1843,14 +1843,14 @@ function SaveBar({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
+          gap: "var(--space-6)",
           padding: "0 18px",
           height: 30,
           background: dirty && !pending ? ACCENT : ACCENT_SOFT,
           color: dirty && !pending ? "#050505" : ACCENT,
           border: dirty && !pending ? "none" : `1px solid ${ACCENT_RING}`,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: 600,
           letterSpacing: "0.1em",
           textTransform: "uppercase",
@@ -1895,7 +1895,7 @@ function IdentitySection({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: "var(--space-6)",
           padding: "18px 24px 0",
         }}
       >
@@ -1916,7 +1916,7 @@ function IdentitySection({
             border: `1px solid ${title !== initialTitle ? ACCENT_RING : BORDER_STRONG}`,
             height: 44,
             fontFamily: DISPLAY,
-            fontSize: 18,
+            fontSize: "var(--font-size-2xl)",
             fontWeight: 500,
           }}
         />
@@ -1925,7 +1925,7 @@ function IdentitySection({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: "var(--space-6)",
           padding: "12px 24px 0",
         }}
       >
@@ -1947,7 +1947,7 @@ function IdentitySection({
             ...editInput,
             minHeight: 64,
             fontFamily: BODY,
-            fontSize: 14,
+            fontSize: "var(--font-size-lg)",
             lineHeight: "22px",
             resize: "vertical",
             border: `1px solid ${summary !== initialSummary ? ACCENT_RING : BORDER_STRONG}`,
@@ -1958,11 +1958,11 @@ function IdentitySection({
         style={{
           display: "flex",
           flexDirection: "row",
-          gap: 12,
+          gap: "var(--space-12)",
           padding: "12px 24px 18px",
         }}
       >
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <FieldEyebrow
             label="Type"
             trailing={
@@ -1973,7 +1973,7 @@ function IdentitySection({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              gap: "var(--space-10)",
               height: 36,
               padding: "0 12px",
               border: `1px solid ${BORDER}`,
@@ -1982,29 +1982,29 @@ function IdentitySection({
             }}
           >
             <span style={{ width: 6, height: 6, background: color }} />
-            <span style={{ color: TEXT_SECONDARY, fontFamily: MONO, fontSize: 12 }}>
+            <span style={{ color: TEXT_SECONDARY, fontFamily: MONO, fontSize: "var(--font-size-base)" }}>
               {page.type === "voice_identity" ? "voice" : page.type}
             </span>
             <span style={{ flex: 1 }} />
-            <span style={{ color: TEXT_GHOST, fontFamily: MONO, fontSize: 11 }}>
+            <span style={{ color: TEXT_GHOST, fontFamily: MONO, fontSize: "var(--font-size-sm)" }}>
               🔒
             </span>
           </div>
         </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <FieldEyebrow label="Slug" />
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
               height: 36,
               padding: "0 12px",
               border: `1px solid ${BORDER_STRONG}`,
               background: INPUT_BG,
               color: TEXT_PRIMARY,
               fontFamily: MONO,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
             }}
           >
             <span style={{ color: TEXT_FADED }}>/{segment}/</span>
@@ -2014,7 +2014,7 @@ function IdentitySection({
               style={{
                 color: TEXT_GHOST,
                 fontFamily: MONO,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.06em",
               }}
             >
@@ -2050,11 +2050,11 @@ function BodyEditorSection({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 14,
+          gap: "var(--space-14)",
           padding: "12px 18px",
           borderBottom: `1px solid ${DIVIDER}`,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
         }}
@@ -2068,7 +2068,7 @@ function BodyEditorSection({
         <span
           style={{
             display: "flex",
-            gap: 14,
+            gap: "var(--space-14)",
             color: TEXT_GHOST,
             letterSpacing: "0.06em",
             textTransform: "none",
@@ -2094,7 +2094,7 @@ function BodyEditorSection({
           background: "transparent",
           color: TEXT_PRIMARY,
           fontFamily: MONO,
-          fontSize: 13,
+          fontSize: "var(--font-size-md)",
           lineHeight: "22px",
           resize: "vertical",
         }}
@@ -2103,11 +2103,11 @@ function BodyEditorSection({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 14,
+          gap: "var(--space-14)",
           padding: "10px 18px",
           borderTop: `1px solid ${DIVIDER}`,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           color: TEXT_MUTED,
         }}
       >
@@ -2135,7 +2135,7 @@ function BodyEditorSection({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
             color: dirty ? ACCENT : TEXT_MUTED,
           }}
         >
@@ -2181,17 +2181,17 @@ function TimelineSection({
         style={{
           display: "flex",
           flexDirection: "row",
-          gap: 14,
+          gap: "var(--space-14)",
           padding: "18px 24px",
         }}
       >
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <FieldEyebrow label="Era" />
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              gap: "var(--space-10)",
               height: 36,
               padding: "0 12px",
               border: `1px solid ${BORDER_STRONG}`,
@@ -2222,7 +2222,7 @@ function TimelineSection({
                 background: "transparent",
                 color: TEXT_PRIMARY,
                 fontFamily: MONO,
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 appearance: "none",
                 cursor: "pointer",
               }}
@@ -2240,10 +2240,10 @@ function TimelineSection({
                 </option>
               ))}
             </select>
-            <span style={{ color: TEXT_FADED, fontFamily: MONO, fontSize: 12 }}>▾</span>
+            <span style={{ color: TEXT_FADED, fontFamily: MONO, fontSize: "var(--font-size-base)" }}>▾</span>
           </div>
         </div>
-        <div style={{ width: 120, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ width: 120, display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <FieldEyebrow label="T-index" />
           <input
             type="number"
@@ -2260,12 +2260,12 @@ function TimelineSection({
               ...editInput,
               height: 36,
               fontFamily: MONO,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               opacity: timeIndex ? 1 : 0.5,
             }}
           />
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <FieldEyebrow label="Knows future" />
           <button
             type="button"
@@ -2273,14 +2273,14 @@ function TimelineSection({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              gap: "var(--space-10)",
               height: 36,
               padding: "0 14px",
               border: `1px solid ${knowsFuture ? ACCENT_RING : BORDER_STRONG}`,
               background: knowsFuture ? ACCENT_SOFT : INPUT_BG,
               color: knowsFuture ? ACCENT : TEXT_MUTED,
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
               cursor: "pointer",
@@ -2308,7 +2308,7 @@ function TimelineSection({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 10,
+          gap: "var(--space-10)",
           padding: "0 24px 18px",
         }}
       >
@@ -2334,7 +2334,7 @@ function TimelineSection({
             alignItems: "center",
             color: TEXT_GHOST,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.06em",
           }}
         >
@@ -2367,7 +2367,7 @@ function PerspectiveSection({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: "var(--space-6)",
           padding: "16px 24px 14px",
           borderBottom: `1px solid ${DIVIDER}`,
         }}
@@ -2383,7 +2383,7 @@ function PerspectiveSection({
             ...editInput,
             height: 40,
             fontFamily: BODY,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             cursor: "pointer",
           }}
         >
@@ -2408,7 +2408,7 @@ function PerspectiveSection({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: "var(--space-6)",
           padding: "14px 24px 14px",
           borderBottom: `1px solid ${DIVIDER}`,
         }}
@@ -2430,7 +2430,7 @@ function PerspectiveSection({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: "var(--space-6)",
           padding: "14px 24px 18px",
         }}
       >
@@ -2446,7 +2446,7 @@ function PerspectiveSection({
             ...editInput,
             minHeight: 56,
             fontFamily: BODY,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             lineHeight: "20px",
             resize: "vertical",
           }}
@@ -2483,7 +2483,7 @@ function TagInput({
         display: "flex",
         flexWrap: "wrap",
         alignItems: "center",
-        gap: 6,
+        gap: "var(--space-6)",
         padding: "8px 12px",
         border: `1px solid ${BORDER_STRONG}`,
         background: INPUT_BG,
@@ -2496,13 +2496,13 @@ function TagInput({
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
             padding: "3px 9px",
             border: `1px solid ${ACCENT_RING}`,
             background: ACCENT_SOFT,
             color: ACCENT,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
           }}
         >
           <span>{t}</span>
@@ -2515,7 +2515,7 @@ function TagInput({
               color: "rgba(140, 231, 210, 0.55)",
               cursor: "pointer",
               padding: 0,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               fontFamily: MONO,
             }}
           >
@@ -2549,7 +2549,7 @@ function TagInput({
           background: "transparent",
           color: TEXT_PRIMARY,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           padding: "3px 6px",
         }}
       />
@@ -2582,7 +2582,7 @@ function FrontmatterSection({
           background: "transparent",
           color: error ? DANGER : TEXT_PRIMARY,
           fontFamily: MONO,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
           lineHeight: "20px",
           resize: "vertical",
           minHeight: 200,
@@ -2593,13 +2593,13 @@ function FrontmatterSection({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "10px 18px",
             borderTop: `1px solid ${DANGER_RING}`,
             background: DANGER_SOFT,
             color: DANGER,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.04em",
           }}
         >
@@ -2699,12 +2699,12 @@ function SaveStateCard({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           padding: "12px 16px",
           borderBottom: `1px solid rgba(140, 231, 210, 0.18)`,
           color: FG,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: 500,
           letterSpacing: "0.14em",
           textTransform: "uppercase",
@@ -2723,7 +2723,7 @@ function SaveStateCard({
             padding: "14px 16px",
             color: TEXT_FADED,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.04em",
           }}
         >
@@ -2734,21 +2734,21 @@ function SaveStateCard({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "14px 16px",
           }}
         >
           {rows.map((r) => (
             <div
               key={r.label}
-              style={{ display: "flex", alignItems: "baseline", gap: 8 }}
+              style={{ display: "flex", alignItems: "baseline", gap: "var(--space-8)" }}
             >
               <span
                 style={{
                   width: 80,
                   color: TEXT_FADED,
                   fontFamily: MONO,
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                 }}
@@ -2760,7 +2760,7 @@ function SaveStateCard({
                   flex: 1,
                   color: TEXT_PRIMARY,
                   fontFamily: MONO,
-                  fontSize: 11,
+                  fontSize: "var(--font-size-sm)",
                 }}
               >
                 {r.value}
@@ -2773,16 +2773,16 @@ function SaveStateCard({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           padding: "10px 16px",
           borderTop: `1px solid rgba(140, 231, 210, 0.14)`,
           color: TEXT_MUTED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.06em",
         }}
       >
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
           <span
             style={{
               width: 5,
@@ -2849,7 +2849,7 @@ function WikilinksDetectedCard({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              gap: "var(--space-10)",
               height: 36,
               padding: "0 16px",
               borderBottom:
@@ -2864,7 +2864,7 @@ function WikilinksDetectedCard({
                 flex: 1,
                 color: TEXT_PRIMARY,
                 fontFamily: MONO,
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -2872,7 +2872,7 @@ function WikilinksDetectedCard({
             >
               [[{w.slug}]]
             </span>
-            <span style={{ color: statusColor, fontFamily: MONO, fontSize: 10 }}>
+            <span style={{ color: statusColor, fontFamily: MONO, fontSize: "var(--font-size-xs)" }}>
               {status}
             </span>
           </div>
@@ -2899,7 +2899,7 @@ function ReadOnlyContradictionsCard({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 6,
+            gap: "var(--space-6)",
             padding: "12px 14px",
             borderLeft: `2px solid ${DANGER}`,
             background: "rgba(248, 113, 113, 0.04)",
@@ -2907,7 +2907,7 @@ function ReadOnlyContradictionsCard({
               i === contradictions.length - 1 ? "none" : `1px solid ${DIVIDER}`,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
             <span
               style={{
                 width: 5,
@@ -2920,7 +2920,7 @@ function ReadOnlyContradictionsCard({
               style={{
                 color: DANGER,
                 fontFamily: MONO,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 fontWeight: 500,
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
@@ -2934,7 +2934,7 @@ function ReadOnlyContradictionsCard({
               paddingLeft: 13,
               color: TEXT_PRIMARY,
               fontFamily: BODY,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               lineHeight: "18px",
             }}
           >
@@ -2960,12 +2960,12 @@ function DangerZoneCard() {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           padding: "12px 16px",
           borderBottom: `1px solid rgba(248, 113, 113, 0.12)`,
           color: DANGER,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: 500,
           letterSpacing: "0.14em",
           textTransform: "uppercase",
@@ -2977,17 +2977,17 @@ function DangerZoneCard() {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 10,
+          gap: "var(--space-10)",
           padding: "14px 16px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
             <span
               style={{
                 color: TEXT_PRIMARY,
                 fontFamily: BODY,
-                fontSize: 13,
+                fontSize: "var(--font-size-md)",
                 fontWeight: 500,
               }}
             >
@@ -2997,7 +2997,7 @@ function DangerZoneCard() {
               style={{
                 color: TEXT_FADED,
                 fontFamily: MONO,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
               }}
             >
               wikilinks redirect; back-compat one revision
@@ -3008,14 +3008,14 @@ function DangerZoneCard() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 6,
+              gap: "var(--space-6)",
               padding: "0 12px",
               height: 28,
               border: `1px solid rgba(255, 255, 255, 0.16)`,
               background: "transparent",
               color: TEXT_PRIMARY,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               fontWeight: 500,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
@@ -3026,13 +3026,13 @@ function DangerZoneCard() {
           </button>
         </div>
         <span style={{ height: 1, background: DIVIDER }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
             <span
               style={{
                 color: TEXT_PRIMARY,
                 fontFamily: BODY,
-                fontSize: 13,
+                fontSize: "var(--font-size-md)",
                 fontWeight: 500,
               }}
             >
@@ -3042,7 +3042,7 @@ function DangerZoneCard() {
               style={{
                 color: TEXT_FADED,
                 fontFamily: MONO,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
               }}
             >
               drops inbound edges · cannot undo
@@ -3053,14 +3053,14 @@ function DangerZoneCard() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 6,
+              gap: "var(--space-6)",
               padding: "0 12px",
               height: 28,
               border: `1px solid ${DANGER_RING}`,
               background: "transparent",
               color: DANGER,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               fontWeight: 500,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
@@ -3098,10 +3098,10 @@ function TopEyebrow({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 14,
+        gap: "var(--space-14)",
         color: TEXT_FADED,
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         fontWeight: 500,
         letterSpacing: "0.16em",
         textTransform: "uppercase",
@@ -3152,14 +3152,14 @@ function GhostLink({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 6,
+        gap: "var(--space-6)",
         padding: "0 12px",
         height: 28,
         border: `1px solid rgba(255, 255, 255, 0.16)`,
         background: "transparent",
         color: TEXT_PRIMARY,
         fontFamily: MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         fontWeight: 500,
         letterSpacing: "0.1em",
         textTransform: "uppercase",
@@ -3198,12 +3198,12 @@ function CardHeader({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: "var(--space-10)",
         padding: "14px 20px 8px 20px",
         borderBottom: `1px solid ${DIVIDER}`,
         color: FG,
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         fontWeight: 500,
         letterSpacing: "0.14em",
         textTransform: "uppercase",
@@ -3242,7 +3242,7 @@ function KvRow({
         alignItems: "center",
         minHeight: 44,
         padding: "10px 20px",
-        gap: 16,
+        gap: "var(--space-16)",
         borderBottom: last ? "none" : `1px solid ${DIVIDER}`,
       }}
     >
@@ -3252,7 +3252,7 @@ function KvRow({
           flexShrink: 0,
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.1em",
           textTransform: "uppercase",
         }}
@@ -3272,7 +3272,7 @@ function EmptyRow({ children }: { children: ReactNode }) {
         textAlign: "center",
         color: TEXT_FADED,
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         letterSpacing: "0.04em",
       }}
     >
@@ -3293,10 +3293,10 @@ function FieldEyebrow({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: "var(--space-10)",
         color: TEXT_FADED,
         fontFamily: MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         letterSpacing: "0.14em",
         textTransform: "uppercase",
       }}
@@ -3315,7 +3315,7 @@ const editInput: CSSProperties = {
   background: INPUT_BG,
   color: TEXT_PRIMARY,
   fontFamily: BODY,
-  fontSize: 13,
+  fontSize: "var(--font-size-md)",
   outline: "none",
   boxSizing: "border-box",
 };

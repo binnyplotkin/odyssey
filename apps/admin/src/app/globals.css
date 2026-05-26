@@ -15,12 +15,33 @@
 .admin-table-scroll {
   width: 100%;
   overflow-x: auto;
-  border-radius: 14px;
+  border-radius: var(--radius-card, 18px);
   scrollbar-color: var(--border) transparent;
 }
 
 .admin-table-grid {
   width: 100%;
+  background: var(--card-material, var(--panel)) !important;
+  border: 1px solid var(--border-subtle, var(--border)) !important;
+  border-radius: var(--radius-card, 18px) !important;
+  box-shadow: var(--elevation-card, 0 8px 40px var(--shadow));
+}
+
+.admin-table-header-row {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--emissive-mint) 4%, transparent), transparent),
+    var(--surface-2) !important;
+  border-bottom: 1px solid var(--border-subtle, var(--border)) !important;
+}
+
+.admin-table-data-row {
+  border-bottom: 1px solid var(--border-subtle, var(--border)) !important;
+}
+
+.admin-table-data-row:hover {
+  background:
+    radial-gradient(circle at 15% 50%, color-mix(in srgb, var(--active-teal) 7%, transparent), transparent 38%),
+    var(--surface-hover) !important;
 }
 
 .admin-table-mobile-fields {
@@ -29,6 +50,113 @@
 
 .admin-table-toolbar-primary {
   min-width: 0;
+}
+
+.odyssey-toolbar {
+  gap: 16px;
+}
+
+.odyssey-search {
+  background: var(--input-bg) !important;
+  border: 1px solid var(--input-border) !important;
+  border-radius: var(--radius-button, 12px) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 3%, transparent);
+}
+
+.odyssey-select-shell,
+.odyssey-filter-pill,
+.odyssey-icon-button,
+.odyssey-ghost-button,
+.odyssey-primary-button,
+.odyssey-danger-button,
+.odyssey-status-pill {
+  border-radius: var(--radius-button, 12px) !important;
+}
+
+.odyssey-select-shell,
+.odyssey-ghost-button {
+  background: var(--input-bg) !important;
+  border: 1px solid var(--input-border) !important;
+  color: var(--text-secondary) !important;
+}
+
+.odyssey-filter-pill {
+  border: 1px solid var(--input-border) !important;
+  background: color-mix(in srgb, var(--surface-2) 72%, transparent) !important;
+  color: var(--text-tertiary) !important;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.odyssey-filter-pill[data-active="true"],
+.odyssey-filter-pill[aria-expanded="true"] {
+  border-color: var(--border-active) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent-strong) !important;
+}
+
+.odyssey-icon-button {
+  background: var(--input-bg) !important;
+  border: 1px solid var(--input-border) !important;
+  color: var(--text-tertiary) !important;
+}
+
+.odyssey-icon-button:hover,
+.odyssey-ghost-button:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+.odyssey-primary-button {
+  background: var(--emissive-mint) !important;
+  color: #07100E !important;
+  box-shadow: 0 0 28px color-mix(in srgb, var(--emissive-mint) 16%, transparent);
+}
+
+.odyssey-danger-button {
+  background: color-mix(in srgb, var(--status-error) 8%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--status-error) 26%, transparent) !important;
+  color: var(--status-error) !important;
+}
+
+.odyssey-status-pill {
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.odyssey-dropdown {
+  background: var(--surface-material, var(--panel)) !important;
+  border: 1px solid var(--dropdown-border, var(--border)) !important;
+  border-radius: var(--radius-button, 12px) !important;
+  box-shadow: var(--elevation-panel, 0 18px 70px var(--shadow)) !important;
+  backdrop-filter: blur(18px);
+}
+
+.odyssey-dropdown-item:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+.odyssey-dropdown-item[data-active="true"] {
+  background: var(--accent-soft) !important;
+  color: var(--accent-strong) !important;
+}
+
+.odyssey-compact-card,
+.odyssey-log-panel {
+  background: var(--card-material, var(--panel)) !important;
+  border: 1px solid var(--border-subtle, var(--border)) !important;
+  border-radius: var(--radius-card, 18px) !important;
+  box-shadow: var(--elevation-card, 0 8px 40px var(--shadow));
+}
+
+.odyssey-log-panel {
+  background:
+    radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--active-teal) 8%, transparent), transparent 44%),
+    var(--card-material, var(--panel)) !important;
+}
+
+.odyssey-stream-row {
+  border-radius: 12px;
+  padding: 2px 0;
 }
 
 @media (max-width: 980px) {
@@ -86,7 +214,7 @@
 
   .admin-table-primary-cell {
     width: 100%;
-    padding-right: 34px;
+    padding-right: 82px;
   }
 
   .admin-table-mobile-fields {
@@ -121,7 +249,7 @@
     font-size: 0.75rem;
   }
 
-  .admin-table-row-menu {
+  .admin-table-row-actions {
     position: absolute;
     top: 14px;
     right: 14px;
@@ -159,4 +287,36 @@
   .session-detail-prompt-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
+}
+
+/* Used by the harness eval rail's "live" poll-status indicator. Soft pulse
+   so the dot reads as "still active" without screaming for attention. */
+@keyframes harness-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+@keyframes ingestion-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+/* Theme-aware overrides for @xyflow/react controls. Maps the library's
+   --xy-controls-* tokens to our theme tokens so the zoom/fit cluster
+   flips with light/dark. Hover uses --card-hover (subtle in both themes)
+   instead of --panel-strong (which is a dark pill surface in light mode
+   and would invert against the dark icon color). */
+.react-flow__controls {
+  --xy-controls-button-background-color: var(--panel);
+  --xy-controls-button-background-color-hover: var(--card-hover);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: 0 4px 12px var(--shadow, rgba(0, 0, 0, 0.20));
+}
+
+/* Suppress xyflow's default selected-node outline so custom node renderers
+   own the selection affordance (e.g. the accent halo on CharacterNode). */
+.react-flow__node {
+  --xy-node-boxshadow-selected: none;
 }

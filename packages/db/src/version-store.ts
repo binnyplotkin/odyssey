@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "./client";
+import { retryRead } from "./retry";
 import { versionsTable } from "./schema";
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -132,7 +133,7 @@ function neonStore(): VersionStore {
       const db = getDb();
       if (!db) return memoryStore().list();
       try {
-        const rows = await db.select().from(versionsTable);
+        const rows = await retryRead(() => db.select().from(versionsTable));
         return rows.map(normalize).sort(
           (a, b) => a.sortOrder - b.sortOrder || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         );
@@ -146,7 +147,9 @@ function neonStore(): VersionStore {
       const db = getDb();
       if (!db) return memoryStore().getById(id);
       try {
-        const [row] = await db.select().from(versionsTable).where(eq(versionsTable.id, id)).limit(1);
+        const [row] = await retryRead(() =>
+          db.select().from(versionsTable).where(eq(versionsTable.id, id)).limit(1),
+        );
         return row ? normalize(row) : null;
       } catch (e: unknown) {
         if (isMissingTable(e)) return memoryStore().getById(id);

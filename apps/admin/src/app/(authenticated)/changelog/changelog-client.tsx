@@ -53,7 +53,7 @@ function categoryBadge(category: string) {
       style={{
         display: "inline-block",
         padding: "0.15rem 0.55rem",
-        borderRadius: 9999,
+        borderRadius: "var(--radius-pill)",
         fontSize: "0.65rem",
         fontWeight: 600,
         letterSpacing: "0.06em",
@@ -197,7 +197,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
               onClick={() => setFilterCategory(cat)}
               style={{
                 padding: "0.35rem 0.75rem",
-                borderRadius: 9999,
+                borderRadius: "var(--radius-pill)",
                 fontSize: "0.75rem",
                 fontWeight: 600,
                 border: "1px solid",
@@ -228,7 +228,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
             style={{
               marginLeft: "auto",
               padding: "0.35rem 0.6rem",
-              borderRadius: 8,
+              borderRadius: "var(--radius-md)",
               fontSize: "0.75rem",
               background: "var(--input-bg)",
               color: "var(--text-primary)",
@@ -290,7 +290,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                   onClick={() => setExpandedEntry(expanded ? null : entry.id)}
                   style={{
                     padding: "0.75rem 1rem",
-                    borderRadius: 10,
+                    borderRadius: "var(--radius-lg)",
                     background: expanded ? "var(--card-hover)" : "var(--card)",
                     border: "1px solid",
                     borderColor: expanded ? "var(--card-border)" : "var(--divider)",

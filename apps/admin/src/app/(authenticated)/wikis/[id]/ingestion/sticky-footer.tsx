@@ -4,24 +4,24 @@ import { type CSSProperties, type ReactNode } from "react";
 import { type ModelId } from "@odyssey/wiki-ingest";
 
 /**
- * Sticky footer — anchors the ingestion page, carries an abbreviated pipeline
- * summary + adaptive primary action on the right.
+ * Sticky footer — anchors the ingestion page, carries ingestion pipeline,
+ * compact run telemetry, and adaptive primary action on the right.
  *
- * Same anatomy in every state: [status] · [stat group] · [pipeline chips
- * with inline edit-prompt icon] · [actions]. State governs colour, chrome
- * accents, and what the stat group + actions contain. See Paper artboard
+ * Same anatomy in every state: [prompt] · [model] · [embedding] ·
+ * [stat group] · [actions]. State governs colour, chrome accents, and what
+ * the stat group + actions contain. See Paper artboard
  * "Ingestion · Sticky Footer — Five States" for the visual contract.
  *
  * Self-contained: depends on the admin theme CSS variables so the footer
  * stays legible in both dark and light mode.
  */
 
-const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
-const FONT_HEAD = "'Inter', system-ui, sans-serif";
+const FONT_MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
+const FONT_HEAD = "var(--font-body, Inter), system-ui, sans-serif";
 
 const ACCENT = "var(--accent-strong)";
 const ACCENT_SOFT = "var(--accent-soft)";
-const ACCENT_LINE = "color-mix(in srgb, var(--accent-strong) 30%, transparent)";
+const ACCENT_LINE = "var(--accent-border)";
 const ACCENT_BORDER_TOP_READY =
   "color-mix(in srgb, var(--accent-strong) 35%, transparent)";
 const ACCENT_BORDER_TOP_RUN =
@@ -30,15 +30,44 @@ const DANGER = "var(--danger)";
 const DANGER_FILL = "color-mix(in srgb, var(--danger) 12%, transparent)";
 const ON_ACCENT = "var(--background)";
 
-const PROMPT_DOT = "#8CE7D2";
+const PROMPT_DOT = "#8FD1CB";
 const MODEL_DOT = "#A48CE7";
 const EMBED_DOT = "#E7CB8C";
-const PROMPT_DOT_FADED = "color-mix(in srgb, #8CE7D2 50%, transparent)";
+const PROMPT_DOT_FADED = "color-mix(in srgb, #8FD1CB 50%, transparent)";
 const MODEL_DOT_FADED = "color-mix(in srgb, #A48CE7 50%, transparent)";
 const EMBED_DOT_FADED = "color-mix(in srgb, #E7CB8C 50%, transparent)";
 
-const FOOTER_BG = "var(--background)";
-const ROW_HEIGHT = 64;
+const ROW_HEIGHT = 50;
+const TOP_ACCENT_BASE: CSSProperties = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: 1,
+  pointerEvents: "none",
+};
+
+const PIPELINE_SEGMENT_CSS = `
+  .ingestion-pipeline-segment[data-interactive="true"] {
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .ingestion-pipeline-segment[data-interactive="true"]:hover {
+    background: var(--sidebar-hover, color-mix(in srgb, var(--text-primary) 4%, transparent));
+  }
+
+  .ingestion-pipeline-segment[data-interactive="true"]:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--accent-border);
+  }
+
+  .ingestion-pipeline-segment[data-interactive="true"]:hover .ingestion-pipeline-edit {
+    background: var(--accent-soft);
+    border-color: var(--accent-border);
+    color: var(--accent-strong);
+  }
+`;
 
 export type StickyFooterState =
   | "idle"
@@ -57,12 +86,9 @@ export type StickyFooterProps = {
   model: ModelId;
   embeddings?: string;
 
-  /* Destination wiki, surfaced in the ready/idle status pill. */
-  wikiTitle: string;
-
   /* Projected (idle / ready). */
   projectedCost?: number;
-  projectedDurationSec?: number;
+  projectedTokens?: number;
   projectedPages?: number;
 
   /* Live (running). */
@@ -103,11 +129,15 @@ export function StickyFooter(props: StickyFooterProps) {
         position: "sticky",
         bottom: 0,
         zIndex: 30,
-        background: FOOTER_BG,
+        height: ROW_HEIGHT,
+        background: "var(--header-bg, var(--sidebar))",
+        backdropFilter: "blur(var(--header-blur, 18px))",
+        boxShadow: "0 -18px 46px rgba(0, 0, 0, 0.22)",
         // Footer is a sibling of the grid inside <main>; it spans the full
         // content-area width naturally (left of sidebar, right to edge).
       }}
     >
+      <style>{PIPELINE_SEGMENT_CSS}</style>
       <TopAccent state={state} progressFraction={props.progressFraction} />
 
       <div
@@ -115,12 +145,10 @@ export function StickyFooter(props: StickyFooterProps) {
           display: "flex",
           alignItems: "stretch",
           height: ROW_HEIGHT,
-          borderBottom: "1px solid var(--divider)",
         }}
       >
-        <StatusCell {...props} />
-        <StatGroup {...props} />
         <PipelineChips {...props} />
+        <StatGroup {...props} />
         <ActionsCell {...props} />
       </div>
     </div>
@@ -137,20 +165,28 @@ function TopAccent({
   progressFraction?: number;
 }) {
   if (state === "idle") {
-    return <div style={{ height: 1, background: "var(--divider)" }} />;
+    return (
+      <div
+        style={{ ...TOP_ACCENT_BASE, height: 1, background: "var(--divider)" }}
+      />
+    );
   }
   if (state === "ready") {
-    return <div style={{ height: 1, background: ACCENT_BORDER_TOP_READY }} />;
+    return (
+      <div
+        style={{ ...TOP_ACCENT_BASE, height: 1, background: ACCENT_BORDER_TOP_READY }}
+      />
+    );
   }
   if (state === "running") {
     const fraction = Math.max(0, Math.min(1, progressFraction ?? 0));
     return (
       <div
         style={{
+          ...TOP_ACCENT_BASE,
           height: 3,
           background: "var(--accent-soft)",
           borderTop: `1px solid ${ACCENT_BORDER_TOP_RUN}`,
-          position: "relative",
         }}
       >
         <span
@@ -173,6 +209,7 @@ function TopAccent({
     return (
       <div
         style={{
+          ...TOP_ACCENT_BASE,
           height: 3,
           background: ACCENT,
           borderTop: `1px solid ${ACCENT_BORDER_TOP_READY}`,
@@ -184,10 +221,10 @@ function TopAccent({
   return (
     <div
       style={{
+        ...TOP_ACCENT_BASE,
         height: 3,
         background: "color-mix(in srgb, var(--danger) 10%, transparent)",
         borderTop: `1px solid rgba(248, 113, 113, 0.55)`,
-        position: "relative",
       }}
     >
       <span
@@ -206,64 +243,6 @@ function TopAccent({
   );
 }
 
-/* ── Status cell ──────────────────────────────────────────────── */
-
-function StatusCell(props: StickyFooterProps) {
-  const {
-    state,
-    wikiTitle,
-    runningOpNum,
-    runningOpTotal,
-    finalDurationSec,
-    finalCost,
-    failedAtOpNum,
-    failedAtOpTotal,
-  } = props;
-
-  if (state === "idle") {
-    return (
-      <CellShell color="var(--text-tertiary)">
-        <Dot color="var(--text-placeholder)" />
-        Waiting for source + title
-      </CellShell>
-    );
-  }
-  if (state === "ready") {
-    return (
-      <CellShell color={ACCENT}>
-        <Dot color={ACCENT} glow />
-        Ready · writes to {wikiTitle}
-      </CellShell>
-    );
-  }
-  if (state === "running") {
-    const isPlanning = !runningOpTotal;
-    return (
-      <CellShell color={ACCENT}>
-        <Dot color={ACCENT} glow />
-        {isPlanning
-          ? "Running · planning…"
-          : `Running · op ${runningOpNum ?? 1} of ${runningOpTotal ?? 1}`}
-      </CellShell>
-    );
-  }
-  if (state === "complete") {
-    return (
-      <CellShell color={ACCENT}>
-        <CheckIcon color={ACCENT} />
-        Complete · {fmtSec(finalDurationSec)} · {fmtCost(finalCost)}
-      </CellShell>
-    );
-  }
-  // failed
-  return (
-    <CellShell color={DANGER}>
-      <ErrorIcon color={DANGER} />
-      Failed · op {failedAtOpNum ?? 1} of {failedAtOpTotal ?? 1}
-    </CellShell>
-  );
-}
-
 /* ── Stat group (middle, varies by state) ─────────────────────── */
 
 function StatGroup(props: StickyFooterProps) {
@@ -274,8 +253,8 @@ function StatGroup(props: StickyFooterProps) {
   if (state === "ready") {
     return (
       <CellGroup>
+        <StatCell label="Tokens" value={fmtTokens(props.projectedTokens)} />
         <StatCell label="Cost" value={fmtCost(props.projectedCost)} />
-        <StatCell label="Time" value={`~${props.projectedDurationSec ?? 0}s`} />
         <StatCell
           label="+Pages"
           value={`+${props.projectedPages ?? 0}`}
@@ -312,6 +291,7 @@ function StatGroup(props: StickyFooterProps) {
         display: "inline-flex",
         alignItems: "center",
         padding: "0 22px",
+        borderLeft: "1px solid var(--divider)",
         borderRight: "1px solid var(--divider)",
         minWidth: 0,
       }}
@@ -320,14 +300,14 @@ function StatGroup(props: StickyFooterProps) {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 2,
+          gap: "var(--space-2)",
           minWidth: 0,
         }}
       >
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 9,
+            fontSize: "var(--font-size-2xs)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             color: DANGER,
@@ -338,7 +318,7 @@ function StatGroup(props: StickyFooterProps) {
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             color: "var(--text-primary)",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -359,7 +339,9 @@ function CellGroup({ children }: { children: ReactNode }) {
       style={{
         display: "inline-flex",
         alignItems: "stretch",
+        borderLeft: "1px solid var(--divider)",
         borderRight: "1px solid var(--divider)",
+        flexShrink: 0,
       }}
     >
       {children}
@@ -384,7 +366,7 @@ function StatCell({
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        gap: 1,
+        gap: "var(--space-1)",
         padding: "0 18px",
         height: "100%",
       }}
@@ -392,7 +374,7 @@ function StatCell({
       <span
         style={{
           fontFamily: FONT_MONO,
-          fontSize: 9,
+          fontSize: "var(--font-size-2xs)",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
           color: "var(--text-tertiary)",
@@ -414,7 +396,7 @@ function StatCell({
   );
 }
 
-/* ── Pipeline chips + edit icon ──────────────────────────────── */
+/* ── Pipeline segments ─────────────────────────────────────────── */
 
 function PipelineChips(props: StickyFooterProps) {
   const {
@@ -429,19 +411,15 @@ function PipelineChips(props: StickyFooterProps) {
   const muted = state === "idle";
   const dimmed =
     state === "running" || state === "complete" || state === "failed";
+  const promptLocked = dimmed;
+  const promptEditable = !promptLocked && Boolean(onEditPrompt);
 
-  const chipColor = muted
+  const valueColor = muted
     ? "var(--text-tertiary)"
     : dimmed
       ? "var(--text-secondary)"
       : "var(--text-primary)";
-
-  const dividerColor = muted
-    ? "var(--text-placeholder)"
-    : "var(--text-tertiary)";
-  const stackLabelColor = muted
-    ? "var(--text-placeholder)"
-    : "var(--text-tertiary)";
+  const labelColor = muted ? "var(--text-placeholder)" : "var(--text-tertiary)";
 
   const promptDotColor = muted ? PROMPT_DOT_FADED : PROMPT_DOT;
   const modelDotColor = muted ? MODEL_DOT_FADED : MODEL_DOT;
@@ -457,88 +435,199 @@ function PipelineChips(props: StickyFooterProps) {
       style={{
         flex: 1,
         display: "flex",
-        alignItems: "center",
+        alignItems: "stretch",
         gap: 0,
-        padding: "0 22px",
         minWidth: 0,
         overflow: "hidden",
       }}
     >
-      <span
-        style={{
-          fontFamily: FONT_MONO,
-          fontSize: 10,
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          color: stackLabelColor,
-          marginRight: 14,
-        }}
-      >
-        Stack
-      </span>
-      <Chip color={chipColor} dotColor={promptDotColor} label={promptText} />
-      {state !== "running" && onEditPrompt && (
-        <EditPromptButton onClick={onEditPrompt} muted={muted} />
-      )}
-      <Divider color={dividerColor} />
-      <Chip color={chipColor} dotColor={modelDotColor} label={model} />
-      <Divider color={dividerColor} />
-      <Chip
-        color={chipColor}
+      <PipelineSegment
+        label="Prompt"
+        value={promptText}
+        valueColor={valueColor}
+        labelColor={labelColor}
+        dotColor={promptDotColor}
+        flex="1.35 1 320px"
+        onClick={promptEditable ? onEditPrompt : undefined}
+        action={promptEditable ? <EditPromptIcon muted={muted} /> : undefined}
+        locked={promptLocked}
+      />
+      <PipelineSegment
+        label="AI model"
+        value={model}
+        valueColor={valueColor}
+        labelColor={labelColor}
+        dotColor={modelDotColor}
+        flex="0.9 1 250px"
+        locked
+      />
+      <PipelineSegment
+        label="Embedding"
+        value={embeddings ?? "text-embedding-3-large"}
+        valueColor={valueColor}
+        labelColor={labelColor}
         dotColor={embedDotColor}
-        label={embeddings ?? "text-embedding-3-large"}
+        flex="1 1 280px"
+        locked
+        isLast
       />
     </div>
   );
 }
 
-function Chip({
-  color,
-  dotColor,
+function PipelineSegment({
   label,
+  value,
+  valueColor,
+  labelColor,
+  dotColor,
+  flex,
+  action,
+  onClick,
+  locked = false,
+  isLast = false,
 }: {
-  color: string;
+  label: string;
+  value: ReactNode;
+  valueColor: string;
+  labelColor: string;
   dotColor: string;
-  label: ReactNode;
+  flex: string;
+  action?: ReactNode;
+  onClick?: () => void;
+  locked?: boolean;
+  isLast?: boolean;
 }) {
+  const content = (
+    <>
+      <div
+        style={{
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-4)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: FONT_MONO,
+            fontSize: "var(--font-size-2xs)",
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: labelColor,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {label}
+        </span>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "var(--space-8)",
+            minWidth: 0,
+            fontFamily: FONT_MONO,
+            fontSize: "var(--font-size-base)",
+            color: valueColor,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <Dot color={dotColor} small />
+          <span
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              minWidth: 0,
+            }}
+          >
+            {value}
+          </span>
+        </span>
+      </div>
+      {action}
+      {locked && <LockedIndicator />}
+    </>
+  );
+
+  const segmentStyle: CSSProperties = {
+    flex,
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "var(--space-12)",
+    padding: "0 18px",
+    borderRight: isLast
+      ? "none"
+      : "1px solid var(--header-border, var(--divider))",
+    transition: "background 140ms ease, box-shadow 140ms ease",
+  };
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className="ingestion-pipeline-segment"
+        data-interactive="true"
+        onClick={onClick}
+        aria-label={`Edit ${label.toLowerCase()}`}
+        title={`Edit ${label.toLowerCase()}`}
+        style={{
+          ...segmentStyle,
+          appearance: "none",
+          borderTop: 0,
+          borderBottom: 0,
+          borderLeft: 0,
+          color: "inherit",
+          font: "inherit",
+          textAlign: "left",
+        }}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className="ingestion-pipeline-segment"
+      data-interactive="false"
+      style={{
+        ...segmentStyle,
+      }}
+    >
+      {content}
+    </div>
+  );
+}
+
+function LockedIndicator() {
   return (
     <span
+      title="Locked"
+      aria-label="Locked"
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
-        fontFamily: FONT_MONO,
-        fontSize: 12,
-        color,
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
+        justifyContent: "center",
+        width: 22,
+        height: 22,
+        color: "var(--text-placeholder)",
+        flexShrink: 0,
+        opacity: 0.82,
       }}
     >
-      <Dot color={dotColor} small />
-      {label}
+      <LockIcon />
     </span>
   );
 }
 
-function Divider({ color }: { color: string }) {
-  return <span style={{ color, margin: "0 12px", flexShrink: 0 }}>/</span>;
-}
-
-function EditPromptButton({
-  onClick,
-  muted,
-}: {
-  onClick: () => void;
-  muted: boolean;
-}) {
+function EditPromptIcon({ muted }: { muted: boolean }) {
   const iconColor = muted ? "rgba(140, 231, 210, 0.55)" : ACCENT;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Edit prompt"
-      title="Edit prompt"
+    <span
+      className="ingestion-pipeline-edit"
+      aria-hidden
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -546,16 +635,15 @@ function EditPromptButton({
         width: 24,
         height: 24,
         padding: 0,
-        marginLeft: 8,
         background: muted ? "transparent" : ACCENT_SOFT,
         border: `1px solid ${muted ? "rgba(140, 231, 210, 0.18)" : ACCENT_LINE}`,
         color: iconColor,
-        cursor: "pointer",
         flexShrink: 0,
+        transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
       }}
     >
       <PencilIcon color={iconColor} />
-    </button>
+    </span>
   );
 }
 
@@ -569,7 +657,7 @@ function ActionsCell(props: StickyFooterProps) {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 10,
+        gap: "var(--space-10)",
         padding: "0 22px",
         borderLeft: "1px solid var(--divider)",
         flexShrink: 0,
@@ -663,14 +751,15 @@ function PrimaryButton({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
+        gap: "var(--space-8)",
         padding: "0 18px",
         height: 36,
         background: disabled ? "rgba(140, 231, 210, 0.10)" : ACCENT,
         border: `1px solid ${disabled ? "rgba(140, 231, 210, 0.20)" : ACCENT}`,
+        borderRadius: "var(--radius-md)",
         color: disabled ? "var(--text-placeholder)" : ON_ACCENT,
         fontFamily: FONT_HEAD,
-        fontSize: 13,
+        fontSize: "var(--font-size-md)",
         fontWeight: 600,
         cursor: disabled ? "not-allowed" : "pointer",
         boxShadow: disabled ? undefined : "0 0 14px rgba(140, 231, 210, 0.20)",
@@ -700,9 +789,10 @@ function GhostButton({
         height: 36,
         background: "transparent",
         border: "1px solid var(--border)",
+        borderRadius: "var(--radius-md)",
         color: "var(--text-secondary)",
         fontFamily: FONT_MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         letterSpacing: "0.12em",
         textTransform: "uppercase",
         cursor: "pointer",
@@ -734,9 +824,10 @@ function DangerOutlineButton({
         height: 36,
         background: "transparent",
         border: `1px solid rgba(248, 113, 113, 0.40)`,
+        borderRadius: "var(--radius-md)",
         color: DANGER,
         fontFamily: FONT_MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         letterSpacing: "0.12em",
         textTransform: "uppercase",
         cursor: "pointer",
@@ -764,14 +855,15 @@ function DangerSolidButton({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
+        gap: "var(--space-8)",
         padding: "0 18px",
         height: 36,
         background: DANGER_FILL,
         border: `1px solid ${DANGER}`,
+        borderRadius: "var(--radius-md)",
         color: DANGER,
         fontFamily: FONT_HEAD,
-        fontSize: 13,
+        fontSize: "var(--font-size-md)",
         fontWeight: 600,
         cursor: "pointer",
       }}
@@ -783,34 +875,6 @@ function DangerSolidButton({
 }
 
 /* ── Atoms ────────────────────────────────────────────────────── */
-
-function CellShell({
-  color,
-  children,
-}: {
-  color: string;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "0 22px",
-        borderRight: "1px solid var(--divider)",
-        fontFamily: FONT_MONO,
-        fontSize: 11,
-        letterSpacing: "0.14em",
-        textTransform: "uppercase",
-        color,
-        flexShrink: 0,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 function Dot({
   color,
@@ -829,36 +893,12 @@ function Dot({
         display: "inline-block",
         width: size,
         height: size,
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         background: color,
         boxShadow: glow ? `0 0 8px ${color}` : undefined,
         flexShrink: 0,
       }}
     />
-  );
-}
-
-function CheckIcon({ color }: { color: string }) {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
-      <path
-        d="M2 5l2 2 4-5"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ErrorIcon({ color }: { color: string }) {
-  return (
-    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden>
-      <circle cx="5.5" cy="5.5" r="4.5" stroke={color} strokeWidth="1" />
-      <path d="M5.5 3v3" stroke={color} strokeWidth="1" strokeLinecap="round" />
-      <circle cx="5.5" cy="7.8" r="0.4" fill={color} />
-    </svg>
   );
 }
 
@@ -872,6 +912,28 @@ function PencilIcon({ color }: { color: string }) {
         strokeLinejoin="round"
       />
       <path d="M6.5 2.5l2 2" stroke={color} strokeWidth="1" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden>
+      <rect
+        x="2"
+        y="5"
+        width="7"
+        height="4.5"
+        rx="1"
+        stroke="currentColor"
+        strokeWidth="1"
+      />
+      <path
+        d="M3.5 5V3.8a2 2 0 014 0V5"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -911,6 +973,13 @@ function fmtCost(value: number | undefined): string {
   if (value < 0.01) return `$${value.toFixed(4)}`;
   if (value < 1) return `$${value.toFixed(3)}`;
   return `$${value.toFixed(2)}`;
+}
+
+function fmtTokens(value: number | undefined): string {
+  const n = Math.max(0, value ?? 0);
+  if (n < 1000) return `${n}`;
+  if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
+  return `${Math.round(n / 1000)}k`;
 }
 
 function fmtSec(value: number | undefined): string {

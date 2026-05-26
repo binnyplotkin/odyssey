@@ -37,7 +37,7 @@ const BORDER = "rgba(255, 255, 255, 0.08)";
 const DIVIDER = "rgba(255, 255, 255, 0.06)";
 const INPUT_BG = "rgba(255, 255, 255, 0.02)";
 
-const ACCENT = "#8CE7D2";
+const ACCENT = "#8FD1CB";
 const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
 const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
 
@@ -171,14 +171,14 @@ export function WikiDetail({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 32,
+        gap: "var(--space-32)",
         padding: "32px 32px 80px",
       }}
     >
       <TopEyebrow slug={wiki.slug} title={localTitle} />
 
       {/* Hero band */}
-      <div style={{ display: "flex", gap: 32, alignItems: "stretch" }}>
+      <div style={{ display: "flex", gap: "var(--space-32)", alignItems: "stretch" }}>
         <FingerprintTile iconData={iconData} />
         <div
           style={{
@@ -186,17 +186,17 @@ export function WikiDetail({
             minWidth: 0,
             display: "flex",
             flexDirection: "column",
-            gap: 14,
+            gap: "var(--space-14)",
           }}
         >
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 12,
+              gap: "var(--space-12)",
               color: TEXT_GHOST,
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               letterSpacing: "0.06em",
             }}
           >
@@ -233,7 +233,7 @@ export function WikiDetail({
       />
 
       {/* Eras + Bound Characters */}
-      <div style={{ display: "flex", gap: 32, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", gap: "var(--space-32)", alignItems: "flex-start" }}>
         <ErasCard eras={wiki.eras} />
         <BoundCharactersCard bindings={boundCharacters} />
       </div>
@@ -252,10 +252,10 @@ function TopEyebrow({ slug: _slug, title }: { slug: string; title: string }) {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 14,
+        gap: "var(--space-14)",
         color: TEXT_FADED,
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         fontWeight: 500,
         letterSpacing: "0.16em",
         textTransform: "uppercase",
@@ -319,12 +319,12 @@ function FingerprintTile({ iconData }: { iconData: KnowledgeGraphData }) {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
           padding: "8px 12px",
           borderTop: `1px solid ${DIVIDER}`,
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 9,
+          fontSize: "var(--font-size-2xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
         }}
@@ -357,15 +357,15 @@ function ErasRow({ eras }: { eras: WikiRecord["eras"] }) {
         display: "flex",
         alignItems: "center",
         flexWrap: "wrap",
-        gap: 8,
-        paddingTop: 4,
+        gap: "var(--space-8)",
+        paddingTop: "var(--space-4)",
       }}
     >
       <span
         style={{
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
         }}
@@ -386,12 +386,12 @@ function ErasRow({ eras }: { eras: WikiRecord["eras"] }) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
             padding: "4px 10px",
             border: `1px solid ${BORDER}`,
             color: TEXT_PRIMARY,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
           }}
         >
           <span
@@ -475,7 +475,7 @@ function StatRow({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: "var(--space-4)",
         padding: "18px 20px",
         borderBottom: last ? "none" : `1px solid ${DIVIDER}`,
       }}
@@ -484,10 +484,10 @@ function StatRow({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
         }}
@@ -496,7 +496,7 @@ function StatRow({
         <span style={{ flex: 1, height: 1, background: DIVIDER }} />
         <span style={{ color: TEXT_GHOST }}>{meta}</span>
       </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-8)" }}>
         <span
           style={{
             color: FG,
@@ -508,7 +508,7 @@ function StatRow({
         >
           {value.toLocaleString()}
         </span>
-        <span style={{ color: TEXT_GHOST, fontFamily: MONO, fontSize: 11 }}>
+        <span style={{ color: TEXT_GHOST, fontFamily: MONO, fontSize: "var(--font-size-sm)" }}>
           {caption}
         </span>
       </div>
@@ -594,7 +594,7 @@ function PromptBlock({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: "var(--space-12)",
           padding: "14px 18px",
         }}
       >
@@ -602,7 +602,7 @@ function PromptBlock({
           style={{
             color: TEXT_FADED,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.14em",
             textTransform: "uppercase",
           }}
@@ -614,7 +614,7 @@ function PromptBlock({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
               padding: "2px 8px",
               border: `1px solid ${ACCENT_RING}`,
               background: ACCENT_SOFT,
@@ -632,7 +632,7 @@ function PromptBlock({
               style={{
                 color: ACCENT,
                 fontFamily: MONO,
-                fontSize: 9,
+                fontSize: "var(--font-size-2xs)",
                 letterSpacing: "0.12em",
                 textTransform: "uppercase",
               }}
@@ -645,7 +645,7 @@ function PromptBlock({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
               padding: "2px 8px",
               border: `1px solid ${BORDER}`,
             }}
@@ -662,7 +662,7 @@ function PromptBlock({
               style={{
                 color: TEXT_MUTED,
                 fontFamily: MONO,
-                fontSize: 9,
+                fontSize: "var(--font-size-2xs)",
                 letterSpacing: "0.12em",
                 textTransform: "uppercase",
               }}
@@ -677,7 +677,7 @@ function PromptBlock({
             style={{
               color: TEXT_GHOST,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
             }}
           >
             {tokens} tok · {sections} section{sections === 1 ? "" : "s"}
@@ -689,7 +689,7 @@ function PromptBlock({
           margin: 0,
           padding: "4px 18px 18px 18px",
           fontFamily: MONO,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
           lineHeight: "20px",
           color: hasPrompt ? TEXT_PRIMARY : TEXT_FADED,
           fontStyle: hasPrompt ? "normal" : "italic",
@@ -706,12 +706,12 @@ function PromptBlock({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: "var(--space-12)",
           padding: "12px 18px",
           borderTop: `1px solid ${DIVIDER}`,
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.06em",
         }}
       >
@@ -721,7 +721,7 @@ function PromptBlock({
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 6,
+                gap: "var(--space-6)",
                 color: TEXT_SECONDARY,
               }}
             >
@@ -747,12 +747,12 @@ function PromptBlock({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
             padding: "6px 14px",
             border: `1px solid rgba(255, 255, 255, 0.16)`,
             color: TEXT_PRIMARY,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 500,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -781,7 +781,7 @@ function RuntimeBlock() {
           padding: "14px 18px 8px 18px",
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
         }}
@@ -795,7 +795,7 @@ function RuntimeBlock() {
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
             }}
           >
             <span
@@ -841,12 +841,12 @@ function RuntimeRow({
           flex: 1,
           color: TEXT_SECONDARY,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
         }}
       >
         {label}
       </span>
-      <span style={{ color: FG, fontFamily: MONO, fontSize: 12 }}>{value}</span>
+      <span style={{ color: FG, fontFamily: MONO, fontSize: "var(--font-size-base)" }}>{value}</span>
     </div>
   );
 }
@@ -900,7 +900,7 @@ function EraRow({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         height: 48,
         padding: "0 18px 0 16px",
         borderLeft: `2px solid ${active ? ACCENT : "transparent"}`,
@@ -914,7 +914,7 @@ function EraRow({
           flexShrink: 0,
           color: active ? ACCENT : TEXT_GHOST,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: active ? 500 : 400,
         }}
       >
@@ -924,7 +924,7 @@ function EraRow({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 2,
+          gap: "var(--space-2)",
           flex: 1,
           minWidth: 0,
         }}
@@ -933,7 +933,7 @@ function EraRow({
           style={{
             color: active ? FG : TEXT_SECONDARY,
             fontFamily: BODY,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             fontWeight: active ? 500 : 400,
           }}
         >
@@ -943,7 +943,7 @@ function EraRow({
           style={{
             color: TEXT_FADED,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.04em",
           }}
         >
@@ -1021,7 +1021,7 @@ function CharacterRow({
           : "rgba(255, 255, 255, 0.06)",
     color: style.chipText,
     fontFamily: MONO,
-    fontSize: 12,
+    fontSize: "var(--font-size-base)",
     fontWeight: 600,
   };
 
@@ -1030,7 +1030,7 @@ function CharacterRow({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         height: 56,
         padding: "0 16px 0 14px",
         borderLeft: `2px solid ${active ? ACCENT : "transparent"}`,
@@ -1043,7 +1043,7 @@ function CharacterRow({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 2,
+          gap: "var(--space-2)",
           flex: 1,
           minWidth: 0,
         }}
@@ -1052,7 +1052,7 @@ function CharacterRow({
           style={{
             color: active ? FG : TEXT_PRIMARY,
             fontFamily: BODY,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             fontWeight: active ? 500 : 400,
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -1065,7 +1065,7 @@ function CharacterRow({
           style={{
             color: TEXT_FADED,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.04em",
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -1081,7 +1081,7 @@ function CharacterRow({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
           padding: "4px 10px",
           border: `1px solid ${style.chipBorder}`,
           background: style.chipBg,
@@ -1100,7 +1100,7 @@ function CharacterRow({
           style={{
             color: style.chipText,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 500,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -1139,7 +1139,7 @@ function RecentIngestionCard({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: "var(--space-12)",
           padding: "14px 18px",
           borderBottom: `1px solid ${DIVIDER}`,
         }}
@@ -1157,7 +1157,7 @@ function RecentIngestionCard({
           style={{
             color: FG,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             fontWeight: 500,
             letterSpacing: "0.14em",
             textTransform: "uppercase",
@@ -1170,7 +1170,7 @@ function RecentIngestionCard({
           style={{
             color: TEXT_FADED,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.06em",
           }}
         >
@@ -1183,12 +1183,12 @@ function RecentIngestionCard({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
             padding: "6px 12px",
             border: `1px solid rgba(255, 255, 255, 0.16)`,
             color: TEXT_PRIMARY,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 500,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -1202,12 +1202,12 @@ function RecentIngestionCard({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--space-6)",
             padding: "6px 12px",
             background: ACCENT,
             color: "#050505",
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 600,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -1243,7 +1243,7 @@ function RunTableHead() {
   const headStyle: CSSProperties = {
     color: TEXT_FADED,
     fontFamily: MONO,
-    fontSize: 10,
+    fontSize: "var(--font-size-xs)",
     fontWeight: 500,
     letterSpacing: "0.14em",
     textTransform: "uppercase",
@@ -1253,7 +1253,7 @@ function RunTableHead() {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         padding: "8px 18px",
         borderBottom: `1px solid ${DIVIDER}`,
       }}
@@ -1298,7 +1298,7 @@ function RunRow({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         minHeight: 56,
         padding: "8px 18px",
         borderBottom: last ? "none" : `1px solid ${DIVIDER}`,
@@ -1311,7 +1311,7 @@ function RunRow({
           width: 30,
           color: TEXT_GHOST,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
         }}
       >
         {pad2(index)}
@@ -1321,7 +1321,7 @@ function RunRow({
           flex: 1.4,
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: "var(--space-10)",
           minWidth: 0,
         }}
       >
@@ -1338,7 +1338,7 @@ function RunRow({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 2,
+            gap: "var(--space-2)",
             minWidth: 0,
           }}
         >
@@ -1346,7 +1346,7 @@ function RunRow({
             style={{
               color: statusColor,
               fontFamily: MONO,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               letterSpacing: "0.06em",
             }}
           >
@@ -1356,7 +1356,7 @@ function RunRow({
             style={{
               color: TEXT_FADED,
               fontFamily: MONO,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
             }}
           >
             {relative(run.finishedAt ?? run.startedAt)}
@@ -1368,7 +1368,7 @@ function RunRow({
           flex: 1.2,
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: "var(--space-8)",
           minWidth: 0,
         }}
       >
@@ -1385,7 +1385,7 @@ function RunRow({
           style={{
             color: TEXT_SECONDARY,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -1399,9 +1399,9 @@ function RunRow({
           width: 200,
           display: "flex",
           flexDirection: "column",
-          gap: 2,
+          gap: "var(--space-2)",
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           color: failed ? DANGER : TEXT_SECONDARY,
         }}
       >
@@ -1416,7 +1416,7 @@ function RunRow({
             >
               {run.errorMessage}
             </span>
-            <span style={{ color: "rgba(248,113,113,0.55)", fontSize: 10 }}>
+            <span style={{ color: "rgba(248,113,113,0.55)", fontSize: "var(--font-size-xs)" }}>
               review run
             </span>
           </>
@@ -1428,7 +1428,7 @@ function RunRow({
               <span style={{ color: ACCENT }}>+{run.edgesAdded}</span> edge
               {run.edgesAdded === 1 ? "" : "s"}
             </span>
-            <span style={{ color: TEXT_FADED, fontSize: 10 }}>
+            <span style={{ color: TEXT_FADED, fontSize: "var(--font-size-xs)" }}>
               {run.pagesUpdated > 0
                 ? `${run.pagesUpdated} updated`
                 : "no updates"}
@@ -1441,7 +1441,7 @@ function RunRow({
           width: 100,
           color: TEXT_SECONDARY,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
         }}
       >
         {runDuration(run.startedAt, run.finishedAt)}
@@ -1452,7 +1452,7 @@ function RunRow({
           textAlign: "right",
           color: FG,
           fontFamily: MONO,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
         }}
       >
         {formatTokens(run.tokensUsed)}
@@ -1490,7 +1490,7 @@ function CardHeader({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         padding: "14px 18px",
         borderBottom: `1px solid ${DIVIDER}`,
       }}
@@ -1499,7 +1499,7 @@ function CardHeader({
         style={{
           color: FG,
           fontFamily: MONO,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: 500,
           letterSpacing: "0.14em",
           textTransform: "uppercase",
@@ -1513,7 +1513,7 @@ function CardHeader({
           style={{
             color: TEXT_GHOST,
             fontFamily: MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.06em",
           }}
         >
@@ -1532,7 +1532,7 @@ function EmptyState({ children }: { children: ReactNode }) {
         textAlign: "center",
         color: TEXT_FADED,
         fontFamily: MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         letterSpacing: "0.04em",
       }}
     >
@@ -1547,7 +1547,7 @@ function AddRow({ label, hotkey }: { label: string; hotkey: string }) {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         height: 44,
         padding: "0 16px 0 14px",
         borderTop: `1px dashed ${DIVIDER}`,
@@ -1560,7 +1560,7 @@ function AddRow({ label, hotkey }: { label: string; hotkey: string }) {
           flexShrink: 0,
           color: TEXT_FADED,
           fontFamily: MONO,
-          fontSize: 14,
+          fontSize: "var(--font-size-lg)",
           textAlign: "left",
         }}
       >
@@ -1571,7 +1571,7 @@ function AddRow({ label, hotkey }: { label: string; hotkey: string }) {
           flex: 1,
           color: TEXT_MUTED,
           fontFamily: BODY,
-          fontSize: 13,
+          fontSize: "var(--font-size-md)",
           fontStyle: "italic",
         }}
       >
@@ -1581,7 +1581,7 @@ function AddRow({ label, hotkey }: { label: string; hotkey: string }) {
         style={{
           color: TEXT_GHOST,
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.06em",
         }}
       >
@@ -1645,7 +1645,7 @@ function EditableTitle({
   }, [draft]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
       <textarea
         ref={inputRef}
         value={draft}
@@ -1692,7 +1692,7 @@ function EditableTitle({
           style={{
             color: DANGER,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.04em",
           }}
         >
@@ -1755,7 +1755,7 @@ function EditableSummary({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: "var(--space-4)",
         maxWidth: 720,
       }}
     >
@@ -1793,7 +1793,7 @@ function EditableSummary({
           resize: "none",
           overflow: "hidden",
           fontFamily: BODY,
-          fontSize: 14,
+          fontSize: "var(--font-size-lg)",
           lineHeight: "22px",
           color: draft ? TEXT_SECONDARY : TEXT_FADED,
           fontStyle: draft ? "normal" : "italic",
@@ -1804,7 +1804,7 @@ function EditableSummary({
           style={{
             color: DANGER,
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.04em",
           }}
         >

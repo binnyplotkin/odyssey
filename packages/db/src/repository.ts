@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "./client";
+import { retryRead } from "./retry";
 import { charactersTable, worldNodesTable, worldsTable } from "./schema";
 import { isoNow } from "@odyssey/utils";
 import { CharacterDefinition, WorldDefinition, worldRecordSchema, WorldRecord } from "@odyssey/types";
@@ -173,10 +174,12 @@ async function hydrateCharactersFromGraph(
 
   let nodes: Array<typeof worldNodesTable.$inferSelect>;
   try {
-    nodes = await db
-      .select()
-      .from(worldNodesTable)
-      .where(and(eq(worldNodesTable.worldId, worldId), eq(worldNodesTable.kind, "character")));
+    nodes = await retryRead(() =>
+      db
+        .select()
+        .from(worldNodesTable)
+        .where(and(eq(worldNodesTable.worldId, worldId), eq(worldNodesTable.kind, "character"))),
+    );
   } catch (error) {
     if (isMissingWorldsTableError(error)) return definition;
     throw error;
@@ -186,14 +189,16 @@ async function hydrateCharactersFromGraph(
   const refIds = nodes.map((n) => n.refId).filter((id): id is string => !!id);
   if (refIds.length === 0) return definition;
 
-  const chars = await db
-    .select({
-      id: charactersTable.id,
-      slug: charactersTable.slug,
-      title: charactersTable.title,
-    })
-    .from(charactersTable)
-    .where(inArray(charactersTable.id, refIds));
+  const chars = await retryRead(() =>
+    db
+      .select({
+        id: charactersTable.id,
+        slug: charactersTable.slug,
+        title: charactersTable.title,
+      })
+      .from(charactersTable)
+      .where(inArray(charactersTable.id, refIds)),
+  );
   const charById = new Map(chars.map((c) => [c.id, c]));
 
   const existingBySlug = new Map(definition.characters.map((c) => [c.id, c]));
@@ -357,13 +362,16 @@ class NeonWorldRepository implements WorldRepository {
     if (!this.db) {
       return mergeWorlds(this.staticWorlds, []);
     }
+    const db = this.db;
 
     try {
-      const rows = await this.db
-        .select()
-        .from(worldsTable)
-        .where(eq(worldsTable.status, "published"))
-        .orderBy(desc(worldsTable.updatedAt));
+      const rows = await retryRead(() =>
+        db
+          .select()
+          .from(worldsTable)
+          .where(eq(worldsTable.status, "published"))
+          .orderBy(desc(worldsTable.updatedAt)),
+      );
 
       const dynamicWorlds = await Promise.all(
         rows.map(async (row) => {
@@ -386,13 +394,16 @@ class NeonWorldRepository implements WorldRepository {
     if (!this.db) {
       return getStaticWorld(this.staticWorlds, worldId);
     }
+    const db = this.db;
 
     try {
-      const rows = await this.db
-        .select()
-        .from(worldsTable)
-        .where(eq(worldsTable.id, worldId))
-        .limit(1);
+      const rows = await retryRead(() =>
+        db
+          .select()
+          .from(worldsTable)
+          .where(eq(worldsTable.id, worldId))
+          .limit(1),
+      );
 
       const row = rows[0];
 
@@ -427,12 +438,15 @@ class NeonWorldRepository implements WorldRepository {
       };
     }
 
+    const db = this.db;
     try {
-      const rows = await this.db
-        .select()
-        .from(worldsTable)
-        .where(eq(worldsTable.id, worldId))
-        .limit(1);
+      const rows = await retryRead(() =>
+        db
+          .select()
+          .from(worldsTable)
+          .where(eq(worldsTable.id, worldId))
+          .limit(1),
+      );
 
       const row = rows[0];
 
@@ -508,11 +522,14 @@ class NeonWorldRepository implements WorldRepository {
       throw new Error("Neon database unavailable.");
     }
 
-    const existingRows = await this.db
-      .select()
-      .from(worldsTable)
-      .where(eq(worldsTable.id, worldId))
-      .limit(1);
+    const db = this.db;
+    const existingRows = await retryRead(() =>
+      db
+        .select()
+        .from(worldsTable)
+        .where(eq(worldsTable.id, worldId))
+        .limit(1),
+    );
 
     const existing = existingRows[0];
 

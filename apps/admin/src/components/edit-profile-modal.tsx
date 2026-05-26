@@ -13,7 +13,7 @@ const T = {
   panelRaised: "#1E2230",
   border: "#FFFFFF14",
   borderSoft: "#FFFFFF0A",
-  accent: "#8CE7D2",
+  accent: "#8FD1CB",
   accentInk: "#04231E",
   green: "#6FCFA0",
   red: "#F37272",
@@ -100,7 +100,7 @@ export function EditProfileModal({ open, target, isSelf, onClose, onSaved }: Pro
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
         display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 16,
+        padding: "var(--space-16)",
         backgroundColor: T.backdrop,
         animation: "userModalFade 140ms ease-out",
       }}
@@ -114,8 +114,8 @@ export function EditProfileModal({ open, target, isSelf, onClose, onSaved }: Pro
           width: 480, maxWidth: "100%",
           background: T.panel,
           border: `1px solid ${T.border}`,
-          borderRadius: 16,
-          boxShadow: "0 32px 64px -16px rgba(0,0,0,0.7)",
+          borderRadius: "var(--radius-3xl)",
+          boxShadow: "var(--elevation-modal)",
           overflow: "hidden",
           animation: "userModalRise 180ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
@@ -126,7 +126,7 @@ export function EditProfileModal({ open, target, isSelf, onClose, onSaved }: Pro
           padding: "22px 24px 18px 24px",
           borderBottom: `1px solid ${T.borderSoft}`,
         }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
             <div style={{
               fontFamily: T.fontHeading, fontSize: 17, fontWeight: 600,
               color: T.fg, lineHeight: "22px",
@@ -134,7 +134,7 @@ export function EditProfileModal({ open, target, isSelf, onClose, onSaved }: Pro
               Edit profile
             </div>
             <div style={{
-              fontFamily: T.fontMono, fontSize: 10, color: T.faint,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.faint,
               letterSpacing: "0.08em", textTransform: "uppercase",
             }}>
               {(target.name ?? target.email)} · {target.role}
@@ -161,7 +161,7 @@ export function EditProfileModal({ open, target, isSelf, onClose, onSaved }: Pro
           }
         >
           <Input value={email} onChange={setEmail} placeholder="user@example.com" />
-          <div style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "16px" }}>
+          <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: "16px" }}>
             Changing the email signs the user out of all sessions and requires re-verification.
           </div>
         </FieldShell>
@@ -169,7 +169,7 @@ export function EditProfileModal({ open, target, isSelf, onClose, onSaved }: Pro
         {/* Role */}
         <FieldShell label="Role" pad="16px 24px 0 24px">
           <RoleToggle value={role} onChange={setRole} disableUser={isSelf && role === "admin"} />
-          <div style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "16px" }}>
+          <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: "16px" }}>
             {isSelf
               ? "You can't demote your own admin account."
               : "Admins can invite users, edit worlds, and access the engine."}
@@ -180,10 +180,10 @@ export function EditProfileModal({ open, target, isSelf, onClose, onSaved }: Pro
           <div style={{
             margin: "16px 24px 0 24px",
             padding: "10px 14px",
-            borderRadius: 10,
+            borderRadius: "var(--radius-lg)",
             background: "rgba(243,114,114,0.08)",
             border: "1px solid rgba(243,114,114,0.20)",
-            fontFamily: T.fontBody, fontSize: 12, color: "#F4A8A8",
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: "#F4A8A8",
           }}>
             {error}
           </div>
@@ -193,17 +193,17 @@ export function EditProfileModal({ open, target, isSelf, onClose, onSaved }: Pro
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "22px 24px",
-          marginTop: 24,
+          marginTop: "var(--space-24)",
           borderTop: `1px solid ${T.borderSoft}`,
           background: "rgba(255,255,255,0.015)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
             <InfoIcon />
-            <div style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+            <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted }}>
               Changes take effect immediately.
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: "var(--space-8)" }}>
             <button
               type="button"
               onClick={onClose}
@@ -241,10 +241,10 @@ function FieldShell({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: pad }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)", padding: pad }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{
-          fontFamily: T.fontMono, fontSize: 10, color: T.muted,
+          fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted,
           letterSpacing: "0.08em", textTransform: "uppercase",
         }}>
           {label}
@@ -270,7 +270,7 @@ function Input({
   return (
     <div style={{
       display: "flex", alignItems: "center", padding: "11px 14px",
-      background: T.panelInner, border: `1px solid ${T.border}`, borderRadius: 10,
+      background: T.panelInner, border: `1px solid ${T.border}`, borderRadius: "var(--radius-lg)",
     }}>
       <input
         type="text"
@@ -280,7 +280,7 @@ function Input({
         autoFocus={autoFocus}
         style={{
           flex: 1, border: "none", background: "transparent", outline: "none",
-          fontFamily: T.fontBody, fontSize: 14, color: T.fg,
+          fontFamily: T.fontBody, fontSize: "var(--font-size-lg)", color: T.fg,
         }}
       />
     </div>
@@ -298,8 +298,8 @@ function RoleToggle({
 }) {
   return (
     <div style={{
-      display: "flex", padding: 4,
-      background: T.panelInner, border: `1px solid ${T.border}`, borderRadius: 10, gap: 4,
+      display: "flex", padding: "var(--space-4)",
+      background: T.panelInner, border: `1px solid ${T.border}`, borderRadius: "var(--radius-lg)", gap: "var(--space-4)",
     }}>
       <RoleSegment label="User" active={value === "user"} disabled={disableUser} onClick={() => onChange("user")} />
       <RoleSegment label="Admin" active={value === "admin"} onClick={() => onChange("admin")} />
@@ -324,11 +324,11 @@ function RoleSegment({
       onClick={onClick}
       disabled={disabled}
       style={{
-        flex: 1, padding: "8px 12px", borderRadius: 7,
+        flex: 1, padding: "8px 12px", borderRadius: "var(--radius-md)",
         background: active ? T.panelRaised : "transparent",
         border: active ? `1px solid ${T.border}` : "1px solid transparent",
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-        fontFamily: T.fontBody, fontSize: 13,
+        display: "flex", alignItems: "center", justifyContent: "center", gap: "var(--space-8)",
+        fontFamily: T.fontBody, fontSize: "var(--font-size-md)",
         color: active ? T.fg : "#FFFFFF99",
         fontWeight: active ? 600 : 500,
         cursor: disabled ? "not-allowed" : "pointer",
@@ -336,7 +336,7 @@ function RoleSegment({
       }}
     >
       <span style={{
-        width: 6, height: 6, borderRadius: 3,
+        width: 6, height: 6, borderRadius: "var(--radius-xs)",
         background: active ? T.accent : "#FFFFFF40",
       }} />
       {label}
@@ -347,10 +347,10 @@ function RoleSegment({
 function Pill({ tone, text }: { tone: "ok" | "warn"; text: string }) {
   const color = tone === "ok" ? T.green : "#F5C26B";
   return (
-    <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-      <span style={{ width: 6, height: 6, borderRadius: 3, background: color }} />
+    <span style={{ display: "flex", alignItems: "center", gap: "var(--space-5)" }}>
+      <span style={{ width: 6, height: 6, borderRadius: "var(--radius-xs)", background: color }} />
       <span style={{
-        fontFamily: T.fontMono, fontSize: 10, color,
+        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color,
         letterSpacing: "0.08em", textTransform: "uppercase",
       }}>
         {text}
@@ -369,7 +369,7 @@ function CloseButton({ onClick, disabled }: { onClick: () => void; disabled?: bo
       style={{
         width: 28, height: 28,
         display: "flex", alignItems: "center", justifyContent: "center",
-        borderRadius: 8, border: "none",
+        borderRadius: "var(--radius-md)", border: "none",
         background: "rgba(255,255,255,0.03)",
         color: "#FFFFFF99", cursor: disabled ? "not-allowed" : "pointer",
       }}
@@ -393,9 +393,9 @@ function InfoIcon() {
 
 function ghostButtonStyle(disabled: boolean): React.CSSProperties {
   return {
-    padding: "9px 16px", borderRadius: 9,
+    padding: "9px 16px", borderRadius: "var(--radius-md)",
     border: `1px solid ${T.border}`, background: "transparent",
-    fontFamily: T.fontBody, fontSize: 13, fontWeight: 500,
+    fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500,
     color: T.fgDim,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
@@ -404,9 +404,9 @@ function ghostButtonStyle(disabled: boolean): React.CSSProperties {
 
 function primaryButtonStyle(disabled: boolean): React.CSSProperties {
   return {
-    padding: "9px 18px", borderRadius: 9,
+    padding: "9px 18px", borderRadius: "var(--radius-md)",
     border: "none", background: T.accent,
-    fontFamily: T.fontBody, fontSize: 13, fontWeight: 600,
+    fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
     color: T.accentInk,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.5 : 1,

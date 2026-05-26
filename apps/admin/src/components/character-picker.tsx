@@ -21,7 +21,7 @@ const T = {
   pink: "#E8A0B5",
   pinkSoft: "rgba(232,160,181,0.10)",
   pinkBorder: "rgba(232,160,181,0.35)",
-  mint: "#7AE5C5",
+  mint: "#8FD1CB",
   mintSoft: "rgba(122,229,197,0.10)",
   mintBorder: "rgba(122,229,197,0.35)",
   fontHeading: "'Space Grotesk', sans-serif",
@@ -168,8 +168,8 @@ export function CharacterPicker({ worldId, open, onClose, onLinked }: Props) {
           width: 640, maxWidth: "100%",
           background: T.panel,
           border: `1px solid ${T.border}`,
-          borderRadius: 16,
-          boxShadow: "0 24px 64px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.03) inset",
+          borderRadius: "var(--radius-3xl)",
+          boxShadow: "var(--elevation-panel)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -178,28 +178,28 @@ export function CharacterPicker({ worldId, open, onClose, onLinked }: Props) {
         }}
       >
         {/* Header + Search */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "20px 20px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 6, height: 6, borderRadius: 999, background: T.pink }} />
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)", padding: "20px 20px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "var(--radius-pill)", background: T.pink }} />
             <span
               id="character-picker-title"
               style={{
-                fontFamily: T.fontMono, fontSize: 11, letterSpacing: "0.14em",
+                fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", letterSpacing: "0.14em",
                 color: T.muted, textTransform: "uppercase",
               }}
             >
               Character library
             </span>
             <div style={{ flex: 1 }} />
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.mutedSoft, letterSpacing: "0.04em" }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.mutedSoft, letterSpacing: "0.04em" }}>
               Esc to close · ↵ to link
             </span>
           </div>
           <div
             style={{
-              display: "flex", alignItems: "center", gap: 10,
+              display: "flex", alignItems: "center", gap: "var(--space-10)",
               padding: "10px 12px",
-              background: T.ground, border: `1px solid ${T.border}`, borderRadius: 10,
+              background: T.ground, border: `1px solid ${T.border}`, borderRadius: "var(--radius-lg)",
             }}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
@@ -216,7 +216,7 @@ export function CharacterPicker({ worldId, open, onClose, onLinked }: Props) {
               placeholder="Search by name, slug, or summary…"
               style={{
                 flex: 1, background: "transparent", border: "none", outline: "none",
-                color: T.fg, fontFamily: T.fontBody, fontSize: 14,
+                color: T.fg, fontFamily: T.fontBody, fontSize: "var(--font-size-lg)",
               }}
             />
             {query && (
@@ -225,8 +225,8 @@ export function CharacterPicker({ worldId, open, onClose, onLinked }: Props) {
                 onClick={() => setQuery("")}
                 style={{
                   background: "transparent", border: "none", cursor: "pointer",
-                  color: T.mutedSoft, fontFamily: T.fontMono, fontSize: 11,
-                  padding: "4px 8px", borderRadius: 6,
+                  color: T.mutedSoft, fontFamily: T.fontMono, fontSize: "var(--font-size-sm)",
+                  padding: "4px 8px", borderRadius: "var(--radius-sm)",
                 }}
               >
                 clear
@@ -246,13 +246,13 @@ export function CharacterPicker({ worldId, open, onClose, onLinked }: Props) {
           }}
         >
           {loading && (
-            <div style={{ padding: 40, textAlign: "center", color: T.muted, fontFamily: T.fontBody, fontSize: 13 }}>
+            <div style={{ padding: 40, textAlign: "center", color: T.muted, fontFamily: T.fontBody, fontSize: "var(--font-size-md)" }}>
               Loading library…
             </div>
           )}
 
           {!loading && filtered.length === 0 && (
-            <div style={{ padding: 40, textAlign: "center", color: T.muted, fontFamily: T.fontBody, fontSize: 13 }}>
+            <div style={{ padding: 40, textAlign: "center", color: T.muted, fontFamily: T.fontBody, fontSize: "var(--font-size-md)" }}>
               {characters.length === 0
                 ? "No characters in the library yet. Create one in /characters first."
                 : "No matches."}
@@ -273,35 +273,35 @@ export function CharacterPicker({ worldId, open, onClose, onLinked }: Props) {
                   onMouseEnter={() => setActiveIdx(idx)}
                   onClick={() => handleLink(c)}
                   style={{
-                    display: "flex", alignItems: "center", gap: 12,
+                    display: "flex", alignItems: "center", gap: "var(--space-12)",
                     width: "100%", textAlign: "left",
                     padding: "10px 12px",
                     background: active && !linked ? T.panelRaised : "transparent",
                     border: `1px solid ${active && !linked ? T.borderStrong : "transparent"}`,
-                    borderRadius: 10,
+                    borderRadius: "var(--radius-lg)",
                     cursor: linked ? "default" : "pointer",
                     opacity: linked ? 0.55 : 1,
-                    marginBottom: 2,
+                    marginBottom: "var(--space-2)",
                   }}
                 >
                   <CharacterAvatar title={c.title} image={c.image} />
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
                       <span style={{
-                        fontFamily: T.fontHeading, fontSize: 14, fontWeight: 500, color: T.fg,
+                        fontFamily: T.fontHeading, fontSize: "var(--font-size-lg)", fontWeight: 500, color: T.fg,
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>
                         {c.title}
                       </span>
                       <span style={{
-                        fontFamily: T.fontMono, fontSize: 10, color: T.mutedSoft, letterSpacing: "0.02em",
+                        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.mutedSoft, letterSpacing: "0.02em",
                       }}>
                         {c.slug}
                       </span>
                     </div>
                     {c.summary && (
                       <span style={{
-                        fontFamily: T.fontBody, fontSize: 12, color: T.muted,
+                        fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted,
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>
                         {c.summary}
@@ -309,24 +309,24 @@ export function CharacterPicker({ worldId, open, onClose, onLinked }: Props) {
                     )}
                   </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "var(--space-4)", flexShrink: 0 }}>
                     {linked ? (
                       <span style={{
-                        fontFamily: T.fontMono, fontSize: 10, color: T.mint, letterSpacing: "0.04em",
-                        padding: "3px 7px", borderRadius: 999,
+                        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.mint, letterSpacing: "0.04em",
+                        padding: "3px 7px", borderRadius: "var(--radius-pill)",
                         background: T.mintSoft, border: `1px solid ${T.mintBorder}`,
                       }}>
                         linked
                       </span>
                     ) : linking ? (
                       <span style={{
-                        fontFamily: T.fontMono, fontSize: 10, color: T.muted, letterSpacing: "0.04em",
+                        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, letterSpacing: "0.04em",
                       }}>
                         linking…
                       </span>
                     ) : (
                       <span style={{
-                        fontFamily: T.fontMono, fontSize: 10, color: T.mutedSoft, letterSpacing: "0.04em",
+                        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.mutedSoft, letterSpacing: "0.04em",
                       }}>
                         {c.worldCount === 0 ? "unused" : c.worldCount === 1 ? "1 world" : `${c.worldCount} worlds`}
                       </span>
@@ -340,25 +340,25 @@ export function CharacterPicker({ worldId, open, onClose, onLinked }: Props) {
         {/* Footer */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          gap: 10, padding: "12px 20px",
+          gap: "var(--space-10)", padding: "12px 20px",
           borderTop: `1px solid ${T.border}`,
           background: "rgba(0,0,0,0.18)",
         }}>
           {error ? (
-            <span style={{ fontFamily: T.fontBody, fontSize: 12, color: "#E8B76A" }}>{error}</span>
+            <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: "#E8B76A" }}>{error}</span>
           ) : (
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.mutedSoft, letterSpacing: "0.04em" }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.mutedSoft, letterSpacing: "0.04em" }}>
               {filtered.length === 1 ? "1 character" : `${filtered.length} characters`}
             </span>
           )}
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: "var(--space-8)" }}>
             <button
               type="button"
               onClick={onClose}
               style={{
-                padding: "7px 14px", borderRadius: 999,
+                padding: "7px 14px", borderRadius: "var(--radius-pill)",
                 background: "transparent", border: `1px solid ${T.borderStrong}`,
-                color: T.fg, fontFamily: T.fontBody, fontSize: 12, cursor: "pointer",
+                color: T.fg, fontFamily: T.fontBody, fontSize: "var(--font-size-base)", cursor: "pointer",
               }}
             >
               Cancel
@@ -382,7 +382,7 @@ function CharacterAvatar({ title, image }: { title: string; image: string | null
         src={image}
         alt=""
         style={{
-          width: 36, height: 36, borderRadius: 10,
+          width: 36, height: 36, borderRadius: "var(--radius-lg)",
           objectFit: "cover", flexShrink: 0,
           border: `1px solid ${T.pinkBorder}`,
         }}
@@ -392,10 +392,10 @@ function CharacterAvatar({ title, image }: { title: string; image: string | null
   return (
     <div
       style={{
-        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+        width: 36, height: 36, borderRadius: "var(--radius-lg)", flexShrink: 0,
         background: T.pinkSoft, border: `1px solid ${T.pinkBorder}`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: T.fontHeading, fontSize: 13, color: T.pink, fontWeight: 500,
+        fontFamily: T.fontHeading, fontSize: "var(--font-size-md)", color: T.pink, fontWeight: 500,
         letterSpacing: "-0.01em",
       }}
     >

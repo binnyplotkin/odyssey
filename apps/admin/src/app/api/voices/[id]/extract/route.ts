@@ -7,6 +7,7 @@ import {
   uploadPreview,
 } from "@/lib/voices-storage";
 import { drainSpeakStreamToWav } from "@/lib/voice-wav";
+import { invalidateVoicesList } from "@/lib/voices-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,6 +79,16 @@ export async function POST(
   }
 
   await store.update(id, { status: "processing", statusError: null });
+  // Invalidate the cached voices list so the next /voices visit reflects
+  // the new "processing" status; the background work will fire another
+  // invalidation when it lands (ready or failed).
+  invalidateVoicesList();
+  // Open a journal entry. We do this even before kicking off the
+  // background work so a crash in detached code still leaves a trace.
+  const attempt = await store.startAttempt(id).catch((err) => {
+    console.warn(`[voices/extract] startAttempt failed for ${id}:`, err);
+    return null;
+  });
 
   // Detach. We deliberately don't await — the response goes back as 202
   // so the client can refresh + render the Processing UI immediately. The
@@ -90,6 +101,7 @@ export async function POST(
     voiceId: id,
     voiceSlug: voice.slug,
     sourcePath: voice.sourcePath,
+    attemptId: attempt?.id ?? null,
   }).catch((err) => {
     console.error(`[voices/extract] unhandled error for ${id}:`, err);
   });
@@ -101,8 +113,9 @@ async function runExtraction(args: {
   voiceId: string;
   voiceSlug: string;
   sourcePath: string;
+  attemptId: string | null;
 }): Promise<void> {
-  const { voiceId, voiceSlug, sourcePath } = args;
+  const { voiceId, voiceSlug, sourcePath, attemptId } = args;
   const store = getVoiceStore();
   const startedAt = Date.now();
   console.log(`[voices/extract] ${voiceId} (${voiceSlug}) started`);
@@ -160,6 +173,12 @@ async function runExtraction(args: {
       embeddingPath,
       previewPath,
     });
+    invalidateVoicesList();
+    if (attemptId) {
+      await store
+        .finishAttempt(attemptId, { status: "succeeded" })
+        .catch(() => null);
+    }
     console.log(
       `[voices/extract] ${voiceId} (${voiceSlug}) ready in ${Date.now() - startedAt}ms` +
         (previewPath ? ` (preview ok)` : ` (preview skipped)`),
@@ -179,6 +198,12 @@ async function runExtraction(args: {
           updateErr,
         );
       });
+    invalidateVoicesList();
+    if (attemptId) {
+      await store
+        .finishAttempt(attemptId, { status: "failed", error: message })
+        .catch(() => null);
+    }
   }
 }
 

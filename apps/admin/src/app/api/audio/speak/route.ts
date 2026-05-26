@@ -29,10 +29,10 @@ export async function POST(request: NextRequest) {
           provider === "elevenlabs"
             ? (process.env.ELEVENLABS_VOICE_ID ?? "")
             : "alloy";
-        const requestedVoice =
-          provider === "elevenlabs"
-            ? (body.voice ?? defaultVoice)
-            : "alloy";
+        // Honor body.voice for both providers. For OpenAI, valid voices
+        // are alloy/echo/fable/onyx/nova/shimmer — invalid values fall back
+        // to the provider's own default. ElevenLabs takes a voice id.
+        const requestedVoice = body.voice ?? defaultVoice;
 
         const audio = await adapter.synthesize({
           text: body.text,

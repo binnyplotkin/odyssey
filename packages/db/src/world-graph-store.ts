@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "./client";
+import { retryRead } from "./retry";
 import {
   charactersTable,
   worldEdgesTable,
@@ -237,20 +238,24 @@ function neonStore(): WorldGraphStore {
   return {
     async listNodes(worldId) {
       const db = requireDb();
-      const rows = await db
-        .select()
-        .from(worldNodesTable)
-        .where(eq(worldNodesTable.worldId, worldId));
+      const rows = await retryRead(() =>
+        db
+          .select()
+          .from(worldNodesTable)
+          .where(eq(worldNodesTable.worldId, worldId)),
+      );
       return rows.map(normalizeNode).sort((a, b) => a.label.localeCompare(b.label));
     },
 
     async getNode(id) {
       const db = requireDb();
-      const [row] = await db
-        .select()
-        .from(worldNodesTable)
-        .where(eq(worldNodesTable.id, id))
-        .limit(1);
+      const [row] = await retryRead(() =>
+        db
+          .select()
+          .from(worldNodesTable)
+          .where(eq(worldNodesTable.id, id))
+          .limit(1),
+      );
       return row ? normalizeNode(row) : null;
     },
 
@@ -270,11 +275,14 @@ function neonStore(): WorldGraphStore {
       // If backed by a library (characters), validate the referenced row exists.
       if (input.kind === "character" && input.refId) {
         const db = requireDb();
-        const [c] = await db
-          .select({ id: charactersTable.id })
-          .from(charactersTable)
-          .where(eq(charactersTable.id, input.refId))
-          .limit(1);
+        const refId = input.refId;
+        const [c] = await retryRead(() =>
+          db
+            .select({ id: charactersTable.id })
+            .from(charactersTable)
+            .where(eq(charactersTable.id, refId))
+            .limit(1),
+        );
         if (!c) throw new Error(`character ${input.refId} not found`);
       }
 
@@ -296,11 +304,13 @@ function neonStore(): WorldGraphStore {
 
     async updateNode(id, input) {
       const db = requireDb();
-      const [existing] = await db
-        .select()
-        .from(worldNodesTable)
-        .where(eq(worldNodesTable.id, id))
-        .limit(1);
+      const [existing] = await retryRead(() =>
+        db
+          .select()
+          .from(worldNodesTable)
+          .where(eq(worldNodesTable.id, id))
+          .limit(1),
+      );
       if (!existing) return null;
 
       const values: Record<string, unknown> = { updatedAt: new Date() };
@@ -330,11 +340,13 @@ function neonStore(): WorldGraphStore {
 
     async ingestCharacter(worldId, characterId, opts) {
       const db = requireDb();
-      const [character] = await db
-        .select({ id: charactersTable.id, title: charactersTable.title })
-        .from(charactersTable)
-        .where(eq(charactersTable.id, characterId))
-        .limit(1);
+      const [character] = await retryRead(() =>
+        db
+          .select({ id: charactersTable.id, title: charactersTable.title })
+          .from(charactersTable)
+          .where(eq(charactersTable.id, characterId))
+          .limit(1),
+      );
       if (!character) throw new Error(`character ${characterId} not found`);
 
       const incomingData: Record<string, unknown> = {
@@ -342,17 +354,19 @@ function neonStore(): WorldGraphStore {
         ...(opts?.data ?? {}),
       };
 
-      const [existing] = await db
-        .select()
-        .from(worldNodesTable)
-        .where(
-          and(
-            eq(worldNodesTable.worldId, worldId),
-            eq(worldNodesTable.kind, "character"),
-            eq(worldNodesTable.refId, characterId),
-          ),
-        )
-        .limit(1);
+      const [existing] = await retryRead(() =>
+        db
+          .select()
+          .from(worldNodesTable)
+          .where(
+            and(
+              eq(worldNodesTable.worldId, worldId),
+              eq(worldNodesTable.kind, "character"),
+              eq(worldNodesTable.refId, characterId),
+            ),
+          )
+          .limit(1),
+      );
 
       if (existing) {
         if (!opts?.mergeOnExist || Object.keys(incomingData).length === 0) {
@@ -383,10 +397,12 @@ function neonStore(): WorldGraphStore {
 
     async listEdges(worldId) {
       const db = requireDb();
-      const rows = await db
-        .select()
-        .from(worldEdgesTable)
-        .where(eq(worldEdgesTable.worldId, worldId));
+      const rows = await retryRead(() =>
+        db
+          .select()
+          .from(worldEdgesTable)
+          .where(eq(worldEdgesTable.worldId, worldId)),
+      );
       return rows.map(normalizeEdge);
     },
 
@@ -394,12 +410,14 @@ function neonStore(): WorldGraphStore {
       // Both endpoints must be in the same world. FK can't express this, so
       // we check in the app layer.
       const db = requireDb();
-      const endpoints = await db
-        .select({ id: worldNodesTable.id, worldId: worldNodesTable.worldId })
-        .from(worldNodesTable)
-        .where(
-          sql`${worldNodesTable.id} IN (${input.fromNodeId}, ${input.toNodeId})`,
-        );
+      const endpoints = await retryRead(() =>
+        db
+          .select({ id: worldNodesTable.id, worldId: worldNodesTable.worldId })
+          .from(worldNodesTable)
+          .where(
+            sql`${worldNodesTable.id} IN (${input.fromNodeId}, ${input.toNodeId})`,
+          ),
+      );
       if (endpoints.length !== 2) {
         throw new Error("edge endpoints not found");
       }
@@ -427,17 +445,19 @@ function neonStore(): WorldGraphStore {
       } catch (e: unknown) {
         if (isUniqueViolation(e)) {
           // Edge already exists — fetch and return it for idempotency.
-          const [row] = await db
-            .select()
-            .from(worldEdgesTable)
-            .where(
-              and(
-                eq(worldEdgesTable.fromNodeId, input.fromNodeId),
-                eq(worldEdgesTable.toNodeId, input.toNodeId),
-                eq(worldEdgesTable.kind, input.kind),
-              ),
-            )
-            .limit(1);
+          const [row] = await retryRead(() =>
+            db
+              .select()
+              .from(worldEdgesTable)
+              .where(
+                and(
+                  eq(worldEdgesTable.fromNodeId, input.fromNodeId),
+                  eq(worldEdgesTable.toNodeId, input.toNodeId),
+                  eq(worldEdgesTable.kind, input.kind),
+                ),
+              )
+              .limit(1),
+          );
           if (row) return normalizeEdge(row);
         }
         throw e;

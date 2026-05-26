@@ -3,7 +3,7 @@ import { Skeleton } from "@odyssey/ui";
 const CARD: React.CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--card-border)",
-  borderRadius: 12,
+  borderRadius: "var(--radius-xl)",
 };
 
 const COLS = ["ID", "Role", "Status", "Version", "Created", "Last active"];
@@ -11,9 +11,9 @@ const GRID_COLS = "minmax(140px,1.4fr) 100px 100px 100px 140px 140px";
 
 export default function WorldSessionsLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
           <Skeleton width={120} height={18} />
           <Skeleton width={36} height={14} />
         </div>
@@ -28,7 +28,7 @@ export default function WorldSessionsLoading() {
             padding: "12px 16px",
             borderBottom: "1px solid var(--card-border)",
             background: "var(--panel)",
-            gap: 12,
+            gap: "var(--space-12)",
           }}
         >
           {COLS.map((c) => (
@@ -44,7 +44,7 @@ export default function WorldSessionsLoading() {
               alignItems: "center",
               padding: "14px 16px",
               borderBottom: i === 5 ? "none" : "1px solid var(--card-border)",
-              gap: 12,
+              gap: "var(--space-12)",
             }}
           >
             <Skeleton width="70%" height={12} />

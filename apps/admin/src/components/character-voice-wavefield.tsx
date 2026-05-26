@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { EraConfig } from "@odyssey/db";
+import type { CharacterBrainModel, EraConfig } from "@odyssey/db";
 import {
   CharacterVoicePanel,
   type CharacterVoicePanelHandle,
@@ -41,6 +41,18 @@ type Props = {
     title: string;
     image: string | null;
     eras: EraConfig[];
+    /**
+     * The character's L04 Brain/Model config — optional because the chat
+     * view that mounts this component may not have loaded it. When
+     * present, the voice picker initializes to:
+     *   brainModel.voice.model      (explicit voice override)
+     *   ?? brainModel.model          (chat model, if voice-capable)
+     *   ?? DEFAULT_VOICE_MODEL      (hardcoded fallback)
+     *
+     * The user can still change the picker live before pressing "go" —
+     * the saved preference is the default, not a lock.
+     */
+    brainModel?: CharacterBrainModel | null;
   };
 };
 
@@ -55,7 +67,23 @@ export function CharacterVoiceWavefield(props: Props) {
     active: false,
     phase: "idle",
   });
-  const [model, setModel] = useState<string>(DEFAULT_VOICE_MODEL);
+  // Resolve the initial picker value from the character's L04 config.
+  // Priority: explicit voice override → chat model (if voice-capable) →
+  // hardcoded DEFAULT_VOICE_MODEL. Memoized so the picker doesn't snap
+  // back to the default if the user toggles other state.
+  const initialModel = useMemo(() => {
+    const mm = character.brainModel;
+    const voicePick = mm?.voice?.model;
+    if (voicePick && modelsFor("voice").some((m) => m.id === voicePick)) {
+      return voicePick;
+    }
+    const chatPick = mm?.model;
+    if (chatPick && modelsFor("voice").some((m) => m.id === chatPick)) {
+      return chatPick;
+    }
+    return DEFAULT_VOICE_MODEL;
+  }, [character.brainModel]);
+  const [model, setModel] = useState<string>(initialModel);
   // Lazy-mount the voice panel only after the user opts in. Mirrors how the
   // test chat mounts the panel on entering voice mode — keeps STT WS handshake
   // out of the page's initial-load critical path.
@@ -84,7 +112,13 @@ export function CharacterVoiceWavefield(props: Props) {
   }, [started, warmStartedAt]);
 
   const availableModels = useMemo(() => modelsFor("voice"), []);
-  const provider = providerFor(model);
+  // Voice surface only supports Anthropic + Cerebras today (OpenAI's realtime
+  // API is a different shape we haven't integrated). The registry returns the
+  // wider ProviderId union; narrow at the boundary with a fallback to
+  // "cerebras" if somehow an unsupported provider slips through the picker.
+  const rawProvider = providerFor(model);
+  const provider: "anthropic" | "cerebras" =
+    rawProvider === "anthropic" ? "anthropic" : "cerebras";
   const modelMeta = modelMetaFor(model);
   // Locked once the panel has mounted — model can't change mid-session.
   const modelLocked = started;
@@ -141,11 +175,11 @@ export function CharacterVoiceWavefield(props: Props) {
             // embedded under a header (chat tab) — the dedicated /voice route
             // works the same since its parent is the full main element.
             height: "100%",
-            borderRadius: 18,
+            borderRadius: "var(--radius-3xl)",
             border: "1px solid color-mix(in srgb, var(--accent-strong) 28%, transparent)",
             background: "color-mix(in srgb, var(--background) 68%, transparent)",
             backdropFilter: "blur(14px)",
-            boxShadow: "0 18px 56px rgba(0,0,0,0.45)",
+            boxShadow: "var(--elevation-panel)",
             overflow: "hidden",
             pointerEvents: voiceUiHidden ? "none" : "auto",
             display: "flex",
@@ -165,11 +199,11 @@ export function CharacterVoiceWavefield(props: Props) {
               background: "color-mix(in srgb, var(--background) 66%, transparent)",
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
               <span
                 style={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                   color: "color-mix(in srgb, var(--foreground) 85%, transparent)",
@@ -180,7 +214,7 @@ export function CharacterVoiceWavefield(props: Props) {
               <span
                 style={{
                   fontFamily: "'Space Grotesk', sans-serif",
-                  fontSize: 16,
+                  fontSize: "var(--font-size-xl)",
                   fontWeight: 600,
                   color: "color-mix(in srgb, var(--foreground) 96%, transparent)",
                 }}
@@ -188,7 +222,7 @@ export function CharacterVoiceWavefield(props: Props) {
                 Voice Pipeline
               </span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
               <button
                 type="button"
                 aria-label="Hide voice session panel"
@@ -222,13 +256,13 @@ export function CharacterVoiceWavefield(props: Props) {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 10,
+              gap: "var(--space-10)",
               padding: "10px 14px",
               borderBottom: "1px solid color-mix(in srgb, var(--accent-strong) 18%, transparent)",
               background: "color-mix(in srgb, var(--background) 55%, transparent)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", minWidth: 0 }}>
               <span
                 style={{
                   fontFamily: "'JetBrains Mono', monospace",
@@ -258,17 +292,17 @@ export function CharacterVoiceWavefield(props: Props) {
                 />
               )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
               {modelLocked ? (
                 <span
                   style={{
                     padding: "4px 10px",
-                    borderRadius: 7,
+                    borderRadius: "var(--radius-md)",
                     border: "1px solid color-mix(in srgb, var(--accent-strong) 32%, transparent)",
                     background: "color-mix(in srgb, var(--accent-strong) 10%, transparent)",
                     color: "color-mix(in srgb, var(--foreground) 94%, transparent)",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10,
+                    fontSize: "var(--font-size-xs)",
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
                   }}
@@ -277,7 +311,7 @@ export function CharacterVoiceWavefield(props: Props) {
                   {modelMeta?.label ?? model}
                   <span
                     style={{
-                      marginLeft: 6,
+                      marginLeft: "var(--space-6)",
                       opacity: 0.55,
                       fontWeight: 500,
                     }}
@@ -304,7 +338,7 @@ export function CharacterVoiceWavefield(props: Props) {
                     background: "color-mix(in srgb, var(--background) 45%, transparent)",
                     color: "color-mix(in srgb, var(--foreground) 94%, transparent)",
                     fontFamily: "'JetBrains Mono', monospace",
-	                    fontSize: 10,
+	                    fontSize: "var(--font-size-xs)",
 	                    letterSpacing: "0.06em",
 	                    textTransform: "uppercase",
 	                    whiteSpace: "nowrap",
@@ -348,7 +382,7 @@ export function CharacterVoiceWavefield(props: Props) {
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 18,
+                gap: "var(--space-18)",
                 padding: "32px",
                 textAlign: "center",
               }}
@@ -356,7 +390,7 @@ export function CharacterVoiceWavefield(props: Props) {
               <span
                 style={{
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: 13,
+                  fontSize: "var(--font-size-md)",
                   lineHeight: "20px",
                   color: "color-mix(in srgb, var(--foreground) 78%, transparent)",
                   maxWidth: 320,
@@ -371,17 +405,17 @@ export function CharacterVoiceWavefield(props: Props) {
                 onClick={() => setStarted(true)}
                 style={{
                   padding: "10px 22px",
-                  borderRadius: 999,
+                  borderRadius: "var(--radius-pill)",
                   border: "1px solid color-mix(in srgb, var(--accent-strong) 42%, transparent)",
-                  background: "color-mix(in srgb, var(--accent-strong) 14%, transparent)",
+                  background: "var(--accent-fill)",
                   color: "var(--foreground)",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11,
+                  fontSize: "var(--font-size-sm)",
                   fontWeight: 600,
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   cursor: "pointer",
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+                  boxShadow: "var(--elevation-card)",
                 }}
               >
                 Start session
@@ -406,11 +440,11 @@ export function CharacterVoiceWavefield(props: Props) {
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 8,
+                    gap: "var(--space-8)",
                     fontFamily: "'Inter', sans-serif",
-                    fontSize: 11,
+                    fontSize: "var(--font-size-sm)",
                     color: "color-mix(in srgb, var(--foreground) 62%, transparent)",
-                    marginTop: 4,
+                    marginTop: "var(--space-4)",
                   }}
                 >
                   <span
@@ -474,13 +508,13 @@ export function CharacterVoiceWavefield(props: Props) {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
               padding: "8px 10px",
-              borderRadius: 999,
+              borderRadius: "var(--radius-pill)",
               border: "1px solid color-mix(in srgb, var(--accent-strong) 28%, transparent)",
               background: "color-mix(in srgb, var(--background) 72%, transparent)",
               backdropFilter: "blur(10px)",
-              boxShadow: "0 14px 34px rgba(0,0,0,0.4)",
+              boxShadow: "var(--elevation-card)",
               pointerEvents: "auto",
             }}
           >
@@ -528,12 +562,12 @@ export function CharacterVoiceWavefield(props: Props) {
               onClick={() => setVoiceUiHidden(false)}
               style={{
                 padding: "8px 12px",
-                borderRadius: 999,
+                borderRadius: "var(--radius-pill)",
                 border: "1px solid color-mix(in srgb, var(--accent-strong) 32%, transparent)",
                 background: "color-mix(in srgb, var(--background) 52%, transparent)",
                 color: "color-mix(in srgb, var(--foreground) 94%, transparent)",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
                 cursor: "pointer",

@@ -23,7 +23,7 @@ export async function Ticket({ id }: { id: string }) {
       <span style={{
         display: "inline-flex",
         padding: "2px 8px",
-        borderRadius: 4,
+        borderRadius: "var(--radius-xs)",
         background: "rgba(248,113,113,0.1)",
         color: "#f87171",
         fontSize: "0.75rem",
@@ -40,9 +40,9 @@ export async function Ticket({ id }: { id: string }) {
     <div style={{
       display: "flex",
       alignItems: "center",
-      gap: 10,
+      gap: "var(--space-10)",
       padding: "10px 14px",
-      borderRadius: 8,
+      borderRadius: "var(--radius-md)",
       border: "1px solid var(--border)",
       background: "var(--panel)",
       margin: "8px 0",
@@ -59,16 +59,16 @@ export async function Ticket({ id }: { id: string }) {
           {ticket.title}
         </div>
         {ticket.domain && (
-          <div style={{ fontSize: "0.6875rem", color: "var(--muted)", marginTop: 2 }}>
+          <div style={{ fontSize: "0.6875rem", color: "var(--muted)", marginTop: "var(--space-2)" }}>
             {ticket.domain}
           </div>
         )}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", flexShrink: 0 }}>
         {priority && (
           <span style={{
             padding: "2px 6px",
-            borderRadius: 4,
+            borderRadius: "var(--radius-xs)",
             fontSize: "0.6875rem",
             fontWeight: 600,
             background: priority.bg,
@@ -79,7 +79,7 @@ export async function Ticket({ id }: { id: string }) {
         )}
         <span style={{
           padding: "2px 8px",
-          borderRadius: 4,
+          borderRadius: "var(--radius-xs)",
           fontSize: "0.6875rem",
           fontWeight: 500,
           background: status.bg,

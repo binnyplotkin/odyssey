@@ -3,21 +3,11 @@
 import { type ReactNode } from "react";
 
 /**
- * ResolvedSummary — the "it worked" moment after a successful ingestion.
- * V3 (hero metric) direction: a single celebratory card with one dominant
- * mint number, a context paragraph, a generative graph snapshot showing
- * new vs existing nodes/edges, and two clear next-steps.
- *
- * Self-contained: depends only on theme CSS variables and `color-mix`.
- * The graph snapshot is procedural — given `pagesNew` and `pagesExisting`,
- * we lay out a small mint constellation joined to an existing constellation.
- *
- * Width: designed for the LiveProgress column (~1240px). Below that the
- * grid collapses to a single column gracefully via flex wrap.
+ * ResolvedSummary — compact run report after a successful ingestion.
  */
 
-const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
-const FONT_HEAD = "'Inter', system-ui, sans-serif";
+const FONT_MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
+const FONT_HEAD = "var(--font-body, Inter), system-ui, sans-serif";
 const ACCENT = "var(--accent-strong)";
 
 export type ResolvedSummaryProps = {
@@ -69,10 +59,11 @@ export function ResolvedSummary({
         display: "flex",
         flexWrap: "wrap",
         alignItems: "stretch",
-        gap: 0,
-        padding: "48px 52px",
-        border: "1px solid color-mix(in srgb, var(--accent-strong) 35%, transparent)",
-        background: "color-mix(in srgb, var(--accent-strong) 5%, transparent)",
+        gap: "var(--space-24)",
+        padding: "30px 32px",
+        border: "1px solid var(--input-border)",
+        borderRadius: "var(--radius-lg)",
+        background: "var(--input-bg)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -82,8 +73,7 @@ export function ResolvedSummary({
           flex: "1.4 1 480px",
           display: "flex",
           flexDirection: "column",
-          gap: 18,
-          paddingRight: 32,
+          gap: "var(--space-16)",
           minWidth: 0,
         }}
       >
@@ -91,9 +81,9 @@ export function ResolvedSummary({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 10,
+            gap: "var(--space-10)",
             fontFamily: FONT_MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             color: ACCENT,
@@ -103,31 +93,28 @@ export function ResolvedSummary({
           complete · {durationSec.toFixed(1)}s
         </div>
 
-        <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
-          <span
-            style={{
-              fontFamily: FONT_HEAD,
-              fontSize: 120,
-              fontWeight: 600,
-              letterSpacing: "-0.04em",
-              color: ACCENT,
-              lineHeight: 1,
-            }}
-          >
-            +{pagesCreated}
-          </span>
-          <span
-            style={{
-              fontFamily: FONT_HEAD,
-              fontSize: 26,
-              color: "var(--text-tertiary)",
-              fontWeight: 400,
-              letterSpacing: "-0.01em",
-            }}
-          >
-            new {pagesCreated === 1 ? "page" : "pages"}
-          </span>
-        </div>
+        <h2
+          style={{
+            margin: 0,
+            fontFamily: FONT_HEAD,
+            fontSize: 34,
+            lineHeight: 1.1,
+            fontWeight: 600,
+            letterSpacing: 0,
+            color: "var(--text-primary)",
+          }}
+        >
+          Ingestion complete
+        </h2>
+
+        <MetricStrip
+          items={[
+            ["Created", `+${pagesCreated}`],
+            ["Updated", `${pagesUpdated}`],
+            ["Edges", `+${edgesAdded}`],
+            ["Tokens", tokensUsed.toLocaleString()],
+          ]}
+        />
 
         <p
           style={{
@@ -142,7 +129,7 @@ export function ResolvedSummary({
           {sub}
         </p>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 6, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", paddingTop: "var(--space-6)", flexWrap: "wrap" }}>
           <PrimaryButton onClick={onOpenKnowledge}>
             Open knowledge graph ↗
           </PrimaryButton>
@@ -157,8 +144,9 @@ export function ResolvedSummary({
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          gap: 14,
+          gap: "var(--space-14)",
           minWidth: 0,
+          opacity: 0.86,
         }}
       >
         <GraphSnapshot
@@ -169,9 +157,9 @@ export function ResolvedSummary({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 14,
+            gap: "var(--space-14)",
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.14em",
             textTransform: "uppercase",
             color: "var(--text-secondary)",
@@ -214,6 +202,57 @@ function buildContextSentence(args: {
 
 /* ── Sub-components ───────────────────────────────────────────── */
 
+function MetricStrip({ items }: { items: Array<[string, string]> }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+        border: "1px solid var(--divider)",
+        borderRadius: "var(--radius-md)",
+        overflow: "hidden",
+        maxWidth: 620,
+      }}
+    >
+      {items.map(([label, value], index) => (
+        <div
+          key={label}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-4)",
+            padding: "12px 14px",
+            borderRight:
+              index === items.length - 1 ? "none" : "1px solid var(--divider)",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: FONT_MONO,
+              fontSize: "var(--font-size-2xs)",
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "var(--text-tertiary)",
+            }}
+          >
+            {label}
+          </span>
+          <span
+            style={{
+              fontFamily: FONT_HEAD,
+              fontSize: "var(--font-size-lg)",
+              fontWeight: 600,
+              color: label === "Created" || label === "Edges" ? ACCENT : "var(--text-primary)",
+            }}
+          >
+            {value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PrimaryButton({
   onClick,
   children,
@@ -228,13 +267,14 @@ function PrimaryButton({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
+        gap: "var(--space-8)",
         padding: "12px 22px",
         background: ACCENT,
         border: `1px solid ${ACCENT}`,
+        borderRadius: "var(--radius-md)",
         color: "var(--background)",
         fontFamily: FONT_HEAD,
-        fontSize: 14,
+        fontSize: "var(--font-size-lg)",
         fontWeight: 600,
         cursor: "pointer",
       }}
@@ -261,9 +301,10 @@ function GhostButton({
         padding: "12px 20px",
         background: "transparent",
         border: "1px solid var(--border)",
+        borderRadius: "var(--radius-md)",
         color: "var(--text-primary)",
         fontFamily: FONT_HEAD,
-        fontSize: 14,
+        fontSize: "var(--font-size-lg)",
         cursor: "pointer",
       }}
     >
@@ -288,14 +329,14 @@ function CheckIcon() {
 
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-6)" }}>
       <span
         aria-hidden
         style={{
           display: "inline-block",
           width: 6,
           height: 6,
-          borderRadius: 999,
+          borderRadius: "var(--radius-pill)",
           background: color,
         }}
       />
@@ -342,7 +383,7 @@ function GraphSnapshot({
             y1={a.y}
             x2={b.x}
             y2={b.y}
-            stroke={isNewEdge ? "var(--accent-strong)" : "color-mix(in srgb, var(--text-primary) 18%, transparent)"}
+            stroke={isNewEdge ? "var(--accent-strong)" : "var(--ink-edge)"}
             strokeWidth={isNewEdge ? 1.4 : 1}
             strokeOpacity={isNewEdge ? 0.85 : 1}
           />

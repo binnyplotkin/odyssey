@@ -24,14 +24,10 @@ const T = {
 /* ── Gradient presets for card headers ────────────────────── */
 
 const GRADIENTS = [
-  "linear-gradient(135deg, #1a4440 0%, #102a28 55%, #0a1a18 100%)",
-  "linear-gradient(135deg, #2e1a4a 0%, #1a1030 55%, #0f0922 100%)",
-  "linear-gradient(135deg, #3a1a18 0%, #25100e 55%, #170908 100%)",
-  "linear-gradient(135deg, #1a2a4a 0%, #101830 55%, #080e1a 100%)",
-  "linear-gradient(135deg, #2a2410 0%, #1a1608 55%, #120f08 100%)",
-  "linear-gradient(135deg, #1a3a2a 0%, #0f2218 55%, #081510 100%)",
-  "linear-gradient(135deg, #3a2a1a 0%, #2a1a10 55%, #1a1008 100%)",
-  "linear-gradient(135deg, #1a1a3a 0%, #101028 55%, #08081a 100%)",
+  "radial-gradient(circle at 25% 18%, color-mix(in srgb, var(--emissive-mint) 18%, transparent), transparent 38%), linear-gradient(135deg, #111417 0%, #0D1013 56%, #07090B 100%)",
+  "radial-gradient(circle at 76% 26%, color-mix(in srgb, var(--event-violet) 16%, transparent), transparent 36%), linear-gradient(135deg, #151A1E 0%, #101319 56%, #07090B 100%)",
+  "radial-gradient(circle at 28% 28%, color-mix(in srgb, var(--warning-amber) 13%, transparent), transparent 36%), linear-gradient(135deg, #151A1E 0%, #111417 54%, #07090B 100%)",
+  "radial-gradient(circle at 76% 22%, color-mix(in srgb, var(--signal-blue) 17%, transparent), transparent 35%), linear-gradient(135deg, #111827 0%, #0D1013 58%, #07090B 100%)",
 ];
 
 function hashString(str: string): number {
@@ -56,9 +52,9 @@ function inferStatus(world: WorldDefinition): Status {
 }
 
 const STATUS_STYLES: Record<Status, { dot: string; color: string; label: string }> = {
-  live: { dot: "#7DD3A1", color: "#7DD3A1", label: "Live" },
-  draft: { dot: "#F5C67A", color: "#F5C67A", label: "Draft" },
-  archived: { dot: "#8B96A8", color: "#8B96A8", label: "Archived" },
+  live: { dot: "var(--status-live)", color: "var(--status-live)", label: "Live" },
+  draft: { dot: "var(--status-draft)", color: "var(--status-draft)", label: "Draft" },
+  archived: { dot: "var(--status-archived)", color: "var(--status-archived)", label: "Archived" },
 };
 
 /* ── Derived helpers ─────────────────────────────────────── */
@@ -83,11 +79,11 @@ function initial(name: string): string {
 }
 
 const AVATAR_COLORS = [
-  { bg: "rgba(141, 240, 200, 0.18)", fg: "#8FD1CB" },
-  { bg: "rgba(251, 167, 192, 0.18)", fg: "#FBA7C0" },
-  { bg: "rgba(165, 180, 252, 0.18)", fg: "#A5B4FC" },
-  { bg: "rgba(245, 198, 122, 0.18)", fg: "#F5C67A" },
-  { bg: "rgba(122, 176, 232, 0.18)", fg: "#7AB0E8" },
+  { bg: "color-mix(in srgb, var(--active-teal) 18%, transparent)", fg: "var(--active-teal)" },
+  { bg: "color-mix(in srgb, var(--critical-crimson) 16%, transparent)", fg: "var(--critical-crimson)" },
+  { bg: "color-mix(in srgb, var(--signal-blue) 18%, transparent)", fg: "var(--signal-blue)" },
+  { bg: "color-mix(in srgb, var(--warning-amber) 18%, transparent)", fg: "var(--warning-amber)" },
+  { bg: "color-mix(in srgb, var(--event-violet) 18%, transparent)", fg: "var(--event-violet)" },
 ];
 
 function avatarColor(seed: string) {
@@ -161,31 +157,38 @@ export function WorldsGrid({ worlds }: Props) {
   const { setContent } = useHeaderContent();
   useEffect(() => {
     setContent(
-      <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
         <h1 style={{
-          fontSize: 16, fontWeight: 700, color: T.fg,
-          marginTop: 0, marginRight: 12, marginBottom: 0, marginLeft: 0,
+          fontSize: "var(--font-size-xl)", fontWeight: 700, color: T.fg,
+          marginTop: 0, marginRight: "var(--space-12)", marginBottom: 0, marginLeft: 0,
           whiteSpace: "nowrap", fontFamily: T.fontHeading,
         }}>
           Worlds
         </h1>
         <div style={{ flex: 1 }} />
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-8)" }}>
           <RefreshButton />
           <Link
             href="/worlds/new"
             style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "6px 14px", borderRadius: 8, border: "none",
-              background: "#8FD1CB", color: "#0C0E14",
-              fontSize: 11, fontWeight: 600, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+              padding: "6px 14px", borderRadius: "var(--radius-xl)", border: "none",
+              background: "var(--active-teal)", color: "var(--background)",
+              fontSize: "var(--font-size-sm)", fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit", whiteSpace: "nowrap", textDecoration: "none",
             }}
           >
             + New World
           </Link>
         </div>
-      </>,
+      </div>,
     );
     return () => setContent(null);
   }, [setContent]);
@@ -194,17 +197,17 @@ export function WorldsGrid({ worlds }: Props) {
     <div style={{ fontFamily: T.fontBody }}>
       {/* Toolbar */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 14, marginBottom: "1.5rem",
+        display: "flex", alignItems: "center", gap: "var(--space-14)", marginBottom: "1.5rem",
         flexWrap: "wrap",
       }}>
         {/* Search */}
         <div style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "0 12px", height: 36, width: 340, borderRadius: 8,
-          background: "rgba(255,255,255,0.02)",
+          display: "flex", alignItems: "center", gap: "var(--space-10)",
+          padding: "0 12px", height: 36, width: 340, borderRadius: "var(--radius-xl)",
+          background: "var(--input-bg)",
           border: `1px solid ${T.border}`,
         }}>
-          <span style={{ color: T.muted, fontSize: 14 }}>⌕</span>
+          <span style={{ color: T.muted, fontSize: "var(--font-size-lg)" }}>⌕</span>
           <input
             type="text"
             placeholder="Search worlds…"
@@ -212,13 +215,13 @@ export function WorldsGrid({ worlds }: Props) {
             onChange={(e) => setSearch(e.target.value)}
             style={{
               flex: 1, border: "none", background: "transparent", outline: "none",
-              fontSize: 13, color: T.fg, fontFamily: T.fontBody,
+              fontSize: "var(--font-size-md)", color: T.fg, fontFamily: T.fontBody,
             }}
           />
         </div>
 
         {/* Filter pills */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
           {filters.map((f) => {
             const active = filter === f.key;
             return (
@@ -227,25 +230,25 @@ export function WorldsGrid({ worlds }: Props) {
                 type="button"
                 onClick={() => setFilter(f.key)}
                 style={{
-                  display: "flex", alignItems: "center", gap: 8,
+                  display: "flex", alignItems: "center", gap: "var(--space-8)",
                   height: 30, padding: f.dot ? "0 12px" : "0 14px",
-                  borderRadius: 9999,
-                  border: active ? "1px solid rgba(141, 240, 200, 0.3)" : "1px solid transparent",
-                  background: active ? "rgba(141, 240, 200, 0.08)" : "transparent",
-                  fontSize: 12, fontWeight: active ? 500 : 400,
+                  borderRadius: "var(--radius-xl)",
+                  border: active ? "1px solid var(--border-active)" : "1px solid transparent",
+                  background: active ? "var(--accent-soft)" : "transparent",
+                  fontSize: "var(--font-size-base)", fontWeight: active ? 500 : 400,
                   fontFamily: T.fontBody,
-                  color: active ? T.accentStrong : "#8B96A8",
+                  color: active ? T.accentStrong : "var(--text-tertiary)",
                   cursor: "pointer",
                 }}
               >
                 {f.dot && (
                   <span style={{
-                    width: 6, height: 6, borderRadius: 9999, background: f.dot, flexShrink: 0,
+                    width: 6, height: 6, borderRadius: "var(--radius-pill)", background: f.dot, flexShrink: 0,
                   }} />
                 )}
                 <span>{f.label}</span>
                 <span style={{
-                  fontFamily: T.fontMono, fontSize: 11, fontWeight: 400,
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", fontWeight: 400,
                   opacity: 0.7,
                 }}>
                   {filterCounts[f.key]}
@@ -258,11 +261,11 @@ export function WorldsGrid({ worlds }: Props) {
         <div style={{ flex: 1 }} />
 
         {/* Sort */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
           <span style={{
-            fontFamily: T.fontMono, fontSize: 11, fontWeight: 400,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", fontWeight: 400,
             letterSpacing: "0.06em", textTransform: "uppercase",
-            color: "#5A6478",
+            color: "var(--text-tertiary)",
           }}>
             Sort
           </span>
@@ -270,9 +273,9 @@ export function WorldsGrid({ worlds }: Props) {
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortBy)}
             style={{
-              height: 30, padding: "0 10px", borderRadius: 6,
+              height: 30, padding: "0 10px", borderRadius: "var(--radius-sm)",
               border: `1px solid ${T.border}`, background: "transparent",
-              color: "#E8ECF2", fontSize: 12, fontFamily: T.fontBody,
+              color: "#E8ECF2", fontSize: "var(--font-size-base)", fontFamily: T.fontBody,
               outline: "none", cursor: "pointer",
             }}
           >
@@ -289,7 +292,7 @@ export function WorldsGrid({ worlds }: Props) {
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
-        gap: 24,
+        gap: "var(--space-24)",
       }}>
         {filtered.map(({ world, status }) => (
           <WorldCard key={world.id} world={world} status={status} />
@@ -299,12 +302,12 @@ export function WorldsGrid({ worlds }: Props) {
       {filtered.length === 0 && (
         <div style={{
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          padding: "4rem 2rem", gap: 10,
+          padding: "4rem 2rem", gap: "var(--space-10)",
         }}>
-          <div style={{ fontFamily: T.fontHeading, fontSize: 18, fontWeight: 600, color: T.fg }}>
+          <div style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-2xl)", fontWeight: 600, color: T.fg }}>
             No worlds found
           </div>
-          <div style={{ fontSize: 13, color: T.muted }}>
+          <div style={{ fontSize: "var(--font-size-md)", color: T.muted }}>
             {search.trim() ? "Try a different search term." : "Create your first world to get started."}
           </div>
         </div>
@@ -331,7 +334,7 @@ function RefreshButton() {
         style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           width: 28, height: 26, padding: 0,
-          borderRadius: 8,
+          borderRadius: "var(--radius-md)",
           border: `1px solid ${T.border}`,
           background: "rgba(255,255,255,0.05)",
           color: T.muted,
@@ -394,18 +397,21 @@ function WorldCard({ world, status }: { world: WorldDefinition; status: Status }
       href={`/worlds/${world.id}`}
       style={{
         display: "flex", flexDirection: "column",
-        borderRadius: 14, overflow: "hidden",
-        background: T.panel, border: `1px solid ${T.border}`,
+        borderRadius: "var(--radius-card, 18px)",
+        overflow: "hidden",
+        background: "var(--card-material, var(--panel))",
+        border: `1px solid ${T.border}`,
+        boxShadow: "var(--elevation-card)",
         textDecoration: "none", color: "inherit",
         transition: "border-color 150ms, transform 150ms, box-shadow 150ms",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "rgba(141, 240, 200, 0.3)";
-        e.currentTarget.style.boxShadow = "0 8px 30px rgba(0,0,0,0.25)";
+        e.currentTarget.style.borderColor = "var(--border-active)";
+        e.currentTarget.style.boxShadow = "var(--elevation-panel)";
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.borderColor = T.border;
-        e.currentTarget.style.boxShadow = "none";
+        e.currentTarget.style.boxShadow = "var(--elevation-card)";
       }}
     >
       {/* Gradient header */}
@@ -418,20 +424,20 @@ function WorldCard({ world, status }: { world: WorldDefinition; status: Status }
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
           <span style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "3px 10px", borderRadius: 9999,
+            display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+            padding: "3px 10px", borderRadius: "var(--radius-pill)",
             background: "rgba(0,0,0,0.35)",
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 400,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 400,
             letterSpacing: "0.1em", textTransform: "uppercase",
             color: statusStyle.color,
           }}>
             <span style={{
-              width: 6, height: 6, borderRadius: 9999, background: statusStyle.dot,
+              width: 6, height: 6, borderRadius: "var(--radius-pill)", background: statusStyle.dot,
             }} />
             {statusStyle.label}
           </span>
           <span style={{
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 400,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 400,
             letterSpacing: "0.08em", textTransform: "uppercase",
             color: "rgba(255,255,255,0.4)",
           }}>
@@ -439,18 +445,18 @@ function WorldCard({ world, status }: { world: WorldDefinition; status: Status }
           </span>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
           <div style={{
             fontFamily: T.fontHeading, fontSize: 32, fontWeight: 600,
             letterSpacing: "-0.03em", lineHeight: "36px",
-            color: "#F1F5F9",
+            color: "var(--text-primary)",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
             {world.title}
           </div>
           {tagline && (
             <div style={{
-              fontFamily: T.fontBody, fontSize: 12, fontWeight: 400,
+              fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 400,
               lineHeight: "16px", color: "rgba(143, 209, 203, 0.75)",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
@@ -463,11 +469,11 @@ function WorldCard({ world, status }: { world: WorldDefinition; status: Status }
       {/* Body */}
       <div style={{
         padding: "18px 20px", display: "flex", flexDirection: "column",
-        gap: 18, flex: 1,
+        gap: "var(--space-18)", flex: 1,
       }}>
         <div style={{
-          fontFamily: T.fontBody, fontSize: 13, fontWeight: 400,
-          lineHeight: "20px", color: "#A8B3C4",
+          fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 400,
+          lineHeight: "20px", color: "var(--text-secondary)",
           display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical",
           overflow: "hidden",
         }}>
@@ -477,21 +483,21 @@ function WorldCard({ world, status }: { world: WorldDefinition; status: Status }
         {/* Stats */}
         <div style={{
           display: "flex", alignItems: "flex-end", justifyContent: "space-between",
-          gap: 12,
+          gap: "var(--space-12)",
         }}>
           {stats.map((stat) => (
-            <div key={stat.label} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div key={stat.label} style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
               <div style={{
-                fontFamily: T.fontHeading, fontSize: 24, fontWeight: 300,
+                fontFamily: T.fontHeading, fontSize: "var(--font-size-4xl)", fontWeight: 300,
                 letterSpacing: "-0.02em", lineHeight: "28px",
-                color: "#F1F5F9",
+                color: "var(--text-primary)",
               }}>
                 {stat.value}
               </div>
               <div style={{
-                fontFamily: T.fontMono, fontSize: 10, fontWeight: 400,
+                fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 400,
                 letterSpacing: "0.1em", textTransform: "uppercase",
-                color: "#5A6478",
+                color: "var(--text-tertiary)",
               }}>
                 {stat.label}
               </div>
@@ -502,18 +508,18 @@ function WorldCard({ world, status }: { world: WorldDefinition; status: Status }
         {/* Footer */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          marginTop: "auto", paddingTop: 14, borderTop: `1px solid ${T.border}`,
+          marginTop: "auto", paddingTop: "var(--space-14)", borderTop: `1px solid ${T.border}`,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", minWidth: 0 }}>
             <div style={{ display: "flex" }}>
               {visibleChars.map((char, i) => {
                 const c = avatarColor(char.id);
                 return (
                   <span key={char.id} style={{
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
-                    width: 22, height: 22, borderRadius: 9999,
+                    width: 22, height: 22, borderRadius: "var(--radius-pill)",
                     background: c.bg, color: c.fg,
-                    fontFamily: T.fontBody, fontSize: 11, fontWeight: 600,
+                    fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 600,
                     border: `2px solid ${T.panel}`,
                     marginLeft: i === 0 ? 0 : -6,
                   }}>
@@ -524,9 +530,9 @@ function WorldCard({ world, status }: { world: WorldDefinition; status: Status }
               {extraChars > 0 && (
                 <span style={{
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 22, height: 22, borderRadius: 9999,
-                  background: "rgba(255,255,255,0.06)", color: "#8B96A8",
-                  fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+                  width: 22, height: 22, borderRadius: "var(--radius-pill)",
+                  background: "var(--surface-hover)", color: "var(--text-tertiary)",
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
                   border: `2px solid ${T.panel}`,
                   marginLeft: -6,
                 }}>
@@ -535,20 +541,20 @@ function WorldCard({ world, status }: { world: WorldDefinition; status: Status }
               )}
             </div>
             <span style={{
-              fontFamily: T.fontBody, fontSize: 12, fontWeight: 400,
-              color: "#8B96A8", overflow: "hidden", textOverflow: "ellipsis",
+              fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 400,
+              color: "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis",
               whiteSpace: "nowrap", minWidth: 0,
             }}>
               {nameList}{nameTrailing}
             </span>
           </div>
           <span style={{
-            display: "inline-flex", alignItems: "center", gap: 4,
-            fontFamily: T.fontBody, fontSize: 12, fontWeight: 400,
+            display: "inline-flex", alignItems: "center", gap: "var(--space-4)",
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 400,
             color: T.accentStrong, flexShrink: 0,
           }}>
             Open
-            <span style={{ fontSize: 13 }}>→</span>
+            <span style={{ fontSize: "var(--font-size-md)" }}>→</span>
           </span>
         </div>
       </div>

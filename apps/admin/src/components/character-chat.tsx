@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { EraConfig, WikiEdgeRecord, WikiPageRecord } from "@odyssey/db";
+import type { CharacterBrainModel, EraConfig, WikiEdgeRecord, WikiPageRecord } from "@odyssey/db";
 import { ChatGraph } from "@/components/chat-graph";
 import { useHeaderContent } from "@/components/header-context";
 import { Menu, type MenuItem } from "@/components/menu";
@@ -40,6 +40,9 @@ type CharacterProp = {
   summary: string | null;
   image: string | null;
   eras: EraConfig[];
+  // Forwarded to the Voice tab's wavefield so it can pre-select the L04
+  // voice-mode override. Optional because legacy mounts may not pass it.
+  brainModel?: CharacterBrainModel | null;
 };
 
 type Moment = { era: string; index: number };
@@ -394,7 +397,7 @@ export function CharacterChat({ character, pages, edges }: Props) {
   /* ── Render ────────────────────────────────────────────────────── */
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--background)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--app-atmosphere, var(--background))" }}>
       {/* Voice tab takes over the workspace — wavefield is self-contained. */}
       {view === "voice" ? (
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
@@ -493,18 +496,18 @@ function ChatHeaderInner({
     <>
       <Link href={`/characters/${character.slug}`} style={{
         display: "flex", alignItems: "center", justifyContent: "center",
-        width: 28, height: 28, borderRadius: 6,
+        width: 28, height: 28, borderRadius: "var(--radius-sm)",
         border: `1px solid ${T.border}`, background: "transparent",
-        color: T.muted, textDecoration: "none", flexShrink: 0, marginRight: 14,
+        color: T.muted, textDecoration: "none", flexShrink: 0, marginRight: "var(--space-14)",
       }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
       </Link>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", flexShrink: 0 }}>
         <CharacterAvatar character={character} size={24} />
-        <span style={{ fontFamily: T.fontHeading, fontSize: 16, fontWeight: 700, color: T.fg, whiteSpace: "nowrap" }}>
+        <span style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-xl)", fontWeight: 700, color: T.fg, whiteSpace: "nowrap" }}>
           {character.title}
         </span>
-        <span style={{ padding: "2px 8px", borderRadius: 4, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.25)", fontFamily: T.fontMono, fontSize: 9, fontWeight: 600, color: "#FACC15", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <span style={{ padding: "2px 8px", borderRadius: "var(--radius-xs)", background: "color-mix(in srgb, var(--status-draft) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--status-draft) 25%, transparent)", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 600, color: "var(--status-draft)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Sandbox
         </span>
       </div>
@@ -531,7 +534,7 @@ function ViewTabs({
       role="tablist"
       aria-label="Sandbox view"
       style={{
-        display: "inline-flex", padding: 2, borderRadius: 8, marginLeft: 4,
+        display: "inline-flex", padding: "var(--space-2)", borderRadius: "var(--radius-md)", marginLeft: "var(--space-4)",
         border: `1px solid ${T.border}`,
         background: "color-mix(in srgb, var(--background) 25%, transparent)",
       }}
@@ -546,15 +549,15 @@ function ViewTabs({
             aria-selected={active}
             onClick={() => setView(t.value)}
             style={{
-              padding: "4px 12px", borderRadius: 6, border: "none",
+              padding: "4px 12px", borderRadius: "var(--radius-sm)", border: "none",
               background: active
                 ? "color-mix(in srgb, var(--accent-strong) 12%, transparent)"
                 : "transparent",
               color: active ? T.fg : T.muted,
-              fontFamily: T.fontMono, fontSize: 10, fontWeight: 600,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600,
               letterSpacing: "0.1em", textTransform: "uppercase",
               cursor: "pointer",
-              display: "inline-flex", alignItems: "center", gap: 6,
+              display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
             }}
           >
             {t.label}
@@ -562,7 +565,7 @@ function ViewTabs({
               <span
                 aria-hidden
                 title="Override active"
-                style={{ width: 6, height: 6, borderRadius: "50%", background: "#FACC15" }}
+                style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--status-draft)" }}
               />
             )}
           </button>
@@ -580,9 +583,9 @@ function MomentPicker({
   const sortedEras = [...eras].sort((a, b) => a.order - b.order);
   if (sortedEras.length === 0) return null;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", border: `1px solid ${T.border}`, borderRadius: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", padding: "5px 10px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-md)" }}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>Moment</span>
+      <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>Moment</span>
       <Menu
         value={moment?.era ?? ""}
         onChange={(key) => {
@@ -596,12 +599,12 @@ function MomentPicker({
         ]}
         triggerStyle={{
           border: "none", padding: 0, background: "transparent",
-          color: "#8CE7D2", fontFamily: T.fontMono, fontSize: 11, fontWeight: 500,
+          color: "var(--accent-strong)", fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", fontWeight: 500,
         }}
       />
       {moment && (
         <>
-          <span style={{ fontFamily: T.fontMono, fontSize: 11, color: "#8CE7D2" }}>·</span>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: "var(--accent-strong)" }}>·</span>
           <input
             type="number"
             value={moment.index}
@@ -610,7 +613,7 @@ function MomentPicker({
             onChange={(e) => setMoment({ era: moment.era, index: Number(e.target.value) || 0 })}
             style={{
               width: 44, border: "none", outline: "none", background: "transparent",
-              color: "#8CE7D2", fontFamily: T.fontMono, fontSize: 11, fontWeight: 500,
+              color: "var(--accent-strong)", fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", fontWeight: 500,
               textAlign: "right",
             }}
           />
@@ -654,15 +657,16 @@ function SceneBar({
 
   return (
     <div style={{
-      display: "flex", flexDirection: "column", gap: 10,
+      display: "flex", flexDirection: "column", gap: "var(--space-10)",
       padding: "14px 32px", borderBottom: `1px solid ${T.border}`,
-      background: "rgba(255,255,255,0.02)",
+      background: "color-mix(in srgb, var(--surface-1) 72%, transparent)",
+      backdropFilter: "blur(16px)",
     }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-12)", flexWrap: "wrap" }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
           Scene
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", flexShrink: 0 }}>
           <MomentPicker moment={moment} setMoment={setMoment} eras={eras} />
           <Menu
             value={model}
@@ -673,21 +677,21 @@ function SceneBar({
               label: m.label,
               meta: m.provider,
             }))}
-            triggerStyle={{ fontFamily: T.fontMono, fontSize: 11 }}
+            triggerStyle={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)" }}
           />
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-14)", flexWrap: "wrap" }}>
         {/* Active entities */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", flexWrap: "wrap" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M5 21v-1c0-3.87 3.13-7 7-7s7 3.13 7 7v1"/></svg>
-          <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>Active</span>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>Active</span>
           {activeEntities.map((slug) => (
             <span key={slug} title={slug} style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              padding: "2px 8px 2px 10px", borderRadius: 999,
+              display: "inline-flex", alignItems: "center", gap: "var(--space-5)",
+              padding: "2px 8px 2px 10px", borderRadius: "var(--radius-pill)",
               background: "rgba(251,167,192,0.1)", border: "1px solid rgba(251,167,192,0.25)",
-              fontFamily: T.fontBody, fontSize: 11, color: "#FBA7C0",
+              fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: "#FBA7C0",
             }}>
               {titleBySlug.get(slug) ?? slug}
               <button type="button" onClick={() => removeEntity(slug)} style={{ border: "none", background: "transparent", color: "#FBA7C0", cursor: "pointer", padding: 0, display: "flex" }} aria-label={`Remove ${titleBySlug.get(slug) ?? slug}`}>
@@ -705,15 +709,15 @@ function SceneBar({
         <span style={{ width: 1, height: 18, background: T.border }} />
 
         {/* Location */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", flexWrap: "wrap" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>Location</span>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>Location</span>
           {location && (
             <span title={location} style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              padding: "2px 8px 2px 10px", borderRadius: 999,
+              display: "inline-flex", alignItems: "center", gap: "var(--space-5)",
+              padding: "2px 8px 2px 10px", borderRadius: "var(--radius-pill)",
               background: "rgba(122,176,232,0.1)", border: "1px solid rgba(122,176,232,0.25)",
-              fontFamily: T.fontBody, fontSize: 11, color: "#7AB0E8",
+              fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: "#7AB0E8",
             }}>
               {titleBySlug.get(location) ?? location}
               <button
@@ -739,8 +743,8 @@ function SceneBar({
         <span style={{ width: 1, height: 18, background: T.border }} />
 
         {/* Budget */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>Budget</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>Budget</span>
           <input
             type="range"
             min={500}
@@ -748,9 +752,9 @@ function SceneBar({
             step={100}
             value={budget}
             onChange={(e) => setBudget(Number(e.target.value))}
-            style={{ width: 120, accentColor: "#8CE7D2" }}
+            style={{ width: 120, accentColor: "var(--accent-strong)" }}
           />
-          <span style={{ fontFamily: T.fontMono, fontSize: 11, color: "#8CE7D2", width: 48, textAlign: "right" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: "var(--accent-strong)", width: 48, textAlign: "right" }}>
             {budget.toLocaleString()}
           </span>
         </div>
@@ -764,7 +768,7 @@ function SceneBar({
 
 function TurnView({ turn }: { turn: Turn }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
       <UserBubble text={turn.userMessage} />
       <AssistantBubble turn={turn} />
     </div>
@@ -777,10 +781,10 @@ function UserBubble({ text }: { text: string }) {
       <div style={{
         maxWidth: 560,
         padding: "10px 14px",
-        borderRadius: 14, borderTopRightRadius: 4,
+        borderRadius: "var(--radius-2xl)", borderTopRightRadius: "var(--radius-xs)",
         background: T.panel, border: `1px solid ${T.border}`,
       }}>
-        <span style={{ fontFamily: T.fontBody, fontSize: 14, color: T.fg, lineHeight: "20px", whiteSpace: "pre-wrap" }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-lg)", color: T.fg, lineHeight: "20px", whiteSpace: "pre-wrap" }}>
           {text}
         </span>
       </div>
@@ -791,14 +795,14 @@ function UserBubble({ text }: { text: string }) {
 function AssistantBubble({ turn }: { turn: Turn }) {
   const isStreaming = turn.status === "streaming" || turn.status === "curator-done";
   return (
-    <div style={{ display: "flex", gap: 12 }}>
+    <div style={{ display: "flex", gap: "var(--space-12)" }}>
       <div style={{ position: "relative" }}>
         <div style={{
           width: 32, height: 32, borderRadius: "50%",
-          background: "linear-gradient(135deg, #8CE7D2 0%, #4FB8A8 100%)",
+          background: "linear-gradient(135deg, var(--emissive-mint) 0%, var(--active-teal) 100%)",
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         }}>
-          <span style={{ fontFamily: T.fontHeading, fontSize: 14, fontWeight: 600, color: "#0C0E14", lineHeight: "16px" }}>
+          <span style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-lg)", fontWeight: 600, color: "#0C0E14", lineHeight: "16px" }}>
             A
           </span>
         </div>
@@ -809,30 +813,30 @@ function AssistantBubble({ turn }: { turn: Turn }) {
           }}/>
         )}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 720, flex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontFamily: T.fontHeading, fontSize: 11, fontWeight: 600, color: "#8CE7D2", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", maxWidth: 720, flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+          <span style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-sm)", fontWeight: 600, color: "var(--accent-strong)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
             Abraham
           </span>
-          {turn.status === "pending" && <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>● curating…</span>}
-          {turn.status === "curator-done" && <span style={{ fontFamily: T.fontMono, fontSize: 10, color: "#4ADE80" }}>● speaking</span>}
-          {turn.status === "streaming" && <span style={{ fontFamily: T.fontMono, fontSize: 10, color: "#4ADE80" }}>● speaking</span>}
+          {turn.status === "pending" && <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>● curating…</span>}
+          {turn.status === "curator-done" && <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "#4ADE80" }}>● speaking</span>}
+          {turn.status === "streaming" && <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "#4ADE80" }}>● speaking</span>}
         </div>
         {turn.status === "error" ? (
-          <span style={{ fontFamily: T.fontBody, fontSize: 13, color: "#E89090" }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: "#E89090" }}>
             {turn.error ?? "Failed"}
           </span>
         ) : turn.assistantMessage.length === 0 && turn.status !== "done" ? (
-          <span style={{ fontFamily: T.fontBody, fontSize: 13, color: T.muted, fontStyle: "italic" }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.muted, fontStyle: "italic" }}>
             curating context…
           </span>
         ) : (
           <p style={{
-            fontFamily: T.fontSerif, fontSize: 16, color: T.fg,
+            fontFamily: T.fontSerif, fontSize: "var(--font-size-xl)", color: T.fg,
             lineHeight: "25px", margin: 0, whiteSpace: "pre-wrap",
           }}>
             {turn.assistantMessage}
-            {isStreaming && <span style={{ display: "inline-block", width: 2, height: 16, background: "#8CE7D2", marginLeft: 2, verticalAlign: "middle", animation: "blink 1s steps(2) infinite" }}/>}
+            {isStreaming && <span style={{ display: "inline-block", width: 2, height: 16, background: "var(--emissive-mint)", marginLeft: "var(--space-2)", verticalAlign: "middle", animation: "blink 1s steps(2) infinite" }}/>}
           </p>
         )}
         <TraceFooter turn={turn} />
@@ -847,38 +851,38 @@ function TraceFooter({ turn }: { turn: Turn }) {
   if (!c && turn.status !== "error") {
     return null;
   }
-  const accent = turn.status === "done" ? "#FFFFFF5C" : turn.status === "error" ? "#E89090" : "#8CE7D2";
+  const accent = turn.status === "done" ? "var(--text-quaternary)" : turn.status === "error" ? "var(--status-error)" : "var(--accent-strong)";
   const bg = turn.status === "streaming" || turn.status === "curator-done" ? "rgba(140,231,210,0.06)" : "rgba(255,255,255,0.03)";
   const border = turn.status === "streaming" || turn.status === "curator-done" ? "rgba(140,231,210,0.2)" : T.border;
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 10,
-      marginTop: 6, padding: "8px 12px", borderRadius: 10,
+      display: "flex", alignItems: "center", gap: "var(--space-10)",
+      marginTop: "var(--space-6)", padding: "8px 12px", borderRadius: "var(--radius-lg)",
       background: bg, border: `1px solid ${border}`, flexWrap: "wrap",
     }}>
       {c ? (
         <>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: accent }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: accent }}>
             curator: {c.pages.length} pages · {c.tokensUsed.toLocaleString()} tok · {c.elapsedMs}ms
           </span>
           {c.trace.seeds.length > 0 && (
-            <span style={{ padding: "1px 7px", borderRadius: 4, background: "rgba(140,231,210,0.1)", fontFamily: T.fontMono, fontSize: 9, color: "#8CE7D2", letterSpacing: "0.05em" }}>
+            <span style={{ padding: "1px 7px", borderRadius: "var(--radius-xs)", background: "var(--accent-soft)", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: "var(--accent-strong)", letterSpacing: "0.05em" }}>
               {c.trace.seeds.length} seeds
             </span>
           )}
           {c.trace.timelineFiltered.length > 0 && (
-            <span style={{ padding: "1px 7px", borderRadius: 4, background: "rgba(250,204,21,0.1)", fontFamily: T.fontMono, fontSize: 9, color: "#FACC15", letterSpacing: "0.05em" }}>
+            <span style={{ padding: "1px 7px", borderRadius: "var(--radius-xs)", background: "color-mix(in srgb, var(--status-draft) 10%, transparent)", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: "var(--status-draft)", letterSpacing: "0.05em" }}>
               {c.trace.timelineFiltered.length} time-gated
             </span>
           )}
           {turn.status === "done" && (turn.tokensIn > 0 || turn.tokensOut > 0) && (
-            <span style={{ marginLeft: "auto", fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+            <span style={{ marginLeft: "auto", fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
               llm: {turn.tokensIn}→{turn.tokensOut} tok
             </span>
           )}
         </>
       ) : (
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, color: accent }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: accent }}>
           {turn.error}
         </span>
       )}
@@ -905,13 +909,16 @@ function Composer({
 
   return (
     <div style={{
-      display: "flex", flexDirection: "column", gap: 8,
+      display: "flex", flexDirection: "column", gap: "var(--space-8)",
       padding: "16px 32px 18px 32px",
-      borderTop: `1px solid ${T.border}`, background: "rgba(255,255,255,0.02)", flexShrink: 0,
+      borderTop: `1px solid ${T.border}`,
+      background: "color-mix(in srgb, var(--surface-1) 72%, transparent)",
+      backdropFilter: "blur(16px)",
+      flexShrink: 0,
     }}>
       <div style={{
-        display: "flex", alignItems: "flex-end", gap: 10,
-        padding: "10px 14px", borderRadius: 12,
+        display: "flex", alignItems: "flex-end", gap: "var(--space-10)",
+        padding: "10px 14px", borderRadius: "var(--radius-xl)",
         background: T.panel, border: `1px solid ${T.border}`,
       }}>
         <textarea
@@ -923,17 +930,17 @@ function Composer({
           style={{
             flex: 1, border: "none", outline: "none", resize: "none",
             background: "transparent", color: T.fg, fontFamily: T.fontBody,
-            fontSize: 14, lineHeight: "20px", maxHeight: 180,
+            fontSize: "var(--font-size-lg)", lineHeight: "20px", maxHeight: 180,
           }}
         />
-        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-          <span style={{ padding: "2px 7px", borderRadius: 4, background: "rgba(255,255,255,0.04)", fontFamily: T.fontMono, fontSize: 9, color: T.muted, letterSpacing: "0.05em" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", flexShrink: 0 }}>
+          <span style={{ padding: "2px 7px", borderRadius: "var(--radius-xs)", background: "rgba(255,255,255,0.04)", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: T.muted, letterSpacing: "0.05em" }}>
             ⌘ ↵
           </span>
           {busy ? (
             <button onClick={onCancel} style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 32, height: 32, borderRadius: 8,
+              width: 32, height: 32, borderRadius: "var(--radius-md)",
               background: "#E89090", border: "none", cursor: "pointer",
             }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0C0E14" strokeWidth="2.5" strokeLinecap="round"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
@@ -941,8 +948,8 @@ function Composer({
           ) : (
             <button onClick={onSend} disabled={!input.trim()} style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 32, height: 32, borderRadius: 8,
-              background: input.trim() ? "#8CE7D2" : "var(--card-hover)",
+              width: 32, height: 32, borderRadius: "var(--radius-md)",
+              background: input.trim() ? "var(--active-teal)" : "var(--card-hover)",
               border: "none", cursor: input.trim() ? "pointer" : "not-allowed",
             }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0C0E14" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
@@ -950,9 +957,9 @@ function Composer({
           )}
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>Tip:</span>
-        <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>Tip:</span>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>
           Edit a wiki page, then re-run the last turn to see how the answer shifts.
         </span>
         <span style={{ flex: 1 }} />
@@ -968,10 +975,10 @@ function Composer({
 }
 
 const ghostBtn: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 5,
-  padding: "4px 10px", borderRadius: 6,
+  display: "flex", alignItems: "center", gap: "var(--space-5)",
+  padding: "4px 10px", borderRadius: "var(--radius-sm)",
   border: "1px solid var(--border)", background: "transparent",
-  color: "var(--foreground)", fontFamily: T.fontBody, fontSize: 10,
+  color: "var(--foreground)", fontFamily: T.fontBody, fontSize: "var(--font-size-xs)",
   cursor: "pointer",
 };
 
@@ -1019,17 +1026,17 @@ function SystemPromptPanel({
     <div
       style={{
         flex: 1, minHeight: 0, overflow: "auto",
-        display: "flex", flexDirection: "column", gap: 16,
+        display: "flex", flexDirection: "column", gap: "var(--space-16)",
         padding: "20px 32px 24px 32px",
       }}
     >
       {/* Top row: status + reset chat */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-12)" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
             System Prompt
           </span>
-          <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted }}>
             What {characterTitle} sees before each turn. Override to test pure model behavior — the curator is skipped while override is active.
           </span>
         </div>
@@ -1038,12 +1045,12 @@ function SystemPromptPanel({
           onClick={onResetChat}
           disabled={!hasTurns || busy}
           style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "6px 14px", borderRadius: 8,
+            display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+            padding: "6px 14px", borderRadius: "var(--radius-md)",
             border: `1px solid ${T.border}`,
             background: "transparent",
             color: hasTurns && !busy ? T.fg : T.muted,
-            fontFamily: T.fontBody, fontSize: 11, fontWeight: 500,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500,
             cursor: hasTurns && !busy ? "pointer" : "not-allowed",
             opacity: hasTurns && !busy ? 1 : 0.5,
             flexShrink: 0,
@@ -1063,34 +1070,34 @@ function SystemPromptPanel({
         style={{
           display: "flex", flexDirection: "column",
           background: T.panel, border: `1px solid ${T.border}`,
-          borderRadius: 12, overflow: "clip",
+          borderRadius: "var(--radius-xl)", overflow: "clip",
         }}
       >
         <div
           style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            gap: 12, padding: "12px 16px",
+            gap: "var(--space-12)", padding: "12px 16px",
             borderBottom: `1px solid ${T.border}`,
             background: draftActive ? "rgba(250,204,21,0.06)" : "transparent",
           }}
         >
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-8)", cursor: "pointer", userSelect: "none" }}>
             <input
               type="checkbox"
               checked={overrideEnabled}
               onChange={(e) => setOverrideEnabled(e.target.checked)}
-              style={{ accentColor: "#FACC15" }}
+              style={{ accentColor: "var(--status-draft)" }}
             />
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 600, color: draftActive ? "#FACC15" : T.fg, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600, color: draftActive ? "var(--status-draft)" : T.fg, letterSpacing: "0.08em", textTransform: "uppercase" }}>
               Use this override
             </span>
             {draftActive && (
-              <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
+              <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>
                 · curator skipped
               </span>
             )}
           </label>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
             <button
               type="button"
               onClick={() => displayedPrompt && setOverrideDraft(displayedPrompt)}
@@ -1131,7 +1138,7 @@ function SystemPromptPanel({
           style={{
             width: "100%", border: "none", outline: "none", resize: "vertical",
             padding: "16px 20px", background: "var(--background)",
-            fontFamily: T.fontMono, fontSize: 12, color: T.fg, lineHeight: "20px",
+            fontFamily: T.fontMono, fontSize: "var(--font-size-base)", color: T.fg, lineHeight: "20px",
             minHeight: 320, boxSizing: "border-box",
           }}
         />
@@ -1140,11 +1147,11 @@ function SystemPromptPanel({
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "10px 16px", borderTop: `1px solid ${T.border}`,
         }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, letterSpacing: "0.05em" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, letterSpacing: "0.05em" }}>
             {charCount.toLocaleString()} chars · ~{tokenEst.toLocaleString()} tokens
           </span>
           {overrideEnabled && !overrideDraft.trim() && (
-            <span style={{ fontFamily: T.fontBody, fontSize: 11, color: "#E89090" }}>
+            <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: "#E89090" }}>
               Override is on but the draft is empty — turns will fall back to the curator.
             </span>
           )}
@@ -1156,24 +1163,24 @@ function SystemPromptPanel({
         style={{
           display: "flex", flexDirection: "column",
           background: T.panel, border: `1px solid ${T.border}`,
-          borderRadius: 12, overflow: "clip",
+          borderRadius: "var(--radius-xl)", overflow: "clip",
         }}
       >
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          gap: 12, padding: "12px 16px", borderBottom: `1px solid ${T.border}`,
+          gap: "var(--space-12)", padding: "12px 16px", borderBottom: `1px solid ${T.border}`,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
               {displayedSource === "sent" ? "Latest sent prompt" : "Resolved prompt · preview"}
             </span>
             {displayedSource === "preview" && (
               <span
                 title="Curator runs with a placeholder query so you can see the prompt before sending a turn."
                 style={{
-                  padding: "1px 7px", borderRadius: 999,
+                  padding: "1px 7px", borderRadius: "var(--radius-pill)",
                   background: "rgba(140,231,210,0.1)", border: "1px solid rgba(140,231,210,0.25)",
-                  fontFamily: T.fontMono, fontSize: 9, fontWeight: 600, color: "#8CE7D2",
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 600, color: "var(--accent-strong)",
                   letterSpacing: "0.06em", textTransform: "uppercase",
                 }}
               >
@@ -1181,9 +1188,9 @@ function SystemPromptPanel({
               </span>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
             {displayedPrompt && (
-              <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>
+              <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
                 {displayedPrompt.length.toLocaleString()} chars
               </span>
             )}
@@ -1206,7 +1213,7 @@ function SystemPromptPanel({
           <div style={{
             padding: "12px 20px", borderBottom: `1px solid ${T.border}`,
             background: "rgba(232,144,144,0.08)",
-            fontFamily: T.fontBody, fontSize: 12, color: "#E89090",
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: "#E89090",
           }}>
             {previewError}
           </div>
@@ -1227,7 +1234,7 @@ function SystemPromptPanel({
         ) : (
           <div style={{
             padding: "16px 20px",
-            fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: "18px",
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: "18px",
           }}>
             {previewLoading
               ? "Assembling preview…"
@@ -1296,7 +1303,7 @@ function TracePanel({
   void character;
 
   return (
-    <div style={{ width: 640, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--background)" }}>
+    <div style={{ width: 640, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "color-mix(in srgb, var(--background) 88%, transparent)", backdropFilter: "blur(12px)" }}>
       {/* Turn scrubber */}
       <TurnScrubber
         turns={turns}
@@ -1320,17 +1327,17 @@ function TracePanel({
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "10px 20px", borderBottom: `1px solid ${T.border}`, flexShrink: 0,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Curator Trace
           </span>
           {c && (
-            <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
+            <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>
               {c.pages.length} selected · {c.elapsedMs}ms
             </span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: "var(--space-4)" }}>
           <TabPill active={tab === "trace"} onClick={() => setTab("trace")} label="Trace" />
           <TabPill active={tab === "prompt"} onClick={() => setTab("prompt")} label="Prompt" />
         </div>
@@ -1339,16 +1346,16 @@ function TracePanel({
       {/* Tab content */}
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "18px 20px" }}>
         {!c ? (
-          <div style={{ color: T.muted, fontFamily: T.fontBody, fontSize: 13 }}>
+          <div style={{ color: T.muted, fontFamily: T.fontBody, fontSize: "var(--font-size-md)" }}>
             {turns.length === 0
               ? "Send a message to see the curator's work."
               : "This turn hasn't been curated yet."}
           </div>
         ) : tab === "prompt" ? (
           <pre style={{
-            margin: 0, padding: "12px 14px", borderRadius: 10,
+            margin: 0, padding: "12px 14px", borderRadius: "var(--radius-lg)",
             background: "var(--panel)", border: `1px solid ${T.border}`,
-            fontFamily: T.fontMono, fontSize: 11, color: T.fg, lineHeight: "18px",
+            fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.fg, lineHeight: "18px",
             whiteSpace: "pre-wrap", wordBreak: "break-word",
           }}>
             {c.systemPrompt}
@@ -1371,14 +1378,14 @@ function TurnScrubber({
   if (turns.length === 0) {
     return (
       <div style={{
-        display: "flex", alignItems: "center", gap: 8,
+        display: "flex", alignItems: "center", gap: "var(--space-8)",
         padding: "10px 20px", borderBottom: `1px solid ${T.border}`,
-        background: "rgba(255,255,255,0.02)", flexShrink: 0,
+        background: "color-mix(in srgb, var(--surface-1) 70%, transparent)", flexShrink: 0,
       }}>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Turn
         </span>
-        <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>
           no turns yet
         </span>
       </div>
@@ -1389,14 +1396,14 @@ function TurnScrubber({
 
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 6,
+      display: "flex", alignItems: "center", gap: "var(--space-6)",
       padding: "8px 14px", borderBottom: `1px solid ${T.border}`,
-      background: "rgba(255,255,255,0.02)", flexShrink: 0,
+      background: "color-mix(in srgb, var(--surface-1) 70%, transparent)", flexShrink: 0,
       overflowX: "auto",
     }}>
       <span style={{
-        fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted,
-        letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0, paddingRight: 4,
+        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted,
+        letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0, paddingRight: "var(--space-4)",
       }}>
         Turn
       </span>
@@ -1436,7 +1443,7 @@ function ScrubberPill({
   isLatest?: boolean;
 }) {
   let dotColor: string | null = null;
-  if (dot) dotColor = "#8CE7D2";
+  if (dot) dotColor = "var(--accent-strong)";
   else if (isLatest && status === "streaming") dotColor = "#4ADE80";
   else if (status === "error") dotColor = "#E89090";
 
@@ -1445,12 +1452,12 @@ function ScrubberPill({
       type="button"
       onClick={onClick}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 5,
-        padding: "3px 10px", borderRadius: 999,
+        display: "inline-flex", alignItems: "center", gap: "var(--space-5)",
+        padding: "3px 10px", borderRadius: "var(--radius-pill)",
         border: active ? "none" : `1px solid ${T.border}`,
         background: active ? "rgba(140,231,210,0.12)" : "transparent",
-        color: active ? "#8CE7D2" : T.muted,
-        fontFamily: T.fontMono, fontSize: 10, fontWeight: active ? 600 : 500,
+        color: active ? "var(--accent-strong)" : T.muted,
+        fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: active ? 600 : 500,
         letterSpacing: "0.04em", textTransform: "uppercase",
         cursor: "pointer", flexShrink: 0,
       }}
@@ -1464,10 +1471,10 @@ function ScrubberPill({
 function TabPill({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button onClick={onClick} style={{
-      padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer",
+      padding: "4px 10px", borderRadius: "var(--radius-sm)", border: "none", cursor: "pointer",
       background: active ? "rgba(140,231,210,0.1)" : "transparent",
-      color: active ? "#8CE7D2" : T.muted,
-      fontFamily: T.fontMono, fontSize: 10, fontWeight: active ? 600 : 500,
+      color: active ? "var(--accent-strong)" : T.muted,
+      fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: active ? 600 : 500,
       letterSpacing: "0.06em", textTransform: "uppercase",
     }}>
       {label}
@@ -1493,18 +1500,18 @@ function TraceContent({ curator, pageBySlug }: { curator: CuratorEvent; pageBySl
             label={`Context Harness · ${curator.routingMode ?? "chat-turn"}`}
             hint={`${curator.promptKind ?? "chat"} prompt · ${curator.timingTrace.elapsedMs}ms`}
           />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "var(--space-8)" }}>
             {curator.timingTrace.events.map((event) => (
               <div key={`${event.name}-${event.elapsedMs}`} style={{
                 padding: "8px 10px",
-                borderRadius: 8,
+                borderRadius: "var(--radius-md)",
                 background: "var(--panel)",
                 border: `1px solid ${T.border}`,
                 minWidth: 0,
               }}>
                 <div style={{
                   fontFamily: T.fontMono,
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   color: T.muted,
                   textTransform: "uppercase",
                   whiteSpace: "nowrap",
@@ -1513,7 +1520,7 @@ function TraceContent({ curator, pageBySlug }: { curator: CuratorEvent; pageBySl
                 }}>
                   {event.name}
                 </div>
-                <div style={{ marginTop: 5, fontFamily: T.fontHeading, fontSize: 14, color: T.fg }}>
+                <div style={{ marginTop: "var(--space-5)", fontFamily: T.fontHeading, fontSize: "var(--font-size-lg)", color: T.fg }}>
                   {event.elapsedMs}ms
                 </div>
               </div>
@@ -1525,20 +1532,20 @@ function TraceContent({ curator, pageBySlug }: { curator: CuratorEvent; pageBySl
       {/* Seeds */}
       <section>
         <SectionHeader label={`Seeds · ${curator.trace.seeds.length}`} hint="why these pages were picked first" />
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           {curator.trace.seeds.map((s, i) => {
             const color = seedColor(s.reason);
             return (
               <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "6px 10px", borderRadius: 8,
+                display: "flex", alignItems: "center", gap: "var(--space-10)",
+                padding: "6px 10px", borderRadius: "var(--radius-md)",
                 background: `${color}0D`, border: `1px solid ${color}33`,
               }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
-                <span style={{ fontFamily: T.fontHeading, fontSize: 12, fontWeight: 500, color: T.fg }}>{s.slug}</span>
-                <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>{s.reason}</span>
+                <span style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-base)", fontWeight: 500, color: T.fg }}>{s.slug}</span>
+                <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>{s.reason}</span>
                 <span style={{ flex: 1 }} />
-                <span style={{ fontFamily: T.fontMono, fontSize: 10, color }}>+{Math.round(s.score)}</span>
+                <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color }}>+{Math.round(s.score)}</span>
               </div>
             );
           })}
@@ -1548,40 +1555,40 @@ function TraceContent({ curator, pageBySlug }: { curator: CuratorEvent; pageBySl
       {/* Rendered breakdown */}
       <section>
         <SectionHeader label={`Rendered · ${curator.pages.length}`} hint="full → summary → title" />
-        <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", background: "var(--card-hover)", marginBottom: 8 }}>
-          <div style={{ width: `${Math.round(fullTokens / Math.max(1, curator.tokensUsed) * 100)}%`, background: "#8CE7D2" }}/>
-          <div style={{ width: `${Math.round(summaryTokens / Math.max(1, curator.tokensUsed) * 100)}%`, background: "#FACC15" }}/>
-          <div style={{ width: `${Math.round(titleTokens / Math.max(1, curator.tokensUsed) * 100)}%`, background: "#A88CFF" }}/>
+        <div style={{ display: "flex", height: 8, borderRadius: "var(--radius-xs)", overflow: "hidden", background: "var(--card-hover)", marginBottom: "var(--space-8)" }}>
+          <div style={{ width: `${Math.round(fullTokens / Math.max(1, curator.tokensUsed) * 100)}%`, background: "var(--accent-strong)" }}/>
+          <div style={{ width: `${Math.round(summaryTokens / Math.max(1, curator.tokensUsed) * 100)}%`, background: "var(--status-draft)" }}/>
+          <div style={{ width: `${Math.round(titleTokens / Math.max(1, curator.tokensUsed) * 100)}%`, background: "#8B5CF6" }}/>
         </div>
-        <div style={{ display: "flex", gap: 14, fontFamily: T.fontMono, fontSize: 10, flexWrap: "wrap" }}>
-          <span style={{ color: "#8CE7D2" }}>● {byRendering.full.length} full · {fullTokens}t</span>
-          <span style={{ color: "#FACC15" }}>● {byRendering.summary.length} summary · {summaryTokens}t</span>
-          <span style={{ color: "#A88CFF" }}>● {byRendering.title.length} title · {titleTokens}t</span>
+        <div style={{ display: "flex", gap: "var(--space-14)", fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", flexWrap: "wrap" }}>
+          <span style={{ color: "var(--accent-strong)" }}>● {byRendering.full.length} full · {fullTokens}t</span>
+          <span style={{ color: "var(--status-draft)" }}>● {byRendering.summary.length} summary · {summaryTokens}t</span>
+          <span style={{ color: "#8B5CF6" }}>● {byRendering.title.length} title · {titleTokens}t</span>
           <span style={{ color: T.muted, marginLeft: "auto" }}>{curator.tokensUsed}/{curator.tokensBudget} used</span>
         </div>
-        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ marginTop: "var(--space-10)", display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
           {curator.pages.slice(0, 12).map((p) => {
             const page = pageBySlug.get(p.slug);
             const typeColor = page ? TYPE_COLOR[page.type] ?? T.muted : T.muted;
             return (
               <div key={p.slug} style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "5px 8px", borderRadius: 6,
+                display: "flex", alignItems: "center", gap: "var(--space-8)",
+                padding: "5px 8px", borderRadius: "var(--radius-sm)",
               }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: typeColor, flexShrink: 0 }} />
-                <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, width: 60, flexShrink: 0, textTransform: "uppercase" }}>
+                <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, width: 60, flexShrink: 0, textTransform: "uppercase" }}>
                   {p.rendering}
                 </span>
-                <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.fg, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.fg, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {p.title}
                 </span>
-                <span style={{ fontFamily: T.fontMono, fontSize: 9, color: T.muted }}>{p.origin}</span>
-                <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, width: 40, textAlign: "right" }}>{p.tokens}t</span>
+                <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: T.muted }}>{p.origin}</span>
+                <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, width: 40, textAlign: "right" }}>{p.tokens}t</span>
               </div>
             );
           })}
           {curator.pages.length > 12 && (
-            <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted, padding: "5px 8px" }}>
+            <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, padding: "5px 8px" }}>
               + {curator.pages.length - 12} more…
             </span>
           )}
@@ -1592,7 +1599,7 @@ function TraceContent({ curator, pageBySlug }: { curator: CuratorEvent; pageBySl
       {(curator.trace.timelineFiltered.length > 0 || curator.trace.budgetDropped.length > 0) && (
         <section>
           <SectionHeader label={`Excluded · ${curator.trace.timelineFiltered.length + curator.trace.budgetDropped.length}`} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
             {curator.trace.timelineFiltered.length > 0 && (
               <ExclusionGroup
                 color="#E89090"
@@ -1620,18 +1627,18 @@ function ExclusionGroup({ color, label, hint, slugs }: { color: string; label: s
   return (
     <div>
       <div style={{
-        display: "flex", alignItems: "center", gap: 10,
-        padding: "6px 10px", borderRadius: 8,
+        display: "flex", alignItems: "center", gap: "var(--space-10)",
+        padding: "6px 10px", borderRadius: "var(--radius-md)",
         border: `1px dashed ${color}4D`,
       }}>
-        <span style={{ fontFamily: T.fontHeading, fontSize: 12, color: T.fg }}>{label}</span>
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, color: T.muted }}>{hint}</span>
+        <span style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-base)", color: T.fg }}>{label}</span>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>{hint}</span>
         <span style={{ flex: 1 }} />
-        <span style={{ fontFamily: T.fontMono, fontSize: 10, color }}>{slugs.length} pages</span>
+        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color }}>{slugs.length} pages</span>
       </div>
-      <div style={{ padding: "4px 10px 2px 30px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <div style={{ padding: "4px 10px 2px 30px", display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
         {slugs.map((s, i) => (
-          <span key={i} style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted, textDecoration: "line-through" }}>
+          <span key={i} style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted, textDecoration: "line-through" }}>
             {s}
           </span>
         ))}
@@ -1642,11 +1649,11 @@ function ExclusionGroup({ color, label, hint, slugs }: { color: string; label: s
 
 function SectionHeader({ label, hint }: { label: string; hint?: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
-      <span style={{ fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "var(--space-10)" }}>
+      <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
         {label}
       </span>
-      {hint && <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>{hint}</span>}
+      {hint && <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>{hint}</span>}
     </div>
   );
 }
@@ -1657,7 +1664,7 @@ function CharacterAvatar({ character, size }: { character: CharacterProp; size: 
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%",
-      background: "linear-gradient(135deg, #8CE7D2 0%, #4FB8A8 100%)",
+      background: "linear-gradient(135deg, var(--emissive-mint) 0%, var(--active-teal) 100%)",
       display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
     }}>
       <span style={{ fontFamily: T.fontHeading, fontSize: Math.round(size * 0.45), fontWeight: 600, color: "#0C0E14" }}>
@@ -1671,18 +1678,18 @@ function EmptyState({ character }: { character: CharacterProp }) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      padding: "4rem 2rem", gap: 12, textAlign: "center", margin: "auto",
+      padding: "4rem 2rem", gap: "var(--space-12)", textAlign: "center", margin: "auto",
     }}>
       <CharacterAvatar character={character} size={72} />
-      <h2 style={{ fontFamily: T.fontHeading, fontSize: 22, fontWeight: 600, margin: 0, color: T.fg }}>
+      <h2 style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-3xl)", fontWeight: 600, margin: 0, color: T.fg }}>
         Talk to {character.title}
       </h2>
       {character.summary && (
-        <p style={{ fontFamily: T.fontBody, fontSize: 14, color: T.muted, margin: 0, maxWidth: 480, lineHeight: 1.55 }}>
+        <p style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-lg)", color: T.muted, margin: 0, maxWidth: 480, lineHeight: 1.55 }}>
           {character.summary}
         </p>
       )}
-      <p style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, margin: "12px 0 0 0", maxWidth: 480, lineHeight: 1.6 }}>
+      <p style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, margin: "12px 0 0 0", maxWidth: 480, lineHeight: 1.6 }}>
         Set the scene above (who's present, where, at what moment of their life). Send a message. The curator will pick pages from {character.title}'s wiki; the LLM will speak in their voice.
       </p>
     </div>
@@ -1692,22 +1699,22 @@ function EmptyState({ character }: { character: CharacterProp }) {
 /* ── Type-color map (shared w/ wiki-graph palette) ─────────────── */
 
 const TYPE_COLOR: Record<string, string> = {
-  entity:         "#FBA7C0",
-  event:          "#FACC15",
-  concept:        "#A88CFF",
-  relationship:   "#8CE7D2",
-  timeline:       "#94A3B8",
-  voice_identity: "#E879A0",
+  entity:         "var(--active-teal)",
+  event:          "var(--status-draft)",
+  concept:        "var(--event-violet)",
+  relationship:   "var(--emissive-mint)",
+  timeline:       "var(--status-archived)",
+  voice_identity: "var(--critical-crimson)",
 };
 
 function seedColor(reason: string): string {
   switch (reason) {
-    case "voice-identity": return "#E879A0";
+    case "voice-identity": return "var(--critical-crimson)";
     case "scene-entity":
-    case "scene-location": return "#FBA7C0";
+    case "scene-location": return "var(--active-teal)";
     case "query-title":
     case "query-alias":
-    case "query-summary":  return "#8CE7D2";
-    default:               return "#94A3B8";
+    case "query-summary":  return "var(--accent-strong)";
+    default:               return "var(--status-archived)";
   }
 }

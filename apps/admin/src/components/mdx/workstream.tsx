@@ -38,11 +38,11 @@ export function Workstream({
   return (
     <div style={{
       border: "1px solid var(--border)",
-      borderRadius: 10,
+      borderRadius: "var(--radius-lg)",
       background: "var(--panel)",
       overflow: "hidden",
-      marginTop: 8,
-      marginBottom: 16,
+      marginTop: "var(--space-8)",
+      marginBottom: "var(--space-16)",
     }}>
       {/* Header */}
       <div style={{
@@ -50,7 +50,7 @@ export function Workstream({
         borderBottom: "1px solid var(--border)",
         display: "flex",
         alignItems: "center",
-        gap: 8,
+        gap: "var(--space-8)",
       }}>
         <div style={{
           width: 24,
@@ -95,7 +95,7 @@ export function Workstream({
               borderRight: "1px solid var(--border)",
               display: "flex",
               flexDirection: "column",
-              gap: 2,
+              gap: "var(--space-2)",
             }}>
               <span style={{
                 fontSize: "0.8125rem",
@@ -121,12 +121,12 @@ export function Workstream({
               padding: "10px 16px",
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
             }}>
               <div style={{
                 width: 3,
                 alignSelf: "stretch",
-                borderRadius: 2,
+                borderRadius: "var(--radius-2xs)",
                 background: color,
                 flexShrink: 0,
               }} />

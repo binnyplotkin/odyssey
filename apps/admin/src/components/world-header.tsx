@@ -47,15 +47,22 @@ export function WorldHeader({ world }: Props) {
 
   useEffect(() => {
     setContent(
-      <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
         <Link
           href="/worlds"
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            width: 28, height: 28, borderRadius: 6,
+            width: 28, height: 28, borderRadius: "var(--radius-sm)",
             border: `1px solid ${T.border}`, background: "transparent",
             color: T.muted, textDecoration: "none",
-            marginRight: 14, flexShrink: 0,
+            marginRight: "var(--space-14)", flexShrink: 0,
           }}
           aria-label="Back to worlds"
         >
@@ -64,7 +71,7 @@ export function WorldHeader({ world }: Props) {
           </svg>
         </Link>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", flexShrink: 0 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="1.8">
             <circle cx="12" cy="12" r="9" />
             <path d="M3 12h18" />
@@ -78,24 +85,24 @@ export function WorldHeader({ world }: Props) {
             {world.title}
           </span>
           <span style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "2px 8px", borderRadius: 9999,
+            display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+            padding: "2px 8px", borderRadius: "var(--radius-pill)",
             background: "rgba(255,255,255,0.04)",
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 400,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 400,
             letterSpacing: "0.1em", textTransform: "uppercase",
             color: statusStyle.color,
           }}>
-            <span style={{ width: 6, height: 6, borderRadius: 9999, background: statusStyle.dot }} />
+            <span style={{ width: 6, height: 6, borderRadius: "var(--radius-pill)", background: statusStyle.dot }} />
             {statusStyle.label}
           </span>
         </div>
 
         <span style={{
           width: 1, height: 20, background: T.border, display: "block",
-          marginLeft: 14, marginRight: 14, flexShrink: 0,
+          marginLeft: "var(--space-14)", marginRight: "var(--space-14)", flexShrink: 0,
         }} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", flexShrink: 0 }}>
           {TABS.map((t) => {
             const active = t.key === activeTab;
             return (
@@ -103,10 +110,10 @@ export function WorldHeader({ world }: Props) {
                 key={t.key}
                 href={`/worlds/${world.id}${t.key === "overview" ? "" : `/${t.key}`}`}
                 style={{
-                  padding: "5px 12px", borderRadius: 8,
+                  padding: "5px 12px", borderRadius: "var(--radius-md)",
                   background: active ? "rgba(140, 231, 210, 0.12)" : "transparent",
                   color: active ? T.accent : T.muted,
-                  fontFamily: T.fontBody, fontSize: 12, fontWeight: 500,
+                  fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500,
                   textDecoration: "none", whiteSpace: "nowrap",
                 }}
               >
@@ -118,22 +125,22 @@ export function WorldHeader({ world }: Props) {
 
         <div style={{ flex: 1 }} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", flexShrink: 0 }}>
           <Link
             href={`/worlds/${world.id}/sessions`}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "6px 12px", borderRadius: 8,
+              display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+              padding: "6px 12px", borderRadius: "var(--radius-md)",
               border: `1px solid ${T.border}`, background: "transparent",
               color: T.fg,
-              fontFamily: T.fontBody, fontSize: 11, fontWeight: 500,
+              fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500,
               textDecoration: "none", whiteSpace: "nowrap",
             }}
           >
             View sessions
           </Link>
         </div>
-      </>,
+      </div>,
     );
     return () => setContent(null);
   }, [setContent, world.id, world.title, world.status, activeTab, statusStyle.color, statusStyle.dot, statusStyle.label]);

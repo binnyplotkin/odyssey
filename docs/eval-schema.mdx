@@ -1,0 +1,330 @@
+# Eval Harness — Backend Schema
+
+Spec for the persistence + API layer behind the new **Evals** page in the
+character harness (Paper artboards: `Admin — Character Harness · Evals`
+and `Admin — Character Harness · Sweep Detail`).
+
+Today the eval runner writes to local files (`.evals/results/<char>/...`,
+`.evals/sweeps/<char>/...`). That's been fine for solo CLI use, but the
+new page needs query/filter/compare/drill-down — file-scanning won't
+scale. This doc proposes moving DB to source-of-truth while keeping the
+file outputs as convenience exports.
+
+---
+
+## Tables
+
+Five new Drizzle tables, all foreign-keyed to `characters`. Naming
+matches existing `wiki_pages` / `world_session_*` conventions.
+
+### `eval_suites`
+
+A versioned set of probes. Currently hard-coded in
+`evals/abraham/suite.ts`; lifting it into the DB lets the harness UI
+edit / fork / version suites without code changes.
+
+```ts
+export const evalSuitesTable = pgTable("eval_suites", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text("character_id")
+    .notNull()
+    .references(() => charactersTable.id, { onDelete: "cascade" }),
+
+  slug: text("slug").notNull(),          // "abraham" — unique per character
+  version: text("version").notNull(),    // "1.0.0" — semver, never mutated
+
+  // Full probe definitions — same shape as Probe[] in packages/evals/types.
+  // jsonb so the runner can deserialize without a separate join table.
+  // Trade-off: can't query "which suite uses probe X". Acceptable for v1.
+  probes: jsonb("probes").notNull().default([]),
+
+  notes: text("notes"),                  // author commentary
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: text("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+}, (t) => ({
+  // Same suite slug can exist at multiple versions; only one (slug, version) per char.
+  suiteVersionUnique: uniqueIndex("eval_suites_slug_version_idx").on(t.characterId, t.slug, t.version),
+}));
+```
+
+### `eval_runs`
+
+One row per single-config execution of a suite. Carries the full
+`CharacterSnapshot` so reruns / debugging can reproduce exactly what
+was tested. This is the existing `EvalRun` type minus per-probe detail
+(which goes in `eval_probe_results`).
+
+```ts
+export const evalRunsTable = pgTable("eval_runs", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text("character_id")
+    .notNull()
+    .references(() => charactersTable.id, { onDelete: "cascade" }),
+  suiteId: text("suite_id")
+    .notNull()
+    .references(() => evalSuitesTable.id, { onDelete: "restrict" }),
+
+  // ── Provenance ─────────────────────────────────────────
+  // Snapshot of L01-L04 at the moment the run started — full content,
+  // not a reference. Lets us reproduce / diff against later edits.
+  characterSnapshot: jsonb("character_snapshot").notNull(),
+  // sha256 of the snapshot's hashable fields — same algorithm as
+  // captureCharacterSnapshot(). Lets us group "runs against identical config".
+  configHash: text("config_hash").notNull(),
+  // Override applied on top of saved mindModel (from --config / --sweep).
+  // Null for runs against the unmodified character.
+  overrideConfig: jsonb("override_config"),
+  // The merged config that actually ran (effective = saved + override).
+  effectiveModelConfig: jsonb("effective_model_config").notNull(),
+
+  // ── Judge ──────────────────────────────────────────────
+  judgeModel: text("judge_model").notNull(),
+
+  // ── Provenance: where did this come from? ──────────────
+  // "single" = ad-hoc run. "sweep" = one config inside a sweep.
+  source: text("source").notNull().default("single"), // "single" | "sweep"
+  sweepId: text("sweep_id").references(() => evalSweepsTable.id, { onDelete: "set null" }),
+
+  // ── Summary (denormalized for fast list-view queries) ──
+  // Mirrors EvalRun.summary in packages/evals/types.
+  // Denormalized so the runs-list page doesn't need to aggregate
+  // probe_results on every render.
+  total: integer("total").notNull(),
+  passed: integer("passed").notNull(),
+  failed: integer("failed").notNull(),
+  errored: integer("errored").notNull(),
+  avgOverall: real("avg_overall").notNull(),
+  avgLatencyMs: integer("avg_latency_ms").notNull(),
+  totalTokens: integer("total_tokens").notNull(),
+  estimatedCostUsd: real("estimated_cost_usd").notNull(),
+
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+  createdBy: text("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+}, (t) => ({
+  // Most common query: runs for one character, newest first.
+  byCharIdx: index("eval_runs_char_started_idx").on(t.characterId, t.startedAt),
+  // Filter runs to a specific config across history.
+  configHashIdx: index("eval_runs_config_hash_idx").on(t.characterId, t.configHash),
+}));
+```
+
+### `eval_probe_results`
+
+One row per probe in a run. Heavy — stores the full character response,
+all five dimension scores, judge rationale, and mechanical-check
+failures. Only loaded when a run is expanded; the list view reads
+from the denormalized summary on `eval_runs`.
+
+```ts
+export const evalProbeResultsTable = pgTable("eval_probe_results", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  runId: text("run_id")
+    .notNull()
+    .references(() => evalRunsTable.id, { onDelete: "cascade" }),
+
+  probeId: text("probe_id").notNull(),       // suite-local id, e.g. "id-tell-me"
+  probeCategory: text("probe_category").notNull(),
+  input: text("input").notNull(),            // probe.input verbatim (denormalized for archeology)
+  response: text("response").notNull(),
+
+  // ── Scores ────────────────────────────────────────────
+  // Stored as jsonb because the dimension set could grow. Shape:
+  //   { voice: { score, rationale }, scope: {...}, frame: {...},
+  //     brevity: {...}, factual: {...} }
+  scores: jsonb("scores").notNull(),
+  overall: real("overall").notNull(),
+  pass: boolean("pass").notNull(),
+  rationale: text("rationale").notNull(),    // judge's one-sentence summary
+
+  // ── Mechanics ─────────────────────────────────────────
+  mechanicalFailures: jsonb("mechanical_failures").notNull().default([]),
+  errors: jsonb("errors").notNull().default([]),
+
+  // ── Telemetry ─────────────────────────────────────────
+  latencyMs: integer("latency_ms").notNull(),
+  // { input, output, cacheRead, cacheCreation }
+  tokens: jsonb("tokens").notNull(),
+}, (t) => ({
+  // Detail view: load all probes for one run.
+  byRunIdx: index("eval_probe_results_run_idx").on(t.runId),
+  // "How has probe X scored across all runs of this character?"
+  byProbeIdx: index("eval_probe_results_probe_idx").on(t.probeId, t.runId),
+}));
+```
+
+### `eval_sweeps`
+
+One row per parameter sweep. The ranked configs + Pareto are
+denormalized for the same reason as `eval_runs.summary` — list view
+must be fast.
+
+```ts
+export const evalSweepsTable = pgTable("eval_sweeps", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text("character_id")
+    .notNull()
+    .references(() => charactersTable.id, { onDelete: "cascade" }),
+  suiteId: text("suite_id")
+    .notNull()
+    .references(() => evalSuitesTable.id, { onDelete: "restrict" }),
+
+  judgeModel: text("judge_model").notNull(),
+
+  // ── Inputs ────────────────────────────────────────────
+  // The SweepSpec passed in — { model: [...], temperature: [...], ... }.
+  // Lets the UI offer "re-run this sweep" with the original grid.
+  spec: jsonb("spec").notNull(),
+  // Probe subset filter (null = all probes).
+  probeIds: jsonb("probe_ids"),
+  maxConcurrency: integer("max_concurrency"),
+
+  // ── Outputs (denormalized) ────────────────────────────
+  // Cartesian-expanded configs: [{ id, override }, ...]
+  configs: jsonb("configs").notNull(),
+  // Ranked configs after sort, mirrors ConfigRanking[].
+  rankings: jsonb("rankings").notNull(),
+  // Subset of rankings on the Pareto frontier (post-error-filter).
+  pareto: jsonb("pareto").notNull(),
+
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+  createdBy: text("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+}, (t) => ({
+  byCharIdx: index("eval_sweeps_char_started_idx").on(t.characterId, t.startedAt),
+}));
+```
+
+`eval_sweeps.id` is referenced by `eval_runs.sweepId` — each sweep
+creates N `eval_runs` rows (one per config), linked by `sweepId`. No
+separate join table needed.
+
+---
+
+## What the page queries
+
+Three primary queries drive the new UI:
+
+### 1. Runs list (artboard 1, main pane below selected run)
+
+```sql
+SELECT id, started_at, effective_model_config, passed, total,
+       avg_overall, avg_latency_ms, estimated_cost_usd, errored,
+       source, sweep_id
+FROM eval_runs
+WHERE character_id = $1
+ORDER BY started_at DESC
+LIMIT 20 OFFSET $2;
+```
+
+Plus the trend sparkline:
+
+```sql
+SELECT started_at, passed::float / total AS pass_rate
+FROM eval_runs
+WHERE character_id = $1
+ORDER BY started_at DESC
+LIMIT 14;
+```
+
+### 2. Run detail (artboard 1, expanded run card)
+
+```sql
+-- The run header + summary
+SELECT * FROM eval_runs WHERE id = $1;
+
+-- All probes for that run
+SELECT * FROM eval_probe_results WHERE run_id = $1 ORDER BY probe_id;
+```
+
+### 3. Sweep detail (artboard 2)
+
+```sql
+-- Full sweep including rankings + pareto (denormalized)
+SELECT * FROM eval_sweeps WHERE id = $1;
+
+-- Per-config detail (one run per config, linked by sweep_id)
+SELECT * FROM eval_runs
+WHERE sweep_id = $1
+ORDER BY passed DESC, avg_overall DESC;
+```
+
+The Pareto chart reads `rankings` / `pareto` jsonb directly from
+`eval_sweeps` — no extra query.
+
+---
+
+## API surface
+
+New REST routes under `apps/admin/src/app/api/characters/[id]/evals/`:
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `.../evals/runs` | Paginated runs list (queries 1+sparkline) |
+| GET | `.../evals/runs/[runId]` | Run detail (query 2) |
+| POST | `.../evals/runs` | Kick off a new single-config run |
+| GET | `.../evals/sweeps` | Sweeps list |
+| GET | `.../evals/sweeps/[sweepId]` | Sweep detail (query 3) |
+| POST | `.../evals/sweeps` | Kick off a new sweep |
+| GET | `.../evals/suites` | List suites for this character |
+| POST | `.../evals/suites` | Create a new suite version |
+
+Auth: admin-only, same middleware as the rest of `/api/characters/[id]/*`.
+
+Long-running runs (sweeps especially) need a streaming/polling story.
+Two options:
+
+- **Polling**: `POST /runs` returns `{ runId, status: "pending" }`
+  immediately, runner writes progress to DB, UI polls `GET /runs/[id]`
+  every 2s until complete. Simple, works.
+- **SSE / WebSocket**: stream progress events. Better UX, more
+  plumbing.
+
+Recommendation: **polling for v1**. The "live activity" feed in the
+right rail (artboard 1) is already designed around it. Upgrade to
+SSE once we hit the friction.
+
+---
+
+## Migration plan
+
+1. **Add the 5 tables** in a new migration (`migrations/00XX_eval_tables.sql`).
+2. **Add a `migrate-eval-files-to-db.ts` one-shot script** that scans
+   `.evals/results/<char>/*.json` + `.evals/sweeps/<char>/*.json`,
+   parses each, and inserts. Keeps existing history visible in the UI
+   from day one.
+3. **Update `packages/evals/src/reporter.ts`** to write to DB *first*,
+   files *second* (so the existing `.evals/` directory still gets
+   populated as exportable artifacts).
+4. **Lift the Abraham suite** from `evals/abraham/suite.ts` into a
+   seed script that inserts row 1 of `eval_suites` for Abraham at
+   `version="1.0.0"`. Keep the TS file as a fallback for CLI runs
+   when DB is unreachable.
+5. **Build the API routes** above.
+6. **Build the React page**, matching the two Paper artboards.
+
+Estimated effort: 1 day for tables + migration + DB writes in runner;
+1.5 days for the API + page UI; 0.5 day for the file-import script
+and polish. Total: **~3 days of focused work**.
+
+---
+
+## Open questions
+
+1. **Probe authoring** — the artboard 1 sidebar's "Test & Eval" section
+   shows a `SUITES · 1` tab. Do we want a full probe-editor UI in v1,
+   or read-only with the suite defined in TS for now? My read:
+   **read-only for v1**, editor for v2. Authoring probes is rare; the
+   primary user flow is *running* them.
+2. **Comparison view** — the "vs · opus-4-5 · t=0.3" card on artboard 2
+   compares against one selected baseline. Should we offer arbitrary
+   side-by-side comparison of two runs (à la git diff)? Useful, but
+   probably v2 — the Pareto chart already shows the trade-offs visually.
+3. **Cron evals** — should we run the suite nightly against the
+   production preset to catch regressions from upstream model changes?
+   Cheap (~$0.31/night) and the trend sparkline gets meaningful.
+   **Probably yes**, but as a follow-up after the page ships.
+4. **Suite versioning semantics** — when an author edits probes, do we
+   bump version automatically (immutable suites) or mutate in place?
+   Immutable is cleaner for "compare against historical baseline" but
+   creates clutter. **Default to immutable + soft-delete old versions**.

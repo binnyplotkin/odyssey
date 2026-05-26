@@ -47,27 +47,34 @@ export function NewCharacterForm() {
   const { setContent } = useHeaderContent();
   useEffect(() => {
     setContent(
-      <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
         <Link
           href="/characters"
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            width: 28, height: 28, borderRadius: 6,
+            width: 28, height: 28, borderRadius: "var(--radius-sm)",
             border: "1px solid var(--border)", background: "transparent",
-            color: "var(--muted)", textDecoration: "none", marginRight: 12,
+            color: "var(--muted)", textDecoration: "none", marginRight: "var(--space-12)",
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
         </Link>
         <h1 style={{
-          fontSize: 16, fontWeight: 700, color: T.fg,
-          marginTop: 0, marginRight: 12, marginBottom: 0, marginLeft: 0,
+          fontSize: "var(--font-size-xl)", fontWeight: 700, color: T.fg,
+          marginTop: 0, marginRight: "var(--space-12)", marginBottom: 0, marginLeft: 0,
           whiteSpace: "nowrap", fontFamily: T.fontHeading,
         }}>
           New Character
         </h1>
         <div style={{ flex: 1 }} />
-      </>,
+      </div>,
     );
     return () => setContent(null);
   }, [setContent]);
@@ -85,24 +92,24 @@ export function NewCharacterForm() {
   const canSubmit = title.trim().length > 0 && slug.trim().length > 0 && !pending;
 
   return (
-    <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 880 }}>
+    <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)", maxWidth: 880 }}>
       <div style={{
         background: T.panel, border: `1px solid ${T.border}`,
-        borderRadius: 14, overflow: "clip",
+        borderRadius: "var(--radius-2xl)", overflow: "clip",
       }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
           <div style={{
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted,
-            letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted,
+            letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "var(--space-4)",
           }}>
             Identity
           </div>
-          <div style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted }}>
+          <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted }}>
             The character is global — one record reused across any number of worlds.
           </div>
         </div>
 
-        <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
           <Field label="Title" help="Human-facing. Renameable.">
             <input
               type="text"
@@ -114,7 +121,7 @@ export function NewCharacterForm() {
             />
           </Field>
 
-          <Field label="Slug" help="Immutable identifier used in wikilinks + URLs. Lowercase kebab-case.">
+          <Field label="Slug" help="Immutable identifier used in [[links]] and URLs. Lowercase kebab-case.">
             <input
               type="text"
               value={slug}
@@ -138,16 +145,16 @@ export function NewCharacterForm() {
 
       <div style={{
         background: T.panel, border: `1px solid ${T.border}`,
-        borderRadius: 14, overflow: "clip",
+        borderRadius: "var(--radius-2xl)", overflow: "clip",
       }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
           <div style={{
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted,
-            letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted,
+            letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "var(--space-4)",
           }}>
             Eras · optional
           </div>
-          <div style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: 1.55 }}>
+          <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: 1.55 }}>
             Named periods in the character's life, used for timeline-aware page filtering. Leave empty for timeless characters.
           </div>
         </div>
@@ -158,16 +165,16 @@ export function NewCharacterForm() {
 
       <div style={{
         background: T.panel, border: `1px solid ${T.border}`,
-        borderRadius: 14, overflow: "clip",
+        borderRadius: "var(--radius-2xl)", overflow: "clip",
       }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
           <div style={{
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: "#8CE7D2",
-            letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: "#8FD1CB",
+            letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "var(--space-4)",
           }}>
             Ingestion prompt · optional
           </div>
-          <div style={{ fontFamily: T.fontBody, fontSize: 12, color: T.muted, lineHeight: 1.55 }}>
+          <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: 1.55 }}>
             The single domain knob. Injected into every compile run so the generic engine interprets sources through this character's tradition. You can skip this now and edit it later from the Overview tab.
           </div>
         </div>
@@ -180,7 +187,7 @@ export function NewCharacterForm() {
           style={{
             width: "100%", border: "none", outline: "none", resize: "vertical",
             padding: "16px 20px", background: "transparent",
-            fontFamily: T.fontMono, fontSize: 12, color: T.fg, lineHeight: "20px",
+            fontFamily: T.fontMono, fontSize: "var(--font-size-base)", color: T.fg, lineHeight: "20px",
             boxSizing: "border-box",
           }}
         />
@@ -188,22 +195,22 @@ export function NewCharacterForm() {
 
       {error && (
         <div style={{
-          padding: "10px 14px", borderRadius: 10,
+          padding: "10px 14px", borderRadius: "var(--radius-lg)",
           background: "rgba(232,144,144,0.08)", border: "1px solid rgba(232,144,144,0.3)",
-          color: "#E89090", fontFamily: T.fontBody, fontSize: 13,
+          color: "#E89090", fontFamily: T.fontBody, fontSize: "var(--font-size-md)",
         }}>
           {error}
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "var(--space-10)" }}>
         <Link
           href="/characters"
           style={{
-            padding: "8px 16px", borderRadius: 10,
+            padding: "8px 16px", borderRadius: "var(--radius-lg)",
             border: "1px solid var(--border)", background: "transparent",
             color: T.muted, textDecoration: "none",
-            fontFamily: T.fontBody, fontSize: 13, cursor: "pointer",
+            fontFamily: T.fontBody, fontSize: "var(--font-size-md)", cursor: "pointer",
           }}
         >
           Cancel
@@ -212,10 +219,10 @@ export function NewCharacterForm() {
           type="submit"
           disabled={!canSubmit}
           style={{
-            padding: "8px 20px", borderRadius: 10, border: "none",
+            padding: "8px 20px", borderRadius: "var(--radius-lg)", border: "none",
             background: canSubmit ? T.accent : "var(--card-hover)",
             color: canSubmit ? "var(--background)" : T.muted,
-            fontFamily: T.fontBody, fontSize: 13, fontWeight: 600,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
             cursor: canSubmit ? "pointer" : "not-allowed",
           }}
         >
@@ -227,9 +234,9 @@ export function NewCharacterForm() {
 }
 
 const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "9px 12px", borderRadius: 8,
+  width: "100%", padding: "9px 12px", borderRadius: "var(--radius-md)",
   background: "var(--background)", border: "1px solid var(--border)",
-  color: T.fg, outline: "none", fontFamily: T.fontBody, fontSize: 13,
+  color: T.fg, outline: "none", fontFamily: T.fontBody, fontSize: "var(--font-size-md)",
   boxSizing: "border-box",
 };
 
@@ -237,16 +244,16 @@ function Field({
   label, help, optional, children,
 }: { label: string; help?: string; optional?: boolean; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-8)" }}>
         <span style={{
-          fontFamily: T.fontMono, fontSize: 10, fontWeight: 500, color: T.muted,
+          fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted,
           letterSpacing: "0.08em", textTransform: "uppercase",
         }}>
           {label}{optional && " · optional"}
         </span>
         {help && (
-          <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted }}>{help}</span>
+          <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>{help}</span>
         )}
       </div>
       {children}

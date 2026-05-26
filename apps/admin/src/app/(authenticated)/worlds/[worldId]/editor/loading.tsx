@@ -8,10 +8,10 @@ export default function WorldEditorLoading() {
         style={{
           width: 220,
           borderRight: "1px solid var(--border)",
-          padding: 14,
+          padding: "var(--space-14)",
           display: "flex",
           flexDirection: "column",
-          gap: 10,
+          gap: "var(--space-10)",
           flexShrink: 0,
         }}
       >
@@ -22,7 +22,7 @@ export default function WorldEditorLoading() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
               paddingLeft: i % 3 === 0 ? 0 : 14,
             }}
           >
@@ -60,16 +60,16 @@ export default function WorldEditorLoading() {
         style={{
           width: 280,
           borderLeft: "1px solid var(--border)",
-          padding: 14,
+          padding: "var(--space-14)",
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: "var(--space-12)",
           flexShrink: 0,
         }}
       >
         <Skeleton width={100} height={11} />
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div key={i} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
             <Skeleton width={64} height={10} />
             <Skeleton width="100%" height={28} radius={6} />
           </div>

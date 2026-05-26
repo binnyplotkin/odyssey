@@ -26,6 +26,10 @@ export default async function CharacterVoicePage({ params }: { params: Params })
         title: character.title,
         image: character.image,
         eras: character.eras,
+        // Pass the L04 Brain/Model so the wavefield can pre-select the
+        // author's pinned voice model. Falls through to DEFAULT_VOICE_MODEL
+        // when the character has no preference.
+        brainModel: character.brainModel,
       }
     : fallbackAbraham;
   if (!resolved) notFound();

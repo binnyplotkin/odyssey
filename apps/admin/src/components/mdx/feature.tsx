@@ -59,9 +59,9 @@ export async function Feature({
     <span style={{
       display: "inline-flex",
       alignItems: "center",
-      gap: 6,
+      gap: "var(--space-6)",
       padding: "3px 10px",
-      borderRadius: 999,
+      borderRadius: "var(--radius-pill)",
       background: style.bg,
       color: style.text,
       fontSize: "0.75rem",

@@ -5,17 +5,13 @@ import { WikiSourcesView } from "./wiki-sources-view";
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
-type SearchParams = Promise<{ source?: string }>;
 
 export default async function SourcesTab({
   params,
-  searchParams,
 }: {
   params: Params;
-  searchParams: SearchParams;
 }) {
   const { id } = await params;
-  const { source: initialSourceId } = await searchParams;
 
   const wiki = await getWikisStore().getWikiById(id);
   if (!wiki) notFound();
@@ -29,17 +25,14 @@ export default async function SourcesTab({
     store.listIngestionRunsForWiki(wiki.id, 100),
   ]);
 
-  const initial =
-    sources.find((s) => s.id === initialSourceId) ?? sources[0] ?? null;
-
   return (
     <WikiSourcesView
       wikiId={wiki.id}
+      wikiTitle={wiki.title}
       sources={sources}
       pages={pages}
       refs={refs}
       runs={runs}
-      initialSourceId={initial?.id ?? null}
       routeBase={routeBase}
     />
   );

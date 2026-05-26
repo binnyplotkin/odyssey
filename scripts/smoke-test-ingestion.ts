@@ -21,6 +21,7 @@ dotenv.config({ override: true });
 import {
   getCharacterStore,
   getWikiStore,
+  getWikisStore,
 } from "@odyssey/db";
 import { runIngestion, resolveModel } from "@odyssey/wiki-ingest";
 
@@ -61,6 +62,7 @@ async function main() {
 
   const characters = getCharacterStore();
   const wiki = getWikiStore();
+  const wikis = getWikisStore();
 
   // Clean slate
   const prior = await characters.getBySlug(SLUG);
@@ -86,10 +88,25 @@ Margaret Hale is a fictional private detective operating in Vienna during the in
   });
   console.log(`   character id ${char.id}\n`);
 
+  const targetWiki = await wikis.createWiki({
+    slug: SLUG,
+    title: "Margaret Hale Smoke Test",
+    summary: "Throwaway wiki for ingestion smoke tests.",
+    ingestionPrompt: char.ingestionPrompt,
+    ingestionPromptName: "Smoke test lens",
+    eras: char.eras,
+  });
+  await wikis.createBinding({
+    characterId: char.id,
+    wikiId: targetWiki.id,
+    priority: "primary",
+    isActive: true,
+  });
+
   // ── Create source ───────────────────────────────────────────
   console.log("2. Creating source");
   const source = await wiki.createSource({
-    characterId: char.id,
+    wikiId: targetWiki.id,
     title: "Margaret Hale — biographical sketch",
     kind: "primary",
     content: SOURCE_CONTENT,
@@ -104,7 +121,7 @@ Margaret Hale is a fictional private detective operating in Vienna during the in
   let failed: string | null = null;
 
   for await (const ev of runIngestion({
-    characterId: char.id,
+    wikiId: targetWiki.id,
     sourceId: source.id,
     model,
   })) {
@@ -156,8 +173,8 @@ Margaret Hale is a fictional private detective operating in Vienna during the in
 
   // ── Verify DB state ─────────────────────────────────────────
   console.log("\n4. Verifying DB state");
-  const pages = await wiki.listPages(char.id);
-  const edges = await wiki.listCharacterEdges(char.id);
+  const pages = await wiki.listPagesForWiki(targetWiki.id);
+  const edges = await wiki.listWikiEdges(targetWiki.id);
   console.log(`   pages=${pages.length} · edges=${edges.length}`);
   for (const p of pages) {
     const linkCount = edges.filter((e) => e.fromPageId === p.id || e.toPageId === p.id).length;
@@ -169,7 +186,7 @@ Margaret Hale is a fictional private detective operating in Vienna during the in
     process.exit(1);
   }
 
-  const ingestRuns = await wiki.listIngestionRuns(char.id);
+  const ingestRuns = await wiki.listIngestionRunsForWiki(targetWiki.id);
   console.log(`\n   ingestion runs=${ingestRuns.length} · status=${ingestRuns[0]?.status} · tokens=${ingestRuns[0]?.tokensUsed} · model=${ingestRuns[0]?.model}`);
 
   // ── Cleanup ─────────────────────────────────────────────────
@@ -177,8 +194,9 @@ Margaret Hale is a fictional private detective operating in Vienna during the in
     console.log(`\n   Left character ${char.id} in place (--leave).\n`);
   } else {
     console.log("\n5. Cleanup");
+    await wikis.deleteWiki(targetWiki.id);
     await characters.remove(char.id);
-    console.log(`   removed character (cascades wiki, edges, sources, runs)\n`);
+    console.log(`   removed wiki and character\n`);
   }
 
   console.log("✓ Smoke test passed.\n");

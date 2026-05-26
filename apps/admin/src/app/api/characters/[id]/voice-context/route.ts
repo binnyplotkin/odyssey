@@ -1,9 +1,14 @@
 import { NextRequest } from "next/server";
+import { getCharacterStore, getWorldSessionStore } from "@odyssey/db";
 import {
-  buildCharacterContext,
-  CharacterContextError,
-} from "@/lib/character-context";
-import { getWorldSessionStore } from "@odyssey/db";
+  buildVoicePromptPlan,
+  OrchestrationContextError,
+} from "@odyssey/orchestration/server";
+import {
+  sandboxVoiceContextCacheKeyForDebug,
+  startSandboxVoiceContextCacheWarm,
+} from "@/lib/sandbox-voice-context-cache";
+import { curate } from "@odyssey/wiki-curator";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,11 +34,10 @@ export const dynamic = "force-dynamic";
  *   elapsedMs: number;
  * }
  *
- * The curator runs with `query: undefined`, which it interprets as "give me
- * the character's baseline context (voice + core ideas + key entities)".
- * Voice replies are short and conversational — this baseline is enough for
- * 90%+ of voice questions, while query-specific deep retrieval remains
- * available via the regular /chat route.
+ * The default warm path runs with `query: undefined`, which the curator
+ * interprets as "give me the character's baseline context." Callers may pass
+ * `query` when refreshing the session cache after a turn so follow-ups can
+ * start from the last topic without putting curation on the first-audio path.
  */
 type ContextBody = {
   sessionId?: string;
@@ -41,6 +45,7 @@ type ContextBody = {
   moment?: { era: string; index: number };
   scene?: { activeEntities?: string[]; location?: string };
   tokenBudget?: number;
+  query?: string;
 };
 
 export async function POST(
@@ -58,28 +63,59 @@ export async function POST(
 
   try {
     const fallbackCharacter =
-      id === "abraham-fallback" ? { id, slug: "abraham", title: "Abraham" } : undefined;
-    const context = await buildCharacterContext({
-      characterId: id,
-      character: fallbackCharacter,
-      mode: "voice-baseline",
-      promptKind: "voice",
-      query: undefined, // baseline — no specific query
-      currentMoment: body.moment,
+      id === "abraham-fallback"
+        ? { id, slug: "abraham", title: "Abraham" }
+        : null;
+    const character =
+      fallbackCharacter ??
+      (await getCharacterStore().getById(id)) ??
+      (await getCharacterStore().getBySlug(id));
+    if (!character) return jsonError(404, "character not found");
+
+    const tokenBudget = body.tokenBudget ?? 2500;
+    const cachedCurated = await startSandboxVoiceContextCacheWarm({
+      characterId: character.id,
+      sessionId: body.sessionId,
+      query: body.query,
       scene: body.scene,
-      tokenBudget: body.tokenBudget ?? 2500,
+      tokenBudget,
     });
+    const context = await buildVoicePromptPlan(
+      {
+        characterId: character.id,
+        character,
+        mode: "voice-baseline",
+        promptKind: "voice",
+        currentMoment: body.moment,
+        scene: body.scene,
+        tokenBudget,
+        curatedContext: cachedCurated,
+      },
+      {
+        getCharacterById: (characterId) => getCharacterStore().getById(characterId),
+        curate,
+      },
+    );
+
+    const cacheKey = sandboxVoiceContextCacheKeyForDebug({
+      characterId: character.id,
+      sessionId: body.sessionId,
+      scene: body.scene,
+      tokenBudget,
+    });
+    const routingMode = "voice-baseline";
+    const promptKind = "voice";
 
     if (body.sessionId) {
       await getWorldSessionStore().recordContextBuild({
         sessionId: body.sessionId,
         turnId: body.turnId ?? null,
-        mode: context.routingMode,
-        promptKind: context.promptKind,
-        query: null,
+        mode: routingMode,
+        promptKind,
+        query: body.query?.trim() || null,
         moment: body.moment,
         scene: body.scene,
-        tokenBudget: body.tokenBudget ?? 2500,
+        tokenBudget,
         tokensUsed: context.tokensUsed,
         tokensBudget: context.tokensBudget,
         selectedPages: context.pages,
@@ -87,6 +123,12 @@ export async function POST(
         timingTrace: context.timingTrace,
         promptChunk: context.promptChunk,
         systemPrompt: context.systemPrompt,
+        metadata: {
+          cacheKey,
+          cacheWarmed: true,
+          cacheScope: cachedCurated.cacheScope,
+          sourceQuery: cachedCurated.sourceQuery,
+        },
       });
       await getWorldSessionStore().appendEvent({
         sessionId: body.sessionId,
@@ -98,6 +140,8 @@ export async function POST(
           tokensUsed: context.tokensUsed,
           selectedPages: context.pages.map((p) => p.slug),
           elapsedMs: context.elapsedMs,
+          cacheKey,
+          cacheWarmed: true,
         },
       });
     }
@@ -115,10 +159,13 @@ export async function POST(
       elapsedMs: context.elapsedMs,
       routingMode: context.routingMode,
       timingTrace: context.timingTrace,
+      cacheKey,
+      cacheWarmed: true,
+      cacheScope: cachedCurated.cacheScope,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Curator failed.";
-    const status = err instanceof CharacterContextError ? err.status : 500;
+    const status = err instanceof OrchestrationContextError ? err.status : 500;
     return jsonError(status, message);
   }
 }

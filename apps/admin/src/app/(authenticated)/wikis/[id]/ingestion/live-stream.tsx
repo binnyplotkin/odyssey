@@ -4,24 +4,14 @@ import { type CSSProperties } from "react";
 import type { IngestionEvent, PlanOp } from "@odyssey/wiki-ingest";
 
 /**
- * LiveStream — sidebar panel during the running phase. Forming-first
- * direction (Paper V3): the active write is promoted to a hero card with
- * its action/type eyebrow, slug, rationale, an indeterminate mint
- * shimmer progress bar, and a per-op token counter. Below it sits a
- * small tail of recent SSE events with timestamp · glyph · detail, fading
- * by recency.
- *
- * Self-contained: only depends on theme CSS variables and the
- * `IngestionEvent` / `PlanOp` types. All derivation (tail rows) happens
- * inside, so the caller just passes `run.events` + `run.startedAt` plus
- * the currently-writing op snapshot.
+ * LiveStream — compact context panel during the running phase.
  */
 
-const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
-const FONT_HEAD = "'Inter', system-ui, sans-serif";
+const FONT_MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
+const FONT_HEAD = "var(--font-body, Inter), system-ui, sans-serif";
 const ACCENT = "var(--accent-strong)";
 const AMBER = "#FACC15";
-const TAIL_BG = "rgba(0, 0, 0, 0.30)";
+const PANEL_BG = "var(--input-bg)";
 
 export type ActiveWriteSnapshot = {
   op: PlanOp;
@@ -59,7 +49,7 @@ export function LiveStream({
   const pageCount = loadedIndex?.pageCount ?? null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
       <style>{ANIM_CSS}</style>
 
       <header
@@ -69,33 +59,41 @@ export function LiveStream({
           justifyContent: "space-between",
         }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-10)" }}>
           <span
             style={{
               fontFamily: FONT_MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               letterSpacing: "0.18em",
               textTransform: "uppercase",
               color: ACCENT,
             }}
           >
-            {activeWrite
-              ? "writing"
-              : subPhase === "loading-index"
-                ? "context"
-                : subPhase === "planning"
-                  ? "planning"
-                  : "writing"}
+            context
           </span>
-          {activeWrite && (
+          {activeWrite ? (
             <span
               style={{
                 fontFamily: FONT_MONO,
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
                 color: "var(--text-tertiary)",
               }}
             >
               {activeWrite.indexInPlan} of {activeWrite.totalOps}
+            </span>
+          ) : (
+            <span
+              style={{
+                fontFamily: FONT_MONO,
+                fontSize: "var(--font-size-sm)",
+                color: "var(--text-tertiary)",
+              }}
+            >
+              {subPhase === "loading-index"
+                ? "loading"
+                : subPhase === "planning"
+                  ? "planning"
+                  : "between ops"}
             </span>
           )}
         </div>
@@ -113,30 +111,30 @@ export function LiveStream({
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
-          paddingTop: 4,
+          padding: "0 2px",
         }}
       >
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             color: "var(--text-tertiary)",
           }}
         >
-          tail · {events.length} events
+          event trace
         </span>
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 10,
-            letterSpacing: "0.10em",
+            fontSize: "var(--font-size-xs)",
+            letterSpacing: "0.14em",
             textTransform: "uppercase",
-            color: "var(--text-quaternary)",
+            color: "var(--text-tertiary)",
           }}
         >
-          expand ↗
+          {events.length} events
         </span>
       </div>
 
@@ -153,9 +151,13 @@ function LiveBadge() {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
+        gap: "var(--space-8)",
+        padding: "3px 9px",
+        border: "1px solid var(--accent-border)",
+        borderRadius: "var(--radius-pill)",
+        background: "var(--accent-soft)",
         fontFamily: FONT_MONO,
-        fontSize: 11,
+        fontSize: "var(--font-size-xs)",
         letterSpacing: "0.12em",
         textTransform: "uppercase",
         color: ACCENT,
@@ -166,9 +168,9 @@ function LiveBadge() {
           display: "inline-block",
           width: 6,
           height: 6,
-          borderRadius: 999,
+          borderRadius: "var(--radius-pill)",
           background: "var(--accent-strong)",
-          boxShadow: "0 0 8px var(--accent-strong)",
+          boxShadow: "0 0 8px color-mix(in srgb, var(--accent-strong) 70%, transparent)",
           animation: "live-stream-pulse 1.1s ease-in-out infinite",
         }}
       />
@@ -183,11 +185,12 @@ function HeroCard({ write }: { write: ActiveWriteSnapshot }) {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 14,
-        padding: "20px 22px",
-        border:
-          "1px solid color-mix(in srgb, var(--accent-strong) 40%, transparent)",
-        background: "color-mix(in srgb, var(--accent-strong) 5%, transparent)",
+        gap: "var(--space-12)",
+        padding: "16px 18px",
+        border: "1px solid var(--accent-border)",
+        borderRadius: "var(--radius-lg)",
+        background: PANEL_BG,
+        boxShadow: "0 0 0 1px color-mix(in srgb, var(--accent-strong) 4%, transparent)",
       }}
     >
       <div
@@ -196,7 +199,7 @@ function HeroCard({ write }: { write: ActiveWriteSnapshot }) {
           alignItems: "baseline",
           justifyContent: "space-between",
           fontFamily: FONT_MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
         }}
@@ -211,7 +214,7 @@ function HeroCard({ write }: { write: ActiveWriteSnapshot }) {
       <span
         style={{
           fontFamily: FONT_MONO,
-          fontSize: 16,
+          fontSize: "var(--font-size-lg)",
           fontWeight: 600,
           color: "var(--text-primary)",
         }}
@@ -222,7 +225,7 @@ function HeroCard({ write }: { write: ActiveWriteSnapshot }) {
         <p
           style={{
             fontFamily: FONT_HEAD,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             lineHeight: "20px",
             color: "var(--text-secondary)",
             margin: 0,
@@ -231,7 +234,7 @@ function HeroCard({ write }: { write: ActiveWriteSnapshot }) {
           {write.op.rationale}
         </p>
       )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
         <ShimmerBar />
         <div
           style={{
@@ -239,7 +242,7 @@ function HeroCard({ write }: { write: ActiveWriteSnapshot }) {
             alignItems: "center",
             justifyContent: "space-between",
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             letterSpacing: "0.10em",
             textTransform: "uppercase",
             color: "var(--text-tertiary)",
@@ -286,16 +289,17 @@ function IdleHero({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 8,
-        padding: "20px 22px",
-        border: "1px solid var(--border)",
-        background: "var(--card)",
+        gap: "var(--space-8)",
+        padding: "16px 18px",
+        border: "1px solid var(--input-border)",
+        borderRadius: "var(--radius-lg)",
+        background: PANEL_BG,
       }}
     >
       <span
         style={{
           fontFamily: FONT_MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
           color: "var(--text-tertiary)",
@@ -306,7 +310,8 @@ function IdleHero({
       <span
         style={{
           fontFamily: FONT_MONO,
-          fontSize: 13,
+          fontSize: "var(--font-size-base)",
+          lineHeight: 1.55,
           color: "var(--text-secondary)",
         }}
       >
@@ -323,6 +328,7 @@ function ShimmerBar() {
         position: "relative",
         height: 3,
         background: "rgba(255, 255, 255, 0.08)",
+        borderRadius: "var(--radius-pill)",
         overflow: "hidden",
       }}
     >
@@ -349,9 +355,10 @@ function TailLog({ rows }: { rows: TailRow[] }) {
         display: "flex",
         flexDirection: "column",
         gap: 0,
-        border: "1px solid var(--border)",
-        background: TAIL_BG,
-        padding: "6px 0",
+        border: "1px solid var(--input-border)",
+        borderRadius: "var(--radius-lg)",
+        background: PANEL_BG,
+        padding: "5px 0",
         maxHeight: 200,
         overflow: "hidden",
       }}
@@ -359,9 +366,9 @@ function TailLog({ rows }: { rows: TailRow[] }) {
       {rows.length === 0 ? (
         <div
           style={{
-            padding: "8px 14px",
+            padding: "9px 14px",
             fontFamily: FONT_MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: "var(--text-tertiary)",
           }}
         >
@@ -373,18 +380,21 @@ function TailLog({ rows }: { rows: TailRow[] }) {
             key={i}
             style={{
               display: "flex",
-              gap: 10,
-              padding: "4px 14px",
+              gap: "var(--space-10)",
+              minHeight: 30,
+              alignItems: "center",
+              padding: "5px 14px",
               fontFamily: FONT_MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               lineHeight: "16px",
               // Fade older entries (top is newest in our reversed list)
-              opacity: Math.max(0.35, 1 - i * 0.12),
+              opacity: Math.max(0.42, 1 - i * 0.1),
+              borderTop: i === 0 ? "none" : "1px solid var(--divider)",
             }}
           >
             <span
               style={{
-                width: 46,
+                width: 50,
                 flexShrink: 0,
                 color: "var(--text-tertiary)",
               }}
@@ -404,7 +414,7 @@ function TailLog({ rows }: { rows: TailRow[] }) {
                 whiteSpace: "nowrap",
               }}
             >
-              <span style={{ color: glyphColor(row.tone), marginRight: 6 }}>
+              <span style={{ color: glyphColor(row.tone), marginRight: "var(--space-6)" }}>
                 {row.glyph}
               </span>
               {row.detail}
@@ -419,7 +429,7 @@ function TailLog({ rows }: { rows: TailRow[] }) {
           right: 0,
           bottom: 0,
           height: 50,
-          background: `linear-gradient(180deg, transparent 0%, ${TAIL_BG} 100%)`,
+          background: `linear-gradient(180deg, transparent 0%, var(--background) 120%)`,
           pointerEvents: "none",
         }}
       />

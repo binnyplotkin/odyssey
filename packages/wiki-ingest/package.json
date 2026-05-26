@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "dotenv -e ../../.env -- tsx src/worker.ts"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",

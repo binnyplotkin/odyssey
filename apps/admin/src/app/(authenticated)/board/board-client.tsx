@@ -231,10 +231,10 @@ function DomainTag({ domain }: { domain: TicketDomain }) {
   return (
     <span
       style={{
-        borderRadius: 4,
+        borderRadius: "var(--radius-xs)",
         padding: "2px 6px",
         background: c.bg,
-        fontSize: 9,
+        fontSize: "var(--font-size-2xs)",
         fontFamily: "var(--font-mono, ui-monospace, monospace)",
         fontWeight: 500,
         color: c.color,
@@ -251,13 +251,13 @@ function PriorityTag({ priority }: { priority: TicketPriority }) {
   return (
     <span
       style={{
-        borderRadius: 4,
+        borderRadius: "var(--radius-xs)",
         padding: "2px 6px",
         background: "rgba(140, 231, 210, 0.08)",
-        fontSize: 9,
+        fontSize: "var(--font-size-2xs)",
         fontFamily: "var(--font-mono, ui-monospace, monospace)",
         fontWeight: 500,
-        color: "#8CE7D2",
+        color: "#8FD1CB",
         lineHeight: "12px",
         whiteSpace: "nowrap",
       }}
@@ -294,9 +294,9 @@ function TicketCard({
       style={{
         display: "flex",
         flexDirection: "column",
-        borderRadius: 10,
-        padding: 12,
-        gap: 8,
+        borderRadius: "var(--radius-lg)",
+        padding: "var(--space-12)",
+        gap: "var(--space-8)",
         background: isSelected ? "rgba(59, 130, 246, 0.08)" : "var(--card)",
         border: isSelected
           ? "1.5px solid rgba(59, 130, 246, 0.4)"
@@ -308,11 +308,11 @@ function TicketCard({
       }}
     >
       {/* Title row */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-8)" }}>
         <span
           style={{
             flex: 1,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             fontWeight: 500,
             color: "var(--foreground)",
             lineHeight: "17px",
@@ -332,7 +332,7 @@ function TicketCard({
               borderRadius: "50%",
               background: PRIORITY_DOT[ticket.priority],
               flexShrink: 0,
-              marginTop: 4,
+              marginTop: "var(--space-4)",
             }}
           />
         )}
@@ -342,7 +342,7 @@ function TicketCard({
       {ticket.description && (
         <span
           style={{
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: "var(--muted)",
             lineHeight: "14px",
             overflow: "hidden",
@@ -360,8 +360,8 @@ function TicketCard({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
-          paddingTop: 4,
+          gap: "var(--space-6)",
+          paddingTop: "var(--space-4)",
           borderTop: "1px solid var(--divider)",
         }}
       >
@@ -370,10 +370,10 @@ function TicketCard({
         {featureName && (
           <span
             style={{
-              borderRadius: 4,
+              borderRadius: "var(--radius-xs)",
               padding: "2px 6px",
               background: "rgba(59, 130, 246, 0.08)",
-              fontSize: 9,
+              fontSize: "var(--font-size-2xs)",
               fontFamily: "var(--font-mono, ui-monospace, monospace)",
               fontWeight: 500,
               color: "rgba(59, 130, 246, 0.7)",
@@ -414,10 +414,10 @@ function FilterDropdown({
         minWidth: 140,
         background: "var(--dropdown-bg)",
         border: "1px solid var(--input-border)",
-        borderRadius: 8,
+        borderRadius: "var(--radius-md)",
         padding: "4px 0",
         zIndex: 100,
-        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+        boxShadow: "var(--elevation-card)",
       }}
     >
       {options.map((opt) => (
@@ -427,7 +427,7 @@ function FilterDropdown({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
             width: "100%",
             padding: "6px 12px",
             background: active === opt ? "rgba(140, 231, 210, 0.08)" : "none",
@@ -435,9 +435,9 @@ function FilterDropdown({
             cursor: "pointer",
             color:
               active === opt
-                ? "#8CE7D2"
+                ? "#8FD1CB"
                 : "var(--text-secondary)",
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             fontFamily: "var(--font-mono, ui-monospace, monospace)",
             textAlign: "left",
           }}
@@ -481,19 +481,19 @@ function InlineSelect<T extends string>({
   const selected = options.find((o) => o.value === value);
 
   const defaultRenderSelected = () => {
-    if (!selected) return <span style={{ fontSize: 12, color: "var(--text-placeholder)" }}>{placeholder}</span>;
+    if (!selected) return <span style={{ fontSize: "var(--font-size-base)", color: "var(--text-placeholder)" }}>{placeholder}</span>;
     if (selected.tag) return (
       <span style={{
-        borderRadius: 3, padding: "1px 5px", background: selected.tag.bg,
-        fontSize: 10, color: selected.tag.color, lineHeight: "14px",
+        borderRadius: "var(--radius-xs)", padding: "1px 5px", background: selected.tag.bg,
+        fontSize: "var(--font-size-xs)", color: selected.tag.color, lineHeight: "14px",
       }}>
         {selected.label}
       </span>
     );
     return (
-      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
         {selected.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: selected.dot, flexShrink: 0 }} />}
-        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{selected.label}</span>
+        <span style={{ fontSize: "var(--font-size-base)", color: "var(--text-secondary)" }}>{selected.label}</span>
       </span>
     );
   };
@@ -506,7 +506,7 @@ function InlineSelect<T extends string>({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
+          gap: "var(--space-6)",
           padding: 0,
           background: "none",
           border: "none",
@@ -525,10 +525,10 @@ function InlineSelect<T extends string>({
           minWidth: 160,
           background: "var(--dropdown-bg)",
           border: "1px solid var(--input-border)",
-          borderRadius: 8,
+          borderRadius: "var(--radius-md)",
           padding: "4px 0",
           zIndex: 100,
-          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+          boxShadow: "var(--elevation-card)",
           maxHeight: 200,
           overflowY: "auto",
         }}>
@@ -536,12 +536,12 @@ function InlineSelect<T extends string>({
             type="button"
             onClick={() => { onChange("" as T | ""); setOpen(false); }}
             style={{
-              display: "flex", alignItems: "center", gap: 8,
+              display: "flex", alignItems: "center", gap: "var(--space-8)",
               width: "100%", padding: "7px 12px",
               background: value === "" ? "rgba(140, 231, 210, 0.08)" : "none",
               border: "none", cursor: "pointer", textAlign: "left",
               color: value === "" ? "var(--accent-strong)" : "var(--text-quaternary)",
-              fontSize: 11, fontFamily: "inherit",
+              fontSize: "var(--font-size-sm)", fontFamily: "inherit",
             }}
           >
             {placeholder}
@@ -554,12 +554,12 @@ function InlineSelect<T extends string>({
                 type="button"
                 onClick={() => { onChange(opt.value); setOpen(false); }}
                 style={{
-                  display: "flex", alignItems: "center", gap: 8,
+                  display: "flex", alignItems: "center", gap: "var(--space-8)",
                   width: "100%", padding: "7px 12px",
                   background: isActive ? "rgba(140, 231, 210, 0.08)" : "none",
                   border: "none", cursor: "pointer", textAlign: "left",
                   color: isActive ? "var(--accent-strong)" : "var(--text-secondary)",
-                  fontSize: 11, fontFamily: "inherit",
+                  fontSize: "var(--font-size-sm)", fontFamily: "inherit",
                 }}
               >
                 {renderOption ? renderOption(opt, isActive) : (
@@ -567,8 +567,8 @@ function InlineSelect<T extends string>({
                     {opt.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: opt.dot, flexShrink: 0 }} />}
                     {opt.tag && (
                       <span style={{
-                        borderRadius: 3, padding: "1px 5px", background: opt.tag.bg,
-                        fontSize: 10, color: opt.tag.color, lineHeight: "14px",
+                        borderRadius: "var(--radius-xs)", padding: "1px 5px", background: opt.tag.bg,
+                        fontSize: "var(--font-size-xs)", color: opt.tag.color, lineHeight: "14px",
                       }}>
                         {opt.label}
                       </span>
@@ -598,7 +598,7 @@ function InlineDateInput({ value, onChange }: {
       onChange={(e) => onChange(e.target.value || undefined)}
       style={{
         padding: 0, margin: 0, background: "none", border: "none", outline: "none",
-        fontFamily: "inherit", fontSize: 12, width: "100%", cursor: "pointer",
+        fontFamily: "inherit", fontSize: "var(--font-size-base)", width: "100%", cursor: "pointer",
         color: value ? "var(--text-tertiary)" : "var(--text-placeholder)",
         colorScheme: "inherit",
       }}
@@ -640,8 +640,8 @@ function ModalSelect<T extends string>({
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
       <span style={{
-        fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
-        textTransform: "uppercase", color: "var(--text-quaternary)", marginBottom: 4,
+        fontSize: "var(--font-size-xs)", fontWeight: 600, letterSpacing: "0.08em",
+        textTransform: "uppercase", color: "var(--text-quaternary)", marginBottom: "var(--space-4)",
       }}>
         {label}
       </span>
@@ -652,17 +652,17 @@ function ModalSelect<T extends string>({
           style={{
             width: "100%",
             padding: "8px 10px",
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             border: "1px solid var(--input-border)",
             background: "var(--input-bg)",
             color: value ? "var(--foreground)" : "var(--text-quaternary)",
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             fontFamily: "inherit",
             cursor: "pointer",
             textAlign: "left",
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--space-8)",
           }}
         >
           {selected?.dot && (
@@ -670,14 +670,14 @@ function ModalSelect<T extends string>({
           )}
           {selected?.tag && (
             <span style={{
-              borderRadius: 3, padding: "1px 5px", background: selected.tag.bg,
-              fontSize: 10, color: selected.tag.color, lineHeight: "14px",
+              borderRadius: "var(--radius-xs)", padding: "1px 5px", background: selected.tag.bg,
+              fontSize: "var(--font-size-xs)", color: selected.tag.color, lineHeight: "14px",
             }}>
               {selected.label}
             </span>
           )}
           {!selected?.tag && (selected?.label ?? placeholder)}
-          <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-placeholder)" }}>▾</span>
+          <span style={{ marginLeft: "auto", fontSize: "var(--font-size-xs)", color: "var(--text-placeholder)" }}>▾</span>
         </button>
 
         {open && (
@@ -688,10 +688,10 @@ function ModalSelect<T extends string>({
             right: 0,
             background: "var(--dropdown-bg)",
             border: "1px solid var(--input-border)",
-            borderRadius: 8,
+            borderRadius: "var(--radius-md)",
             padding: "4px 0",
             zIndex: 10,
-            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+            boxShadow: "var(--elevation-card)",
             maxHeight: 200,
             overflowY: "auto",
           }}>
@@ -700,11 +700,11 @@ function ModalSelect<T extends string>({
               type="button"
               onClick={() => { onChange("" as T | ""); setOpen(false); }}
               style={{
-                display: "flex", alignItems: "center", gap: 8,
+                display: "flex", alignItems: "center", gap: "var(--space-8)",
                 width: "100%", padding: "7px 12px", background: value === "" ? "rgba(140, 231, 210, 0.08)" : "none",
                 border: "none", cursor: "pointer", textAlign: "left",
                 color: value === "" ? "var(--accent-strong)" : "var(--text-quaternary)",
-                fontSize: 11, fontFamily: "inherit",
+                fontSize: "var(--font-size-sm)", fontFamily: "inherit",
               }}
             >
               {placeholder}
@@ -717,12 +717,12 @@ function ModalSelect<T extends string>({
                   type="button"
                   onClick={() => { onChange(opt.value); setOpen(false); }}
                   style={{
-                    display: "flex", alignItems: "center", gap: 8,
+                    display: "flex", alignItems: "center", gap: "var(--space-8)",
                     width: "100%", padding: "7px 12px",
                     background: isActive ? "rgba(140, 231, 210, 0.08)" : "none",
                     border: "none", cursor: "pointer", textAlign: "left",
                     color: isActive ? "var(--accent-strong)" : "var(--text-secondary)",
-                    fontSize: 11, fontFamily: "inherit",
+                    fontSize: "var(--font-size-sm)", fontFamily: "inherit",
                   }}
                 >
                   {renderOption ? renderOption(opt, isActive) : (
@@ -730,8 +730,8 @@ function ModalSelect<T extends string>({
                       {opt.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: opt.dot, flexShrink: 0 }} />}
                       {opt.tag && (
                         <span style={{
-                          borderRadius: 3, padding: "1px 5px", background: opt.tag.bg,
-                          fontSize: 10, color: opt.tag.color, lineHeight: "14px",
+                          borderRadius: "var(--radius-xs)", padding: "1px 5px", background: opt.tag.bg,
+                          fontSize: "var(--font-size-xs)", color: opt.tag.color, lineHeight: "14px",
                         }}>
                           {opt.label}
                         </span>
@@ -768,22 +768,22 @@ function NewTicketModal({
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "8px 10px",
-    borderRadius: 6,
+    borderRadius: "var(--radius-sm)",
     border: "1px solid var(--input-border)",
     background: "var(--input-bg)",
     color: "var(--foreground)",
-    fontSize: 12,
+    fontSize: "var(--font-size-base)",
     fontFamily: "inherit",
     outline: "none",
   };
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 10,
+    fontSize: "var(--font-size-xs)",
     fontWeight: 600,
     letterSpacing: "0.08em",
     textTransform: "uppercase",
     color: "var(--text-quaternary)",
-    marginBottom: 4,
+    marginBottom: "var(--space-4)",
   };
 
   const handleSubmit = () => {
@@ -818,7 +818,7 @@ function NewTicketModal({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "rgba(0, 0, 0, 0.6)",
+        background: "var(--modal-backdrop)",
         backdropFilter: "blur(4px)",
       }}
       onClick={(e) => {
@@ -830,16 +830,16 @@ function NewTicketModal({
           width: 460,
           background: "var(--dropdown-bg)",
           border: "1px solid var(--input-border)",
-          borderRadius: 14,
-          padding: 24,
+          borderRadius: "var(--radius-2xl)",
+          padding: "var(--space-24)",
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          gap: "var(--space-16)",
         }}
       >
         <h2
           style={{
-            fontSize: 16,
+            fontSize: "var(--font-size-xl)",
             fontWeight: 600,
             color: "var(--foreground)",
             margin: 0,
@@ -872,7 +872,7 @@ function NewTicketModal({
         </div>
 
         {/* Row: Status + Domain */}
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: "var(--space-12)" }}>
           <ModalSelect
             label="Status"
             value={status}
@@ -890,7 +890,7 @@ function NewTicketModal({
         </div>
 
         {/* Row: Priority + Assignee */}
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: "var(--space-12)" }}>
           <ModalSelect
             label="Priority"
             value={priority}
@@ -910,7 +910,7 @@ function NewTicketModal({
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 18, height: 18, borderRadius: "50%",
                   background: assigneeOptions.find((a) => a.value === opt.value)?.dot ?? "#8B7EB5",
-                  color: "#fff", fontSize: 8, fontWeight: 600, flexShrink: 0,
+                  color: "#fff", fontSize: "var(--font-size-3xs)", fontWeight: 600, flexShrink: 0,
                 }}>
                   {getInitials(opt.label)}
                 </span>
@@ -922,17 +922,17 @@ function NewTicketModal({
 
         {/* Actions */}
         <div
-          style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}
+          style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-10)", marginTop: "var(--space-4)" }}
         >
           <button
             onClick={onClose}
             style={{
               padding: "7px 16px",
-              borderRadius: 8,
+              borderRadius: "var(--radius-md)",
               border: "1px solid var(--input-border)",
               background: "none",
               color: "var(--text-tertiary)",
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               fontWeight: 500,
               cursor: "pointer",
               fontFamily: "inherit",
@@ -944,11 +944,11 @@ function NewTicketModal({
             onClick={handleSubmit}
             style={{
               padding: "7px 16px",
-              borderRadius: 8,
+              borderRadius: "var(--radius-md)",
               border: "none",
-              background: "#8CE7D2",
+              background: "#8FD1CB",
               color: "#000",
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               fontWeight: 600,
               cursor: "pointer",
               fontFamily: "inherit",
@@ -1081,12 +1081,12 @@ function TicketDetailSidebar({
   const progress = totalCount > 0 ? (doneCount / totalCount) * 100 : 0;
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 10,
+    fontSize: "var(--font-size-xs)",
     fontWeight: 600,
     letterSpacing: "0.04em",
     textTransform: "uppercase",
     color: "var(--text-quaternary)",
-    marginBottom: 8,
+    marginBottom: "var(--space-8)",
   };
 
   const rowStyle: React.CSSProperties = {
@@ -1107,7 +1107,7 @@ function TicketDetailSidebar({
         flexDirection: "column",
         background: "var(--background)",
         borderLeft: "1px solid var(--input-border)",
-        boxShadow: "-8px 0 32px rgba(0, 0, 0, 0.4)",
+        boxShadow: "var(--elevation-side)",
         zIndex: 50,
         overflow: "hidden",
       }}
@@ -1132,7 +1132,7 @@ function TicketDetailSidebar({
           style={{
             width: 2,
             height: 40,
-            borderRadius: 2,
+            borderRadius: "var(--radius-2xs)",
             background: "var(--border)",
             transition: "background 0.15s ease",
           }}
@@ -1150,7 +1150,7 @@ function TicketDetailSidebar({
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
           <span
             style={{
               width: 6,
@@ -1159,7 +1159,7 @@ function TicketDetailSidebar({
               background: col?.dotColor ?? "#64748B",
             }}
           />
-          <span style={{ fontSize: 11, fontWeight: 500, color: col?.dotColor ?? "#64748B", opacity: 0.8 }}>
+          <span style={{ fontSize: "var(--font-size-sm)", fontWeight: 500, color: col?.dotColor ?? "#64748B", opacity: 0.8 }}>
             {col?.label ?? ticket.status}
           </span>
         </div>
@@ -1168,14 +1168,14 @@ function TicketDetailSidebar({
           style={{
             width: 28,
             height: 28,
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             background: "var(--input-bg)",
             border: "1px solid var(--card-border)",
             color: "var(--text-quaternary)",
-            fontSize: 16,
+            fontSize: "var(--font-size-xl)",
             cursor: "pointer",
             fontFamily: "inherit",
           }}
@@ -1194,7 +1194,7 @@ function TicketDetailSidebar({
         }}
       >
         {/* Title + Description */}
-        <div style={{ padding: "20px 20px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ padding: "20px 20px 16px", display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
           <input
             value={ticket.title}
             onChange={(e) => onUpdateTicket({ ...ticket, title: e.target.value })}
@@ -1220,7 +1220,7 @@ function TicketDetailSidebar({
             style={{
               margin: 0,
               padding: 0,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
               color: "var(--text-tertiary)",
               lineHeight: 1.55,
               background: "none",
@@ -1266,11 +1266,11 @@ function TicketDetailSidebar({
               options={team.map((m, i) => ({ value: m.id, label: m.name, dot: AVATAR_COLORS[i % AVATAR_COLORS.length] }))}
               placeholder="Unassigned"
               renderSelected={(opt) => {
-                if (!opt) return <span style={{ fontSize: 12, color: "var(--text-placeholder)" }}>Unassigned</span>;
+                if (!opt) return <span style={{ fontSize: "var(--font-size-base)", color: "var(--text-placeholder)" }}>Unassigned</span>;
                 return (
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
                     <AvatarBubble assigneeId={opt.value} team={team} size={20} />
-                    <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{opt.label}</span>
+                    <span style={{ fontSize: "var(--font-size-base)", color: "var(--text-secondary)" }}>{opt.label}</span>
                   </span>
                 );
               }}
@@ -1282,7 +1282,7 @@ function TicketDetailSidebar({
                     background: team.findIndex((m) => m.id === opt.value) >= 0
                       ? AVATAR_COLORS[team.findIndex((m) => m.id === opt.value) % AVATAR_COLORS.length]
                       : "#8B7EB5",
-                    color: "#fff", fontSize: 8, fontWeight: 600, flexShrink: 0,
+                    color: "#fff", fontSize: "var(--font-size-3xs)", fontWeight: 600, flexShrink: 0,
                   }}>
                     {getInitials(opt.label)}
                   </span>
@@ -1329,12 +1329,12 @@ function TicketDetailSidebar({
               options={features.map((f) => ({ value: f.id, label: f.title }))}
               placeholder="None"
               renderSelected={(opt) => {
-                if (!opt) return <span style={{ fontSize: 12, color: "var(--text-placeholder)" }}>None</span>;
+                if (!opt) return <span style={{ fontSize: "var(--font-size-base)", color: "var(--text-placeholder)" }}>None</span>;
                 return (
                   <span style={{
-                    fontSize: 11, fontFamily: "var(--font-mono, ui-monospace, monospace)",
+                    fontSize: "var(--font-size-sm)", fontFamily: "var(--font-mono, ui-monospace, monospace)",
                     fontWeight: 500, color: "rgba(59, 130, 246, 0.7)",
-                    background: "rgba(59, 130, 246, 0.08)", borderRadius: 4, padding: "2px 8px",
+                    background: "rgba(59, 130, 246, 0.08)", borderRadius: "var(--radius-xs)", padding: "2px 8px",
                   }}>
                     {opt.label}
                   </span>
@@ -1352,7 +1352,7 @@ function TicketDetailSidebar({
               placeholder="—"
               style={{
                 padding: 0, margin: 0, background: "none", border: "none", outline: "none",
-                fontFamily: "inherit", fontSize: 12, width: "100%",
+                fontFamily: "inherit", fontSize: "var(--font-size-base)", width: "100%",
                 color: ticket.phase ? "var(--text-tertiary)" : "var(--text-placeholder)",
               }}
             />
@@ -1379,7 +1379,7 @@ function TicketDetailSidebar({
           {/* Created */}
           <div style={rowStyle}>
             <span style={labelStyle}>Created</span>
-            <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+            <span style={{ fontSize: "var(--font-size-base)", color: "var(--text-tertiary)" }}>
               {ticket.createdAt.slice(0, 10)}
             </span>
           </div>
@@ -1387,23 +1387,23 @@ function TicketDetailSidebar({
 
         {/* Subtasks */}
         {ticket.subtasks && ticket.subtasks.length > 0 && (
-          <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)" }}>
+              <span style={{ fontSize: "var(--font-size-base)", fontWeight: 600, color: "var(--text-tertiary)" }}>
                 Subtasks
               </span>
-              <span style={{ fontSize: 11, color: "var(--text-placeholder)" }}>
+              <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-placeholder)" }}>
                 {doneCount} / {totalCount}
               </span>
             </div>
 
             {/* Progress bar */}
-            <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--card-border)" }}>
+            <div style={{ width: "100%", height: 3, borderRadius: "var(--radius-2xs)", background: "var(--card-border)" }}>
               <div
                 style={{
                   width: `${progress}%`,
                   height: 3,
-                  borderRadius: 2,
+                  borderRadius: "var(--radius-2xs)",
                   background: "rgba(59, 130, 246, 0.5)",
                   transition: "width 0.2s ease",
                 }}
@@ -1418,7 +1418,7 @@ function TicketDetailSidebar({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
+                  gap: "var(--space-8)",
                   padding: "4px 0",
                   background: "none",
                   border: "none",
@@ -1430,12 +1430,12 @@ function TicketDetailSidebar({
                   style={{
                     width: 16,
                     height: 16,
-                    borderRadius: 4,
+                    borderRadius: "var(--radius-xs)",
                     flexShrink: 0,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 10,
+                    fontSize: "var(--font-size-xs)",
                     background: st.done ? "rgba(59, 130, 246, 0.15)" : "var(--input-bg)",
                     border: st.done ? "none" : "1px solid var(--input-border)",
                     color: "rgba(59, 130, 246, 0.7)",
@@ -1445,7 +1445,7 @@ function TicketDetailSidebar({
                 </span>
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: "var(--font-size-base)",
                     color: st.done ? "var(--text-quaternary)" : "var(--text-tertiary)",
                     textDecoration: st.done ? "line-through" : "none",
                   }}
@@ -1464,22 +1464,22 @@ function TicketDetailSidebar({
             borderTop: "1px solid var(--divider)",
             display: "flex",
             flexDirection: "column",
-            gap: 12,
+            gap: "var(--space-12)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+            <span style={{ fontSize: "var(--font-size-base)", fontWeight: 600, color: "var(--text-tertiary)" }}>
               Activity
             </span>
             {sortedActivity.length > 0 && (
-              <span style={{ fontSize: 11, color: "var(--text-placeholder)" }}>
+              <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-placeholder)" }}>
                 {sortedActivity.length}
               </span>
             )}
           </div>
 
           {/* Comment composer */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
             <textarea
               value={commentDraft}
               onChange={(e) => setCommentDraft(e.target.value)}
@@ -1493,11 +1493,11 @@ function TicketDetailSidebar({
               rows={2}
               style={{
                 padding: "8px 10px",
-                borderRadius: 6,
+                borderRadius: "var(--radius-sm)",
                 border: "1px solid var(--input-border)",
                 background: "var(--input-background, transparent)",
                 color: "var(--text-primary)",
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
                 lineHeight: 1.5,
                 fontFamily: "inherit",
                 resize: "vertical",
@@ -1505,7 +1505,7 @@ function TicketDetailSidebar({
               }}
             />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 10, color: "var(--text-placeholder)" }}>
+              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-placeholder)" }}>
                 ⌘ + Enter to post
               </span>
               <button
@@ -1514,11 +1514,11 @@ function TicketDetailSidebar({
                 disabled={!commentDraft.trim()}
                 style={{
                   padding: "4px 10px",
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-sm)",
                   border: "1px solid var(--input-border)",
                   background: commentDraft.trim() ? "var(--text-tertiary)" : "transparent",
                   color: commentDraft.trim() ? "var(--background)" : "var(--text-placeholder)",
-                  fontSize: 11,
+                  fontSize: "var(--font-size-sm)",
                   fontWeight: 500,
                   cursor: commentDraft.trim() ? "pointer" : "default",
                 }}
@@ -1529,7 +1529,7 @@ function TicketDetailSidebar({
           </div>
 
           {visibleActivity.map((item) => (
-            <div key={item.id} style={{ display: "flex", gap: 8 }}>
+            <div key={item.id} style={{ display: "flex", gap: "var(--space-8)" }}>
               <span
                 style={{
                   width: 20,
@@ -1539,11 +1539,11 @@ function TicketDetailSidebar({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 9,
+                  fontSize: "var(--font-size-2xs)",
                   fontWeight: 600,
                   color: item.authorColor,
                   flexShrink: 0,
-                  marginTop: 1,
+                  marginTop: "var(--space-1)",
                 }}
               >
                 {item.author === "ai-sync" ? (
@@ -1552,13 +1552,13 @@ function TicketDetailSidebar({
                   item.author.slice(0, 1).toUpperCase()
                 )}
               </span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", minWidth: 0, flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+                  <span style={{ fontSize: "var(--font-size-sm)", fontWeight: 500, color: "var(--text-tertiary)" }}>
                     {authorLabel(item.author)}
                   </span>
                   <span
-                    style={{ fontSize: 11, color: "var(--text-placeholder)" }}
+                    style={{ fontSize: "var(--font-size-sm)", color: "var(--text-placeholder)" }}
                     title={item.timestamp}
                   >
                     {timeAgo(item.timestamp)}
@@ -1566,7 +1566,7 @@ function TicketDetailSidebar({
                 </div>
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: "var(--font-size-base)",
                     color: item.type === "system" ? "var(--text-quaternary)" : "var(--text-tertiary)",
                     lineHeight: 1.5,
                     fontStyle: item.type === "system" ? "italic" : "normal",
@@ -1589,7 +1589,7 @@ function TicketDetailSidebar({
                 border: "none",
                 background: "transparent",
                 color: "var(--text-placeholder)",
-                fontSize: 11,
+                fontSize: "var(--font-size-sm)",
                 fontWeight: 500,
                 cursor: "pointer",
               }}
@@ -1599,7 +1599,7 @@ function TicketDetailSidebar({
           )}
 
           {sortedActivity.length === 0 && (
-            <span style={{ fontSize: 11, color: "var(--text-placeholder)", fontStyle: "italic" }}>
+            <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-placeholder)", fontStyle: "italic" }}>
               No activity yet.
             </span>
           )}
@@ -1670,13 +1670,20 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
 
   useEffect(() => {
     setContent(
-      <>
-        <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground)", marginTop: 0, marginRight: 12, marginBottom: 0, marginLeft: 0, whiteSpace: "nowrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
+        <h1 style={{ fontSize: "var(--font-size-xl)", fontWeight: 700, color: "var(--foreground)", marginTop: 0, marginRight: "var(--space-12)", marginBottom: 0, marginLeft: 0, whiteSpace: "nowrap" }}>
           Board
         </h1>
 
         {/* Filter pills */}
-        <div ref={filterRef} style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
+        <div ref={filterRef} style={{ display: "flex", gap: "var(--space-6)", whiteSpace: "nowrap" }}>
           {FILTER_PILLS.map((pill) => {
             const isActive = !!filters[pill.key];
             const isOpen = openFilter === pill.key;
@@ -1688,15 +1695,15 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                   }
                   style={{
                     padding: "5px 12px",
-                    borderRadius: 8,
+                    borderRadius: "var(--radius-md)",
                     border: `1px solid ${isActive ? "rgba(140, 231, 210, 0.3)" : "var(--card-border)"}`,
                     background: isActive
                       ? "rgba(140, 231, 210, 0.08)"
                       : "var(--input-bg)",
                     color: isActive
-                      ? "#8CE7D2"
+                      ? "#8FD1CB"
                       : "var(--muted)",
-                    fontSize: 11,
+                    fontSize: "var(--font-size-sm)",
                     fontWeight: 500,
                     cursor: "pointer",
                     fontFamily: "inherit",
@@ -1705,7 +1712,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                 >
                   {pill.label}
                   {isActive && (
-                    <span style={{ marginLeft: 4, opacity: 0.6 }}>
+                    <span style={{ marginLeft: "var(--space-4)", opacity: 0.6 }}>
                       {pill.key === "assignee" ? (teamNameMap.get(filters[pill.key]!) ?? filters[pill.key]) : filters[pill.key]}
                     </span>
                   )}
@@ -1725,7 +1732,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
 
         <div style={{ flex: 1 }} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
           {/* Refresh */}
           <button
             onClick={() => handleRefreshRef.current()}
@@ -1735,12 +1742,12 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
               justifyContent: "center",
               width: 30,
               height: 30,
-              borderRadius: 8,
+              borderRadius: "var(--radius-md)",
               border: "1px solid var(--card-border)",
               background: "var(--input-bg)",
               color: "var(--muted)",
               cursor: "pointer",
-              fontSize: 14,
+              fontSize: "var(--font-size-lg)",
             }}
             title="Reset board"
           >
@@ -1752,11 +1759,11 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
             onClick={() => setShowModalRef.current(true)}
             style={{
               padding: "6px 14px",
-              borderRadius: 8,
+              borderRadius: "var(--radius-md)",
               border: "none",
-              background: "#8CE7D2",
+              background: "#8FD1CB",
               color: "#000",
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               fontWeight: 600,
               cursor: "pointer",
               fontFamily: "inherit",
@@ -1766,7 +1773,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
             + New Ticket
           </button>
         </div>
-      </>
+      </div>
     );
     return () => setContent(null);
   }, [filters, openFilter, tickets, featureIdToName, teamNameMap, setContent]);
@@ -1880,7 +1887,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
       <div
         style={{
           display: "flex",
-          gap: 10,
+          gap: "var(--space-10)",
           flex: 1,
           minHeight: 0,
           overflowX: "auto",
@@ -1906,7 +1913,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                 flexShrink: 0,
                 display: "flex",
                 flexDirection: "column",
-                borderRadius: 14,
+                borderRadius: "var(--radius-2xl)",
                 background: "var(--card)",
                 border: `1px solid ${isDragTarget ? "rgba(140, 231, 210, 0.2)" : "var(--card-border)"}`,
                 transition: "border-color 0.15s ease",
@@ -1918,7 +1925,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
+                  gap: "var(--space-8)",
                   padding: "12px 14px",
                   background: "var(--card)",
                   borderBottom: "1px solid var(--divider)",
@@ -1935,7 +1942,7 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                 />
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: "var(--font-size-base)",
                     fontWeight: 600,
                     color: "var(--foreground)",
                     flex: 1,
@@ -1950,9 +1957,9 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                     justifyContent: "center",
                     minWidth: 20,
                     height: 18,
-                    borderRadius: 9,
+                    borderRadius: "var(--radius-md)",
                     background: col.dotColor + "1A",
-                    fontSize: 10,
+                    fontSize: "var(--font-size-xs)",
                     fontFamily: "var(--font-mono, ui-monospace, monospace)",
                     fontWeight: 600,
                     color: "var(--text-quaternary)",
@@ -1968,8 +1975,8 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 10,
-                  padding: 10,
+                  gap: "var(--space-10)",
+                  padding: "var(--space-10)",
                   flex: 1,
                   minHeight: 0,
                   overflowY: "auto",

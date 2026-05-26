@@ -1,65 +1,54 @@
 import { notFound } from "next/navigation";
-import { getCharacterStore, getWikiStore } from "@odyssey/db";
-import { CharacterOverview } from "@/components/character-overview";
+import { MODEL_REGISTRY } from "@/lib/model-registry";
+import { CharacterConfig } from "@/components/character-config";
+import {
+  getCharacterDetail,
+  getCharacterIdBySlugOrId,
+} from "@/lib/character-detail-cache";
 
-export const dynamic = "force-dynamic";
+/*
+ * Cached read path — see `character-detail-cache.ts`. Two cache layers:
+ *   1. slug → id (tagged with characters-list; cheap)
+ *   2. id → full payload (tagged per-character; collapses 4 + 4N
+ *      DB round-trips to 0 on cache hits)
+ *
+ * Page-level `dynamic` flag intentionally omitted: with the cache in
+ * place we want Next to serve from the data cache on subsequent
+ * navigations rather than re-fetching every request. Mutation routes
+ * fire `invalidateCharacterDetail(id)` to refresh.
+ */
+
+// Model registry filters are pure constants over a static import —
+// hoisted out of the request lifecycle so they're computed once at
+// module load, not on every page render.
+const CHAT_MODELS = MODEL_REGISTRY.filter((m) => m.modes.includes("chat"));
+const VOICE_MODELS = MODEL_REGISTRY.filter(
+  (m) =>
+    m.modes.includes("voice") &&
+    (m.provider === "anthropic" ||
+      m.provider === "cerebras" ||
+      m.provider === "groq"),
+);
 
 type Params = Promise<{ slug: string }>;
 
-export default async function CharacterOverviewPage({ params }: { params: Params }) {
+export default async function CharacterConfigPage({ params }: { params: Params }) {
   const { slug } = await params;
-  const character = await getCharacterStore().getBySlug(slug);
-  if (!character) notFound();
 
-  const wiki = getWikiStore();
-  const [pages, edges, sources, runs, voiceIdPages] = await Promise.all([
-    wiki.listPages(character.id),
-    wiki.listCharacterEdges(character.id),
-    wiki.listSources(character.id),
-    wiki.listIngestionRuns(character.id, 50),
-    wiki.listPages(character.id, { type: "voice_identity" }),
-  ]);
+  const id = await getCharacterIdBySlugOrId(slug);
+  if (!id) notFound();
 
-  // Event count per era (for the Eras card).
-  const eventCountByEra = new Map<string, number>();
-  for (const p of pages) {
-    if (p.type !== "event" || !p.timeIndex) continue;
-    eventCountByEra.set(p.timeIndex.era, (eventCountByEra.get(p.timeIndex.era) ?? 0) + 1);
-  }
-
-  const voiceIdPage = voiceIdPages[0] ?? null;
-
-  const lastRun = runs[0] ?? null;
-  const status: "live" | "draft" =
-    pages.length >= 5 && lastRun?.status === "succeeded" ? "live" : "draft";
+  const payload = await getCharacterDetail(id);
+  if (!payload) notFound();
 
   return (
-    <CharacterOverview
-      character={{
-        id: character.id,
-        slug: character.slug,
-        title: character.title,
-        summary: character.summary,
-        image: character.image,
-        eras: character.eras,
-      }}
-      stats={{
-        pageCount: pages.length,
-        edgeCount: edges.length,
-        sourceCount: sources.length,
-        ingestionCount: runs.length,
-        lastIngestAt: lastRun?.finishedAt ?? lastRun?.startedAt ?? null,
-        status,
-      }}
-      eventCountByEra={Object.fromEntries(eventCountByEra)}
-      voiceIdentity={
-        voiceIdPage
-          ? {
-              slug: voiceIdPage.slug,
-              frontmatter: voiceIdPage.frontmatter as Record<string, unknown>,
-            }
-          : null
-      }
+    <CharacterConfig
+      character={payload.character}
+      knowledge={payload.knowledge}
+      sessions={{ rememberedCount: 0 }}
+      versions={payload.versions}
+      chatModels={CHAT_MODELS}
+      voiceModels={VOICE_MODELS}
     />
   );
 }

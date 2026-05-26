@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   WikiIngestionLogRecord,
@@ -9,31 +10,32 @@ import type {
   WikiSourceRecord,
   WikiSourceRefRecord,
 } from "@odyssey/db";
-import {
-  previewPurgeWikiSource,
-  purgeWikiSource,
-} from "@/app/(authenticated)/wikis/actions";
-import {
-  PurgeConfirmModal,
-  type PurgePreview,
-} from "@/components/purge-confirm-modal";
 
-const FG = "#F1F5F9";
-const TEXT_DIM = "#FFFFFFD9";
-const TEXT_MUTED = "#FFFFFF8C";
-const TEXT_FADED = "#FFFFFF73";
-const TEXT_GHOST = "#FFFFFF66";
-const BORDER = "#FFFFFF14";
-const BORDER_STRONG = "#FFFFFF1A";
-const ROW_BG = "#FFFFFF05";
-const ROW_BORDER = "#FFFFFF0F";
-const ROW_BG_ACTIVE = "#8CE7D20D";
-const ROW_BORDER_ACTIVE = "#8CE7D24D";
-const ACCENT = "#8CE7D2";
-const OK = "#4ADE80";
-const BAD = "#E89090";
-const HEAD = '"Space Grotesk", system-ui, sans-serif';
-const MONO = '"JetBrains Mono", system-ui, sans-serif';
+/* ── Tokens ────────────────────────────────────────────────────── */
+
+const MONO = '"JetBrains Mono", ui-monospace, monospace';
+const DISPLAY = '"Space Grotesk", system-ui, sans-serif';
+const BODY = '"Geist", "Inter", system-ui, sans-serif';
+
+const FG = "rgba(255, 255, 255, 0.95)";
+const TEXT_PRIMARY = "rgba(255, 255, 255, 0.88)";
+const TEXT_SECONDARY = "rgba(255, 255, 255, 0.7)";
+const TEXT_MUTED = "rgba(255, 255, 255, 0.55)";
+const TEXT_FADED = "rgba(255, 255, 255, 0.4)";
+const TEXT_GHOST = "rgba(255, 255, 255, 0.32)";
+const TEXT_QUIET = "rgba(255, 255, 255, 0.2)";
+
+const PANEL_BG = "#0A0A0A";
+const BORDER = "rgba(255, 255, 255, 0.08)";
+const BORDER_STRONG = "rgba(255, 255, 255, 0.12)";
+const DIVIDER = "rgba(255, 255, 255, 0.06)";
+const INPUT_BG = "rgba(255, 255, 255, 0.02)";
+
+const ACCENT = "#8FD1CB";
+const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
+const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
+
+/* ── Buckets ───────────────────────────────────────────────────── */
 
 type Bucket = "primary" | "annotation" | "transcript" | "reference";
 type BucketFilter = "all" | Bucket;
@@ -50,17 +52,17 @@ const KIND_TO_BUCKET: Record<WikiSourceKind, Bucket> = {
 };
 
 const BUCKET_COLOR: Record<Bucket, string> = {
-  primary: "#8CE7D2",
+  primary: "#8FD1CB",
   annotation: "#F4A3B8",
   transcript: "#A8C4E8",
   reference: "#9AA4B2",
 };
 
-const BUCKET_PLURAL: Record<Bucket, string> = {
-  primary: "primary",
-  annotation: "annotations",
-  transcript: "transcripts",
-  reference: "references",
+const BUCKET_LABEL: Record<Bucket, string> = {
+  primary: "PRIMARY",
+  annotation: "ANNOTATION",
+  transcript: "TRANSCRIPT",
+  reference: "REFERENCE",
 };
 
 const FILTER_ORDER: BucketFilter[] = [
@@ -70,6 +72,15 @@ const FILTER_ORDER: BucketFilter[] = [
   "transcript",
   "reference",
 ];
+
+const BUCKET_ORDER: Bucket[] = [
+  "primary",
+  "annotation",
+  "transcript",
+  "reference",
+];
+
+/* ── Helpers ───────────────────────────────────────────────────── */
 
 function relative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -91,56 +102,61 @@ function wordCount(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length;
 }
 
-function bytes(s: string): string {
+function byteSize(s: string): string {
   const n = new Blob([s]).size;
   if (n < 1024) return `${n} b`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} kb`;
   return `${(n / (1024 * 1024)).toFixed(1)} mb`;
 }
 
+/* ── Props ─────────────────────────────────────────────────────── */
+
 export type WikiSourcesViewProps = {
   wikiId: string;
+  wikiTitle: string;
   sources: WikiSourceRecord[];
   pages: WikiPageRecord[];
   refs: WikiSourceRefRecord[];
   runs: WikiIngestionLogRecord[];
-  initialSourceId: string | null;
   routeBase: string;
 };
 
+type SortKey = "added" | "title" | "size";
+
+/* ── Root ──────────────────────────────────────────────────────── */
+
 export function WikiSourcesView({
   wikiId,
+  wikiTitle,
   sources,
   pages,
   refs,
   runs,
-  initialSourceId,
   routeBase,
 }: WikiSourcesViewProps) {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialSourceId ?? (sources[0]?.id ?? null),
-  );
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<BucketFilter>("all");
-  const [purgeOpen, setPurgeOpen] = useState(false);
-  const [purgePreview, setPurgePreview] = useState<PurgePreview | null>(null);
-  const [purgeLoading, setPurgeLoading] = useState(false);
-  const [purgeError, setPurgeError] = useState<string | null>(null);
-  const [purgePending, startPurge] = useTransition();
+  const [sort, setSort] = useState<SortKey>("added");
 
-  const pageById = useMemo(
-    () => new Map(pages.map((p) => [p.id, p])),
-    [pages],
-  );
+  // Focus search on Cmd+K / Ctrl+K
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const cmd = e.metaKey || e.ctrlKey;
+      if (cmd && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const refsBySource = useMemo(() => {
-    const m = new Map<string, WikiSourceRefRecord[]>();
-    for (const r of refs) {
-      const list = m.get(r.sourceId) ?? [];
-      list.push(r);
-      m.set(r.sourceId, list);
-    }
+    const m = new Map<string, number>();
+    for (const r of refs) m.set(r.sourceId, (m.get(r.sourceId) ?? 0) + 1);
     return m;
   }, [refs]);
 
@@ -156,36 +172,51 @@ export function WikiSourcesView({
   }, [runs]);
 
   const bucketCounts = useMemo(() => {
-    const c: Record<string, number> = { all: sources.length };
-    for (const s of sources) {
-      const b = KIND_TO_BUCKET[s.kind];
-      c[b] = (c[b] ?? 0) + 1;
-    }
+    const c: Record<BucketFilter, number> = {
+      all: sources.length,
+      primary: 0,
+      annotation: 0,
+      transcript: 0,
+      reference: 0,
+    };
+    for (const s of sources) c[KIND_TO_BUCKET[s.kind]] += 1;
     return c;
   }, [sources]);
 
+  const lastIngestedOverall = useMemo(() => {
+    const latest = runs.reduce<WikiIngestionLogRecord | null>((acc, r) => {
+      const t = new Date(r.finishedAt ?? r.startedAt).getTime();
+      if (!acc) return r;
+      const accT = new Date(acc.finishedAt ?? acc.startedAt).getTime();
+      return t > accT ? r : acc;
+    }, null);
+    return latest;
+  }, [runs]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return sources
-      .filter((s) =>
-        filter === "all" ? true : KIND_TO_BUCKET[s.kind] === filter,
-      )
-      .filter((s) => {
-        if (!q) return true;
-        return (
-          s.title.toLowerCase().includes(q) ||
-          s.kind.toLowerCase().includes(q)
-        );
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    const list = sources.filter((s) => {
+      if (filter !== "all" && KIND_TO_BUCKET[s.kind] !== filter) return false;
+      if (!q) return true;
+      const meta = s.metadata as Record<string, unknown>;
+      const tags = Array.isArray(meta.tags) ? (meta.tags as string[]) : [];
+      const summary = typeof meta.summary === "string" ? (meta.summary as string) : "";
+      return (
+        s.title.toLowerCase().includes(q) ||
+        s.kind.toLowerCase().includes(q) ||
+        summary.toLowerCase().includes(q) ||
+        tags.some((t) => t.toLowerCase().includes(q))
       );
-  }, [sources, query, filter]);
+    });
+    const sortFn = (a: WikiSourceRecord, b: WikiSourceRecord) => {
+      if (sort === "title") return a.title.localeCompare(b.title);
+      if (sort === "size") return b.content.length - a.content.length;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    };
+    return list.sort(sortFn);
+  }, [sources, query, filter, sort]);
 
-  /* Group by bucket. */
   const grouped = useMemo(() => {
-    const order: Array<{ bucket: Bucket; sources: WikiSourceRecord[] }> = [];
     const byBucket = new Map<Bucket, WikiSourceRecord[]>();
     for (const s of filtered) {
       const b = KIND_TO_BUCKET[s.kind];
@@ -193,50 +224,16 @@ export function WikiSourcesView({
       list.push(s);
       byBucket.set(b, list);
     }
-    const allBuckets: Bucket[] = ["primary", "annotation", "transcript", "reference"];
-    for (const b of allBuckets) {
+    const order: Array<{ bucket: Bucket; sources: WikiSourceRecord[] }> = [];
+    for (const b of BUCKET_ORDER) {
       const list = byBucket.get(b);
-      if (list && list.length > 0) {
-        order.push({ bucket: b, sources: list });
-      }
+      if (list && list.length > 0) order.push({ bucket: b, sources: list });
     }
     return order;
   }, [filtered]);
 
-  const selected = selectedId ? sources.find((s) => s.id === selectedId) ?? null : null;
-
-  function handleSelect(s: WikiSourceRecord) {
+  function handleOpen(s: WikiSourceRecord) {
     router.push(`${routeBase}/sources/${s.id}`);
-  }
-
-  function openPurge() {
-    if (!selected) return;
-    setPurgeOpen(true);
-    setPurgePreview(null);
-    setPurgeError(null);
-    setPurgeLoading(true);
-    void previewPurgeWikiSource(wikiId, selected.id).then((res) => {
-      setPurgeLoading(false);
-      if (res.ok) setPurgePreview(res.data ?? null);
-      else setPurgeError(res.error);
-    });
-  }
-
-  function confirmPurge() {
-    if (!selected) return;
-    setPurgeError(null);
-    startPurge(async () => {
-      const res = await purgeWikiSource(wikiId, selected.id);
-      if (!res.ok) {
-        setPurgeError(res.error);
-        return;
-      }
-      setPurgeOpen(false);
-      setPurgePreview(null);
-      const next = sources.find((s) => s.id !== selected.id) ?? null;
-      setSelectedId(next?.id ?? null);
-      router.refresh();
-    });
   }
 
   return (
@@ -244,874 +241,608 @@ export function WikiSourcesView({
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "calc(100vh - 67px)",
+        background: PANEL_BG,
+        minHeight: "calc(100vh - 67px)",
+        paddingBottom: 80,
       }}
     >
-      {/* Filter strip */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          padding: "18px 32px",
-          borderBottom: `1px solid ${BORDER}`,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1 }}>
-          <SearchBox
-            value={query}
-            onChange={setQuery}
-            placeholder="Search sources, tags, passages…"
-          />
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {FILTER_ORDER.map((b) => {
-              const isActive = filter === b;
-              const color = b === "all" ? FG : BUCKET_COLOR[b];
-              const label = b === "all" ? "all" : BUCKET_PLURAL[b];
-              const n = bucketCounts[b] ?? 0;
-              return (
-                <button
-                  key={b}
-                  type="button"
-                  onClick={() => setFilter(b)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: b === "all" ? "4px 10px" : "4px 0",
-                    borderRadius: b === "all" ? 999 : 0,
-                    border:
-                      b === "all"
-                        ? `1px solid ${isActive ? color : BORDER_STRONG}`
-                        : "none",
-                    background:
-                      b === "all" && isActive ? "#FFFFFF0F" : "transparent",
-                    color: isActive ? FG : TEXT_MUTED,
-                    fontFamily: MONO,
-                    fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  {b !== "all" && (
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: color,
-                      }}
-                    />
-                  )}
-                  {label}
-                  <span style={{ color: TEXT_FADED }}>{n}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            type="button"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 12px",
-              borderRadius: 8,
-              border: `1px solid ${BORDER_STRONG}`,
-              background: "transparent",
-              color: TEXT_DIM,
-              fontFamily: MONO,
-              fontSize: 11,
-              cursor: "pointer",
-            }}
-          >
-            added ↓
-          </button>
-          <button
-            type="button"
-            style={{
-              padding: "6px 14px",
-              borderRadius: 8,
-              background: ACCENT,
-              color: "#0C0E14",
-              fontWeight: 600,
-              fontSize: 12,
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            + add source
-          </button>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.4fr 1fr",
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
-        {/* List */}
-        <div
-          style={{
-            borderRight: `1px solid ${BORDER}`,
-            overflow: "auto",
-            padding: "16px 24px 32px",
-          }}
-        >
-          {grouped.length === 0 ? (
-            <Empty>No sources match this filter.</Empty>
-          ) : (
-            grouped.map((group, idx) => (
-              <div key={group.bucket} style={{ marginTop: idx === 0 ? 0 : 20 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    justifyContent: "space-between",
-                    padding: "6px 4px 10px",
-                    fontFamily: MONO,
-                    fontSize: 10,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: TEXT_FADED,
-                  }}
-                >
-                  <span>
-                    {BUCKET_PLURAL[group.bucket]} · {group.sources.length}
-                  </span>
-                  {idx === 0 && <span>grouped by kind</span>}
-                </div>
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
-                >
-                  {group.sources.map((s) => (
-                    <SourceRow
-                      key={s.id}
-                      source={s}
-                      active={s.id === selectedId}
-                      refs={refsBySource.get(s.id)?.length ?? 0}
-                      onSelect={() => handleSelect(s)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Detail */}
-        <div style={{ overflow: "auto", padding: "20px 28px 40px" }}>
-          {selected ? (
-            <SourceDetail
-              source={selected}
-              refs={refsBySource.get(selected.id) ?? []}
-              runs={runsBySource.get(selected.id) ?? []}
-              pageById={pageById}
-              onOpenPurge={openPurge}
-              purgeOpen={purgeOpen}
-              purgePreview={purgePreview}
-              purgeLoading={purgeLoading}
-              purgePending={purgePending}
-              purgeError={purgeError}
-              onCancelPurge={() => {
-                if (purgePending) return;
-                setPurgeOpen(false);
-                setPurgePreview(null);
-                setPurgeError(null);
-              }}
-              onConfirmPurge={confirmPurge}
-            />
-          ) : (
-            <Empty>Select a source to inspect.</Empty>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Row ────────────────────────────────────────────────────────── */
-
-function SourceRow({
-  source,
-  active,
-  refs,
-  onSelect,
-}: {
-  source: WikiSourceRecord;
-  active: boolean;
-  refs: number;
-  onSelect: () => void;
-}) {
-  const bucket = KIND_TO_BUCKET[source.kind];
-  const color = BUCKET_COLOR[bucket];
-  const summary =
-    typeof source.metadata.summary === "string"
-      ? (source.metadata.summary as string)
-      : null;
-  const tags =
-    Array.isArray(source.metadata.tags) && (source.metadata.tags as unknown[]).every((t) => typeof t === "string")
-      ? (source.metadata.tags as string[])
-      : [];
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "auto 1fr auto",
-        gap: 14,
-        padding: "14px 16px",
-        borderRadius: 12,
-        border: `1px solid ${active ? ROW_BORDER_ACTIVE : ROW_BORDER}`,
-        background: active ? ROW_BG_ACTIVE : ROW_BG,
-        textAlign: "left",
-        cursor: "pointer",
-        color: "inherit",
-      }}
-    >
-      <div
-        style={{
-          width: 8,
-          height: 8,
-          marginTop: 6,
-          borderRadius: "50%",
-          background: color,
-        }}
+      <TopEyebrow wikiId={wikiId} wikiTitle={wikiTitle} />
+      <HeroBlock />
+      <MetaStrip
+        sources={sources}
+        bucketCounts={bucketCounts}
+        pages={pages}
+        lastRun={lastIngestedOverall}
       />
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-        <div
-          style={{
-            fontFamily: HEAD,
-            fontSize: 14,
-            fontWeight: 600,
-            color: FG,
-          }}
-        >
-          {source.title}
-        </div>
-        {summary && (
-          <div
-            style={{
-              fontSize: 12,
-              lineHeight: 1.5,
-              color: TEXT_MUTED,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              display: "-webkit-box",
-              WebkitBoxOrient: "vertical",
-              WebkitLineClamp: 2,
-            }}
-          >
-            {summary}
-          </div>
+      <FilterStrip
+        searchRef={searchRef}
+        query={query}
+        onQuery={setQuery}
+        filter={filter}
+        onFilter={setFilter}
+        bucketCounts={bucketCounts}
+        sort={sort}
+        onSort={setSort}
+        ingestHref={`${routeBase}/ingestion`}
+      />
+      <ListHeader />
+      <div style={{ padding: "0 32px" }}>
+        {filtered.length === 0 ? (
+          <Empty>
+            {query.trim()
+              ? `No sources match "${query}"`
+              : "No sources yet — open the Ingestion tab to add one."}
+          </Empty>
+        ) : (
+          grouped.map((group) => (
+            <BucketGroup
+              key={group.bucket}
+              bucket={group.bucket}
+              sources={group.sources}
+              refsBySource={refsBySource}
+              runsBySource={runsBySource}
+              onOpen={handleOpen}
+            />
+          ))
         )}
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-            flexWrap: "wrap",
-            fontFamily: MONO,
-            fontSize: 10,
-            letterSpacing: "0.02em",
-            color: TEXT_FADED,
-          }}
-        >
-          <span style={{ color, textTransform: "uppercase" }}>{bucket}</span>
-          <span style={{ opacity: 0.4 }}>·</span>
-          <span>{source.kind}</span>
-          {tags.length > 0 && (
-            <>
-              <span style={{ opacity: 0.4 }}>tags:</span>
-              {tags.slice(0, 3).map((t) => (
-                <span
-                  key={t}
-                  style={{
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                    border: `1px solid ${ROW_BORDER}`,
-                    color: TEXT_MUTED,
-                  }}
-                >
-                  {t}
-                </span>
-              ))}
-            </>
-          )}
-        </div>
       </div>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          gap: 4,
-          fontFamily: MONO,
-          fontSize: 10,
-          color: TEXT_FADED,
-          whiteSpace: "nowrap",
-        }}
-      >
-        <span>
-          {refs} ref{refs === 1 ? "" : "s"}
-        </span>
-        <span>{relative(source.createdAt)}</span>
-      </div>
-    </button>
-  );
-}
-
-/* ── Detail ─────────────────────────────────────────────────────── */
-
-function SourceDetail({
-  source,
-  refs,
-  runs,
-  pageById,
-  onOpenPurge,
-  purgeOpen,
-  purgePreview,
-  purgeLoading,
-  purgePending,
-  purgeError,
-  onCancelPurge,
-  onConfirmPurge,
-}: {
-  source: WikiSourceRecord;
-  refs: WikiSourceRefRecord[];
-  runs: WikiIngestionLogRecord[];
-  pageById: Map<string, WikiPageRecord>;
-  onOpenPurge: () => void;
-  purgeOpen: boolean;
-  purgePreview: PurgePreview | null;
-  purgeLoading: boolean;
-  purgePending: boolean;
-  purgeError: string | null;
-  onCancelPurge: () => void;
-  onConfirmPurge: () => void;
-}) {
-  const bucket = KIND_TO_BUCKET[source.kind];
-  const color = BUCKET_COLOR[bucket];
-  const meta = source.metadata as Record<string, unknown>;
-  const tags = Array.isArray(meta.tags) ? (meta.tags as string[]) : [];
-  const sourceUrl = typeof meta.sourceUrl === "string" ? (meta.sourceUrl as string) : null;
-  const edition = typeof meta.edition === "string" ? (meta.edition as string) : null;
-  const language = typeof meta.language === "string" ? (meta.language as string) : null;
-
-  /* Count refs per backing page. */
-  const refsByPage = new Map<string, number>();
-  for (const r of refs) {
-    refsByPage.set(r.pageId, (refsByPage.get(r.pageId) ?? 0) + 1);
-  }
-  const backedPages = Array.from(refsByPage.entries())
-    .map(([pageId, n]) => ({ page: pageById.get(pageId), n }))
-    .filter((x): x is { page: WikiPageRecord; n: number } => Boolean(x.page))
-    .sort((a, b) => b.n - a.n);
-
-  const excerpt =
-    source.content.length > 600 ? source.content.slice(0, 600) + "…" : source.content;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "3px 10px",
-              borderRadius: 999,
-              background: `${color}1F`,
-              border: `1px solid ${color}4D`,
-              color,
-              fontFamily: MONO,
-              fontSize: 10,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-            }}
-          >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: color,
-              }}
-            />
-            {bucket}
-            <span style={{ opacity: 0.7 }}>· {source.kind}</span>
-          </span>
-          <span
-            style={{
-              fontFamily: MONO,
-              fontSize: 11,
-              color: TEXT_GHOST,
-            }}
-          >
-            id: {source.id.slice(0, 10)}
-          </span>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            style={{
-              padding: "5px 12px",
-              borderRadius: 8,
-              border: `1px solid ${BORDER_STRONG}`,
-              background: "transparent",
-              fontFamily: HEAD,
-              fontSize: 12,
-              fontWeight: 500,
-              color: FG,
-              cursor: "pointer",
-            }}
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            style={{
-              width: 30,
-              height: 28,
-              borderRadius: 8,
-              border: `1px solid ${BORDER_STRONG}`,
-              background: "transparent",
-              color: TEXT_MUTED,
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            …
-          </button>
-        </div>
-      </div>
-
-      <div>
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: HEAD,
-            fontSize: 30,
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
-            color: FG,
-          }}
-        >
-          {source.title}
-        </h1>
-        <div
-          style={{
-            marginTop: 6,
-            fontFamily: MONO,
-            fontSize: 11,
-            color: TEXT_GHOST,
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <span>{wordCount(source.content).toLocaleString()} words</span>
-          <span style={{ opacity: 0.5 }}>·</span>
-          <span>{bytes(source.content)}</span>
-          <span style={{ opacity: 0.5 }}>·</span>
-          <span>added {relative(source.createdAt)}</span>
-          <span style={{ opacity: 0.5 }}>·</span>
-          <span>hash {source.contentHash.slice(0, 8)}</span>
-        </div>
-      </div>
-
-      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <SectionLabel>metadata</SectionLabel>
-        <table
-          style={{
-            borderCollapse: "collapse",
-            fontFamily: MONO,
-            fontSize: 12,
-          }}
-        >
-          <tbody>
-            {edition && <FmRow label="edition" value={edition} />}
-            {language && <FmRow label="language" value={language} />}
-            {tags.length > 0 && (
-              <tr>
-                <td
-                  style={{
-                    padding: "4px 18px 4px 0",
-                    color: TEXT_FADED,
-                    verticalAlign: "top",
-                  }}
-                >
-                  tags
-                </td>
-                <td style={{ padding: "4px 0" }}>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {tags.map((t) => (
-                      <span
-                        key={t}
-                        style={{
-                          padding: "1px 8px",
-                          borderRadius: 4,
-                          border: `1px solid ${ROW_BORDER}`,
-                          color: TEXT_DIM,
-                          fontSize: 11,
-                        }}
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-              </tr>
-            )}
-            {sourceUrl && (
-              <tr>
-                <td
-                  style={{
-                    padding: "4px 18px 4px 0",
-                    color: TEXT_FADED,
-                    verticalAlign: "top",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  source url
-                </td>
-                <td style={{ padding: "4px 0" }}>
-                  <a
-                    href={sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ color: ACCENT, fontSize: 11 }}
-                  >
-                    {sourceUrl}
-                  </a>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-
-      {source.content && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              justifyContent: "space-between",
-            }}
-          >
-            <SectionLabel>content · excerpt</SectionLabel>
-            <span
-              style={{
-                fontFamily: MONO,
-                fontSize: 10,
-                color: TEXT_FADED,
-              }}
-            >
-              show all {wordCount(source.content).toLocaleString()} words
-            </span>
-          </div>
-          <div
-            style={{
-              padding: "14px 16px",
-              borderRadius: 10,
-              border: `1px solid ${ROW_BORDER}`,
-              background: "#0000004D",
-              fontFamily: MONO,
-              fontSize: 12,
-              lineHeight: 1.6,
-              whiteSpace: "pre-wrap",
-              color: FG,
-              maxHeight: 240,
-              overflow: "auto",
-            }}
-          >
-            {excerpt}
-          </div>
-        </section>
-      )}
-
-      {backedPages.length > 0 && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              justifyContent: "space-between",
-            }}
-          >
-            <SectionLabel>
-              backs {refs.length} ref{refs.length === 1 ? "" : "s"} · top{" "}
-              {Math.min(6, backedPages.length)}
-            </SectionLabel>
-            <span
-              style={{
-                fontFamily: MONO,
-                fontSize: 10,
-                color: TEXT_FADED,
-              }}
-            >
-              view all ↗
-            </span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {backedPages.slice(0, 6).map(({ page, n }) => (
-              <div
-                key={page.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: `1px solid ${ROW_BORDER}`,
-                  background: ROW_BG,
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontFamily: HEAD,
-                    fontSize: 13,
-                    color: FG,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: BUCKET_COLOR.primary,
-                    }}
-                  />
-                  {page.title}
-                </span>
-                <span
-                  style={{
-                    fontFamily: MONO,
-                    fontSize: 10,
-                    color: TEXT_FADED,
-                  }}
-                >
-                  {n} ref{n === 1 ? "" : "s"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {runs.length > 0 && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <SectionLabel>ingestion runs · {runs.length}</SectionLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {runs.slice(0, 4).map((r) => {
-              const ok = r.status === "succeeded";
-              const failed = r.status === "failed";
-              return (
-                <div
-                  key={r.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "auto 1fr auto",
-                    gap: 12,
-                    alignItems: "center",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: `1px solid ${ROW_BORDER}`,
-                    background: ROW_BG,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: "50%",
-                      background: ok ? `${OK}1F` : failed ? `${BAD}1A` : "#FACC151F",
-                      color: ok ? OK : failed ? BAD : "#FACC15",
-                      fontSize: 9,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {ok ? "✓" : failed ? "×" : "·"}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 11,
-                      color: TEXT_DIM,
-                    }}
-                  >
-                    {r.model ?? "unknown"} · +{r.pagesCreated} pages · +
-                    {r.edgesAdded} edges
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 10,
-                      color: TEXT_FADED,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {relative(r.finishedAt ?? r.startedAt)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      <section
-        style={{
-          padding: "14px 16px",
-          borderRadius: 10,
-          border: `1px solid ${BORDER_STRONG}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <div>
-          <div style={{ fontFamily: HEAD, fontSize: 14, color: FG }}>
-            Purge source
-          </div>
-          <div
-            style={{
-              fontFamily: MONO,
-              fontSize: 11,
-              color: TEXT_FADED,
-            }}
-          >
-            Removes this source + any pages whose only provenance was this source.
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onOpenPurge}
-          style={{
-            padding: "6px 14px",
-            borderRadius: 8,
-            border: `1px solid ${BAD}4D`,
-            background: `${BAD}14`,
-            color: BAD,
-            fontFamily: HEAD,
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
-          Purge…
-        </button>
-      </section>
-      <PurgeConfirmModal
-        open={purgeOpen}
-        kind="source"
-        preview={purgePreview}
-        loading={purgeLoading}
-        pending={purgePending}
-        error={purgeError}
-        onCancel={onCancelPurge}
-        onConfirm={onConfirmPurge}
-      />
     </div>
   );
 }
 
-/* ── Atoms ──────────────────────────────────────────────────────── */
+/* ── TopEyebrow ────────────────────────────────────────────────── */
 
-function SearchBox({
-  value,
-  onChange,
-  placeholder,
+function TopEyebrow({
+  wikiId,
+  wikiTitle,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
+  wikiId: string;
+  wikiTitle: string;
 }) {
   return (
     <div
       style={{
-        flex: 1,
-        maxWidth: 420,
         display: "flex",
+        flexDirection: "row",
         alignItems: "center",
-        gap: 8,
-        padding: "8px 12px",
-        borderRadius: 10,
-        border: `1px solid ${BORDER_STRONG}`,
-        background: ROW_BG,
+        justifyContent: "space-between",
+        padding: "18px 32px",
+        borderTop: 0,
+        borderRight: 0,
+        borderBottom: `1px solid ${DIVIDER}`,
+        borderLeft: 0,
       }}
     >
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={TEXT_FADED}
-        strokeWidth="2"
-        strokeLinecap="round"
-      >
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+      <div
         style={{
-          flex: 1,
-          background: "transparent",
-          border: "none",
-          color: FG,
-          fontSize: 12,
-          outline: "none",
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "var(--space-14)",
+          fontFamily: MONO,
+          fontSize: "var(--font-size-sm)",
+          fontWeight: 500,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
         }}
+      >
+        <Link href="/wikis" style={{ color: TEXT_GHOST, textDecoration: "none" }}>
+          wikis
+        </Link>
+        <span style={{ color: TEXT_QUIET }}>/</span>
+        <Link
+          href={`/wikis/${wikiId}`}
+          style={{ color: TEXT_MUTED, textDecoration: "none" }}
+        >
+          {wikiTitle}
+        </Link>
+        <span style={{ color: TEXT_QUIET }}>/</span>
+        <span style={{ color: ACCENT }}>sources</span>
+      </div>
+      <div
+        style={{
+          fontFamily: MONO,
+          fontSize: 10.5,
+          fontWeight: 500,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: TEXT_FADED,
+        }}
+      >
+        ⌘K to search
+      </div>
+    </div>
+  );
+}
+
+/* ── HeroBlock ─────────────────────────────────────────────────── */
+
+function HeroBlock() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-14)",
+        padding: "36px 40px 12px",
+      }}
+    >
+      <h1
+        style={{
+          margin: 0,
+          fontFamily: DISPLAY,
+          fontSize: 52,
+          fontWeight: 500,
+          lineHeight: "60px",
+          letterSpacing: "-0.014em",
+          color: FG,
+        }}
+      >
+        Sources
+      </h1>
+      <p
+        style={{
+          margin: 0,
+          maxWidth: 760,
+          fontFamily: BODY,
+          fontSize: "var(--font-size-xl)",
+          fontWeight: 400,
+          lineHeight: "26px",
+          color: TEXT_SECONDARY,
+        }}
+      >
+        Every canonical document attached to this wiki — bibles, commentaries,
+        midrash, transcripts, notes. Each row links to its full ingestion record
+        (input · prompt · output · effects).
+      </p>
+    </div>
+  );
+}
+
+/* ── MetaStrip ─────────────────────────────────────────────────── */
+
+function MetaStrip({
+  sources,
+  bucketCounts,
+  pages,
+  lastRun,
+}: {
+  sources: WikiSourceRecord[];
+  bucketCounts: Record<BucketFilter, number>;
+  pages: WikiPageRecord[];
+  lastRun: WikiIngestionLogRecord | null;
+}) {
+  const totalWords = useMemo(
+    () => sources.reduce((acc, s) => acc + wordCount(s.content), 0),
+    [sources],
+  );
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: "var(--space-32)",
+        padding: "8px 40px 0",
+        flexWrap: "wrap",
+      }}
+    >
+      <MetaCell label="TOTAL" value={String(sources.length)} accent />
+      <MetaDivider />
+      <MetaCell label="PRIMARY" value={String(bucketCounts.primary)} swatch={BUCKET_COLOR.primary} />
+      <MetaDivider />
+      <MetaCell
+        label="ANNOTATION"
+        value={String(bucketCounts.annotation)}
+        swatch={BUCKET_COLOR.annotation}
       />
+      <MetaDivider />
+      <MetaCell
+        label="TRANSCRIPT"
+        value={String(bucketCounts.transcript)}
+        swatch={BUCKET_COLOR.transcript}
+      />
+      <MetaDivider />
+      <MetaCell
+        label="REFERENCE"
+        value={String(bucketCounts.reference)}
+        swatch={BUCKET_COLOR.reference}
+      />
+      <MetaDivider />
+      <MetaCell
+        label="TOTAL WORDS"
+        value={totalWords.toLocaleString()}
+      />
+      <MetaDivider />
+      <MetaCell
+        label="PAGES IN GRAPH"
+        value={String(pages.length)}
+      />
+      <MetaDivider />
+      <MetaCell
+        label="LAST INGESTED"
+        value={lastRun ? relative(lastRun.finishedAt ?? lastRun.startedAt) : "never"}
+      />
+    </div>
+  );
+}
+
+function MetaCell({
+  label,
+  value,
+  accent = false,
+  swatch,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  swatch?: string;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "var(--space-6)",
+        }}
+      >
+        {swatch && (
+          <span
+            style={{
+              display: "inline-block",
+              width: 7,
+              height: 7,
+              background: swatch,
+            }}
+          />
+        )}
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: "var(--font-size-xs)",
+            fontWeight: 500,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: TEXT_FADED,
+          }}
+        >
+          {label}
+        </span>
+      </div>
       <span
         style={{
           fontFamily: MONO,
-          fontSize: 10,
-          color: TEXT_GHOST,
-          padding: "1px 6px",
-          borderRadius: 4,
-          border: `1px solid ${ROW_BORDER}`,
+          fontSize: 12.5,
+          fontWeight: accent ? 600 : 500,
+          color: accent ? ACCENT : TEXT_PRIMARY,
         }}
       >
-        ⌘ K
+        {value}
       </span>
     </div>
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function MetaDivider() {
+  return <div style={{ width: 1, height: 32, background: DIVIDER }} />;
+}
+
+/* ── FilterStrip ───────────────────────────────────────────────── */
+
+function FilterStrip({
+  searchRef,
+  query,
+  onQuery,
+  filter,
+  onFilter,
+  bucketCounts,
+  sort,
+  onSort,
+  ingestHref,
+}: {
+  searchRef: React.RefObject<HTMLInputElement | null>;
+  query: string;
+  onQuery: (v: string) => void;
+  filter: BucketFilter;
+  onFilter: (b: BucketFilter) => void;
+  bucketCounts: Record<BucketFilter, number>;
+  sort: SortKey;
+  onSort: (s: SortKey) => void;
+  ingestHref: string;
+}) {
   return (
     <div
       style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: "var(--space-14)",
+        padding: "32px 40px 0",
+        flexWrap: "wrap",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "var(--space-8)",
+          flex: 1,
+          minWidth: 280,
+          maxWidth: 520,
+          padding: "9px 14px",
+          background: INPUT_BG,
+          borderTop: `1px solid ${BORDER}`,
+          borderRight: `1px solid ${BORDER}`,
+          borderBottom: `1px solid ${BORDER}`,
+          borderLeft: `1px solid ${BORDER}`,
+        }}
+      >
+        <span style={{ fontFamily: MONO, fontSize: "var(--font-size-md)", color: TEXT_FADED }}>⌕</span>
+        <input
+          ref={searchRef}
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder="Search title, kind, summary, tags…"
+          style={{
+            flex: 1,
+            background: "transparent",
+            border: 0,
+            outline: "none",
+            color: FG,
+            fontFamily: MONO,
+            fontSize: 12.5,
+          }}
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => onQuery("")}
+            aria-label="Clear search"
+            style={{
+              background: "transparent",
+              border: 0,
+              fontFamily: MONO,
+              fontSize: "var(--font-size-sm)",
+              color: TEXT_FADED,
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "var(--space-6)",
+        }}
+      >
+        {FILTER_ORDER.map((b) => (
+          <FilterPill
+            key={b}
+            bucket={b}
+            count={bucketCounts[b]}
+            active={filter === b}
+            onClick={() => onFilter(b)}
+          />
+        ))}
+      </div>
+
+      <div
+        style={{
+          marginLeft: "auto",
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "var(--space-8)",
+        }}
+      >
+        <SortToggle sort={sort} onSort={onSort} />
+        <Link
+          href={ingestHref}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "var(--space-8)",
+            padding: "9px 14px",
+            background: ACCENT,
+            borderTop: `1px solid ${ACCENT}`,
+            borderRight: `1px solid ${ACCENT}`,
+            borderBottom: `1px solid ${ACCENT}`,
+            borderLeft: `1px solid ${ACCENT}`,
+            fontFamily: MONO,
+            fontSize: "var(--font-size-sm)",
+            fontWeight: 700,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: "#0A0A0A",
+            textDecoration: "none",
+          }}
+        >
+          + INGEST
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function FilterPill({
+  bucket,
+  count,
+  active,
+  onClick,
+}: {
+  bucket: BucketFilter;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const color = bucket === "all" ? ACCENT : BUCKET_COLOR[bucket];
+  const label = bucket === "all" ? "ALL" : BUCKET_LABEL[bucket];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--space-8)",
+        padding: "9px 14px",
+        background: active ? ACCENT_SOFT : "transparent",
+        borderTop: `1px solid ${active ? color : BORDER_STRONG}`,
+        borderRight: `1px solid ${active ? color : BORDER_STRONG}`,
+        borderBottom: `1px solid ${active ? color : BORDER_STRONG}`,
+        borderLeft: `1px solid ${active ? color : BORDER_STRONG}`,
         fontFamily: MONO,
-        fontSize: 10,
-        letterSpacing: "0.08em",
+        fontSize: "var(--font-size-sm)",
+        fontWeight: active ? 600 : 500,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color: active ? color : TEXT_SECONDARY,
+        cursor: "pointer",
+      }}
+    >
+      {bucket !== "all" && (
+        <span
+          style={{
+            display: "inline-block",
+            width: 6,
+            height: 6,
+            background: color,
+          }}
+        />
+      )}
+      <span>{label}</span>
+      <span style={{ color: TEXT_FADED, fontWeight: 400 }}>{count}</span>
+    </button>
+  );
+}
+
+function SortToggle({
+  sort,
+  onSort,
+}: {
+  sort: SortKey;
+  onSort: (s: SortKey) => void;
+}) {
+  const options: Array<{ key: SortKey; label: string }> = [
+    { key: "added", label: "ADDED" },
+    { key: "title", label: "TITLE" },
+    { key: "size", label: "SIZE" },
+  ];
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 0,
+        borderTop: `1px solid ${BORDER_STRONG}`,
+        borderRight: `1px solid ${BORDER_STRONG}`,
+        borderBottom: `1px solid ${BORDER_STRONG}`,
+        borderLeft: `1px solid ${BORDER_STRONG}`,
+      }}
+    >
+      <span
+        style={{
+          padding: "9px 12px",
+          fontFamily: MONO,
+          fontSize: "var(--font-size-xs)",
+          fontWeight: 500,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: TEXT_FADED,
+          borderRight: `1px solid ${BORDER_STRONG}`,
+        }}
+      >
+        SORT
+      </span>
+      {options.map((opt, i) => (
+        <button
+          key={opt.key}
+          type="button"
+          onClick={() => onSort(opt.key)}
+          style={{
+            padding: "9px 12px",
+            background: sort === opt.key ? ACCENT_SOFT : "transparent",
+            border: 0,
+            borderRight: i < options.length - 1 ? `1px solid ${BORDER_STRONG}` : 0,
+            fontFamily: MONO,
+            fontSize: 10.5,
+            fontWeight: sort === opt.key ? 600 : 500,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: sort === opt.key ? ACCENT : TEXT_SECONDARY,
+            cursor: "pointer",
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ── List header ───────────────────────────────────────────────── */
+
+function ListHeader() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 0,
+        margin: "28px 40px 0",
+        padding: "10px 18px",
+        background: INPUT_BG,
+        borderTop: `1px solid ${BORDER}`,
+        borderRight: `1px solid ${BORDER}`,
+        borderBottom: `1px solid ${DIVIDER}`,
+        borderLeft: `1px solid ${BORDER}`,
+      }}
+    >
+      <ColHead width={14} />
+      <ColHead width={100}>KIND</ColHead>
+      <ColHead flex>TITLE</ColHead>
+      <ColHead width={120} alignRight>PAGES BACKED</ColHead>
+      <ColHead width={100} alignRight>RUNS</ColHead>
+      <ColHead width={120} alignRight>SIZE</ColHead>
+      <ColHead width={130} alignRight>ADDED</ColHead>
+      <ColHead width={32} />
+    </div>
+  );
+}
+
+function ColHead({
+  width,
+  flex,
+  alignRight,
+  children,
+}: {
+  width?: number;
+  flex?: boolean;
+  alignRight?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        ...(flex ? { flex: 1, minWidth: 0 } : { width, flexShrink: 0 }),
+        fontFamily: MONO,
+        fontSize: "var(--font-size-xs)",
+        fontWeight: 500,
+        letterSpacing: "0.18em",
         textTransform: "uppercase",
         color: TEXT_FADED,
+        textAlign: alignRight ? "right" : "left",
       }}
     >
       {children}
@@ -1119,35 +850,301 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FmRow({ label, value }: { label: string; value: string }) {
+/* ── BucketGroup ───────────────────────────────────────────────── */
+
+function BucketGroup({
+  bucket,
+  sources,
+  refsBySource,
+  runsBySource,
+  onOpen,
+}: {
+  bucket: Bucket;
+  sources: WikiSourceRecord[];
+  refsBySource: Map<string, number>;
+  runsBySource: Map<string, WikiIngestionLogRecord[]>;
+  onOpen: (s: WikiSourceRecord) => void;
+}) {
+  const color = BUCKET_COLOR[bucket];
+  const totalWords = sources.reduce((acc, s) => acc + wordCount(s.content), 0);
+
   return (
-    <tr>
-      <td
+    <>
+      <div
         style={{
-          padding: "4px 18px 4px 0",
-          color: TEXT_FADED,
-          verticalAlign: "top",
-          whiteSpace: "nowrap",
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "var(--space-14)",
+          padding: "18px 18px 8px",
+          margin: "0 8px",
+          borderTop: 0,
+          borderRight: `1px solid ${BORDER}`,
+          borderBottom: `1px solid ${DIVIDER}`,
+          borderLeft: `1px solid ${BORDER}`,
+          background: PANEL_BG,
         }}
       >
-        {label}
-      </td>
-      <td style={{ padding: "4px 0", color: FG }}>{value}</td>
-    </tr>
+        <span
+          style={{
+            display: "inline-block",
+            width: 8,
+            height: 8,
+            background: color,
+          }}
+        />
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: "var(--font-size-sm)",
+            fontWeight: 600,
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            color,
+          }}
+        >
+          {BUCKET_LABEL[bucket]}
+        </span>
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: 10.5,
+            fontWeight: 400,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: TEXT_FADED,
+          }}
+        >
+          {sources.length} {sources.length === 1 ? "SOURCE" : "SOURCES"}
+        </span>
+        <div style={{ flex: 1, height: 1, background: DIVIDER }} />
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: 10.5,
+            fontWeight: 500,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: TEXT_MUTED,
+          }}
+        >
+          {totalWords.toLocaleString()} WORDS
+        </span>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 0,
+          margin: "0 8px",
+          borderTop: 0,
+          borderRight: `1px solid ${BORDER}`,
+          borderBottom: `1px solid ${BORDER}`,
+          borderLeft: `1px solid ${BORDER}`,
+        }}
+      >
+        {sources.map((s) => (
+          <SourceRow
+            key={s.id}
+            source={s}
+            refs={refsBySource.get(s.id) ?? 0}
+            runs={runsBySource.get(s.id) ?? []}
+            onOpen={() => onOpen(s)}
+          />
+        ))}
+      </div>
+    </>
   );
 }
+
+/* ── SourceRow ─────────────────────────────────────────────────── */
+
+function SourceRow({
+  source,
+  refs,
+  runs,
+  onOpen,
+}: {
+  source: WikiSourceRecord;
+  refs: number;
+  runs: WikiIngestionLogRecord[];
+  onOpen: () => void;
+}) {
+  const bucket = KIND_TO_BUCKET[source.kind];
+  const color = BUCKET_COLOR[bucket];
+  const meta = source.metadata as Record<string, unknown>;
+  const summary =
+    typeof meta.summary === "string" ? (meta.summary as string) : null;
+  const lastRun = runs[0] ?? null;
+  const failedCount = runs.filter((r) => r.status === "failed").length;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 0,
+        padding: "14px 18px",
+        background: "transparent",
+        borderTop: 0,
+        borderRight: 0,
+        borderBottom: `1px solid ${DIVIDER}`,
+        borderLeft: `2px solid ${color}`,
+        textAlign: "left",
+        cursor: "pointer",
+        color: "inherit",
+        width: "calc(100% - 0px)",
+      }}
+    >
+      <div style={{ width: 14, flexShrink: 0 }} />
+      <div
+        style={{
+          width: 100,
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "var(--space-8)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: 10.5,
+            fontWeight: 500,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: TEXT_SECONDARY,
+          }}
+        >
+          {source.kind}
+        </span>
+      </div>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-3)",
+          paddingRight: "var(--space-14)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: DISPLAY,
+            fontSize: 15,
+            fontWeight: 500,
+            color: FG,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {source.title}
+        </span>
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: "var(--font-size-sm)",
+            fontWeight: 400,
+            color: TEXT_MUTED,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {summary ?? <span style={{ color: TEXT_GHOST }}>no summary</span>}
+        </span>
+      </div>
+      <div
+        style={{
+          width: 120,
+          flexShrink: 0,
+          textAlign: "right",
+          fontFamily: MONO,
+          fontSize: "var(--font-size-base)",
+          color: refs > 0 ? TEXT_PRIMARY : TEXT_GHOST,
+        }}
+      >
+        {refs} {refs === 1 ? "ref" : "refs"}
+      </div>
+      <div
+        style={{
+          width: 100,
+          flexShrink: 0,
+          textAlign: "right",
+          fontFamily: MONO,
+          fontSize: "var(--font-size-base)",
+          color: runs.length > 0 ? TEXT_PRIMARY : TEXT_GHOST,
+        }}
+      >
+        {runs.length}
+        {failedCount > 0 && (
+          <span style={{ color: "#F87171", marginLeft: "var(--space-6)" }}>· {failedCount} ✗</span>
+        )}
+      </div>
+      <div
+        style={{
+          width: 120,
+          flexShrink: 0,
+          textAlign: "right",
+          fontFamily: MONO,
+          fontSize: "var(--font-size-base)",
+          color: TEXT_MUTED,
+        }}
+      >
+        {byteSize(source.content)}
+      </div>
+      <div
+        style={{
+          width: 130,
+          flexShrink: 0,
+          textAlign: "right",
+          fontFamily: MONO,
+          fontSize: "var(--font-size-sm)",
+          color: TEXT_MUTED,
+        }}
+      >
+        {lastRun
+          ? relative(lastRun.finishedAt ?? lastRun.startedAt)
+          : relative(source.createdAt)}
+      </div>
+      <div
+        style={{
+          width: 32,
+          flexShrink: 0,
+          textAlign: "right",
+          fontFamily: MONO,
+          fontSize: "var(--font-size-md)",
+          color: TEXT_FADED,
+        }}
+      >
+        ↗
+      </div>
+    </button>
+  );
+}
+
+/* ── Empty ─────────────────────────────────────────────────────── */
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        padding: 28,
-        border: `1px dashed ${BORDER_STRONG}`,
-        borderRadius: 12,
-        textAlign: "center",
+        margin: "32px 8px 0",
+        padding: "48px 24px",
+        borderTop: `1px dashed ${BORDER_STRONG}`,
+        borderRight: `1px dashed ${BORDER_STRONG}`,
+        borderBottom: `1px dashed ${BORDER_STRONG}`,
+        borderLeft: `1px dashed ${BORDER_STRONG}`,
         fontFamily: MONO,
-        fontSize: 11,
-        color: TEXT_FADED,
+        fontSize: "var(--font-size-base)",
+        color: TEXT_MUTED,
+        textAlign: "center",
       }}
     >
       {children}

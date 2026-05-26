@@ -76,11 +76,11 @@ export function UserRowMenu({ anchor, role, isCurrent, onSelect, onClose }: Prop
         opacity: pos ? 1 : 0,
         display: "flex",
         flexDirection: "column",
-        padding: 6,
+        padding: "var(--space-6)",
         background: T.panel,
-        borderRadius: 12,
+        borderRadius: "var(--radius-xl)",
         border: `1px solid ${T.border}`,
-        boxShadow: "0 24px 48px -12px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.4)",
+        boxShadow: "var(--elevation-menu)",
       }}
     >
       <MenuItem icon={<EditIcon />} label="Edit profile" onClick={() => onSelect("edit")} />
@@ -139,15 +139,15 @@ function MenuItem({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: "var(--space-10)",
         padding: "8px 10px",
-        borderRadius: 8,
+        borderRadius: "var(--radius-md)",
         border: "none",
         background: hover && !disabled ? T.panelHover : "transparent",
         color,
         cursor: disabled ? "not-allowed" : "pointer",
         fontFamily: T.fontBody,
-        fontSize: 13,
+        fontSize: "var(--font-size-md)",
         fontWeight: 500,
         textAlign: "left",
         opacity: dim,
@@ -160,7 +160,7 @@ function MenuItem({
       {meta && (
         <span style={{
           fontFamily: T.fontMono,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           color: T.meta,
           letterSpacing: "0.04em",
         }}>

@@ -25,11 +25,11 @@ export function Timeline({ data }: { data: string }) {
   return (
     <div style={{
       border: "1px solid var(--border)",
-      borderRadius: 10,
+      borderRadius: "var(--radius-lg)",
       background: "var(--panel)",
       overflow: "hidden",
-      marginTop: 8,
-      marginBottom: 16,
+      marginTop: "var(--space-8)",
+      marginBottom: "var(--space-16)",
     }}>
       {/* Header row */}
       <div style={{

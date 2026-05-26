@@ -16,7 +16,7 @@
 import * as dotenv from "dotenv";
 dotenv.config({ override: true });
 
-import { getCharacterStore, getWikiStore } from "@odyssey/db";
+import { getCharacterStore, getWikiStore, getWikisStore } from "@odyssey/db";
 import { runIngestion, resolveModel } from "@odyssey/wiki-ingest";
 
 /* ── CLI flags ─────────────────────────────────────────────────── */
@@ -108,6 +108,7 @@ async function main() {
 
   const characters = getCharacterStore();
   const wiki = getWikiStore();
+  const wikis = getWikisStore();
 
   // ── Upsert character ────────────────────────────────────────
   let character = await characters.getBySlug(SLUG);
@@ -135,6 +136,26 @@ async function main() {
   console.log(`  eras: ${ERAS.map((e) => e.key).join(" → ")}`);
   console.log(`  ingestion prompt: ${INGESTION_PROMPT.length} chars, ~${Math.ceil(INGESTION_PROMPT.length / 4)} tokens\n`);
 
+  const boundWikis = await wikis.listWikisForCharacter(character.id);
+  let targetWiki = boundWikis.find((w) => w.binding.priority === "primary") ?? boundWikis[0];
+  if (!targetWiki) {
+    const createdWiki = await wikis.createWiki({
+      slug: "abraham",
+      title: "Abraham",
+      summary: "Shared Abraham knowledge graph.",
+      eras: [...ERAS],
+      ingestionPrompt: INGESTION_PROMPT,
+      ingestionPromptName: "Abraham lens",
+    });
+    const binding = await wikis.createBinding({
+      characterId: character.id,
+      wikiId: createdWiki.id,
+      priority: "primary",
+      isActive: true,
+    });
+    targetWiki = { ...createdWiki, binding };
+  }
+
   if (!DO_INGEST) {
     console.log("Done (config only).");
     console.log("Open http://localhost:3001/characters/abraham to review.");
@@ -146,7 +167,7 @@ async function main() {
   console.log(`Creating source: "${SOURCE_TITLE}"`);
   console.log(`  ${SOURCE_CONTENT.length} chars, ~${Math.ceil(SOURCE_CONTENT.length / 4)} tokens`);
   const source = await wiki.createSource({
-    characterId: character.id,
+    wikiId: targetWiki.id,
     title: SOURCE_TITLE,
     kind: "primary",
     content: SOURCE_CONTENT,
@@ -162,7 +183,7 @@ async function main() {
   const runStart = Date.now();
 
   for await (const ev of runIngestion({
-    characterId: character.id,
+    wikiId: targetWiki.id,
     sourceId: source.id,
     model,
   })) {

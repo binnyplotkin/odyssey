@@ -57,16 +57,16 @@ function InlineSelect<T extends string>({
         type="button"
         onClick={() => setOpen(!open)}
         style={{
-          display: "flex", alignItems: "center", gap: 6,
+          display: "flex", alignItems: "center", gap: "var(--space-6)",
           width: "100%", padding: "4px 8px",
           background: "var(--input-bg)", border: "1px solid var(--card-border)",
-          borderRadius: 5, cursor: "pointer", fontFamily: "inherit",
-          fontSize: 12, color: selected ? "var(--text-tertiary)" : "var(--text-placeholder)",
+          borderRadius: "var(--radius-sm)", cursor: "pointer", fontFamily: "inherit",
+          fontSize: "var(--font-size-base)", color: selected ? "var(--text-tertiary)" : "var(--text-placeholder)",
         }}
       >
         {selected?.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: selected.dot, flexShrink: 0 }} />}
         {selected?.label ?? placeholder}
-        <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-quaternary)" }}>▾</span>
+        <span style={{ marginLeft: "auto", fontSize: "var(--font-size-xs)", color: "var(--text-quaternary)" }}>▾</span>
       </button>
 
       {open && (
@@ -74,8 +74,8 @@ function InlineSelect<T extends string>({
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
           minWidth: 140, background: "var(--dropdown-bg, var(--background))",
           border: "1px solid var(--input-border, var(--border))",
-          borderRadius: 8, padding: "4px 0", zIndex: 100,
-          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+          borderRadius: "var(--radius-md)", padding: "4px 0", zIndex: 100,
+          boxShadow: "var(--elevation-card)",
           maxHeight: 200, overflowY: "auto",
         }}>
           {options.map((opt) => {
@@ -86,12 +86,12 @@ function InlineSelect<T extends string>({
                 type="button"
                 onClick={() => { onChange(opt.value); setOpen(false); }}
                 style={{
-                  display: "flex", alignItems: "center", gap: 8,
+                  display: "flex", alignItems: "center", gap: "var(--space-8)",
                   width: "100%", padding: "7px 12px",
                   background: isActive ? "rgba(140, 231, 210, 0.08)" : "none",
                   border: "none", cursor: "pointer", textAlign: "left",
                   color: isActive ? "var(--accent-strong, var(--accent))" : "var(--text-secondary, var(--foreground))",
-                  fontSize: 11, fontFamily: "inherit",
+                  fontSize: "var(--font-size-sm)", fontFamily: "inherit",
                 }}
               >
                 {opt.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: opt.dot, flexShrink: 0 }} />}
@@ -119,7 +119,7 @@ function InlineDateInput({ value, onChange }: {
       style={{
         width: "100%", padding: "4px 8px",
         background: "var(--input-bg)", border: "1px solid var(--card-border)",
-        borderRadius: 5, fontSize: 12, color: value ? "var(--text-tertiary)" : "var(--text-placeholder)",
+        borderRadius: "var(--radius-sm)", fontSize: "var(--font-size-base)", color: value ? "var(--text-tertiary)" : "var(--text-placeholder)",
         fontFamily: "var(--font-mono, ui-monospace, monospace)",
         outline: "none", colorScheme: "inherit",
       }}
@@ -152,7 +152,7 @@ const AVATAR_COLORS = ["#8B7EB5", "#5B9E82", "#5B7FB5", "#C8875A", "#C45C5C", "#
 
 const FEATURE_COLORS = [
   "#7C5CFC", "#5B7FB5", "#5B9E82", "#C8875A", "#C45C5C",
-  "#8B7EB5", "#3B82F6", "#8CE7D2", "#F59E0B", "#EF4444",
+  "#8B7EB5", "#3B82F6", "#8FD1CB", "#F59E0B", "#EF4444",
   "#A855F7", "#EC4899", "#14B8A6", "#64748B", "#F97316",
 ];
 
@@ -188,7 +188,7 @@ function avatarBadge(
           background: member ? memberColor(memberIdx) : "var(--card-hover)",
           border: member ? "none" : "1.5px dashed var(--border)",
           color: member ? "#fff" : "var(--text-quaternary)",
-          fontSize: 10, fontWeight: 600, cursor: "pointer",
+          fontSize: "var(--font-size-xs)", fontWeight: 600, cursor: "pointer",
           fontFamily: "inherit", padding: 0, lineHeight: 1,
           transition: "all 0.15s ease",
           flexShrink: 0, overflow: "hidden",
@@ -200,10 +200,10 @@ function avatarBadge(
       {isOpen && (
         <div
           style={{
-            position: "absolute", top: "100%", right: 0, marginTop: 4,
+            position: "absolute", top: "100%", right: 0, marginTop: "var(--space-4)",
             background: "var(--dropdown-bg, var(--background))", border: "1px solid var(--input-border, var(--border))",
-            borderRadius: 8, padding: 4, zIndex: 50, minWidth: 160,
-            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
+            borderRadius: "var(--radius-md)", padding: "var(--space-4)", zIndex: 50, minWidth: 160,
+            boxShadow: "var(--elevation-card)",
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -212,18 +212,18 @@ function avatarBadge(
               key={m.id}
               onClick={() => { onSelect(m.id); setMenuOpen(null); }}
               style={{
-                display: "flex", alignItems: "center", gap: 8,
+                display: "flex", alignItems: "center", gap: "var(--space-8)",
                 width: "100%", padding: "6px 10px", border: "none",
                 background: assignee === m.id ? "var(--card-hover)" : "transparent",
-                borderRadius: 5, cursor: "pointer", fontFamily: "inherit",
-                color: "var(--text-secondary)", fontSize: 12,
+                borderRadius: "var(--radius-sm)", cursor: "pointer", fontFamily: "inherit",
+                color: "var(--text-secondary)", fontSize: "var(--font-size-base)",
               }}
             >
               <span
                 style={{
                   width: 20, height: 20, borderRadius: "50%",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  background: memberColor(i), color: "#fff", fontSize: 9, fontWeight: 600,
+                  background: memberColor(i), color: "#fff", fontSize: "var(--font-size-2xs)", fontWeight: 600,
                   overflow: "hidden", flexShrink: 0,
                 }}
               >
@@ -238,10 +238,10 @@ function avatarBadge(
               <button
                 onClick={() => { onSelect(null); setMenuOpen(null); }}
                 style={{
-                  display: "flex", alignItems: "center", gap: 8,
+                  display: "flex", alignItems: "center", gap: "var(--space-8)",
                   width: "100%", padding: "6px 10px", border: "none",
-                  background: "transparent", borderRadius: 5, cursor: "pointer",
-                  fontFamily: "inherit", color: "var(--text-quaternary)", fontSize: 12,
+                  background: "transparent", borderRadius: "var(--radius-sm)", cursor: "pointer",
+                  fontFamily: "inherit", color: "var(--text-quaternary)", fontSize: "var(--font-size-base)",
                 }}
               >
                 Unassign
@@ -262,7 +262,7 @@ function statusDot(status: string) {
       <span
         style={{
           width: 8, height: 8, borderRadius: "50%",
-          background: "var(--success, #8CE7D2)", flexShrink: 0,
+          background: "var(--success, #8FD1CB)", flexShrink: 0,
         }}
       />
     );
@@ -292,7 +292,7 @@ function statusDot(status: string) {
 
 function statusBadge(status: string) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
-    done: { label: "Complete", bg: "rgba(140, 231, 210, 0.15)", color: "var(--success, #8CE7D2)" },
+    done: { label: "Complete", bg: "rgba(140, 231, 210, 0.15)", color: "var(--success, #8FD1CB)" },
     active: { label: "In Progress", bg: "rgba(143, 209, 203, 0.15)", color: "var(--accent, #8fd1cb)" },
     planned: { label: "Upcoming", bg: "var(--card-border)", color: "var(--muted)" },
   };
@@ -300,7 +300,7 @@ function statusBadge(status: string) {
   return (
     <span
       style={{
-        display: "inline-block", padding: "0.15rem 0.6rem", borderRadius: 9999,
+        display: "inline-block", padding: "0.15rem 0.6rem", borderRadius: "var(--radius-pill)",
         fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.06em",
         textTransform: "uppercase", background: s.bg, color: s.color,
       }}
@@ -341,9 +341,9 @@ function SortableTicketRow({
     opacity: isDragging ? 0.5 : 1,
     display: "flex",
     alignItems: "center",
-    gap: 8,
+    gap: "var(--space-8)",
     padding: "8px 10px",
-    borderRadius: 6,
+    borderRadius: "var(--radius-sm)",
     background: isDragging ? "rgba(59, 130, 246, 0.08)" : "var(--card)",
     border: isDragging ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid var(--card-border)",
   };
@@ -357,7 +357,7 @@ function SortableTicketRow({
         style={{
           cursor: "grab",
           color: "var(--text-placeholder)",
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           flexShrink: 0,
           lineHeight: 1,
           touchAction: "none",
@@ -366,10 +366,10 @@ function SortableTicketRow({
         ⠿
       </span>
       {statusDot(ticket.status === "done" ? "done" : ticket.status === "in-progress" || ticket.status === "review" ? "active" : "planned")}
-      <span style={{ flex: 1, fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span style={{ flex: 1, fontSize: "var(--font-size-base)", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {ticket.title}
       </span>
-      <span style={{ fontSize: 10, color: "var(--text-quaternary)", textTransform: "capitalize", flexShrink: 0 }}>
+      <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-quaternary)", textTransform: "capitalize", flexShrink: 0 }}>
         {ticket.status}
       </span>
       {avatarBadge(
@@ -680,16 +680,16 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
   const activeFeatures = allFeatures.filter((f) => f.status === "active").length;
 
   const tabButtons = (
-    <div style={{ display: "flex", gap: 4 }}>
+    <div style={{ display: "flex", gap: "var(--space-4)" }}>
       {TABS.map((t) => (
         <button
           key={t.id}
           onClick={() => setTab(t.id)}
           style={{
-            padding: "5px 14px", borderRadius: 8, border: "none",
+            padding: "5px 14px", borderRadius: "var(--radius-md)", border: "none",
             background: tab === t.id ? "rgba(140, 231, 210, 0.12)" : "transparent",
             color: tab === t.id ? "var(--accent-strong)" : "var(--text-tertiary)",
-            fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+            fontSize: "var(--font-size-base)", fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}
         >
           {t.label}
@@ -706,20 +706,27 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
   useEffect(() => {
     const onTab = (id: RoadmapTab) => setTabRef.current(id);
     setContent(
-      <>
-        <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground, #fff)", marginTop: 0, marginRight: 12, marginBottom: 0, marginLeft: 0, whiteSpace: "nowrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
+        <h1 style={{ fontSize: "var(--font-size-xl)", fontWeight: 700, color: "var(--foreground, #fff)", marginTop: 0, marginRight: "var(--space-12)", marginBottom: 0, marginLeft: 0, whiteSpace: "nowrap" }}>
           Roadmap
         </h1>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: "var(--space-4)" }}>
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => onTab(t.id)}
               style={{
-                padding: "5px 14px", borderRadius: 8, border: "none",
+                padding: "5px 14px", borderRadius: "var(--radius-md)", border: "none",
                 background: tab === t.id ? "rgba(140, 231, 210, 0.12)" : "transparent",
                 color: tab === t.id ? "var(--accent-strong)" : "var(--text-tertiary)",
-                fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                fontSize: "var(--font-size-base)", fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
               }}
             >
               {t.label}
@@ -727,7 +734,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
           ))}
         </div>
         <div style={{ flex: 1 }} />
-      </>
+      </div>
     );
     return () => setContent(null);
   }, [tab, setContent]);
@@ -766,7 +773,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 onTicketReorder={handleGanttTicketReorder}
               />
             ) : (
-              <div style={{ padding: 40, color: "var(--text-quaternary)", fontSize: 13 }}>No roadmap data yet.</div>
+              <div style={{ padding: 40, color: "var(--text-quaternary)", fontSize: "var(--font-size-md)" }}>No roadmap data yet.</div>
             )}
           </div>
 
@@ -781,9 +788,9 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 width: sidebarWidth,
                 display: "flex",
                 flexDirection: "column",
-                background: "var(--background, #0C0E14)",
+                background: "var(--background, #0A0A0A)",
                 borderLeft: "1px solid var(--input-border)",
-                boxShadow: "-8px 0 32px rgba(0, 0, 0, 0.4)",
+                boxShadow: "var(--elevation-side)",
                 zIndex: 50,
               }}
             >
@@ -803,7 +810,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   justifyContent: "center",
                 }}
               >
-                <div style={{ width: 2, height: 40, borderRadius: 2, background: "var(--border)" }} />
+                <div style={{ width: 2, height: 40, borderRadius: "var(--radius-2xs)", background: "var(--border)" }} />
               </div>
 
               {/* Header */}
@@ -818,14 +825,14 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-6)" }}>
                     <span style={{ width: 8, height: 8, borderRadius: "50%", background: selectedVersion.color, flexShrink: 0 }} />
                     <input
                       value={selectedVersion.tag}
                       onChange={(e) => updateVersionLocal(selectedVersion.id, { tag: e.target.value })}
                       onBlur={() => persistVersion(selectedVersion.id, { tag: selectedVersion.tag })}
                       style={{
-                        fontSize: 11, fontWeight: 600, color: selectedVersion.color,
+                        fontSize: "var(--font-size-sm)", fontWeight: 600, color: selectedVersion.color,
                         fontFamily: "var(--font-mono, ui-monospace, monospace)",
                         background: "transparent", border: "none", outline: "none",
                         padding: 0, width: 80,
@@ -848,12 +855,12 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 <button
                   onClick={() => setSelectedVersionId(null)}
                   style={{
-                    width: 28, height: 28, borderRadius: 6,
+                    width: 28, height: 28, borderRadius: "var(--radius-sm)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     background: "var(--input-bg)",
                     border: "1px solid var(--card-border)",
                     color: "var(--text-quaternary)",
-                    fontSize: 16, cursor: "pointer", flexShrink: 0, marginLeft: 12,
+                    fontSize: "var(--font-size-xl)", cursor: "pointer", flexShrink: 0, marginLeft: "var(--space-12)",
                   }}
                 >
                   ×
@@ -866,17 +873,17 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
                     {/* Start */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Start</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Start</div>
                       <InlineDateInput value={selectedVersion.startDate} onChange={(v) => updateVersion(selectedVersion.id, { startDate: v })} />
                     </div>
                     {/* End */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>End</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>End</div>
                       <InlineDateInput value={selectedVersion.endDate} onChange={(v) => updateVersion(selectedVersion.id, { endDate: v })} />
                     </div>
                     {/* Status */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Status</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Status</div>
                       <InlineSelect
                         value={selectedVersion.status}
                         onChange={(v) => updateVersion(selectedVersion.id, { status: v })}
@@ -889,7 +896,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     </div>
                     {/* Color */}
                     <div style={{ padding: "4px 0", position: "relative" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Color</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Color</div>
                       <button
                         onClick={(e) => { e.stopPropagation(); setColorMenuOpen((prev) => prev === selectedVersion.id ? null : selectedVersion.id); }}
                         style={{
@@ -902,11 +909,11 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                       {colorMenuOpen === selectedVersion.id && (
                         <div
                           style={{
-                            position: "absolute", top: "100%", left: 0, marginTop: 4,
+                            position: "absolute", top: "100%", left: 0, marginTop: "var(--space-4)",
                             background: "var(--dropdown-bg, var(--background))", border: "1px solid var(--input-border, var(--border))",
-                            borderRadius: 10, padding: 10, zIndex: 60,
-                            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
-                            display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6,
+                            borderRadius: "var(--radius-lg)", padding: "var(--space-10)", zIndex: 60,
+                            boxShadow: "var(--elevation-card)",
+                            display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "var(--space-6)",
                           }}
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -939,7 +946,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                       style={{
                         width: "100%", minHeight: 60, resize: "none", overflow: "hidden",
                         background: "var(--input-bg)", border: "1px solid var(--card-border)",
-                        borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "var(--text-tertiary)",
+                        borderRadius: "var(--radius-sm)", padding: "8px 10px", fontSize: "var(--font-size-md)", color: "var(--text-tertiary)",
                         lineHeight: 1.5, outline: "none", fontFamily: "inherit",
                       }}
                     />
@@ -948,13 +955,13 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
 
                 {/* Features list */}
                 <div style={{ padding: "16px 20px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12 }}>
+                  <div style={{ fontSize: "var(--font-size-base)", fontWeight: 600, color: "var(--text-tertiary)", marginBottom: "var(--space-12)" }}>
                     Features ({selectedVersion.features.length})
                   </div>
                   {selectedVersion.features.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "var(--text-quaternary)" }}>No features yet</div>
+                    <div style={{ fontSize: "var(--font-size-base)", color: "var(--text-quaternary)" }}>No features yet</div>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
                       {selectedVersion.features.map((f) => {
                         const progress = f.ticketCount > 0 ? Math.round((f.doneTicketCount / f.ticketCount) * 100) : 0;
                         return (
@@ -967,20 +974,20 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                             style={{
                               display: "flex",
                               alignItems: "center",
-                              gap: 8,
+                              gap: "var(--space-8)",
                               padding: "8px 10px",
-                              borderRadius: 6,
+                              borderRadius: "var(--radius-sm)",
                               background: "var(--card)",
                               border: "1px solid var(--card-border)",
                               cursor: "pointer",
                             }}
                           >
                             {statusDot(f.status)}
-                            <span style={{ flex: 1, fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <span style={{ flex: 1, fontSize: "var(--font-size-base)", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {f.title}
                             </span>
                             {f.ticketCount > 0 && (
-                              <span style={{ fontSize: 10, color: "var(--text-quaternary)" }}>
+                              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-quaternary)" }}>
                                 {progress}%
                               </span>
                             )}
@@ -1005,9 +1012,9 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 width: sidebarWidth,
                 display: "flex",
                 flexDirection: "column",
-                background: "var(--background, #0C0E14)",
+                background: "var(--background, #0A0A0A)",
                 borderLeft: "1px solid var(--input-border)",
-                boxShadow: "-8px 0 32px rgba(0, 0, 0, 0.4)",
+                boxShadow: "var(--elevation-side)",
                 zIndex: 50,
               }}
             >
@@ -1020,7 +1027,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
               >
-                <div style={{ width: 2, height: 40, borderRadius: 2, background: "var(--border)" }} />
+                <div style={{ width: 2, height: 40, borderRadius: "var(--radius-2xs)", background: "var(--border)" }} />
               </div>
 
               {/* Header */}
@@ -1031,11 +1038,11 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-6)" }}>
                     {statusDot(selectedTicket.status === "done" ? "done" : selectedTicket.status === "in-progress" || selectedTicket.status === "review" ? "active" : "planned")}
                     {statusBadge(selectedTicket.status === "done" ? "done" : selectedTicket.status === "in-progress" || selectedTicket.status === "review" ? "active" : "planned")}
                     {selectedTicket.domain && (
-                      <span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-quaternary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <span style={{ fontSize: "var(--font-size-xs)", fontWeight: 500, color: "var(--text-quaternary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                         {selectedTicket.domain}
                       </span>
                     )}
@@ -1055,12 +1062,12 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 <button
                   onClick={() => setSelectedTicketId(null)}
                   style={{
-                    width: 28, height: 28, borderRadius: 6,
+                    width: 28, height: 28, borderRadius: "var(--radius-sm)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     background: "var(--input-bg)",
                     border: "1px solid var(--card-border)",
                     color: "var(--text-quaternary)",
-                    fontSize: 16, cursor: "pointer", flexShrink: 0, marginLeft: 12,
+                    fontSize: "var(--font-size-xl)", cursor: "pointer", flexShrink: 0, marginLeft: "var(--space-12)",
                   }}
                 >
                   ×
@@ -1073,7 +1080,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
                     {/* Start */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Start</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Start</div>
                       <InlineDateInput
                         value={selectedTicket.startDate}
                         onChange={(v) => {
@@ -1084,7 +1091,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     </div>
                     {/* End */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>End</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>End</div>
                       <InlineDateInput
                         value={selectedTicket.endDate}
                         onChange={(v) => {
@@ -1095,7 +1102,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     </div>
                     {/* Owner */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Owner</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Owner</div>
                       {avatarBadge(
                         selectedTicket.assignee,
                         (key) => {
@@ -1110,7 +1117,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     </div>
                     {/* Status */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Status</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Status</div>
                       <InlineSelect
                         value={selectedTicket.status}
                         onChange={(v) => {
@@ -1128,7 +1135,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     </div>
                     {/* Priority */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Priority</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Priority</div>
                       <InlineSelect
                         value={selectedTicket.priority ?? ""}
                         onChange={(v) => {
@@ -1157,7 +1164,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                       style={{
                         width: "100%", minHeight: 80, resize: "none", overflow: "hidden",
                         background: "var(--input-bg)", border: "1px solid var(--card-border)",
-                        borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "var(--text-tertiary)",
+                        borderRadius: "var(--radius-sm)", padding: "8px 10px", fontSize: "var(--font-size-md)", color: "var(--text-tertiary)",
                         lineHeight: 1.5, outline: "none", fontFamily: "inherit",
                       }}
                     />
@@ -1178,9 +1185,9 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 width: sidebarWidth,
                 display: "flex",
                 flexDirection: "column",
-                background: "var(--background, #0C0E14)",
+                background: "var(--background, #0A0A0A)",
                 borderLeft: "1px solid var(--input-border)",
-                boxShadow: "-8px 0 32px rgba(0, 0, 0, 0.4)",
+                boxShadow: "var(--elevation-side)",
                 zIndex: 50,
               }}
             >
@@ -1200,7 +1207,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   justifyContent: "center",
                 }}
               >
-                <div style={{ width: 2, height: 40, borderRadius: 2, background: "var(--border)" }} />
+                <div style={{ width: 2, height: 40, borderRadius: "var(--radius-2xs)", background: "var(--border)" }} />
               </div>
 
               {/* Header */}
@@ -1215,9 +1222,9 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-6)" }}>
                     <span style={{ width: 8, height: 8, borderRadius: "50%", background: selectedFeature.color ?? selectedFeature.versionColor, flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-quaternary)" }}>
+                    <span style={{ fontSize: "var(--font-size-sm)", fontWeight: 500, color: "var(--text-quaternary)" }}>
                       {selectedFeature.versionTag}
                     </span>
                     {statusBadge(selectedFeature.status)}
@@ -1237,12 +1244,12 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                 <button
                   onClick={() => setSelectedFeatureId(null)}
                   style={{
-                    width: 28, height: 28, borderRadius: 6,
+                    width: 28, height: 28, borderRadius: "var(--radius-sm)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     background: "var(--input-bg)",
                     border: "1px solid var(--card-border)",
                     color: "var(--text-quaternary)",
-                    fontSize: 16, cursor: "pointer", flexShrink: 0, marginLeft: 12,
+                    fontSize: "var(--font-size-xl)", cursor: "pointer", flexShrink: 0, marginLeft: "var(--space-12)",
                   }}
                 >
                   ×
@@ -1256,17 +1263,17 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
                     {/* Start */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Start</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Start</div>
                       <InlineDateInput value={selectedFeature.startDate} onChange={(v) => updateFeature(selectedFeature.id, { startDate: v })} />
                     </div>
                     {/* End */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>End</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>End</div>
                       <InlineDateInput value={selectedFeature.endDate} onChange={(v) => updateFeature(selectedFeature.id, { endDate: v })} />
                     </div>
                     {/* Status */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Status</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Status</div>
                       <InlineSelect
                         value={selectedFeature.status}
                         onChange={(v) => updateFeature(selectedFeature.id, { status: v })}
@@ -1279,7 +1286,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     </div>
                     {/* Owner */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Owner</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Owner</div>
                       {avatarBadge(
                         selectedFeature.assignee ?? null,
                         (key) => updateFeature(selectedFeature.id, { assignee: key }),
@@ -1291,7 +1298,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     </div>
                     {/* Color */}
                     <div style={{ padding: "4px 0", position: "relative" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Color</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Color</div>
                       <button
                         onClick={(e) => { e.stopPropagation(); setColorMenuOpen((prev) => prev === selectedFeature.id ? null : selectedFeature.id); }}
                         style={{
@@ -1304,11 +1311,11 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                       {colorMenuOpen === selectedFeature.id && (
                         <div
                           style={{
-                            position: "absolute", top: "100%", left: 0, marginTop: 4,
+                            position: "absolute", top: "100%", left: 0, marginTop: "var(--space-4)",
                             background: "var(--dropdown-bg, var(--background))", border: "1px solid var(--input-border, var(--border))",
-                            borderRadius: 10, padding: 10, zIndex: 60,
-                            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
-                            display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6,
+                            borderRadius: "var(--radius-lg)", padding: "var(--space-10)", zIndex: 60,
+                            boxShadow: "var(--elevation-card)",
+                            display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "var(--space-6)",
                           }}
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -1330,20 +1337,20 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                     </div>
                     {/* Tickets (read-only) */}
                     <div style={{ padding: "4px 0" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-quaternary)", marginBottom: 4 }}>Tickets</div>
-                      <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                      <div style={{ fontSize: "var(--font-size-sm)", color: "var(--text-quaternary)", marginBottom: "var(--space-4)" }}>Tickets</div>
+                      <span style={{ fontSize: "var(--font-size-base)", color: "var(--text-tertiary)" }}>
                         {selectedFeature.doneTicketCount}/{selectedFeature.ticketCount} done
                       </span>
                     </div>
                   </div>
                   {selectedFeature.ticketCount > 0 && (
-                    <div style={{ marginTop: 4, height: 3, borderRadius: 2, background: "var(--card-border)", overflow: "hidden" }}>
+                    <div style={{ marginTop: "var(--space-4)", height: 3, borderRadius: "var(--radius-2xs)", background: "var(--card-border)", overflow: "hidden" }}>
                       <div
                         style={{
                           width: `${(selectedFeature.doneTicketCount / selectedFeature.ticketCount) * 100}%`,
                           height: "100%",
                           background: selectedFeature.color ?? selectedFeature.versionColor,
-                          borderRadius: 2,
+                          borderRadius: "var(--radius-2xs)",
                           transition: "width 0.2s ease",
                         }}
                       />
@@ -1361,7 +1368,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                       style={{
                         width: "100%", minHeight: 60, resize: "none", overflow: "hidden",
                         background: "var(--input-bg)", border: "1px solid var(--card-border)",
-                        borderRadius: 6, padding: "8px 10px", fontSize: 13, color: "var(--text-tertiary)",
+                        borderRadius: "var(--radius-sm)", padding: "8px 10px", fontSize: "var(--font-size-md)", color: "var(--text-tertiary)",
                         lineHeight: 1.5, outline: "none", fontFamily: "inherit",
                       }}
                     />
@@ -1370,17 +1377,17 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
 
                 {/* Tickets list — sortable */}
                 <div style={{ padding: "16px 20px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12 }}>
+                  <div style={{ fontSize: "var(--font-size-base)", fontWeight: 600, color: "var(--text-tertiary)", marginBottom: "var(--space-12)" }}>
                     Tickets
                   </div>
                   {ticketsLoading ? (
-                    <div style={{ fontSize: 12, color: "var(--text-quaternary)" }}>Loading...</div>
+                    <div style={{ fontSize: "var(--font-size-base)", color: "var(--text-quaternary)" }}>Loading...</div>
                   ) : featureTickets.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "var(--text-quaternary)" }}>No tickets linked</div>
+                    <div style={{ fontSize: "var(--font-size-base)", color: "var(--text-quaternary)" }}>No tickets linked</div>
                   ) : (
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTicketReorder}>
                       <SortableContext items={featureTickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
                           {featureTickets.map((t) => (
                             <SortableTicketRow
                               key={t.id}
@@ -1426,7 +1433,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
 
         {/* Progress summary */}
         <div style={{ display: "flex", gap: "1.5rem", marginBottom: "2rem", flexWrap: "wrap" }}>
-          <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: "0.5rem", padding: "0.75rem 1.25rem", minWidth: 140 }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0.75rem 1.25rem", minWidth: 140 }}>
             <div style={{ fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--muted)", marginBottom: "0.25rem" }}>
               Overall
             </div>
@@ -1434,16 +1441,16 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
               {totalFeatures > 0 ? Math.round((doneFeatures / totalFeatures) * 100) : 0}%
             </div>
           </div>
-          <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: "0.5rem", padding: "0.75rem 1.25rem", minWidth: 140 }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0.75rem 1.25rem", minWidth: 140 }}>
             <div style={{ fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--muted)", marginBottom: "0.25rem" }}>
               Completed
             </div>
-            <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--success, #8CE7D2)" }}>
+            <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--success, #8FD1CB)" }}>
               {doneFeatures}
               <span style={{ fontSize: "0.85rem", fontWeight: 400, color: "var(--muted)" }}> / {totalFeatures}</span>
             </div>
           </div>
-          <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: "0.5rem", padding: "0.75rem 1.25rem", minWidth: 140 }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0.75rem 1.25rem", minWidth: 140 }}>
             <div style={{ fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--muted)", marginBottom: "0.25rem" }}>
               Active
             </div>
@@ -1455,7 +1462,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
 
         {/* Band progress rail */}
         {totalFeatures > 0 && (
-          <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", marginBottom: "2.5rem", background: "var(--panel)", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", height: 6, borderRadius: "var(--radius-xs)", overflow: "hidden", marginBottom: "2.5rem", background: "var(--panel)", border: "1px solid var(--border)" }}>
             {versions.map((v) => {
               const weight = v.features.length / totalFeatures;
               const done = v.features.filter((f) => f.status === "done").length;
@@ -1484,7 +1491,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   style={{
                     background: "var(--panel)",
                     border: `1px solid ${isExpanded ? v.color + "33" : "var(--border)"}`,
-                    borderRadius: "0.75rem", overflow: "hidden",
+                    borderRadius: "var(--radius-xl)", overflow: "hidden",
                     transition: "border-color 0.2s ease",
                   }}
                 >
@@ -1516,8 +1523,8 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
-                      <div style={{ width: 64, height: 4, borderRadius: 2, background: "var(--card-border)", overflow: "hidden" }}>
-                        <div style={{ width: `${progress}%`, height: "100%", background: v.color, borderRadius: 2, transition: "width 0.3s ease" }} />
+                      <div style={{ width: 64, height: 4, borderRadius: "var(--radius-2xs)", background: "var(--card-border)", overflow: "hidden" }}>
+                        <div style={{ width: `${progress}%`, height: "100%", background: v.color, borderRadius: "var(--radius-2xs)", transition: "width 0.3s ease" }} />
                       </div>
                       <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--muted)", width: 32, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                         {progress}%
@@ -1568,7 +1575,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             {versions.map((v) => (
               <div key={v.id}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", marginBottom: "0.75rem" }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: v.color, flexShrink: 0 }} />
                   <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--foreground)", fontFamily: "var(--font-mono, ui-monospace, monospace)" }}>
                     {v.tag}
@@ -1576,7 +1583,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                   <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{v.title}</span>
                 </div>
                 {v.features.length === 0 ? (
-                  <div style={{ fontSize: "0.8rem", color: "var(--muted)", paddingLeft: 24 }}>No features</div>
+                  <div style={{ fontSize: "0.8rem", color: "var(--muted)", paddingLeft: "var(--space-24)" }}>No features</div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                     {v.features.map((f) => (
@@ -1584,7 +1591,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                         key={f.id}
                         style={{
                           display: "flex", alignItems: "center", gap: "0.75rem",
-                          padding: "0.6rem 1rem", borderRadius: "0.5rem",
+                          padding: "0.6rem 1rem", borderRadius: "var(--radius-md)",
                           background: "var(--panel)", border: "1px solid var(--border)",
                         }}
                       >
@@ -1596,7 +1603,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
                           </span>
                         )}
                         {f.ticketCount > 0 && (
-                          <span style={{ fontSize: "0.7rem", color: "var(--muted)", background: "var(--input-bg)", padding: "2px 8px", borderRadius: 4 }}>
+                          <span style={{ fontSize: "0.7rem", color: "var(--muted)", background: "var(--input-bg)", padding: "2px 8px", borderRadius: "var(--radius-xs)" }}>
                             {f.doneTicketCount}/{f.ticketCount}
                           </span>
                         )}
@@ -1613,7 +1620,7 @@ export default function RoadmapClient({ versions: initialVersions, team = [] }: 
         {/* Vision footer */}
         <div
           style={{
-            marginTop: "2.5rem", padding: "1.5rem", borderRadius: "0.75rem",
+            marginTop: "2.5rem", padding: "1.5rem", borderRadius: "var(--radius-xl)",
             background: "linear-gradient(135deg, rgba(143, 209, 203, 0.06) 0%, rgba(196, 167, 231, 0.06) 50%, rgba(231, 106, 106, 0.06) 100%)",
             border: "1px solid var(--border)", textAlign: "center",
           }}

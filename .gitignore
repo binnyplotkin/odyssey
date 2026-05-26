@@ -26,6 +26,7 @@
 # misc
 .DS_Store
 *.pem
+.generated/
 .local/
 tmp-app/
 .world-session-audio/
@@ -52,3 +53,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# eval runs (machine + human-readable per-run reports)
+/.evals/

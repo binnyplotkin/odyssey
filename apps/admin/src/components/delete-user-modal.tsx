@@ -87,7 +87,7 @@ export function DeleteUserModal({ open, target, onClose, onDeleted }: Props) {
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
         display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 16,
+        padding: "var(--space-16)",
         backgroundColor: T.backdrop,
         animation: "userModalFade 140ms ease-out",
       }}
@@ -100,23 +100,23 @@ export function DeleteUserModal({ open, target, onClose, onDeleted }: Props) {
         style={{
           width: 460, maxWidth: "100%",
           background: T.panel, border: `1px solid ${T.border}`,
-          borderRadius: 16, overflow: "hidden",
-          boxShadow: "0 32px 64px -16px rgba(0,0,0,0.7)",
+          borderRadius: "var(--radius-3xl)", overflow: "hidden",
+          boxShadow: "var(--elevation-modal)",
           animation: "userModalRise 180ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
         {/* Header */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "22px 24px 18px 24px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)", padding: "22px 24px 18px 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
             <span style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 22, height: 22, borderRadius: 6,
+              width: 22, height: 22, borderRadius: "var(--radius-sm)",
               background: T.redBg, flexShrink: 0,
             }}>
               <TrashIcon size={11} stroke={T.red} strokeWidth={2.4} />
             </span>
             <span style={{
-              fontFamily: T.fontMono, fontSize: 10, fontWeight: 600,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600,
               color: T.red, letterSpacing: "0.12em", textTransform: "uppercase",
             }}>
               Delete user
@@ -128,14 +128,14 @@ export function DeleteUserModal({ open, target, onClose, onDeleted }: Props) {
           }}>
             Permanently delete {target.name ?? target.email}?
           </div>
-          <div style={{ fontFamily: T.fontBody, fontSize: 13, color: T.muted, lineHeight: "19px" }}>
+          <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.muted, lineHeight: "19px" }}>
             Their account, OAuth links, and all {target.sessionCount} active session{target.sessionCount === 1 ? "" : "s"} will be removed. Game sessions they created will be retained but unowned. This can't be undone.
           </div>
         </div>
 
         {/* Confirm input */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 24px" }}>
-          <div style={{ fontFamily: T.fontBody, fontSize: 12, color: T.faint, lineHeight: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)", padding: "0 24px" }}>
+          <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.faint, lineHeight: "16px" }}>
             Type <span style={{ fontFamily: T.fontMono, color: T.fgDim }}>{expected}</span> to confirm.
           </div>
           <input
@@ -147,8 +147,8 @@ export function DeleteUserModal({ open, target, onClose, onDeleted }: Props) {
             style={{
               padding: "11px 14px",
               background: T.panelInner, border: `1px solid ${confirm && !canDelete ? T.redBorder : T.border}`,
-              borderRadius: 10,
-              fontFamily: T.fontMono, fontSize: 14, color: T.fg, outline: "none",
+              borderRadius: "var(--radius-lg)",
+              fontFamily: T.fontMono, fontSize: "var(--font-size-lg)", color: T.fg, outline: "none",
             }}
           />
         </div>
@@ -157,10 +157,10 @@ export function DeleteUserModal({ open, target, onClose, onDeleted }: Props) {
           <div style={{
             margin: "16px 24px 0 24px",
             padding: "10px 14px",
-            borderRadius: 10,
+            borderRadius: "var(--radius-lg)",
             background: T.redBg,
             border: `1px solid ${T.redBorder}`,
-            fontFamily: T.fontBody, fontSize: 12, color: T.redText,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.redText,
           }}>
             {error}
           </div>
@@ -168,9 +168,9 @@ export function DeleteUserModal({ open, target, onClose, onDeleted }: Props) {
 
         {/* Footer */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8,
+          display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "var(--space-8)",
           padding: "20px 24px",
-          marginTop: 16,
+          marginTop: "var(--space-16)",
           borderTop: `1px solid ${T.borderFaint}`,
         }}>
           <button type="button" onClick={onClose} disabled={pending} style={ghostButtonStyle(pending)}>
@@ -188,9 +188,9 @@ export function DeleteUserModal({ open, target, onClose, onDeleted }: Props) {
 
 function ghostButtonStyle(disabled: boolean): React.CSSProperties {
   return {
-    padding: "9px 16px", borderRadius: 9,
+    padding: "9px 16px", borderRadius: "var(--radius-md)",
     border: `1px solid ${T.border}`, background: "transparent",
-    fontFamily: T.fontBody, fontSize: 13, fontWeight: 500,
+    fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500,
     color: T.fgDim,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
@@ -200,10 +200,10 @@ function ghostButtonStyle(disabled: boolean): React.CSSProperties {
 function dangerButtonStyle(disabled: boolean): React.CSSProperties {
   return {
     display: "flex", alignItems: "center", gap: 7,
-    padding: "9px 18px", borderRadius: 9,
+    padding: "9px 18px", borderRadius: "var(--radius-md)",
     border: `1px solid ${T.redBorder}`,
     background: "rgba(243,114,114,0.14)",
-    fontFamily: T.fontBody, fontSize: 13, fontWeight: 600,
+    fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
     color: T.redText,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.5 : 1,

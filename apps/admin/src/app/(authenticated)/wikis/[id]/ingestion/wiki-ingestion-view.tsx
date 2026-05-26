@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type CSSProperties,
@@ -10,7 +9,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useTransition,
 } from "react";
 import type { IngestionEvent, ModelId, PlanOp } from "@odyssey/wiki-ingest";
 import type { WikiIngestionLogRecord, WikiSourceRecord } from "@odyssey/db";
@@ -23,13 +21,7 @@ import {
 } from "./ascii-matter";
 import { PromptOverlay } from "./prompt-overlay";
 import { MetadataEditor } from "./metadata-editor";
-import { PipelineSection } from "./pipeline-section";
-import { RunPreviewSection } from "./run-preview-section";
-import {
-  SourceComposer,
-  type SourceMode,
-  type SourcePreviewChunk,
-} from "./source-composer";
+import { SourceComposer } from "./source-composer";
 import { StickyFooter, type StickyFooterState } from "./sticky-footer";
 import { MissionControl } from "./mission-control";
 import { OpsLog, type OpQueueRow } from "./ops-log";
@@ -38,14 +30,6 @@ import { ResolvedSummary } from "./resolved-summary";
 import { FailedRecovery } from "./failed-recovery";
 import { estimateCost } from "@odyssey/wiki-ingest";
 import { classifySource } from "../../../characters/actions";
-import {
-  previewPurgeWikiIngestionRun,
-  purgeWikiIngestionRun,
-} from "../../../wikis/actions";
-import {
-  PurgeConfirmModal,
-  type PurgePreview,
-} from "@/components/purge-confirm-modal";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -71,23 +55,12 @@ const T = {
   dangerSoft: "rgba(248, 113, 113, 0.08)",
   dangerLine: "rgba(248, 113, 113, 0.25)",
   onAccent: "var(--background)",
-  fontHead: "'Space Grotesk', system-ui, sans-serif",
-  fontBody: "'Inter', system-ui, sans-serif",
-  fontMono: "'JetBrains Mono', ui-monospace, monospace",
+  fontHead: "var(--font-display, 'Space Grotesk'), system-ui, sans-serif",
+  fontBody: "var(--font-body, Inter), system-ui, sans-serif",
+  fontMono: "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace",
 };
 
 /* ── Types ─────────────────────────────────────────────────────── */
-
-/**
- * Multi-line ghost shown behind the textarea when empty. Doubles as a
- * what-to-paste hint and matches the Paper artboard's preview state.
- */
-const GHOST_SAMPLE = `22:1  And it came to pass after these things, that God did tempt
-Abraham, and said unto him, Abraham: and he said, Behold, here I am.
-
-22:2  And he said, Take now thy son, thine only son Isaac, whom thou
-lovest, and get thee into the land of Moriah; and offer him there for
-a burnt offering upon one of the mountains which I will tell thee of.`;
 
 type SourceKind =
   | "primary"
@@ -95,8 +68,6 @@ type SourceKind =
   | "annotation"
   | "transcript"
   | "reference";
-
-const CHUNK_TOKEN_BUDGET = 512;
 
 function estimateTokensFromText(text: string) {
   return Math.round(text.length / 4);
@@ -111,69 +82,6 @@ function normalizeSourceWhitespace(input: string) {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-}
-
-function splitLongTextAtBudget(text: string, charBudget: number): string[] {
-  const out: string[] = [];
-  let rest = text.trim();
-  while (rest.length > charBudget) {
-    const hard = rest.slice(0, charBudget);
-    const breakAt = Math.max(
-      hard.lastIndexOf("\n"),
-      hard.lastIndexOf(". "),
-      hard.lastIndexOf("; "),
-      hard.lastIndexOf(", "),
-      hard.lastIndexOf(" "),
-    );
-    const cut = breakAt > charBudget * 0.55 ? breakAt + 1 : charBudget;
-    out.push(rest.slice(0, cut).trim());
-    rest = rest.slice(cut).trim();
-  }
-  if (rest) out.push(rest);
-  return out;
-}
-
-function buildSourcePreviewChunks(
-  text: string,
-  tokenBudget = CHUNK_TOKEN_BUDGET,
-): SourcePreviewChunk[] {
-  const body = text.trim();
-  if (!body) return [];
-  const charBudget = tokenBudget * 4;
-  const paragraphs = body.split(/\n{2,}/).filter((part) => part.trim());
-  const chunks: string[] = [];
-  let current = "";
-
-  const flush = () => {
-    const trimmed = current.trim();
-    if (trimmed) chunks.push(trimmed);
-    current = "";
-  };
-
-  for (const paragraph of paragraphs) {
-    const part = paragraph.trim();
-    if (!part) continue;
-    if (part.length > charBudget) {
-      flush();
-      chunks.push(...splitLongTextAtBudget(part, charBudget));
-      continue;
-    }
-    const next = current ? `${current}\n\n${part}` : part;
-    if (next.length > charBudget) {
-      flush();
-      current = part;
-    } else {
-      current = next;
-    }
-  }
-  flush();
-
-  return chunks.map((chunk, index) => ({
-    index: index + 1,
-    text: chunk,
-    tokens: estimateTokensFromText(chunk),
-    chars: chunk.length,
-  }));
 }
 
 function useIsLightTheme() {
@@ -270,7 +178,7 @@ function lightMatterBaseField(phase: MatterPhase) {
 // Dot colors per kind — config consumed by the EnumMenu in MetadataEditor.
 // Each kind gets its own hue so the dropdown reads at a glance.
 const KINDS: { value: SourceKind; label: string; dot: string }[] = [
-  { value: "primary", label: "primary", dot: "#8CE7D2" },
+  { value: "primary", label: "primary", dot: "#8FD1CB" },
   { value: "commentary", label: "commentary", dot: "#A48CE7" },
   { value: "annotation", label: "annotation", dot: "#E78C8C" },
   { value: "transcript", label: "transcript", dot: "#E7CB8C" },
@@ -348,10 +256,7 @@ export function WikiIngestionView({
   wikiId,
   wikiTitle,
   brain,
-  sources,
   runs,
-  weekRuns,
-  weekTokens,
   promptVersion = "v3",
   promptTokens = 482,
   promptText,
@@ -381,22 +286,15 @@ export function WikiIngestionView({
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<SourceKind>("primary");
   const [tags, setTags] = useState<string[]>([]);
-  const [chunkPreviewEnabled, setChunkPreviewEnabled] = useState(false);
-  const [normalizeWhitespace, setNormalizeWhitespace] = useState(true);
   const [model] = useState<ModelId>("claude-sonnet-4-5");
 
   const normalizedContent = useMemo(
     () => normalizeSourceWhitespace(content),
     [content],
   );
-  const effectiveContent = normalizeWhitespace ? normalizedContent : content;
+  const effectiveContent = normalizedContent;
   const tokens = estimateTokensFromText(effectiveContent);
   const canRun = title.trim().length > 0 && effectiveContent.trim().length > 20;
-  const previewChunks = useMemo(
-    () => buildSourcePreviewChunks(effectiveContent),
-    [effectiveContent],
-  );
-  const normalizedCharDelta = normalizedContent.length - content.length;
 
   const watchRun = useCallback(
     async (runId: string, startedAt: number, signal: AbortSignal) => {
@@ -512,12 +410,6 @@ export function WikiIngestionView({
       if (typeof draft.content === "string") setContent(draft.content);
       if (typeof draft.title === "string") setTitle(draft.title);
       if (isSourceKind(draft.kind)) setKind(draft.kind);
-      if (typeof draft.chunkPreviewEnabled === "boolean") {
-        setChunkPreviewEnabled(draft.chunkPreviewEnabled);
-      }
-      if (typeof draft.normalizeWhitespace === "boolean") {
-        setNormalizeWhitespace(draft.normalizeWhitespace);
-      }
       if (Array.isArray(draft.tags)) {
         setTags(
           draft.tags.filter((tag): tag is string => typeof tag === "string"),
@@ -527,11 +419,6 @@ export function WikiIngestionView({
       window.localStorage.removeItem(draftKey);
     }
   }, [draftKey]);
-
-  const sourceById = useMemo(
-    () => new Map(sources.map((s) => [s.id, s])),
-    [sources],
-  );
 
   // Ticks once per second while a run is live so the footer's elapsed /
   // spent / progress values stay fresh between SSE events (planning can
@@ -550,19 +437,6 @@ export function WikiIngestionView({
     () => deriveFooterTelemetry(run, model, nowMs),
     [run, model, nowMs],
   );
-
-  // Stats summary for the header / sidebar.
-  const stats = useMemo(() => {
-    const succeeded = runs.filter((r) => r.status === "succeeded").length;
-    const successPct =
-      runs.length === 0 ? 0 : Math.round((succeeded / runs.length) * 100);
-    return {
-      total: runs.length,
-      week: weekRuns,
-      weekTokens: weekTokens,
-      success: successPct,
-    };
-  }, [runs, weekRuns, weekTokens]);
 
   const submitRun = useCallback(
     async (payload: ComposerPayload) => {
@@ -616,20 +490,21 @@ export function WikiIngestionView({
       style={{
         display: "flex",
         flexDirection: "column",
-        minHeight: "calc(100vh - 67px)",
+        minHeight: "calc(100vh - 48px)",
         background: T.bg,
       }}
     >
       <div
         style={{
           display: "grid",
+          flex: "1 1 auto",
           // Composer is the per-run primary surface and should always get
           // the dominant share. Right column (matter + runs) is context —
           // kept narrow with a hard cap so it doesn't bloat on wide screens
           // and never crushes the composer on narrow ones.
-          gridTemplateColumns: "minmax(0, 2fr) minmax(320px, 460px)",
-          gap: 40,
-          padding: "32px 32px 56px",
+          gridTemplateColumns: "minmax(0, 2.65fr) minmax(280px, 380px)",
+          gap: 34,
+          padding: "34px 40px 112px",
           alignItems: "flex-start",
         }}
       >
@@ -655,12 +530,6 @@ export function WikiIngestionView({
               onTagsChange={setTags}
               model={model}
               tokens={tokens}
-              chunkPreviewEnabled={chunkPreviewEnabled}
-              onChunkPreviewChange={setChunkPreviewEnabled}
-              normalizeWhitespace={normalizeWhitespace}
-              onNormalizeWhitespaceChange={setNormalizeWhitespace}
-              previewChunks={previewChunks}
-              normalizedCharDelta={normalizedCharDelta}
             />
           ) : run.phase === "live" ? (
             <LiveProgress run={run} />
@@ -685,25 +554,22 @@ export function WikiIngestionView({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 24,
+            gap: "var(--space-20)",
             position: "sticky",
-            top: 24,
+            top: 20,
             minWidth: 0,
           }}
         >
-          <MatterPanel run={run} height={sourceSectionHeight} />
-          {run.phase === "live" ? (
+          <MatterPanel
+            run={run}
+            height={sourceSectionHeight}
+            ready={canRun}
+          />
+          {run.phase === "live" && (
             <LiveStream
               events={run.events}
               startedAt={run.startedAt}
               activeWrite={deriveActiveWrite(run.events)}
-            />
-          ) : (
-            <RecentRunsPanel
-              wikiId={wikiId}
-              runs={runs}
-              sourceById={sourceById}
-              stats={stats}
             />
           )}
         </div>
@@ -715,9 +581,8 @@ export function WikiIngestionView({
         promptVersion={promptVersion}
         promptTokens={promptTokens}
         model={model}
-        wikiTitle={wikiTitle}
         projectedCost={estimateCost(model, tokens, Math.round(tokens * 0.4))}
-        projectedDurationSec={Math.max(3, Math.round(tokens / 2000))}
+        projectedTokens={tokens}
         projectedPages={Math.max(0, Math.ceil(Math.ceil(tokens / 512) * 0.5))}
         runningOpNum={footerTelemetry.runningOpNum}
         runningOpTotal={footerTelemetry.runningOpTotal}
@@ -776,10 +641,7 @@ type ComposerPayload = {
   model: ModelId;
 };
 
-type ComposerDraft = ComposerPayload & {
-  chunkPreviewEnabled?: boolean;
-  normalizeWhitespace?: boolean;
-};
+type ComposerDraft = ComposerPayload;
 
 function ComposerCard({
   characterId,
@@ -801,12 +663,6 @@ function ComposerCard({
   onTagsChange,
   model,
   tokens,
-  chunkPreviewEnabled,
-  onChunkPreviewChange,
-  normalizeWhitespace,
-  onNormalizeWhitespaceChange,
-  previewChunks,
-  normalizedCharDelta,
 }: {
   characterId: string | null;
   wikiId: string;
@@ -827,16 +683,8 @@ function ComposerCard({
   onTagsChange: (next: string[]) => void;
   model: ModelId;
   tokens: number;
-  chunkPreviewEnabled: boolean;
-  onChunkPreviewChange: (next: boolean) => void;
-  normalizeWhitespace: boolean;
-  onNormalizeWhitespaceChange: (next: boolean) => void;
-  previewChunks: SourcePreviewChunk[];
-  normalizedCharDelta: number;
 }) {
   void wikiId;
-  const [contentMode, setContentMode] = useState<SourceMode>("paste");
-
   // Auto-classification: fires on paste when the form is still pristine.
   // Server action calls Haiku and returns { title, kind, tags }; the user
   // can edit or regenerate.
@@ -871,9 +719,7 @@ function ComposerCard({
     // so we classify the full pasted text rather than the stale value.
     requestAnimationFrame(() => {
       const rawText = textareaRef.current?.value ?? "";
-      const text = normalizeWhitespace
-        ? normalizeSourceWhitespace(rawText)
-        : rawText;
+      const text = normalizeSourceWhitespace(rawText);
       if (text.trim().length >= 500) void runClassify(text, "auto");
     });
   }
@@ -914,28 +760,20 @@ function ComposerCard({
   const canRun = title.trim().length > 0 && effectiveContent.trim().length > 20;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-18)" }}>
       {/* Step 01 — Source */}
       <div ref={sourceSectionRef}>
         <SourceComposer
-          mode={contentMode}
-          onModeChange={setContentMode}
           value={content}
           onChange={onContentChange}
           onPaste={handlePaste}
           textareaRef={textareaRef}
           tokens={tokens}
-          ghostSample={GHOST_SAMPLE}
-          chunkPreviewEnabled={chunkPreviewEnabled}
-          onChunkPreviewChange={onChunkPreviewChange}
-          normalizeWhitespace={normalizeWhitespace}
-          onNormalizeWhitespaceChange={onNormalizeWhitespaceChange}
-          previewChunks={previewChunks}
-          normalizedCharDelta={normalizedCharDelta}
         />
       </div>
 
-      {/* Step 02 — Metadata */}
+      {/* Operational stack — metadata stays attached to the ingest surface.
+          Runtime estimates live in the sticky command footer. */}
       <MetadataEditor<SourceKind>
         title={title}
         onTitleChange={onTitleChange}
@@ -949,14 +787,6 @@ function ComposerCard({
         classifyError={classifyError}
         canRegenerate={effectiveContent.trim().length >= 80}
         onRegenerate={() => void runClassify(effectiveContent, "regenerate")}
-      />
-
-      {/* Step 03 — Run preview (pipeline now lives in the sticky footer). */}
-      <RunPreviewSection
-        tokens={tokens}
-        model={model}
-        wikiTitle={wikiTitle}
-        canRun={canRun}
       />
     </div>
   );
@@ -1090,15 +920,15 @@ function LiveProgress({ run }: { run: Extract<RunPhase, { phase: "live" }> }) {
   const liveModel = startedEv?.model ?? null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
-      {/* Status pill */}
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-18)" }}>
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: "var(--space-12)",
+          padding: "0 2px",
           fontFamily: T.fontMono,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
         }}
@@ -1107,13 +937,13 @@ function LiveProgress({ run }: { run: Extract<RunPhase, { phase: "live" }> }) {
           style={{
             width: 7,
             height: 7,
-            borderRadius: "50%",
-            background: T.amber,
-            boxShadow: `0 0 8px ${T.amber}CC`,
+            borderRadius: "var(--radius-pill)",
+            background: T.accent,
+            boxShadow: `0 0 8px ${T.accent}`,
             animation: "ingestion-pulse 1.2s ease-in-out infinite",
           }}
         />
-        <span style={{ color: T.amber, fontWeight: 500 }}>
+        <span style={{ color: T.accent, fontWeight: 500 }}>
           {isLoadingIndex
             ? "loading context"
             : isPlanning
@@ -1216,14 +1046,16 @@ function FailedFromRun({
   );
 }
 
-/* ── Matter panel (contained canvas) ────────────────────────────── */
+/* ── Matter panel (ambient cognition rail) ───────────────────────── */
 
 function MatterPanel({
   run,
   height,
+  ready,
 }: {
   run: RunPhase;
   height: number | null;
+  ready: boolean;
 }) {
   // Convert the view-local RunPhase into the canvas's MatterIngestionInput
   // shape (a near-1:1 mirror, kept as a separate type so ascii-matter.tsx
@@ -1244,84 +1076,79 @@ function MatterPanel({
             finishedAt: run.finishedAt,
           };
   const state = matterStateFromIngestion(ingestion);
+  const isReadyIdle = run.phase === "idle" && ready;
+  const visualState = isReadyIdle
+    ? {
+        ...state,
+        energy: 0.36,
+        amplitude: 0.34,
+      }
+    : state;
   const activeActivationMode = run.phase === "live" ? "particles" : "off";
   const activations = useMemo(() => matterActivationsFromRun(run), [run]);
   const isLightTheme = useIsLightTheme();
   const canvasColor = isLightTheme
-    ? lightMatterColor(state.color, state.phase)
-    : state.color;
+    ? lightMatterColor(visualState.color, visualState.phase)
+    : visualState.color;
 
   return (
     <div
+      data-ingestion-matter-state={isReadyIdle ? "ready" : run.phase}
       style={{
         position: "relative",
-        height: height ?? 360,
-        border: `1px solid ${T.border}`,
+        height: height ?? 420,
         boxSizing: "border-box",
-        // Keep the corner markers visible outside the frame, but isolate
-        // the animated field in its own clipped layer below.
-        overflow: "visible",
+        overflow: "hidden",
+        background:
+          `radial-gradient(circle at 52% 46%, color-mix(in srgb, var(--accent-strong) ${isReadyIdle ? 16 : 10}%, transparent), transparent ${isReadyIdle ? 58 : 54}%)`,
+        opacity: isReadyIdle ? 0.9 : 0.82,
+        transition: "background 220ms ease, opacity 220ms ease",
+        WebkitMaskImage:
+          "linear-gradient(180deg, transparent 0%, black 10%, black 88%, transparent 100%)",
+        maskImage:
+          "linear-gradient(180deg, transparent 0%, black 10%, black 88%, transparent 100%)",
       }}
     >
       <div
         aria-hidden
         style={{
           position: "absolute",
-          inset: -1,
+          inset: -26,
           overflow: "hidden",
           pointerEvents: "none",
         }}
       >
         <ASCIIMatterCanvas
-          phase={state.phase}
-          mode={state.mode}
-          energy={state.energy}
-          amplitude={state.amplitude}
-          pulseAt={state.pulseAt}
+          phase={visualState.phase}
+          mode={visualState.mode}
+          energy={visualState.energy}
+          amplitude={visualState.amplitude}
+          pulseAt={isReadyIdle ? 1 : visualState.pulseAt}
           color={canvasColor}
+          neuralColor="var(--neural_color, #6FBF88)"
           baseFieldColor={isLightTheme ? "rgba(86, 96, 101, 1)" : undefined}
           baseFieldStrength={
-            isLightTheme ? lightMatterBaseField(state.phase) : undefined
+            isLightTheme ? lightMatterBaseField(visualState.phase) : undefined
           }
           activations={activations}
           activationMode={activeActivationMode}
           surfaceTone={isLightTheme ? "light" : "dark"}
           brightnessOverride={
-            isLightTheme ? lightMatterBrightness(state.phase) : undefined
+            isLightTheme ? lightMatterBrightness(visualState.phase) : undefined
           }
           trailOverride={
-            isLightTheme ? lightMatterTrail(state.phase) : undefined
+            isLightTheme ? lightMatterTrail(visualState.phase) : undefined
           }
           maskThreshold={isLightTheme ? 0.045 : undefined}
           style={{
-            inset: -2,
-            width: "calc(100% + 4px)",
-            height: "calc(100% + 4px)",
+            inset: -24,
+            width: "calc(100% + 48px)",
+            height: "calc(100% + 48px)",
+            opacity: run.phase === "idle" ? (isReadyIdle ? 0.76 : 0.64) : 0.78,
+            transition: "opacity 220ms ease",
           }}
         />
       </div>
-      {(["top-left", "top-right", "bottom-left", "bottom-right"] as const).map(
-        (corner) => (
-          <span
-            key={corner}
-            aria-hidden
-            style={{
-              position: "absolute",
-              zIndex: 2,
-              pointerEvents: "none",
-              fontFamily: T.fontMono,
-              fontSize: 13,
-              lineHeight: 1,
-              color: T.accent,
-              opacity: 0.72,
-              ...(corner.includes("top") ? { top: -7 } : { bottom: -7 }),
-              ...(corner.includes("left") ? { left: -4 } : { right: -4 }),
-            }}
-          >
-            +
-          </span>
-        ),
-      )}
     </div>
   );
 }
@@ -1631,396 +1458,6 @@ function deriveFooterTelemetry(
   };
 }
 
-/* ── Recent runs panel ──────────────────────────────────────────── */
-
-function RecentRunsPanel({
-  wikiId,
-  runs,
-  sourceById,
-  stats,
-}: {
-  wikiId: string;
-  runs: WikiIngestionLogRecord[];
-  sourceById: Map<string, WikiSourceRecord>;
-  stats: { total: number; week: number; weekTokens: number; success: number };
-}) {
-  const router = useRouter();
-  const [purgeRunId, setPurgeRunId] = useState<string | null>(null);
-  const [purgeOpen, setPurgeOpen] = useState(false);
-  const [purgePreview, setPurgePreview] = useState<PurgePreview | null>(null);
-  const [purgeLoading, setPurgeLoading] = useState(false);
-  const [purgeError, setPurgeError] = useState<string | null>(null);
-  const [purgePending, startPurge] = useTransition();
-
-  const openPurge = async (run: WikiIngestionLogRecord) => {
-    setPurgeRunId(run.id);
-    setPurgeOpen(true);
-    setPurgePreview(null);
-    setPurgeError(null);
-    setPurgeLoading(true);
-    const result = await previewPurgeWikiIngestionRun(wikiId, run.id);
-    setPurgeLoading(false);
-    if (result.ok) setPurgePreview(result.data ?? null);
-    else setPurgeError(result.error);
-  };
-
-  const confirmPurge = () => {
-    if (!purgeRunId) return;
-    setPurgeError(null);
-    startPurge(async () => {
-      const result = await purgeWikiIngestionRun(wikiId, purgeRunId);
-      if (!result.ok) {
-        setPurgeError(result.error);
-        return;
-      }
-      setPurgeOpen(false);
-      setPurgeRunId(null);
-      setPurgePreview(null);
-      router.refresh();
-    });
-  };
-
-  const cells: Array<{
-    label: string;
-    value: string | number;
-    tone?: "ok" | "amber" | "error";
-  }> = [
-    { label: "Total runs", value: stats.total },
-    { label: "This week", value: stats.week },
-    { label: "Tokens · 7d", value: formatTokens(stats.weekTokens) },
-    {
-      label: "Success",
-      value: `${stats.success}%`,
-      tone:
-        stats.success >= 80 ? "ok" : stats.success >= 50 ? "amber" : "error",
-    },
-  ];
-  return (
-    // No outer card — Paper renders Recent Runs as a vertical stack with
-    // the stat strip and each run row carrying their own borders. Matches
-    // 648-0 in the artboard.
-    <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <style>{RUN_ROW_HOVER_CSS}</style>
-      <header
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span
-            style={{
-              fontFamily: T.fontMono,
-              fontSize: 10,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: T.faded,
-            }}
-          >
-            run log
-          </span>
-          <h3
-            style={{
-              margin: 0,
-              fontFamily: T.fontHead,
-              fontSize: 20,
-              fontWeight: 500,
-              color: T.fg,
-              letterSpacing: "-0.01em",
-            }}
-          >
-            Recent runs
-          </h3>
-        </div>
-        <span style={{ fontFamily: T.fontMono, fontSize: 11, color: T.faded }}>
-          {Math.min(5, runs.length)} of {runs.length} ↗
-        </span>
-      </header>
-
-      {/* Stat strip — sharp-cornered card with vertical dividers between cells. */}
-      <div
-        style={{
-          display: "flex",
-          border: `1px solid ${T.border}`,
-          overflow: "hidden",
-        }}
-      >
-        {cells.map((c, i) => (
-          <div
-            key={c.label}
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "flex-end",
-              gap: 4,
-              padding: "18px 16px",
-              borderRight:
-                i < cells.length - 1 ? `1px solid ${T.divider}` : "none",
-            }}
-          >
-            <Stat label={c.label} value={c.value} tone={c.tone} />
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {runs.slice(0, 5).map((r) => (
-          <RunRow
-            key={r.id}
-            wikiId={wikiId}
-            run={r}
-            source={r.sourceId ? (sourceById.get(r.sourceId) ?? null) : null}
-            onOpenPurge={() => openPurge(r)}
-            purgePending={purgePending && purgeRunId === r.id}
-          />
-        ))}
-      </div>
-      <PurgeConfirmModal
-        open={purgeOpen}
-        kind="run"
-        preview={purgePreview}
-        loading={purgeLoading}
-        pending={purgePending}
-        error={purgeError}
-        onCancel={() => {
-          if (!purgePending) setPurgeOpen(false);
-        }}
-        onConfirm={confirmPurge}
-      />
-    </section>
-  );
-}
-
-/**
- * Idle + hover bg/border live in CSS classes (not inline) so the
- * `:hover` pseudo-class can override them. Inline `style` always wins
- * over stylesheet rules by specificity, which would silently swallow the
- * hover. Hover commits to the Odyssey accent for an unmistakable signal
- * in both themes.
- */
-const RUN_ROW_HOVER_CSS = `
-  .ingestion-run-row {
-    background: var(--card);
-    border: 1px solid var(--border);
-  }
-  .ingestion-run-row:hover {
-    background: var(--accent-soft);
-    border-color: var(--accent);
-  }
-  .ingestion-run-row-failed {
-    background: color-mix(in srgb, var(--danger) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
-  }
-  .ingestion-run-row-failed:hover {
-    background: color-mix(in srgb, var(--danger) 16%, transparent);
-    border-color: var(--danger);
-  }
-`;
-
-function RunRow({
-  wikiId,
-  run,
-  source,
-  onOpenPurge,
-  purgePending,
-}: {
-  wikiId: string;
-  run: WikiIngestionLogRecord;
-  source: WikiSourceRecord | null;
-  onOpenPurge: () => void;
-  purgePending: boolean;
-}) {
-  const ok = run.status === "succeeded";
-  const failed = run.status === "failed";
-  const running = run.status === "running" || run.status === "queued";
-  const finishedAt = run.finishedAt ?? run.startedAt;
-  const href = run.sourceId
-    ? `/wikis/${wikiId}/sources/${run.sourceId}?run=${run.id}`
-    : `/wikis/${wikiId}/ingestion`;
-  return (
-    <div
-      className={failed ? "ingestion-run-row-failed" : "ingestion-run-row"}
-      style={{
-        display: "flex",
-        alignItems: "stretch",
-        justifyContent: "space-between",
-        gap: 12,
-        padding: "18px 20px",
-        color: "inherit",
-        transition: "border-color 120ms ease, background 120ms ease",
-      }}
-    >
-      <Link
-        href={href}
-        style={{
-          display: "flex",
-          flex: 1,
-          minWidth: 0,
-          flexDirection: "column",
-          gap: 10,
-          textDecoration: "none",
-          color: "inherit",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <RunIcon ok={ok} failed={failed} running={running} />
-            <span
-              style={{
-                fontFamily: T.fontBody,
-                fontSize: 13,
-                color: T.fg,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {source?.title ?? "(inline)"}
-            </span>
-          </div>
-          <span style={{ fontFamily: T.fontMono, fontSize: 11, color: T.faded }}>
-            {relativeShort(finishedAt)}
-          </span>
-        </div>
-        <div
-          style={{
-            fontFamily: T.fontMono,
-            fontSize: 11,
-            color: failed ? T.danger : T.muted,
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <span>{run.model ?? "—"}</span>
-          <span style={{ opacity: 0.3 }}>·</span>
-          {failed ? (
-            <span>{run.errorMessage ?? "halted"}</span>
-          ) : (
-            <>
-              <span style={{ color: T.ok }}>+{run.pagesCreated} pages</span>
-              <span style={{ color: T.ok }}>+{run.edgesAdded} edges</span>
-              <span style={{ opacity: 0.3 }}>·</span>
-              <span>{formatTokens(run.tokensUsed)}</span>
-            </>
-          )}
-        </div>
-      </Link>
-      <button
-        type="button"
-        onClick={onOpenPurge}
-        disabled={purgePending}
-        title="Purge this run"
-        style={{
-          alignSelf: "center",
-          padding: "6px 10px",
-          borderRadius: 6,
-          border: `1px solid ${T.dangerLine}`,
-          background: "transparent",
-          color: T.danger,
-          fontFamily: T.fontBody,
-          fontSize: 11,
-          cursor: purgePending ? "not-allowed" : "pointer",
-          opacity: purgePending ? 0.5 : 1,
-        }}
-      >
-        {purgePending ? "…" : "Purge"}
-      </button>
-    </div>
-  );
-}
-
-function RunIcon({
-  ok,
-  failed,
-  running,
-}: {
-  ok: boolean;
-  failed: boolean;
-  running: boolean;
-}) {
-  const size = 16;
-  const color = ok ? T.ok : failed ? T.danger : T.amber;
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        background: `${color}22`,
-        border: `1px solid ${color}66`,
-      }}
-    >
-      {ok && (
-        <svg
-          width="8"
-          height="8"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="3 6 5 8 9 4" />
-        </svg>
-      )}
-      {failed && (
-        <svg
-          width="8"
-          height="8"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinecap="round"
-        >
-          <line x1="3" y1="3" x2="9" y2="9" />
-          <line x1="9" y1="3" x2="3" y2="9" />
-        </svg>
-      )}
-      {running && (
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: color,
-            animation: "ingestion-pulse 1.2s ease-in-out infinite",
-          }}
-        />
-      )}
-    </span>
-  );
-}
-
-function relativeShort(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function formatTokens(n: number): string {
-  if (n < 1000) return `${n}`;
-  return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
-}
-
 /* ── Atoms ──────────────────────────────────────────────────────── */
 
 function StepLabel({ num, children }: { num: string; children: ReactNode }) {
@@ -2028,7 +1465,7 @@ function StepLabel({ num, children }: { num: string; children: ReactNode }) {
     <span
       style={{
         fontFamily: T.fontMono,
-        fontSize: 11,
+        fontSize: "var(--font-size-sm)",
         letterSpacing: "0.18em",
         textTransform: "uppercase",
         color: T.accent,
@@ -2049,10 +1486,10 @@ function Metric({
   valueColor?: string;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
       <span
         style={{
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
           color: T.faded,
@@ -2083,13 +1520,13 @@ function Stat({
           ? T.danger
           : T.fg;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <span
         style={{
           fontFamily: T.fontHead,
-          fontSize: 26,
+          fontSize: 17,
           fontWeight: 500,
-          letterSpacing: "-0.02em",
+          letterSpacing: 0,
           color,
           lineHeight: 1,
         }}
@@ -2099,7 +1536,7 @@ function Stat({
       <span
         style={{
           fontFamily: T.fontMono,
-          fontSize: 10,
+          fontSize: "var(--font-size-2xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
           color: T.faded,
@@ -2128,14 +1565,14 @@ function PrimaryButton({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 10,
+        gap: "var(--space-10)",
         padding: "11px 22px",
         background: disabled ? T.accentSoft : T.accent,
         color: T.onAccent,
         border: "none",
-        borderRadius: 10,
+        borderRadius: "var(--radius-lg)",
         fontFamily: T.fontMono,
-        fontSize: 13,
+        fontSize: "var(--font-size-md)",
         fontWeight: 500,
         cursor: disabled ? "not-allowed" : "pointer",
       }}
@@ -2161,9 +1598,9 @@ function GhostButton({
         background: "transparent",
         color: T.text,
         border: `1px solid ${T.border}`,
-        borderRadius: 10,
+        borderRadius: "var(--radius-lg)",
         fontFamily: T.fontMono,
-        fontSize: 13,
+        fontSize: "var(--font-size-md)",
         cursor: "pointer",
       }}
     >

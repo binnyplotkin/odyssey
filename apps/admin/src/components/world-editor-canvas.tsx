@@ -27,9 +27,9 @@ import type { EntityType, EditorNode } from "./world-editor";
 /* ── Design Tokens (matching Paper designs) ────────────────── */
 
 const T = {
-  canvasBg: "var(--background, #0C0E14)",
-  chrome: "var(--panel, #111318)",
-  nodeBg: "var(--card, #161620)",
+  canvasBg: "var(--canvas-background, var(--background))",
+  chrome: "color-mix(in srgb, var(--background) 84%, transparent)",
+  nodeBg: "var(--card-material, var(--card))",
   borderSubtle: "var(--divider)",
   borderInput: "var(--input-border)",
   textPrimary: "var(--text-primary)",
@@ -42,13 +42,13 @@ const T = {
 } as const;
 
 const NODE_COLORS: Record<EntityType, { dot: string; glow: string }> = {
-  world:        { dot: "#F4CC15", glow: "rgba(244,204,21,0.2)" },
-  role:         { dot: "#F4CC15", glow: "rgba(244,204,21,0.2)" },
-  character:    { dot: "#E879A0", glow: "rgba(232,121,160,0.2)" },
-  group:        { dot: "#6B8AFF", glow: "rgba(107,138,255,0.2)" },
-  event:        { dot: "#F4944D", glow: "rgba(244,148,77,0.2)" },
-  state:        { dot: "#8DF0C8", glow: "rgba(141,240,200,0.2)" },
-  relationship: { dot: "#A88CFF", glow: "rgba(168,140,255,0.2)" },
+  world:        { dot: "var(--warning-amber)", glow: "color-mix(in srgb, var(--warning-amber) 22%, transparent)" },
+  role:         { dot: "var(--warning-amber)", glow: "color-mix(in srgb, var(--warning-amber) 22%, transparent)" },
+  character:    { dot: "var(--critical-crimson)", glow: "color-mix(in srgb, var(--critical-crimson) 20%, transparent)" },
+  group:        { dot: "var(--signal-blue)", glow: "color-mix(in srgb, var(--signal-blue) 22%, transparent)" },
+  event:        { dot: "var(--warning-amber)", glow: "color-mix(in srgb, var(--warning-amber) 20%, transparent)" },
+  state:        { dot: "var(--emissive-mint)", glow: "color-mix(in srgb, var(--emissive-mint) 20%, transparent)" },
+  relationship: { dot: "var(--event-violet)", glow: "color-mix(in srgb, var(--event-violet) 22%, transparent)" },
 };
 
 const ENTITY_LABELS: Record<EntityType, string> = {
@@ -84,8 +84,8 @@ type EditorEdge = {
 
 const ATTITUDE_COLORS: Record<string, string> = {
   loving:     "#E879A0",
-  loyal:      "#7AE5C5",
-  protective: "#A88CFF",
+  loyal:      "#8FD1CB",
+  protective: "#8B5CF6",
   grieving:   "#8A8FA3",
   resentful:  "#E36D76",
   wary:       "#E8B76A",
@@ -279,11 +279,11 @@ function validateWorld(world: WorldDefinition): ValidationError[] {
 
 function MiniBar({ value, max = 100, color }: { value: number; max?: number; color: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
-      <div style={{ flex: 1, height: 3, borderRadius: 2, background: "var(--card-hover)" }}>
-        <div style={{ width: `${(value / max) * 100}%`, height: "100%", borderRadius: 2, background: color }} />
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", width: "100%" }}>
+      <div style={{ flex: 1, height: 3, borderRadius: "var(--radius-2xs)", background: "var(--card-hover)" }}>
+        <div style={{ width: `${(value / max) * 100}%`, height: "100%", borderRadius: "var(--radius-2xs)", background: color }} />
       </div>
-      <span style={{ fontSize: 10, color: T.textSecondary, fontFamily: T.fontMono, minWidth: 18, textAlign: "right" }}>
+      <span style={{ fontSize: "var(--font-size-xs)", color: T.textSecondary, fontFamily: T.fontMono, minWidth: 18, textAlign: "right" }}>
         {value}
       </span>
     </div>
@@ -293,8 +293,8 @@ function MiniBar({ value, max = 100, color }: { value: number; max?: number; col
 function Badge({ text, color }: { text: string; color?: string }) {
   return (
     <span style={{
-      display: "inline-block", padding: "1px 6px", borderRadius: 3,
-      fontSize: 8, fontWeight: 600, fontFamily: T.fontMono,
+      display: "inline-block", padding: "1px 6px", borderRadius: "var(--radius-xs)",
+      fontSize: "var(--font-size-3xs)", fontWeight: 600, fontFamily: T.fontMono,
       background: color ? `${color}22` : "var(--card-hover)",
       color: color ?? T.textSecondary, letterSpacing: "0.04em",
     }}>
@@ -307,12 +307,12 @@ function Badge({ text, color }: { text: string; color?: string }) {
 
 function WorldCoreContent({ world }: { world: WorldDefinition }) {
   return (
-    <div style={{ marginTop: 6 }}>
-      <div style={{ fontSize: 10, color: T.textTertiary, lineHeight: 1.4, marginBottom: 6, fontFamily: T.fontBody }}>
+    <div style={{ marginTop: "var(--space-6)" }}>
+      <div style={{ fontSize: "var(--font-size-xs)", color: T.textTertiary, lineHeight: 1.4, marginBottom: "var(--space-6)", fontFamily: T.fontBody }}>
         {world.setting.length > 60 ? world.setting.slice(0, 58) + "…" : world.setting}
       </div>
       {world.metrics && (
-        <Badge text="v2" color="#A88CFF" />
+        <Badge text="v2" color="#8B5CF6" />
       )}
     </div>
   );
@@ -344,20 +344,20 @@ function CharacterChipNode({
 
   // border + shadow per Paper states (Default / Hover / Selected / Error)
   const border = hasErrors
-    ? "1.5px solid #E36D76"
+    ? "1.5px solid var(--status-error)"
     : isSelected
-    ? "1.5px solid #E8A0B5"
+    ? "1.5px solid var(--critical-crimson)"
     : hover
-    ? "1px solid #3A4050"
-    : "1px solid #242934";
-  const background = hover && !isSelected ? "#161A22" : "#13161D";
+    ? "1px solid var(--border-active)"
+    : "1px solid var(--border-subtle)";
+  const background = hover && !isSelected ? "var(--surface-hover)" : "var(--card-material)";
   const boxShadow = hasErrors
-    ? "rgba(227,109,118,0.14) 0 0 0 4px"
+    ? "0 0 0 4px var(--critical-fill), var(--elevation-card)"
     : isSelected
-    ? "rgba(232,160,181,0.12) 0 0 0 4px"
+    ? "0 0 0 4px color-mix(in srgb, var(--critical-crimson) 12%, transparent), 0 0 26px color-mix(in srgb, var(--critical-crimson) 22%, transparent), var(--elevation-card)"
     : hover
-    ? "rgba(0,0,0,0.6) 0 8px 24px -12px"
-    : "rgba(0,0,0,0.35) 0 4px 16px -8px";
+    ? "var(--elevation-card)"
+    : "var(--elevation-surface)";
 
   return (
     <article
@@ -365,9 +365,9 @@ function CharacterChipNode({
       data-node-id={node.id}
       style={{
         position: "absolute", left: node.x, top: node.y, width: node.w,
-        display: "flex", alignItems: "stretch", gap: 10,
+        display: "flex", alignItems: "stretch", gap: "var(--space-10)",
         padding: "10px 14px 10px 10px",
-        borderRadius: 12,
+        borderRadius: "var(--radius-card, 18px)",
         border,
         background,
         boxShadow,
@@ -384,7 +384,7 @@ function CharacterChipNode({
       {/* Avatar slot */}
       <div style={{ position: "relative", width: 40, height: 40, flexShrink: 0 }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 10,
+          width: 40, height: 40, borderRadius: "var(--radius-lg)",
           display: "flex", alignItems: "center", justifyContent: "center",
           backgroundImage:
             "linear-gradient(in oklab 135deg, oklab(78.1% 0.089 0.0005) 0%, oklab(56.5% 0.095 -0.0008) 100%)",
@@ -401,8 +401,8 @@ function CharacterChipNode({
           title={hasErrors ? (errorMessage || "Error") : "Linked to global character library"}
           style={{
             position: "absolute", right: -3, bottom: -3,
-            width: 11, height: 11, borderRadius: 999,
-            background: hasErrors ? "#E8B76A" : "#7AE5C5",
+            width: 11, height: 11, borderRadius: "var(--radius-pill)",
+            background: hasErrors ? "#E8B76A" : "#8FD1CB",
             border: "2px solid #13161D",
             boxSizing: "border-box",
           }}
@@ -411,16 +411,16 @@ function CharacterChipNode({
 
       {/* Content column */}
       <div style={{
-        display: "flex", flexDirection: "column", gap: 2, paddingTop: 2,
+        display: "flex", flexDirection: "column", gap: "var(--space-2)", paddingTop: "var(--space-2)",
         minWidth: 0, flex: 1,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
           <span style={{
-            width: 5, height: 5, borderRadius: 999,
+            width: 5, height: 5, borderRadius: "var(--radius-pill)",
             background: "#E8A0B5", flexShrink: 0,
           }} />
           <span style={{
-            fontFamily: T.fontBody, fontSize: 13, fontWeight: 500,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500,
             color: "#E7EAF0", lineHeight: "16px", letterSpacing: "-0.005em",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
@@ -429,7 +429,7 @@ function CharacterChipNode({
         </div>
         {roleCaption && (
           <div style={{
-            fontFamily: T.fontBody, fontSize: 9, fontWeight: 500,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-2xs)", fontWeight: 500,
             color: "#7C8494", lineHeight: "12px",
             letterSpacing: "0.14em", textTransform: "uppercase",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -439,9 +439,9 @@ function CharacterChipNode({
         )}
         {isSelected && (
           <div style={{
-            marginTop: 2,
+            marginTop: "var(--space-2)",
             fontFamily: "'DM Mono', 'JetBrains Mono', monospace",
-            fontSize: 9, color: "#5B6272", lineHeight: "12px",
+            fontSize: "var(--font-size-2xs)", color: "#5B6272", lineHeight: "12px",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
             → characters.{slug}
@@ -454,15 +454,15 @@ function CharacterChipNode({
 
 function GroupContent({ group, world }: { group: GroupDefinition; world: WorldDefinition }) {
   return (
-    <div style={{ marginTop: 6 }}>
-      <div style={{ display: "flex", gap: 24, marginBottom: 4 }}>
+    <div style={{ marginTop: "var(--space-6)" }}>
+      <div style={{ display: "flex", gap: "var(--space-24)", marginBottom: "var(--space-4)" }}>
         <div>
-          <div style={{ fontSize: 8, color: T.textQuaternary, fontFamily: T.fontMono, letterSpacing: "0.06em", textTransform: "uppercase" }}>INFLUENCE</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: NODE_COLORS.group.dot, fontFamily: T.fontHeading }}>{group.influence}</div>
+          <div style={{ fontSize: "var(--font-size-3xs)", color: T.textQuaternary, fontFamily: T.fontMono, letterSpacing: "0.06em", textTransform: "uppercase" }}>INFLUENCE</div>
+          <div style={{ fontSize: "var(--font-size-lg)", fontWeight: 600, color: NODE_COLORS.group.dot, fontFamily: T.fontHeading }}>{group.influence}</div>
         </div>
         <div>
-          <div style={{ fontSize: 8, color: T.textQuaternary, fontFamily: T.fontMono, letterSpacing: "0.06em", textTransform: "uppercase" }}>DISPOSITION</div>
-          <div style={{ fontSize: 13, fontWeight: 500, color: T.textSecondary, fontFamily: T.fontHeading }}>{group.disposition}</div>
+          <div style={{ fontSize: "var(--font-size-3xs)", color: T.textQuaternary, fontFamily: T.fontMono, letterSpacing: "0.06em", textTransform: "uppercase" }}>DISPOSITION</div>
+          <div style={{ fontSize: "var(--font-size-md)", fontWeight: 500, color: T.textSecondary, fontFamily: T.fontHeading }}>{group.disposition}</div>
         </div>
       </div>
     </div>
@@ -471,8 +471,8 @@ function GroupContent({ group, world }: { group: GroupDefinition; world: WorldDe
 
 function RoleContent({ role }: { role: RoleDefinition }) {
   return (
-    <div style={{ marginTop: 4, fontFamily: T.fontBody }}>
-      <div style={{ fontSize: 11, color: T.textSecondary, marginBottom: 4 }}>
+    <div style={{ marginTop: "var(--space-4)", fontFamily: T.fontBody }}>
+      <div style={{ fontSize: "var(--font-size-sm)", color: T.textSecondary, marginBottom: "var(--space-4)" }}>
         {role.summary.length > 50 ? role.summary.slice(0, 48) + "…" : role.summary}
       </div>
     </div>
@@ -481,12 +481,12 @@ function RoleContent({ role }: { role: RoleDefinition }) {
 
 function EventContent({ event, world }: { event: EventTemplate; world: WorldDefinition }) {
   return (
-    <div style={{ marginTop: 4 }}>
-      <div style={{ fontSize: 11, color: T.textSecondary, fontFamily: T.fontBody, marginBottom: 6 }}>
+    <div style={{ marginTop: "var(--space-4)" }}>
+      <div style={{ fontSize: "var(--font-size-sm)", color: T.textSecondary, fontFamily: T.fontBody, marginBottom: "var(--space-6)" }}>
         {event.summary.slice(0, 60)}…
       </div>
       {event.turnRange && (
-        <div style={{ fontSize: 9, color: T.textTertiary, fontFamily: T.fontMono, marginBottom: 4 }}>
+        <div style={{ fontSize: "var(--font-size-2xs)", color: T.textTertiary, fontFamily: T.fontMono, marginBottom: "var(--space-4)" }}>
           Turns {event.turnRange.min}–{event.turnRange.max}
         </div>
       )}
@@ -502,12 +502,19 @@ function InitialStateContent({ world }: { world: WorldDefinition }) {
     { id: "resources", label: "Resources", initialValue: 50, direction: "higher-better" as const },
     { id: "pressure", label: "Pressure", initialValue: 50, direction: "lower-better" as const },
   ];
-  const colors = ["#8DF0C8", "#6B8AFF", "#F4CC15", "#F4944D", "#E879A0", "#A88CFF"];
+  const colors = [
+    "var(--emissive-mint)",
+    "var(--signal-blue)",
+    "var(--status-draft)",
+    "var(--warning-amber)",
+    "var(--critical-crimson)",
+    "var(--event-violet)",
+  ];
   return (
-    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+    <div style={{ marginTop: "var(--space-6)", display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
       {metrics.map((m, i) => (
-        <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 9, color: T.textTertiary, width: 52, fontFamily: T.fontMono }}>{m.label}</span>
+        <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+          <span style={{ fontSize: "var(--font-size-2xs)", color: T.textTertiary, width: 52, fontFamily: T.fontMono }}>{m.label}</span>
           <MiniBar value={s.metricValues[m.id] ?? (s as Record<string, unknown>)[m.id] as number ?? m.initialValue} color={colors[i % colors.length]} />
         </div>
       ))}
@@ -1006,11 +1013,6 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
 
   return (
     <>
-      {/* Google Fonts */}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
       <div style={{
         display: "flex", flexDirection: "column",
         height: "calc(100% + 4rem)", margin: "-2rem",
@@ -1023,13 +1025,15 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
           style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             height: 48, padding: "0 16px", flexShrink: 0,
-            background: T.chrome, borderBottom: `1px solid ${T.borderSubtle}`,
+            background: T.chrome,
+            borderBottom: `1px solid ${T.borderSubtle}`,
+            backdropFilter: "blur(18px)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
             {!fixedWorldId && (
               <>
-                <span style={{ fontFamily: T.fontHeading, fontSize: 13, fontWeight: 500, color: T.textSecondary }}>World Editor</span>
+                <span style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-md)", fontWeight: 500, color: T.textSecondary }}>World Editor</span>
                 <div style={{ width: 1, height: 18, background: T.borderSubtle }} />
 
                 <select
@@ -1038,7 +1042,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                   disabled={isLoading}
                   style={{
                     background: "transparent", border: "none", outline: "none", cursor: "pointer",
-                    fontFamily: T.fontHeading, fontSize: 14, fontWeight: 600, color: T.textPrimary,
+                    fontFamily: T.fontHeading, fontSize: "var(--font-size-lg)", fontWeight: 600, color: T.textPrimary,
                   }}
                 >
                   {(worlds ?? []).map((w) => (
@@ -1052,50 +1056,50 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
 
             {/* Status badges */}
             {saveStatus === "saved" && (
-              <span style={{ padding: "2px 8px", borderRadius: 4, background: "rgba(141,240,200,0.2)", fontFamily: T.fontMono, fontSize: 9, fontWeight: 700, color: "#8DF0C8", letterSpacing: "0.06em" }}>
+              <span style={{ padding: "2px 8px", borderRadius: "var(--radius-xs)", background: "color-mix(in srgb, var(--status-live) 18%, transparent)", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 700, color: "var(--status-live)", letterSpacing: "0.06em" }}>
                 SAVED
               </span>
             )}
             {dirty && !saveStatus && (
-              <span style={{ padding: "2px 8px", borderRadius: 4, background: "rgba(244,204,21,0.2)", fontFamily: T.fontMono, fontSize: 9, fontWeight: 700, color: "#F4CC15", letterSpacing: "0.06em" }}>
+              <span style={{ padding: "2px 8px", borderRadius: "var(--radius-xs)", background: "color-mix(in srgb, var(--status-draft) 18%, transparent)", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 700, color: "var(--status-draft)", letterSpacing: "0.06em" }}>
                 UNSAVED
               </span>
             )}
             {validationErrors.length > 0 && (
-              <span style={{ padding: "2px 8px", borderRadius: 4, background: "rgba(239,91,91,0.2)", fontFamily: T.fontMono, fontSize: 9, fontWeight: 700, color: "#EF5B5B", letterSpacing: "0.06em" }}>
+              <span style={{ padding: "2px 8px", borderRadius: "var(--radius-xs)", background: "color-mix(in srgb, var(--status-error) 18%, transparent)", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 700, color: "var(--status-error)", letterSpacing: "0.06em" }}>
                 {validationErrors.length} ISSUE{validationErrors.length > 1 ? "S" : ""}
               </span>
             )}
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {saveError && <span style={{ fontSize: 11, color: "#EF5B5B", fontFamily: T.fontBody, marginRight: 8 }}>{saveError}</span>}
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+            {saveError && <span style={{ fontSize: "var(--font-size-sm)", color: "var(--status-error)", fontFamily: T.fontBody, marginRight: "var(--space-8)" }}>{saveError}</span>}
             <button type="button" onClick={() => { setZoom(0.75); setCamera({ x: 0, y: 0 }); }}
               style={{
-                padding: "6px 12px", borderRadius: 6, border: `1px solid ${T.borderSubtle}`, background: "transparent",
-                fontFamily: T.fontHeading, fontSize: 12, color: T.textSecondary, cursor: "pointer",
+                padding: "6px 12px", borderRadius: "var(--radius-sm)", border: `1px solid ${T.borderSubtle}`, background: "transparent",
+                fontFamily: T.fontHeading, fontSize: "var(--font-size-base)", color: T.textSecondary, cursor: "pointer",
               }}>
               Fit View
             </button>
             <button type="button"
               style={{
-                padding: "6px 12px", borderRadius: 6, border: `1px solid ${T.borderSubtle}`, background: "transparent",
-                fontFamily: T.fontHeading, fontSize: 12, color: T.textSecondary, cursor: "pointer",
+                padding: "6px 12px", borderRadius: "var(--radius-sm)", border: `1px solid ${T.borderSubtle}`, background: "transparent",
+                fontFamily: T.fontHeading, fontSize: "var(--font-size-base)", color: T.textSecondary, cursor: "pointer",
               }}>
               Auto Layout
             </button>
             <button type="button"
               style={{
-                padding: "6px 12px", borderRadius: 6, border: `1px solid ${T.borderSubtle}`, background: "transparent",
-                fontFamily: T.fontHeading, fontSize: 12, color: T.textSecondary, cursor: "pointer",
+                padding: "6px 12px", borderRadius: "var(--radius-sm)", border: `1px solid ${T.borderSubtle}`, background: "transparent",
+                fontFamily: T.fontHeading, fontSize: "var(--font-size-base)", color: T.textSecondary, cursor: "pointer",
               }}>
               Preview
             </button>
             <button type="button" onClick={saveWorld} disabled={!dirty || isSaving}
               style={{
-                padding: "6px 14px", borderRadius: 6, border: "none",
-                background: dirty ? "#8DF0C8" : T.borderSubtle,
-                fontFamily: T.fontHeading, fontSize: 12, fontWeight: 600,
+                padding: "6px 14px", borderRadius: "var(--radius-sm)", border: "none",
+                background: dirty ? "var(--active-teal)" : T.borderSubtle,
+                fontFamily: T.fontHeading, fontSize: "var(--font-size-base)", fontWeight: 600,
                 color: dirty ? T.canvasBg : T.textTertiary,
                 cursor: dirty ? "pointer" : "not-allowed", opacity: isSaving ? 0.6 : 1,
               }}>
@@ -1124,8 +1128,8 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
             >
               {/* Loading overlay */}
               {isLoading && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", zIndex: 50 }}>
-                  <span style={{ fontSize: 13, color: T.textSecondary, fontFamily: T.fontHeading }}>Loading world…</span>
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--modal-backdrop)", zIndex: 50 }}>
+                  <span style={{ fontSize: "var(--font-size-md)", color: T.textSecondary, fontFamily: T.fontHeading }}>Loading world…</span>
                 </div>
               )}
 
@@ -1133,7 +1137,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
               <div
                 style={{
                   position: "absolute", inset: 0,
-                  backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px)",
+                  backgroundImage: "radial-gradient(circle, var(--grid-color) 1px, transparent 1px)",
                   backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
                   backgroundPosition: `${camera.x}px ${camera.y}px`,
                 }}
@@ -1142,34 +1146,34 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
 
               {/* Empty state */}
               {!world && !isLoading && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "var(--space-16)" }}>
                   <div style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(168,140,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                      <circle cx="14" cy="14" r="4" fill="#A88CFF" />
-                      <circle cx="14" cy="4" r="2.5" fill="#A88CFF" />
-                      <circle cx="14" cy="24" r="2.5" fill="#A88CFF" />
-                      <circle cx="4" cy="14" r="2.5" fill="#A88CFF" />
-                      <circle cx="24" cy="14" r="2.5" fill="#A88CFF" />
+                      <circle cx="14" cy="14" r="4" fill="#8B5CF6" />
+                      <circle cx="14" cy="4" r="2.5" fill="#8B5CF6" />
+                      <circle cx="14" cy="24" r="2.5" fill="#8B5CF6" />
+                      <circle cx="4" cy="14" r="2.5" fill="#8B5CF6" />
+                      <circle cx="24" cy="14" r="2.5" fill="#8B5CF6" />
                     </svg>
                   </div>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontFamily: T.fontHeading, fontSize: 18, fontWeight: 600, color: T.textPrimary, marginBottom: 6 }}>No world loaded</div>
-                    <div style={{ fontFamily: T.fontBody, fontSize: 13, color: T.textTertiary, maxWidth: 280, lineHeight: 1.5 }}>
+                    <div style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-2xl)", fontWeight: 600, color: T.textPrimary, marginBottom: "var(--space-6)" }}>No world loaded</div>
+                    <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.textTertiary, maxWidth: 280, lineHeight: 1.5 }}>
                       Select a world from the dropdown above or create a new one.
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                  <div style={{ display: "flex", gap: "var(--space-10)", marginTop: "var(--space-8)" }}>
                     <button type="button" style={{
-                      padding: "8px 16px", borderRadius: 8, border: "none",
-                      background: "#A88CFF", color: T.canvasBg,
-                      fontFamily: T.fontHeading, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                      padding: "8px 16px", borderRadius: "var(--radius-md)", border: "none",
+                      background: "#8B5CF6", color: T.canvasBg,
+                      fontFamily: T.fontHeading, fontSize: "var(--font-size-md)", fontWeight: 600, cursor: "pointer",
                     }}>
                       Generate with AI
                     </button>
                     <button type="button" style={{
-                      padding: "8px 16px", borderRadius: 8,
+                      padding: "8px 16px", borderRadius: "var(--radius-md)",
                       border: `1px solid ${T.borderSubtle}`, background: "transparent",
-                      color: T.textSecondary, fontFamily: T.fontHeading, fontSize: 13, cursor: "pointer",
+                      color: T.textSecondary, fontFamily: T.fontHeading, fontSize: "var(--font-size-md)", cursor: "pointer",
                     }}>
                       Start from scratch
                     </button>
@@ -1184,10 +1188,10 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setAddMenuOpen(!addMenuOpen); setContextMenu(null); }}
                     style={{
-                      display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8,
-                      border: "none", background: addMenuOpen ? "#A88CFF" : "rgba(168,140,255,0.15)",
-                      color: addMenuOpen ? T.canvasBg : "#A88CFF",
-                      fontFamily: T.fontHeading, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: "var(--space-6)", padding: "7px 14px", borderRadius: "var(--radius-md)",
+                      border: "none", background: addMenuOpen ? "#8B5CF6" : "rgba(168,140,255,0.15)",
+                      color: addMenuOpen ? T.canvasBg : "#8B5CF6",
+                      fontFamily: T.fontHeading, fontSize: "var(--font-size-base)", fontWeight: 600, cursor: "pointer",
                     }}
                   >
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -1203,11 +1207,11 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         position: "absolute", top: 40, right: 0, width: 280,
-                        background: "#1A1A24", border: `1px solid ${T.borderSubtle}`, borderRadius: 12,
-                        padding: 6, boxShadow: "0 12px 40px rgba(0,0,0,0.5)", zIndex: 30,
+                        background: "#1A1A24", border: `1px solid ${T.borderSubtle}`, borderRadius: "var(--radius-xl)",
+                        padding: "var(--space-6)", boxShadow: "var(--elevation-card)", zIndex: 30,
                       }}
                     >
-                      <div style={{ padding: "8px 10px 6px", fontFamily: T.fontMono, fontSize: 9, fontWeight: 700, color: T.textQuaternary, letterSpacing: "0.08em" }}>
+                      <div style={{ padding: "8px 10px 6px", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 700, color: T.textQuaternary, letterSpacing: "0.08em" }}>
                         NODE TYPES
                       </div>
                       {addableTypes.map((item) => {
@@ -1220,7 +1224,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                             onClick={() => canCreate && addEntity(item.type)}
                             disabled={!canCreate}
                             style={{
-                              display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 8,
+                              display: "flex", alignItems: "center", gap: "var(--space-10)", padding: "var(--space-10)", borderRadius: "var(--radius-md)",
                               width: "100%", border: "none", background: "transparent",
                               cursor: canCreate ? "pointer" : "default",
                               opacity: canCreate ? 1 : 0.5, textAlign: "left",
@@ -1229,15 +1233,15 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                           >
                             <div style={{
-                              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                              width: 32, height: 32, borderRadius: "var(--radius-md)", flexShrink: 0,
                               background: `${color.dot}18`,
                               display: "flex", alignItems: "center", justifyContent: "center",
                             }}>
-                              <div style={{ width: 10, height: 10, borderRadius: 3, background: color.dot }} />
+                              <div style={{ width: 10, height: 10, borderRadius: "var(--radius-xs)", background: color.dot }} />
                             </div>
                             <div>
-                              <div style={{ fontFamily: T.fontHeading, fontSize: 13, fontWeight: 600, color: T.textPrimary }}>{item.label}</div>
-                              <div style={{ fontFamily: T.fontBody, fontSize: 11, color: T.textSecondary }}>{item.description}</div>
+                              <div style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-md)", fontWeight: 600, color: T.textPrimary }}>{item.label}</div>
+                              <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.textSecondary }}>{item.description}</div>
                             </div>
                           </button>
                         );
@@ -1245,7 +1249,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
 
                       <div style={{ height: 1, background: T.borderSubtle, margin: "4px 10px" }} />
 
-                      <div style={{ padding: "8px 10px 6px", fontFamily: T.fontMono, fontSize: 9, fontWeight: 700, color: T.textQuaternary, letterSpacing: "0.08em" }}>
+                      <div style={{ padding: "8px 10px 6px", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 700, color: T.textQuaternary, letterSpacing: "0.08em" }}>
                         FROM LIBRARY
                       </div>
 
@@ -1253,14 +1257,14 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                         type="button"
                         onClick={() => { setAddMenuOpen(false); setPickerOpen(true); }}
                         style={{
-                          display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 8,
+                          display: "flex", alignItems: "center", gap: "var(--space-10)", padding: "var(--space-10)", borderRadius: "var(--radius-md)",
                           width: "100%", border: "none", background: "transparent", cursor: "pointer", textAlign: "left",
                         }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = "var(--card)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                       >
                         <div style={{
-                          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                          width: 32, height: 32, borderRadius: "var(--radius-md)", flexShrink: 0,
                           background: "rgba(232,121,160,0.12)",
                           display: "flex", alignItems: "center", justifyContent: "center",
                         }}>
@@ -1270,40 +1274,40 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                           </svg>
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ fontFamily: T.fontHeading, fontSize: 13, fontWeight: 600, color: "#E879A0" }}>Character from library</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+                            <div style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-md)", fontWeight: 600, color: "#E879A0" }}>Character from library</div>
                             <span style={{
-                              fontFamily: T.fontMono, fontSize: 9, letterSpacing: "0.06em",
-                              color: T.textQuaternary, padding: "1px 5px", borderRadius: 4,
+                              fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", letterSpacing: "0.06em",
+                              color: T.textQuaternary, padding: "1px 5px", borderRadius: "var(--radius-xs)",
                               background: "rgba(255,255,255,0.06)",
                             }}>
                               ⌘K
                             </span>
                           </div>
-                          <div style={{ fontFamily: T.fontBody, fontSize: 11, color: T.textSecondary }}>Link a global character into this world</div>
+                          <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.textSecondary }}>Link a global character into this world</div>
                         </div>
                       </button>
 
                       <button type="button" style={{
-                        display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 8,
+                        display: "flex", alignItems: "center", gap: "var(--space-10)", padding: "var(--space-10)", borderRadius: "var(--radius-md)",
                         width: "100%", border: "none", background: "transparent", cursor: "pointer", textAlign: "left",
                       }}>
                         <div style={{
-                          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                          width: 32, height: 32, borderRadius: "var(--radius-md)", flexShrink: 0,
                           background: "rgba(168,140,255,0.1)",
                           display: "flex", alignItems: "center", justifyContent: "center",
                         }}>
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <circle cx="7" cy="7" r="2" fill="#A88CFF" />
-                            <circle cx="7" cy="2" r="1.2" fill="#A88CFF" />
-                            <circle cx="7" cy="12" r="1.2" fill="#A88CFF" />
-                            <circle cx="2" cy="7" r="1.2" fill="#A88CFF" />
-                            <circle cx="12" cy="7" r="1.2" fill="#A88CFF" />
+                            <circle cx="7" cy="7" r="2" fill="#8B5CF6" />
+                            <circle cx="7" cy="2" r="1.2" fill="#8B5CF6" />
+                            <circle cx="7" cy="12" r="1.2" fill="#8B5CF6" />
+                            <circle cx="2" cy="7" r="1.2" fill="#8B5CF6" />
+                            <circle cx="12" cy="7" r="1.2" fill="#8B5CF6" />
                           </svg>
                         </div>
                         <div>
-                          <div style={{ fontFamily: T.fontHeading, fontSize: 13, fontWeight: 600, color: "#A88CFF" }}>Generate with AI</div>
-                          <div style={{ fontFamily: T.fontBody, fontSize: 11, color: T.textQuaternary }}>Auto-create nodes from a description</div>
+                          <div style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-md)", fontWeight: 600, color: "#8B5CF6" }}>Generate with AI</div>
+                          <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.textQuaternary }}>Auto-create nodes from a description</div>
                         </div>
                       </button>
                     </div>
@@ -1341,19 +1345,29 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                       const midX = (start.x + end.x) / 2;
                       const isKnows = edge.kind === "knows";
                       const stroke = isKnows
-                        ? (edge.attitude && ATTITUDE_COLORS[edge.attitude]) ?? "#E879A0"
+                        ? (edge.attitude && ATTITUDE_COLORS[edge.attitude]) ?? "var(--critical-crimson)"
                         : "var(--card-border)";
                       return (
-                        <path
-                          key={edge.id}
-                          d={`M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${end.y}, ${end.x} ${end.y}`}
-                          stroke={stroke}
-                          strokeWidth={isKnows ? 1.25 : 1.5}
-                          strokeDasharray={isKnows ? "4 3" : undefined}
-                          strokeOpacity={isKnows ? 0.75 : 1}
-                          fill="none"
-                          markerEnd={isKnows ? undefined : "url(#canvas-arrow)"}
-                        />
+                        <g key={edge.id}>
+                          <path
+                            d={`M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${end.y}, ${end.x} ${end.y}`}
+                            stroke={stroke}
+                            strokeWidth={isKnows ? 1.25 : 1.5}
+                            strokeDasharray={isKnows ? "4 3" : undefined}
+                            strokeOpacity={isKnows ? 0.75 : 1}
+                            fill="none"
+                            markerEnd={isKnows ? undefined : "url(#canvas-arrow)"}
+                          />
+                          <path
+                            d={`M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${end.y}, ${end.x} ${end.y}`}
+                            stroke="var(--emissive-mint)"
+                            strokeWidth="1"
+                            strokeDasharray="2 12"
+                            strokeOpacity={isKnows ? 0.5 : 0.34}
+                            fill="none"
+                            style={{ animation: "odyssey-signal-flow 2.2s linear infinite" }}
+                          />
+                        </g>
                       );
                     })}
                   </svg>
@@ -1393,39 +1407,39 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                         style={{
                           position: "absolute", left: node.x, top: node.y, width: node.w,
                           padding: node.collapsed ? "8px 12px" : 14,
-                          borderRadius: 10,
+                          borderRadius: "var(--radius-card, 18px)",
                           border: isSelected
                             ? `2px solid ${color.dot}`
                             : hasErrors
-                            ? "2px solid #EF5B5B"
+                            ? "2px solid #FF5A5A"
                             : `1px solid ${T.borderSubtle}`,
                           background: T.nodeBg,
                           boxShadow: isSelected
-                            ? `0 0 20px ${color.glow}`
-                            : "0 4px 16px rgba(0,0,0,0.3)",
+                            ? `0 0 0 1px ${color.glow}, 0 0 28px ${color.glow}, var(--elevation-card)`
+                            : "var(--elevation-card)",
                           cursor: dragState?.type === "node" && dragState.nodeId === node.id ? "grabbing" : "grab",
                           userSelect: "none",
-                          transition: "box-shadow 150ms, border-color 150ms",
+                          transition: "box-shadow 180ms, border-color 180ms, transform 180ms",
                         }}
                         onPointerDown={(e) => startNodeDrag(e, node.id)}
                         onContextMenu={(e) => handleContextMenu(e, node.id)}
                       >
                         {/* Header */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
                           <span style={{ width: 8, height: 8, borderRadius: "50%", background: color.dot, flexShrink: 0 }} />
                           {node.entityType === "character" && (
                             <span
                               title="Linked to global character library"
-                              style={{ width: 6, height: 6, borderRadius: "50%", background: "#7AE5C5", flexShrink: 0, boxShadow: "0 0 6px rgba(122,229,197,0.6)" }}
+                              style={{ width: 6, height: 6, borderRadius: "50%", background: "#8FD1CB", flexShrink: 0, boxShadow: "0 0 6px rgba(122,229,197,0.6)" }}
                             />
                           )}
-                          <span style={{ fontFamily: T.fontMono, fontSize: 9, fontWeight: 700, color: color.dot, letterSpacing: "0.08em" }}>
+                          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 700, color: color.dot, letterSpacing: "0.08em" }}>
                             {ENTITY_LABELS[node.entityType]}
                           </span>
 
                           {/* v2 badge for world core */}
                           {node.entityType === "world" && world?.metrics && (
-                            <span style={{ marginLeft: "auto", padding: "1px 5px", borderRadius: 3, background: "rgba(168,140,255,0.2)", fontFamily: T.fontMono, fontSize: 8, fontWeight: 700, color: "#A88CFF" }}>
+                            <span style={{ marginLeft: "auto", padding: "1px 5px", borderRadius: "var(--radius-xs)", background: "rgba(168,140,255,0.2)", fontFamily: T.fontMono, fontSize: "var(--font-size-3xs)", fontWeight: 700, color: "#8B5CF6" }}>
                               v2
                             </span>
                           )}
@@ -1434,7 +1448,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                           {node.entityType === "event" && (() => {
                             const ev = world?.eventTemplates.find((e) => e.id === node.entityId);
                             return ev ? (
-                              <span style={{ marginLeft: "auto", padding: "2px 6px", borderRadius: 4, background: `${color.dot}22`, fontFamily: T.fontMono, fontSize: 8, color: color.dot }}>
+                              <span style={{ marginLeft: "auto", padding: "2px 6px", borderRadius: "var(--radius-xs)", background: `${color.dot}22`, fontFamily: T.fontMono, fontSize: "var(--font-size-3xs)", color: color.dot }}>
                                 {ev.category}
                               </span>
                             ) : null;
@@ -1442,7 +1456,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
 
                           {/* Error count */}
                           {hasErrors && (
-                            <span style={{ marginLeft: "auto", width: 16, height: 16, borderRadius: "50%", background: "#EF5B5B", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <span style={{ marginLeft: "auto", width: 16, height: 16, borderRadius: "50%", background: "#FF5A5A", color: "#fff", fontSize: "var(--font-size-2xs)", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                               {nodeErrors.length}
                             </span>
                           )}
@@ -1451,7 +1465,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); toggleCollapse(node.id); }}
-                            style={{ border: "none", background: "transparent", color: T.textTertiary, cursor: "pointer", fontSize: 11, padding: 0, lineHeight: 1 }}
+                            style={{ border: "none", background: "transparent", color: T.textTertiary, cursor: "pointer", fontSize: "var(--font-size-sm)", padding: 0, lineHeight: 1 }}
                           >
                             {node.collapsed ? "▸" : "▾"}
                           </button>
@@ -1459,7 +1473,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
 
                         {/* Title */}
                         <div style={{
-                          fontFamily: T.fontHeading, fontSize: 14, fontWeight: 600, color: T.textPrimary,
+                          fontFamily: T.fontHeading, fontSize: "var(--font-size-lg)", fontWeight: 600, color: T.textPrimary,
                           marginTop: node.collapsed ? 0 : 6,
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                         }}>
@@ -1468,9 +1482,9 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
 
                         {/* Errors */}
                         {!node.collapsed && hasErrors && (
-                          <div style={{ marginTop: 4 }}>
+                          <div style={{ marginTop: "var(--space-4)" }}>
                             {nodeErrors.slice(0, 2).map((err, i) => (
-                              <p key={i} style={{ fontSize: 10, color: "#EF5B5B", lineHeight: 1.4, fontFamily: T.fontBody, margin: 0 }}>
+                              <p key={i} style={{ fontSize: "var(--font-size-xs)", color: "#FF5A5A", lineHeight: 1.4, fontFamily: T.fontBody, margin: 0 }}>
                                 {err.message}
                               </p>
                             ))}
@@ -1490,12 +1504,12 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                 const hasErrors = validationErrors.length > 0;
                 const savedJustNow = saveStatus === "saved" && !dirty;
                 const status = hasErrors
-                  ? { dot: "#F5C67A", glow: "rgba(245, 198, 122, 0.5)", label: `Draft · ${validationErrors.length} warning${validationErrors.length === 1 ? "" : "s"}` }
+                  ? { dot: "var(--status-draft)", glow: "color-mix(in srgb, var(--status-draft) 50%, transparent)", label: `Draft · ${validationErrors.length} warning${validationErrors.length === 1 ? "" : "s"}` }
                   : savedJustNow
-                  ? { dot: "#8DF0C8", glow: "rgba(141, 240, 200, 0.5)", label: "Saved" }
+                  ? { dot: "var(--emissive-mint)", glow: "color-mix(in srgb, var(--emissive-mint) 50%, transparent)", label: "Saved" }
                   : dirty
-                  ? { dot: "#F5C67A", glow: "rgba(245, 198, 122, 0.5)", label: "Unsaved changes" }
-                  : { dot: "#8DF0C8", glow: "rgba(141, 240, 200, 0.5)", label: "Draft · ready" };
+                  ? { dot: "var(--status-draft)", glow: "color-mix(in srgb, var(--status-draft) 50%, transparent)", label: "Unsaved changes" }
+                  : { dot: "var(--emissive-mint)", glow: "color-mix(in srgb, var(--emissive-mint) 50%, transparent)", label: "Draft · ready" };
                 const reason = hasErrors
                   ? validationErrors[0].message
                   : savedJustNow
@@ -1509,43 +1523,43 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                     onPointerDown={(e) => e.stopPropagation()}
                     style={{
                       position: "absolute", left: 24, bottom: 24, zIndex: 25,
-                      display: "flex", alignItems: "center", gap: 14,
-                      padding: "10px 14px", borderRadius: 10,
-                      background: "rgba(17, 19, 24, 0.9)",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      display: "flex", alignItems: "center", gap: "var(--space-14)",
+                      padding: "10px 14px", borderRadius: "var(--radius-lg)",
+                      background: "color-mix(in srgb, var(--surface-1) 90%, transparent)",
+                      border: "1px solid var(--border-subtle)",
                       backdropFilter: "blur(12px)",
                       WebkitBackdropFilter: "blur(12px)",
                       fontFamily: T.fontBody,
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
                       <div style={{
-                        width: 8, height: 8, borderRadius: 999, background: status.dot,
+                        width: 8, height: 8, borderRadius: "var(--radius-pill)", background: status.dot,
                         boxShadow: `0 0 10px ${status.glow}`,
                       }} />
-                      <div style={{ fontSize: 12, fontWeight: 500, color: T.textPrimary }}>
+                      <div style={{ fontSize: "var(--font-size-base)", fontWeight: 500, color: T.textPrimary }}>
                         {status.label}
                       </div>
                     </div>
-                    <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.08)" }} />
+                    <div style={{ width: 1, height: 16, background: "var(--border-subtle)" }} />
                     <div style={{
-                      fontFamily: T.fontMono, fontSize: 10,
+                      fontFamily: T.fontMono, fontSize: "var(--font-size-xs)",
                       letterSpacing: "0.06em", color: T.textSecondary,
                       maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                     }}>
                       {reason}
                     </div>
-                    <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.08)" }} />
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 1, height: 16, background: "var(--border-subtle)" }} />
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
                       <button
                         type="button"
                         onClick={saveWorld}
                         disabled={!dirty || isSaving}
                         style={{
-                          padding: "5px 12px", borderRadius: 7,
-                          border: "1px solid rgba(255,255,255,0.1)", background: "transparent",
+                          padding: "5px 12px", borderRadius: "var(--radius-md)",
+                          border: "1px solid var(--border-subtle)", background: "transparent",
                           color: dirty ? T.textPrimary : T.textTertiary,
-                          fontFamily: T.fontBody, fontSize: 11, fontWeight: 500,
+                          fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 500,
                           cursor: dirty && !isSaving ? "pointer" : "not-allowed",
                           opacity: isSaving ? 0.6 : 1,
                         }}
@@ -1557,9 +1571,9 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                         disabled
                         title="Publish flow coming soon"
                         style={{
-                          padding: "5px 14px", borderRadius: 7, border: "none",
-                          background: "rgba(143, 209, 203, 0.3)", color: "rgba(12, 14, 20, 0.6)",
-                          fontFamily: T.fontBody, fontSize: 11, fontWeight: 600,
+                          padding: "5px 14px", borderRadius: "var(--radius-md)", border: "none",
+                          background: "color-mix(in srgb, var(--active-teal) 30%, transparent)", color: "var(--background)",
+                          fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 600,
                           cursor: "not-allowed",
                         }}
                       >
@@ -1577,8 +1591,8 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                   onClick={(e) => e.stopPropagation()}
                   style={{
                     position: "absolute", left: contextMenu.x, top: contextMenu.y, zIndex: 40,
-                    width: 200, background: "#1A1A24", border: `1px solid ${T.borderSubtle}`,
-                    borderRadius: 10, padding: 4, boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+                    width: 200, background: "var(--surface-material)", border: `1px solid ${T.borderSubtle}`,
+                    borderRadius: "var(--radius-xl)", padding: "var(--space-4)", boxShadow: "var(--elevation-panel)",
                   }}
                 >
                   {[
@@ -1589,11 +1603,11 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                     { label: "Move to Group", suffix: "▸", action: () => setContextMenu(null) },
                     { label: "Assign to Event", suffix: "▸", action: () => setContextMenu(null) },
                     { type: "separator" as const },
-                    { label: "AI Refine", color: "#8DF0C8", action: () => setContextMenu(null) },
+                    { label: "AI Refine", color: "var(--accent-strong)", action: () => setContextMenu(null) },
                     { label: "Validate", action: () => setContextMenu(null) },
                     { type: "separator" as const },
                     {
-                      label: "Delete Node", shortcut: "⌫", color: "#EF5B5B",
+                      label: "Delete Node", shortcut: "⌫", color: "#FF5A5A",
                       action: () => {
                         const node = nodeLookup[contextMenu.nodeId];
                         if (node) deleteEntity(node.entityType, node.entityId);
@@ -1612,17 +1626,17 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                         onClick={menuItem.action}
                         style={{
                           display: "flex", alignItems: "center", justifyContent: "space-between",
-                          width: "100%", padding: "7px 10px", borderRadius: 6,
+                          width: "100%", padding: "7px 10px", borderRadius: "var(--radius-sm)",
                           border: "none", background: "transparent",
-                          fontFamily: T.fontBody, fontSize: 13, color: menuItem.color ?? T.textPrimary,
+                          fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: menuItem.color ?? T.textPrimary,
                           cursor: "pointer", textAlign: "left",
                         }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = "var(--divider)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                       >
                         <span>{menuItem.label}</span>
-                        {menuItem.shortcut && <span style={{ fontSize: 11, color: T.textTertiary }}>{menuItem.shortcut}</span>}
-                        {menuItem.suffix && <span style={{ fontSize: 11, color: T.textTertiary }}>{menuItem.suffix}</span>}
+                        {menuItem.shortcut && <span style={{ fontSize: "var(--font-size-sm)", color: T.textTertiary }}>{menuItem.shortcut}</span>}
+                        {menuItem.suffix && <span style={{ fontSize: "var(--font-size-sm)", color: T.textTertiary }}>{menuItem.suffix}</span>}
                       </button>
                     );
                   })}
@@ -1635,26 +1649,26 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
               display: "flex", alignItems: "center", justifyContent: "space-between",
               height: 36, padding: "0 16px", flexShrink: 0,
               background: T.chrome, borderTop: `1px solid ${T.borderSubtle}`,
-              fontFamily: T.fontMono, fontSize: 9, color: T.textTertiary, letterSpacing: "0.06em",
+              fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: T.textTertiary, letterSpacing: "0.06em",
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-14)" }}>
                 {legendItems.map((item) => (
-                  <div key={item.type} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: 2, background: NODE_COLORS[item.type].dot }} />
+                  <div key={item.type} style={{ display: "flex", alignItems: "center", gap: "var(--space-5)" }}>
+                    <div style={{ width: 7, height: 7, borderRadius: "var(--radius-2xs)", background: NODE_COLORS[item.type].dot }} />
                     <span>{item.label}</span>
                   </div>
                 ))}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
                 <span>{nodes.length} nodes</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
                   <button type="button" onClick={() => zoomViewportCenter(1 / 1.1)}
-                    style={{ border: `1px solid ${T.borderSubtle}`, background: "transparent", color: T.textSecondary, borderRadius: 3, padding: "1px 6px", cursor: "pointer", fontSize: 11 }}>
+                    style={{ border: `1px solid ${T.borderSubtle}`, background: "transparent", color: T.textSecondary, borderRadius: "var(--radius-xs)", padding: "1px 6px", cursor: "pointer", fontSize: "var(--font-size-sm)" }}>
                     −
                   </button>
                   <span style={{ minWidth: 36, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
                   <button type="button" onClick={() => zoomViewportCenter(1.1)}
-                    style={{ border: `1px solid ${T.borderSubtle}`, background: "transparent", color: T.textSecondary, borderRadius: 3, padding: "1px 6px", cursor: "pointer", fontSize: 11 }}>
+                    style={{ border: `1px solid ${T.borderSubtle}`, background: "transparent", color: T.textSecondary, borderRadius: "var(--radius-xs)", padding: "1px 6px", cursor: "pointer", fontSize: "var(--font-size-sm)" }}>
                     +
                   </button>
                 </div>

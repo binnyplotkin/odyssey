@@ -400,9 +400,10 @@ const CAPTURE_RAW_STT_STEP_EVENTS = true;
 // utterance and must be dropped before they trigger a phantom barge-in.
 const RESIDUAL_GRACE_MS = 700;
 
-// Curator budget (used for the /voice-context call only — the per-turn
-// voice-chat call doesn't run the curator). Provider/model are now picked
-// by the parent's mode-aware dropdown and arrive as props.
+// Curator budget for the cached /voice-context call made at enterVoiceMode.
+// Per-turn voice-stream requests reuse the cached promptChunk and run their
+// own adaptive retrieval gate on top. Provider/model are picked by the
+// parent's mode-aware dropdown and arrive as props.
 const VOICE_MODE_TOKEN_BUDGET = 1500;
 
 function createInitialStartupStatus(): VoiceStartupStatus {
@@ -570,7 +571,7 @@ function StatusRow({
         <div
           style={{
             fontFamily: T.fontBody,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             fontWeight: 600,
             color: T.fg,
             whiteSpace: "nowrap",
@@ -586,7 +587,7 @@ function StatusRow({
             fontSize: 9.5,
             color: T.muted,
             letterSpacing: "0.03em",
-            marginTop: 2,
+            marginTop: "var(--space-2)",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -598,7 +599,7 @@ function StatusRow({
       <span
         style={{
           padding: "3px 7px",
-          borderRadius: 5,
+          borderRadius: "var(--radius-sm)",
           border: `1px solid ${color}`,
           color,
           fontFamily: T.fontMono,
@@ -618,7 +619,7 @@ function StatusRow({
 function segmentStateColor(state: PipelineSegmentState) {
   switch (state) {
     case "active":
-      return "#8CE7D2";
+      return "#8FD1CB";
     case "ready":
       return "#4ade80";
     case "waiting":
@@ -661,7 +662,7 @@ function MetricCell({
       style={{
         minWidth: 0,
         padding: "8px 9px",
-        borderRadius: 7,
+        borderRadius: "var(--radius-md)",
         border: `1px solid ${T.border}`,
         background: "color-mix(in srgb, var(--background) 38%, transparent)",
       }}
@@ -673,7 +674,7 @@ function MetricCell({
           color: T.muted,
           letterSpacing: "0.07em",
           textTransform: "uppercase",
-          marginBottom: 4,
+          marginBottom: "var(--space-4)",
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -684,7 +685,7 @@ function MetricCell({
       <div
         style={{
           fontFamily: T.fontMono,
-          fontSize: 11,
+          fontSize: "var(--font-size-sm)",
           fontWeight: 700,
           color: T.fg,
           whiteSpace: "nowrap",
@@ -720,7 +721,7 @@ function SegmentPanel({
     <section
       style={{
         border: `1px solid ${T.border}`,
-        borderRadius: 12,
+        borderRadius: "var(--radius-xl)",
         background: "color-mix(in srgb, var(--panel) 88%, transparent)",
         padding: 0,
         minWidth: 0,
@@ -737,7 +738,7 @@ function SegmentPanel({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 8,
+          gap: "var(--space-8)",
           width: "100%",
           padding: "13px 14px",
           border: "none",
@@ -748,13 +749,13 @@ function SegmentPanel({
           textAlign: "left",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", minWidth: 0 }}>
           <span
             aria-hidden
             style={{
               color: T.muted,
               fontFamily: T.fontMono,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)",
               transition: "transform 120ms ease",
               flexShrink: 0,
@@ -766,7 +767,7 @@ function SegmentPanel({
             <div
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 10,
+                fontSize: "var(--font-size-xs)",
                 fontWeight: 800,
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
@@ -781,10 +782,10 @@ function SegmentPanel({
             <div
               style={{
                 fontFamily: T.fontMono,
-                fontSize: 9,
+                fontSize: "var(--font-size-2xs)",
                 color: T.muted,
                 letterSpacing: "0.04em",
-                marginTop: 3,
+                marginTop: "var(--space-3)",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -797,7 +798,7 @@ function SegmentPanel({
         <span
           style={{
             padding: "3px 7px",
-            borderRadius: 5,
+            borderRadius: "var(--radius-sm)",
             border: `1px solid ${color}`,
             color,
             fontFamily: T.fontMono,
@@ -816,8 +817,8 @@ function SegmentPanel({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 10,
-            padding: 12,
+            gap: "var(--space-10)",
+            padding: "var(--space-12)",
           }}
         >
           <div
@@ -835,7 +836,7 @@ function SegmentPanel({
             style={{
               minHeight: 34,
               padding: "8px 9px",
-              borderRadius: 7,
+              borderRadius: "var(--radius-md)",
               background: "color-mix(in srgb, var(--background) 30%, transparent)",
               color: T.muted,
               fontFamily: T.fontBody,
@@ -893,7 +894,7 @@ function VoiceDataFlowPanels({
         width: "100%",
         display: "grid",
         gridTemplateColumns: "1fr",
-        gap: 10,
+        gap: "var(--space-10)",
       }}
     >
       <SegmentPanel
@@ -1023,7 +1024,7 @@ function VoiceReadinessPanel({
       style={{
         width: "min(100%, 420px)",
         border: `1px solid ${T.border}`,
-        borderRadius: 12,
+        borderRadius: "var(--radius-xl)",
         background: "color-mix(in srgb, var(--panel) 88%, transparent)",
         padding: "12px 14px 10px",
         boxShadow: "0 12px 34px rgba(0,0,0,0.18)",
@@ -1034,14 +1035,14 @@ function VoiceReadinessPanel({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 10,
-          marginBottom: 6,
+          gap: "var(--space-10)",
+          marginBottom: "var(--space-6)",
         }}
       >
         <span
           style={{
             fontFamily: T.fontMono,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 700,
             color: T.fg,
             letterSpacing: "0.1em",
@@ -1147,14 +1148,14 @@ function VoiceReadinessPanel({
       {status.micPermission === "error" ? (
         <div
           style={{
-            marginTop: 10,
+            marginTop: "var(--space-10)",
             padding: "10px 12px",
-            borderRadius: 8,
+            borderRadius: "var(--radius-md)",
             border: "1px solid rgba(248,113,113,0.3)",
             background: "rgba(248,113,113,0.08)",
             color: "#fecaca",
             fontFamily: T.fontBody,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             lineHeight: "17px",
           }}
         >
@@ -1250,7 +1251,7 @@ ref,
   const lastMicLevelRef = useRef(0);
 
   // Cached voice-mode context. Pre-fetched at enterVoiceMode in parallel
-  // with the STT WS handshake; then sent with every per-turn voice-chat
+  // with the STT WS handshake; then sent with every per-turn voice-stream
   // request so the server can skip the curator step (~2s saved per turn).
   type VoiceContext = { promptChunk: string; characterTitle: string };
   const voiceContextRef = useRef<{
@@ -3278,7 +3279,7 @@ ref,
           padding: "32px",
           display: "flex",
           flexDirection: "column",
-          gap: 24,
+          gap: "var(--space-24)",
         }}
       >
         <div
@@ -3286,8 +3287,8 @@ ref,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: 16,
-            paddingTop: 12,
+            gap: "var(--space-16)",
+            paddingTop: "var(--space-12)",
           }}
         >
           <button
@@ -3366,7 +3367,7 @@ ref,
           <div
             style={{
               fontFamily: T.fontMono,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               fontWeight: 600,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
@@ -3397,7 +3398,7 @@ ref,
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 10,
+              gap: "var(--space-10)",
             }}
           >
             <div
@@ -3405,13 +3406,13 @@ ref,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: 10,
+                gap: "var(--space-10)",
               }}
             >
               <span
                 style={{
                   fontFamily: T.fontMono,
-                  fontSize: 10,
+                  fontSize: "var(--font-size-xs)",
                   fontWeight: 800,
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
@@ -3423,7 +3424,7 @@ ref,
               <span
                 style={{
                   fontFamily: T.fontMono,
-                  fontSize: 9,
+                  fontSize: "var(--font-size-2xs)",
                   color: T.muted,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
@@ -3455,12 +3456,12 @@ ref,
             onClick={() => setTranscriptPanelHidden((prev) => !prev)}
             style={{
               padding: "6px 10px",
-              borderRadius: 7,
+              borderRadius: "var(--radius-md)",
               border: `1px solid ${T.border}`,
               background: transcriptPanelHidden ? "rgba(140,231,210,0.1)" : "transparent",
               color: transcriptPanelHidden ? T.accent : T.muted,
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               fontWeight: 600,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -3479,19 +3480,19 @@ ref,
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 14,
+              gap: "var(--space-14)",
             }}
           >
             {error ? (
               <div
                 style={{
                   padding: "10px 14px",
-                  borderRadius: 8,
+                  borderRadius: "var(--radius-md)",
                   border: "1px solid rgba(248, 113, 113, 0.3)",
                   background: "rgba(248, 113, 113, 0.08)",
                   color: "#f87171",
                   fontFamily: T.fontBody,
-                  fontSize: 13,
+                  fontSize: "var(--font-size-md)",
                 }}
               >
                 {error}
@@ -3501,8 +3502,8 @@ ref,
             {currentTurnTranscript ? (
               <div
                 style={{
-                  padding: 14,
-                  borderRadius: 10,
+                  padding: "var(--space-14)",
+                  borderRadius: "var(--radius-lg)",
                   border: `1px solid ${T.border}`,
                   background: T.panel,
                 }}
@@ -3510,12 +3511,12 @@ ref,
                 <p
                   style={{
                     fontFamily: T.fontMono,
-                    fontSize: 10,
+                    fontSize: "var(--font-size-xs)",
                     color: T.muted,
                     letterSpacing: "0.1em",
                     textTransform: "uppercase",
                     margin: 0,
-                    marginBottom: 6,
+                    marginBottom: "var(--space-6)",
                   }}
                 >
                   You{" "}
@@ -3528,7 +3529,7 @@ ref,
                 <p
                   style={{
                     fontFamily: T.fontBody,
-                    fontSize: 14,
+                    fontSize: "var(--font-size-lg)",
                     color: T.fg,
                     margin: 0,
                   }}
@@ -3541,8 +3542,8 @@ ref,
             {liveReply ? (
               <div
                 style={{
-                  padding: 14,
-                  borderRadius: 10,
+                  padding: "var(--space-14)",
+                  borderRadius: "var(--radius-lg)",
                   border: `1px solid ${T.border}`,
                   background: T.panel,
                 }}
@@ -3550,12 +3551,12 @@ ref,
                 <p
                   style={{
                     fontFamily: T.fontMono,
-                    fontSize: 10,
+                    fontSize: "var(--font-size-xs)",
                     color: T.muted,
                     letterSpacing: "0.1em",
                     textTransform: "uppercase",
                     margin: 0,
-                    marginBottom: 6,
+                    marginBottom: "var(--space-6)",
                   }}
                 >
                   {character.title}
@@ -3563,7 +3564,7 @@ ref,
                 <p
                   style={{
                     fontFamily: T.fontBody,
-                    fontSize: 14,
+                    fontSize: "var(--font-size-lg)",
                     color: T.fg,
                     margin: 0,
                     whiteSpace: "pre-wrap",
@@ -3579,8 +3580,8 @@ ref,
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 14,
-                  marginTop: 8,
+                  gap: "var(--space-14)",
+                  marginTop: "var(--space-8)",
                 }}
               >
                 <div
@@ -3593,7 +3594,7 @@ ref,
                   <span
                     style={{
                       fontFamily: T.fontMono,
-                      fontSize: 10,
+                      fontSize: "var(--font-size-xs)",
                       fontWeight: 500,
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
@@ -3608,14 +3609,14 @@ ref,
                     style={{
                       padding: "4px 10px",
                       fontFamily: T.fontMono,
-                      fontSize: 10,
+                      fontSize: "var(--font-size-xs)",
                       fontWeight: 500,
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       color: T.muted,
                       background: "transparent",
                       border: `1px solid ${T.border}`,
-                      borderRadius: 6,
+                      borderRadius: "var(--radius-sm)",
                       cursor: "pointer",
                     }}
                   >
@@ -3626,8 +3627,8 @@ ref,
                   <article
                     key={turn.id}
                     style={{
-                      padding: 14,
-                      borderRadius: 10,
+                      padding: "var(--space-14)",
+                      borderRadius: "var(--radius-lg)",
                       border: `1px solid ${
                         turn.status === "error"
                           ? "rgba(248,113,113,0.3)"
@@ -3638,7 +3639,7 @@ ref,
                       background: T.panel,
                       display: "flex",
                       flexDirection: "column",
-                      gap: 10,
+                      gap: "var(--space-10)",
                     }}
                   >
                     {turn.status === "interrupted" ? (
@@ -3646,11 +3647,11 @@ ref,
                         style={{
                           alignSelf: "flex-start",
                           padding: "2px 8px",
-                          borderRadius: 4,
+                          borderRadius: "var(--radius-xs)",
                           background: "rgba(250,204,21,0.08)",
                           border: "1px solid rgba(250,204,21,0.25)",
                           fontFamily: T.fontMono,
-                          fontSize: 9,
+                          fontSize: "var(--font-size-2xs)",
                           fontWeight: 600,
                           color: "#FACC15",
                           letterSpacing: "0.08em",
@@ -3660,11 +3661,11 @@ ref,
                         Interrupted
                       </span>
                     ) : null}
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
                       <span
                         style={{
                           fontFamily: T.fontMono,
-                          fontSize: 10,
+                          fontSize: "var(--font-size-xs)",
                           color: T.muted,
                           letterSpacing: "0.08em",
                           textTransform: "uppercase",
@@ -3676,18 +3677,18 @@ ref,
                         style={{
                           margin: 0,
                           fontFamily: T.fontBody,
-                          fontSize: 13,
+                          fontSize: "var(--font-size-md)",
                           color: T.fg,
                         }}
                       >
                         {turn.user || "(empty)"}
                       </p>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
                       <span
                         style={{
                           fontFamily: T.fontMono,
-                          fontSize: 10,
+                          fontSize: "var(--font-size-xs)",
                           color: T.muted,
                           letterSpacing: "0.08em",
                           textTransform: "uppercase",
@@ -3699,7 +3700,7 @@ ref,
                         style={{
                           margin: 0,
                           fontFamily: T.fontBody,
-                          fontSize: 13,
+                          fontSize: "var(--font-size-md)",
                           color: T.fg,
                           whiteSpace: "pre-wrap",
                         }}
@@ -3711,9 +3712,9 @@ ref,
                       style={{
                         display: "flex",
                         flexWrap: "wrap",
-                        gap: 12,
+                        gap: "var(--space-12)",
                         fontFamily: T.fontMono,
-                        fontSize: 10,
+                        fontSize: "var(--font-size-xs)",
                         color: T.muted,
                         letterSpacing: "0.06em",
                       }}
@@ -3732,13 +3733,13 @@ ref,
           <div
             id="voice-transcript-panel"
             style={{
-              marginTop: 4,
+              marginTop: "var(--space-4)",
               padding: "10px 12px",
-              borderRadius: 8,
+              borderRadius: "var(--radius-md)",
               border: `1px solid ${T.border}`,
               background: T.panel,
               fontFamily: T.fontMono,
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               color: T.muted,
               letterSpacing: "0.06em",
               textTransform: "uppercase",

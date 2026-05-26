@@ -3,12 +3,12 @@ import { Skeleton } from "@odyssey/ui";
 const CARD: React.CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--card-border)",
-  borderRadius: 12,
+  borderRadius: "var(--radius-xl)",
 };
 
 function Field({ label, control = 32 }: { label: number; control?: number | string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <Skeleton width={label} height={11} />
       <Skeleton
         width="100%"
@@ -28,16 +28,16 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ ...CARD, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ ...CARD, padding: "18px 20px", display: "flex", flexDirection: "column", gap: "var(--space-14)" }}>
       <Skeleton width={titleWidth} height={13} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>{children}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-14)" }}>{children}</div>
     </div>
   );
 }
 
 export default function WorldSettingsLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 720 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)", maxWidth: 720 }}>
       <Section titleWidth={120}>
         <Field label={56} />
         <Field label={72} />
@@ -53,7 +53,7 @@ export default function WorldSettingsLoading() {
         <Field label={88} control={88} />
       </Section>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-8)" }}>
         <Skeleton width={88} height={32} radius={8} />
         <Skeleton width={120} height={32} radius={8} />
       </div>

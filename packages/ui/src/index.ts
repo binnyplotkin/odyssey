@@ -14,6 +14,16 @@ export type { SidebarItem, SidebarAction, SidebarProps, SidebarTab } from "./com
 export { Skeleton, SkeletonText, SkeletonCard } from "./components/skeleton";
 export type { SkeletonProps } from "./components/skeleton";
 
+export { ContextMenu, ContextMenuTriggerButton } from "./components/context-menu";
+export type {
+  ContextMenuItem,
+  ContextMenuAnchor,
+  ContextMenuProps,
+} from "./components/context-menu";
+
+export { ConfirmModal } from "./components/confirm-modal";
+export type { ConfirmModalProps } from "./components/confirm-modal";
+
 export const forest = {
   950: "#000500",
   900: "#0F2006",

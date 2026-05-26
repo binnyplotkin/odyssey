@@ -80,11 +80,11 @@ export function EraEditor({ eras, onChange, eventCountByEra, dense }: Props) {
 
   if (eras.length === 0) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
         <button type="button" onClick={add} style={dashedAdd}>
           + Add first era
         </button>
-        <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.muted, lineHeight: "16px" }}>
+        <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted, lineHeight: "16px" }}>
           Eras are named periods in the character's life (e.g. <em>pre-covenant / covenant / post-binding</em>). Useful if you want the runtime to time-gate what the character knows. Leave empty for a timeless character.
         </span>
       </div>
@@ -101,13 +101,13 @@ export function EraEditor({ eras, onChange, eventCountByEra, dense }: Props) {
           <div
             key={`${e.key}-${i}`}
             style={{
-              display: "flex", alignItems: "center", gap: 8,
+              display: "flex", alignItems: "center", gap: "var(--space-8)",
               padding: dense ? "6px 8px" : "10px 12px",
-              borderRadius: 10, border: `1px solid ${T.border}`,
+              borderRadius: "var(--radius-lg)", border: `1px solid ${T.border}`,
               background: "var(--background)",
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", flexShrink: 0 }}>
               <button
                 type="button" onClick={() => move(i, -1)} disabled={!canUp}
                 aria-label="Move up"
@@ -134,7 +134,7 @@ export function EraEditor({ eras, onChange, eventCountByEra, dense }: Props) {
 
             <span style={{
               width: 22, flexShrink: 0, textAlign: "center",
-              fontFamily: T.fontMono, fontSize: 10, color: T.muted,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted,
             }}>
               {i}
             </span>
@@ -158,14 +158,14 @@ export function EraEditor({ eras, onChange, eventCountByEra, dense }: Props) {
               placeholder="era-key"
               style={{
                 ...textInput,
-                fontFamily: T.fontMono, color: "#8CE7D2",
+                fontFamily: T.fontMono, color: "#8FD1CB",
                 flex: "1 1 0", minWidth: 0,
               }}
             />
 
             {eventCount > 0 && (
               <span style={{
-                fontFamily: T.fontMono, fontSize: 10, color: T.muted, flexShrink: 0,
+                fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted, flexShrink: 0,
                 width: 60, textAlign: "right",
               }}>
                 {eventCount} event{eventCount === 1 ? "" : "s"}
@@ -193,20 +193,20 @@ export function EraEditor({ eras, onChange, eventCountByEra, dense }: Props) {
 }
 
 const textInput: React.CSSProperties = {
-  padding: "5px 8px", borderRadius: 6,
+  padding: "5px 8px", borderRadius: "var(--radius-sm)",
   border: `1px solid ${T.border}`, background: "transparent",
-  color: T.fg, outline: "none", fontSize: 12, boxSizing: "border-box",
+  color: T.fg, outline: "none", fontSize: "var(--font-size-base)", boxSizing: "border-box",
 };
 
 const iconBtn: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "center",
   width: 20, height: 20, border: "none", background: "transparent",
-  color: "var(--foreground)", cursor: "pointer", padding: 0, borderRadius: 4,
+  color: "var(--foreground)", cursor: "pointer", padding: 0, borderRadius: "var(--radius-xs)",
 };
 
 const dashedAdd: React.CSSProperties = {
-  display: "inline-flex", alignSelf: "flex-start", alignItems: "center", gap: 6,
-  padding: "7px 14px", borderRadius: 8,
+  display: "inline-flex", alignSelf: "flex-start", alignItems: "center", gap: "var(--space-6)",
+  padding: "7px 14px", borderRadius: "var(--radius-md)",
   border: "1px dashed var(--border)", background: "transparent",
-  color: "var(--muted)", fontFamily: T.fontBody, fontSize: 12, cursor: "pointer",
+  color: "var(--muted)", fontFamily: T.fontBody, fontSize: "var(--font-size-base)", cursor: "pointer",
 };

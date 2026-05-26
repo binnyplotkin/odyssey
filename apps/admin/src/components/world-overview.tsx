@@ -26,19 +26,19 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: T.fontBody }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-24)", fontFamily: T.fontBody }}>
       {/* Hero */}
       <section style={{
         background: GRADIENT,
-        borderRadius: 16,
+        borderRadius: "var(--radius-3xl)",
         padding: "32px 36px",
         border: `1px solid ${T.border}`,
       }}>
         <div style={{
-          display: "flex", alignItems: "center", gap: 10, marginBottom: 14,
+          display: "flex", alignItems: "center", gap: "var(--space-10)", marginBottom: "var(--space-14)",
         }}>
           <span style={{
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
             letterSpacing: "0.1em", textTransform: "uppercase",
             color: T.dim,
           }}>
@@ -46,7 +46,7 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
           </span>
           <span style={{ color: T.dim }}>·</span>
           <span style={{
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
             letterSpacing: "0.08em", textTransform: "uppercase",
             color: T.dim,
           }}>
@@ -62,7 +62,7 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
         </h1>
         {world.setting && (
           <p style={{
-            fontFamily: T.fontBody, fontSize: 14, fontWeight: 400,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-lg)", fontWeight: 400,
             lineHeight: "22px", color: "rgba(241, 245, 249, 0.72)",
             margin: "12px 0 0", maxWidth: 720,
           }}>
@@ -75,13 +75,13 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
       <section style={{
         display: "grid",
         gridTemplateColumns: `repeat(${stats.length}, 1fr)`,
-        gap: 12,
+        gap: "var(--space-12)",
       }}>
         {stats.map((s) => (
           <div key={s.label} style={{
             background: T.panel, border: `1px solid ${T.border}`,
-            borderRadius: 12, padding: "18px 20px",
-            display: "flex", flexDirection: "column", gap: 4,
+            borderRadius: "var(--radius-xl)", padding: "18px 20px",
+            display: "flex", flexDirection: "column", gap: "var(--space-4)",
           }}>
             <div style={{
               fontFamily: T.fontHeading, fontSize: 32, fontWeight: 300,
@@ -90,7 +90,7 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
               {s.value}
             </div>
             <div style={{
-              fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
               letterSpacing: "0.1em", textTransform: "uppercase",
               color: T.dim,
             }}>
@@ -102,7 +102,7 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
 
       {/* Premise + Narrator */}
       <section style={{
-        display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16,
+        display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-16)",
       }}>
         <Card title="Premise">
           <p style={bodyParagraph}>{world.premise}</p>
@@ -117,26 +117,26 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
       {/* Characters */}
       <Card title="Characters" count={world.characters.length}>
         <div style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12,
+          display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "var(--space-12)",
         }}>
           {world.characters.map((character) => (
             <div key={character.id} style={subCard}>
               <div style={{
-                fontFamily: T.fontHeading, fontSize: 16, fontWeight: 600,
+                fontFamily: T.fontHeading, fontSize: "var(--font-size-xl)", fontWeight: 600,
                 letterSpacing: "-0.01em", color: T.fg, lineHeight: "20px",
               }}>
                 {character.name}
               </div>
               <div style={{
-                fontFamily: T.fontMono, fontSize: 10, fontWeight: 400,
+                fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 400,
                 letterSpacing: "0.08em", textTransform: "uppercase",
-                color: T.dim, marginTop: 4,
+                color: T.dim, marginTop: "var(--space-4)",
               }}>
                 {character.title} · {character.archetype}
               </div>
               {character.backstory && (
                 <p style={{
-                  fontFamily: T.fontBody, fontSize: 12, fontWeight: 400,
+                  fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 400,
                   lineHeight: "18px", color: T.muted,
                   margin: "10px 0 0",
                   display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical",
@@ -146,7 +146,7 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
                 </p>
               )}
               {character.tags && character.tags.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 10 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", marginTop: "var(--space-10)" }}>
                   {character.tags.slice(0, 5).map((tag) => (
                     <span key={tag} style={tagPill("#FBA7C0")}>{tag}</span>
                   ))}
@@ -161,26 +161,26 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
       {world.groups.length > 0 && (
         <Card title="Groups" count={world.groups.length}>
           <div style={{
-            display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12,
+            display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "var(--space-12)",
           }}>
             {world.groups.map((group) => (
               <div key={group.id} style={subCard}>
                 <div style={{
-                  fontFamily: T.fontHeading, fontSize: 16, fontWeight: 600,
+                  fontFamily: T.fontHeading, fontSize: "var(--font-size-xl)", fontWeight: 600,
                   letterSpacing: "-0.01em", color: T.fg, lineHeight: "20px",
                 }}>
                   {group.name}
                 </div>
                 <div style={{
-                  fontFamily: T.fontMono, fontSize: 10, fontWeight: 400,
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 400,
                   letterSpacing: "0.08em", textTransform: "uppercase",
-                  color: T.dim, marginTop: 4,
+                  color: T.dim, marginTop: "var(--space-4)",
                 }}>
                   Influence {group.influence} · {group.disposition}
                   {group.powerType ? ` · ${group.powerType}` : ""}
                 </div>
                 <p style={{
-                  fontFamily: T.fontBody, fontSize: 12, fontWeight: 400,
+                  fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 400,
                   lineHeight: "18px", color: T.muted,
                   margin: "10px 0 0",
                   display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical",
@@ -189,7 +189,7 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
                   {group.description}
                 </p>
                 {group.tags && group.tags.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 10 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", marginTop: "var(--space-10)" }}>
                     {group.tags.slice(0, 5).map((tag) => (
                       <span key={tag} style={tagPill("#8FD1CB")}>{tag}</span>
                     ))}
@@ -204,29 +204,29 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
       {/* Events */}
       {world.eventTemplates.length > 0 && (
         <Card title="Event templates" count={world.eventTemplates.length}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
             {world.eventTemplates.slice(0, 8).map((event) => (
               <div key={event.id} style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "10px 12px", borderRadius: 8,
+                display: "flex", alignItems: "center", gap: "var(--space-12)",
+                padding: "10px 12px", borderRadius: "var(--radius-md)",
                 background: "rgba(255, 255, 255, 0.02)",
               }}>
                 <span style={{
-                  fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
                   letterSpacing: "0.08em", textTransform: "uppercase",
                   color: "#A5B4FC", width: 100, flexShrink: 0,
                 }}>
                   {event.category}
                 </span>
                 <span style={{
-                  fontFamily: T.fontBody, fontSize: 13, fontWeight: 500,
+                  fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500,
                   color: T.fg, flex: 1,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
                   {event.title}
                 </span>
                 <span style={{
-                  fontFamily: T.fontMono, fontSize: 10, fontWeight: 400,
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 400,
                   color: T.dim, flexShrink: 0,
                 }}>
                   urgency {event.urgency}
@@ -235,7 +235,7 @@ export function WorldOverview({ detail }: { detail: WorldDetail }) {
             ))}
             {world.eventTemplates.length > 8 && (
               <div style={{
-                fontFamily: T.fontMono, fontSize: 10, fontWeight: 400,
+                fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 400,
                 letterSpacing: "0.08em", textTransform: "uppercase",
                 color: T.dim, padding: "6px 12px",
               }}>
@@ -255,14 +255,14 @@ function Card({ title, count, children }: { title: string; count?: number; child
   return (
     <section style={{
       background: T.panel, border: `1px solid ${T.border}`,
-      borderRadius: 12, padding: "18px 20px",
-      display: "flex", flexDirection: "column", gap: 14,
+      borderRadius: "var(--radius-xl)", padding: "18px 20px",
+      display: "flex", flexDirection: "column", gap: "var(--space-14)",
     }}>
       <header style={{
-        display: "flex", alignItems: "baseline", gap: 10,
+        display: "flex", alignItems: "baseline", gap: "var(--space-10)",
       }}>
         <h2 style={{
-          fontFamily: T.fontHeading, fontSize: 22, fontWeight: 600,
+          fontFamily: T.fontHeading, fontSize: "var(--font-size-3xl)", fontWeight: 600,
           letterSpacing: "-0.02em", lineHeight: "28px", margin: 0,
           color: T.fg,
         }}>
@@ -270,7 +270,7 @@ function Card({ title, count, children }: { title: string; count?: number; child
         </h2>
         {count !== undefined && (
           <span style={{
-            fontFamily: T.fontMono, fontSize: 11, fontWeight: 400,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", fontWeight: 400,
             letterSpacing: "0.08em", color: T.dim,
           }}>
             {count}
@@ -283,7 +283,7 @@ function Card({ title, count, children }: { title: string; count?: number; child
 }
 
 const bodyParagraph: React.CSSProperties = {
-  fontFamily: T.fontBody, fontSize: 14, fontWeight: 400,
+  fontFamily: T.fontBody, fontSize: "var(--font-size-lg)", fontWeight: 400,
   lineHeight: "22px", color: "rgba(255, 255, 255, 0.72)",
   margin: 0,
 };
@@ -291,15 +291,15 @@ const bodyParagraph: React.CSSProperties = {
 const subCard: React.CSSProperties = {
   background: "rgba(255, 255, 255, 0.02)",
   border: `1px solid ${T.border}`,
-  borderRadius: 10,
+  borderRadius: "var(--radius-lg)",
   padding: "14px 16px",
 };
 
 function tagPill(color: string): React.CSSProperties {
   return {
-    fontFamily: T.fontMono, fontSize: 10, fontWeight: 400,
+    fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 400,
     letterSpacing: "0.06em", padding: "2px 7px",
-    borderRadius: 4, color: color,
+    borderRadius: "var(--radius-xs)", color: color,
     background: "rgba(255, 255, 255, 0.04)",
   };
 }

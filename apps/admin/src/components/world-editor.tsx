@@ -52,10 +52,10 @@ type ValidationError = {
 const NODE_COLORS: Record<EntityType, { border: string; dot: string; bg: string }> = {
   world:     { border: "#C4956A", dot: "#C4956A", bg: "rgba(196,149,106,0.08)" },
   character: { border: "#5B8DEF", dot: "#5B8DEF", bg: "rgba(91,141,239,0.08)" },
-  group:     { border: "#6DB889", dot: "#6DB889", bg: "rgba(109,184,137,0.08)" },
+  group:     { border: "#6FBF88", dot: "#6FBF88", bg: "rgba(109,184,137,0.08)" },
   role:      { border: "#E2A55A", dot: "#E2A55A", bg: "rgba(226,165,90,0.08)" },
   event:     { border: "#8B6FC0", dot: "#8B6FC0", bg: "rgba(139,111,192,0.08)" },
-  state:     { border: "#EF5B5B", dot: "#EF5B5B", bg: "rgba(239,91,91,0.08)" },
+  state:     { border: "#FF5A5A", dot: "#FF5A5A", bg: "rgba(239,91,91,0.08)" },
   relationship: { border: "#D94F7A", dot: "#D94F7A", bg: "rgba(217,79,122,0.08)" },
 };
 
@@ -100,8 +100,8 @@ function clamp(v: number, min: number, max: number) {
 function MiniBar({ value, max = 100, color }: { value: number; max?: number; color: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", width: "100%" }}>
-      <div style={{ flex: 1, height: 4, borderRadius: 2, background: "var(--card-hover)" }}>
-        <div style={{ width: `${(value / max) * 100}%`, height: "100%", borderRadius: 2, background: color }} />
+      <div style={{ flex: 1, height: 4, borderRadius: "var(--radius-2xs)", background: "var(--card-hover)" }}>
+        <div style={{ width: `${(value / max) * 100}%`, height: "100%", borderRadius: "var(--radius-2xs)", background: color }} />
       </div>
       <span style={{ fontSize: "0.6rem", color: "var(--muted)", fontFamily: "var(--font-mono)", minWidth: 18, textAlign: "right" }}>
         {value}
@@ -115,7 +115,7 @@ function Badge({ text, color, textColor }: { text: string; color?: string; textC
     <span style={{
       display: "inline-block",
       padding: "0.125rem 0.375rem",
-      borderRadius: "0.25rem",
+      borderRadius: "var(--radius-xs)",
       fontSize: "0.6rem",
       fontWeight: 500,
       background: color ? `${color}20` : "var(--card-hover)",
@@ -409,14 +409,14 @@ function CharacterContent({ char, world }: { char: CharacterDefinition; world: W
       {char.tags && char.tags.length > 0 && (
         <div style={{ display: "flex", gap: "0.2rem", flexWrap: "wrap", marginBottom: "0.375rem" }}>
           {char.tags.map((tag) => (
-            <span key={tag} style={{ fontSize: "0.5rem", padding: "0.1rem 0.3rem", borderRadius: "0.2rem", background: "rgba(232,121,160,0.12)", color: "rgba(232,121,160,0.7)" }}>{tag}</span>
+            <span key={tag} style={{ fontSize: "0.5rem", padding: "0.1rem 0.3rem", borderRadius: "var(--radius-xs)", background: "rgba(232,121,160,0.12)", color: "rgba(232,121,160,0.7)" }}>{tag}</span>
           ))}
         </div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           <span style={{ fontSize: "0.55rem", color: "var(--muted)", width: 36 }}>anger</span>
-          <MiniBar value={char.emotionalBaseline.anger} color="#EF5B5B" />
+          <MiniBar value={char.emotionalBaseline.anger} color="#FF5A5A" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           <span style={{ fontSize: "0.55rem", color: "var(--muted)", width: 36 }}>fear</span>
@@ -424,7 +424,7 @@ function CharacterContent({ char, world }: { char: CharacterDefinition; world: W
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           <span style={{ fontSize: "0.55rem", color: "var(--muted)", width: 36 }}>hope</span>
-          <MiniBar value={char.emotionalBaseline.hope} color="#6DB889" />
+          <MiniBar value={char.emotionalBaseline.hope} color="#6FBF88" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           <span style={{ fontSize: "0.55rem", color: "var(--muted)", width: 36 }}>loyalty</span>
@@ -447,8 +447,8 @@ function GroupContent({ group, world }: { group: GroupDefinition; world: WorldDe
         <Badge
           text={group.disposition}
           color={
-            group.disposition === "supportive" ? "#6DB889"
-            : group.disposition === "hostile" ? "#EF5B5B"
+            group.disposition === "supportive" ? "#6FBF88"
+            : group.disposition === "hostile" ? "#FF5A5A"
             : group.disposition === "volatile" ? "#E2A55A"
             : undefined
           }
@@ -473,7 +473,7 @@ function GroupContent({ group, world }: { group: GroupDefinition; world: WorldDe
       {group.tags && group.tags.length > 0 && (
         <div style={{ display: "flex", gap: "0.2rem", flexWrap: "wrap", marginBottom: "0.375rem" }}>
           {group.tags.map((tag) => (
-            <span key={tag} style={{ fontSize: "0.5rem", padding: "0.1rem 0.3rem", borderRadius: "0.2rem", background: "rgba(109,184,137,0.12)", color: "rgba(109,184,137,0.7)" }}>{tag}</span>
+            <span key={tag} style={{ fontSize: "0.5rem", padding: "0.1rem 0.3rem", borderRadius: "var(--radius-xs)", background: "rgba(109,184,137,0.12)", color: "rgba(109,184,137,0.7)" }}>{tag}</span>
           ))}
         </div>
       )}
@@ -502,9 +502,9 @@ function RoleContent({ role, world }: { role: RoleDefinition; world: WorldDefini
           <Badge
             text={role.difficultyHint}
             color={
-              role.difficultyHint === "beginner" ? "#6DB889"
+              role.difficultyHint === "beginner" ? "#6FBF88"
               : role.difficultyHint === "advanced" ? "#E2A55A"
-              : role.difficultyHint === "expert" ? "#EF5B5B"
+              : role.difficultyHint === "expert" ? "#FF5A5A"
               : undefined
             }
           />
@@ -519,7 +519,7 @@ function RoleContent({ role, world }: { role: RoleDefinition; world: WorldDefini
       {role.tags && role.tags.length > 0 && (
         <div style={{ display: "flex", gap: "0.2rem", flexWrap: "wrap", marginBottom: "0.375rem" }}>
           {role.tags.map((tag) => (
-            <span key={tag} style={{ fontSize: "0.5rem", padding: "0.1rem 0.3rem", borderRadius: "0.2rem", background: "rgba(226,165,90,0.12)", color: "rgba(226,165,90,0.7)" }}>{tag}</span>
+            <span key={tag} style={{ fontSize: "0.5rem", padding: "0.1rem 0.3rem", borderRadius: "var(--radius-xs)", background: "rgba(226,165,90,0.12)", color: "rgba(226,165,90,0.7)" }}>{tag}</span>
           ))}
         </div>
       )}
@@ -548,7 +548,7 @@ function EventContent({ event, world }: { event: EventTemplate; world: WorldDefi
       )}
       <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.375rem" }}>
         <span style={{ fontSize: "0.6rem", color: "var(--muted)" }}>Urgency</span>
-        <MiniBar value={event.urgency} color={event.urgency > 70 ? "#EF5B5B" : "#E2A55A"} />
+        <MiniBar value={event.urgency} color={event.urgency > 70 ? "#FF5A5A" : "#E2A55A"} />
       </div>
       {triggerParts.length > 0 && (
         <p style={{ fontSize: "0.6rem", color: "var(--muted)", marginBottom: "0.375rem" }}>
@@ -600,7 +600,7 @@ function InitialStateContent({ world }: { world: WorldDefinition }) {
     { id: "resources", label: "Resources", initialValue: 50, direction: "higher-better" as const },
     { id: "pressure", label: "Pressure", initialValue: 50, direction: "lower-better" as const },
   ];
-  const metricColors = ["#6DB889", "#E2A55A", "#5B8DEF", "#EF5B5B", "#8B6FC0", "#8DF0C8"];
+  const metricColors = ["#6FBF88", "#E2A55A", "#5B8DEF", "#FF5A5A", "#8B6FC0", "#8DF0C8"];
   return (
     <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
       {metrics.map((m, i) => (
@@ -619,9 +619,9 @@ function InitialStateContent({ world }: { world: WorldDefinition }) {
               <div key={g.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6rem" }}>
                 <span style={{ color: "var(--muted)" }}>{g.name}</span>
                 <span style={{ fontWeight: 600 }}>
-                  <span style={{ color: "#6DB889" }}>{influence}</span>
+                  <span style={{ color: "#6FBF88" }}>{influence}</span>
                   {" "}
-                  <span style={{ color: g.disposition === "hostile" ? "#EF5B5B" : g.disposition === "volatile" ? "#E2A55A" : "var(--muted)", fontSize: "0.5rem" }}>
+                  <span style={{ color: g.disposition === "hostile" ? "#FF5A5A" : g.disposition === "volatile" ? "#E2A55A" : "var(--muted)", fontSize: "0.5rem" }}>
                     {g.disposition}
                   </span>
                 </span>
@@ -1052,17 +1052,17 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
         </select>
 
         {saveStatus === "saved" && (
-          <span style={{ fontSize: "0.7rem", padding: "0.125rem 0.5rem", borderRadius: "0.25rem", background: "rgba(109,184,137,0.15)", color: "#6DB889", fontWeight: 600 }}>
+          <span style={{ fontSize: "0.7rem", padding: "0.125rem 0.5rem", borderRadius: "var(--radius-xs)", background: "rgba(109,184,137,0.15)", color: "#6FBF88", fontWeight: 600 }}>
             Saved
           </span>
         )}
         {dirty && !saveStatus && (
-          <span style={{ fontSize: "0.7rem", padding: "0.125rem 0.5rem", borderRadius: "0.25rem", background: "rgba(251,191,36,0.15)", color: "#fbbf24", fontWeight: 600 }}>
+          <span style={{ fontSize: "0.7rem", padding: "0.125rem 0.5rem", borderRadius: "var(--radius-xs)", background: "rgba(251,191,36,0.15)", color: "#fbbf24", fontWeight: 600 }}>
             Unsaved
           </span>
         )}
         {validationErrors.length > 0 && (
-          <span style={{ fontSize: "0.7rem", padding: "0.125rem 0.5rem", borderRadius: "0.25rem", background: "rgba(239,91,91,0.15)", color: "#EF5B5B", fontWeight: 600 }}>
+          <span style={{ fontSize: "0.7rem", padding: "0.125rem 0.5rem", borderRadius: "var(--radius-xs)", background: "rgba(239,91,91,0.15)", color: "#FF5A5A", fontWeight: 600 }}>
             {validationErrors.length} issue{validationErrors.length > 1 ? "s" : ""}
           </span>
         )}
@@ -1077,7 +1077,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
           disabled={!dirty || isSaving}
           style={{
             padding: "0.375rem 1rem",
-            borderRadius: "0.5rem",
+            borderRadius: "var(--radius-md)",
             border: "none",
             background: dirty ? "var(--accent-strong, var(--accent))" : "var(--border)",
             color: dirty ? "#fff" : "var(--muted)",
@@ -1126,7 +1126,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                   gap: "0.5rem",
                   width: "100%",
                   padding: "0.625rem 0.5rem",
-                  borderRadius: "0.5rem",
+                  borderRadius: "var(--radius-md)",
                   border: `1px solid ${colors.border}30`,
                   background: `${colors.bg}`,
                   color: "var(--foreground)",
@@ -1159,7 +1159,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
               gap: "0.5rem",
               width: "100%",
               padding: "0.625rem 0.5rem",
-              borderRadius: "0.5rem",
+              borderRadius: "var(--radius-md)",
               border: "1px solid rgba(226,165,90,0.2)",
               background: "rgba(226,165,90,0.05)",
               color: "var(--accent-strong, var(--accent))",
@@ -1237,7 +1237,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                 display: "flex", gap: "0.5rem",
                 fontSize: "0.7rem", color: "var(--muted)",
                 background: "var(--panel)", border: "1px solid var(--border)",
-                borderRadius: "0.375rem", padding: "0.25rem 0.625rem",
+                borderRadius: "var(--radius-sm)", padding: "0.25rem 0.625rem",
               }}>
                 <span>{nodes.length} nodes</span>
                 <span>{edges.length} connections</span>
@@ -1299,7 +1299,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                         left: node.x, top: node.y, width: node.w,
                         padding: node.collapsed ? "0.5rem 0.75rem" : "0.75rem",
                         borderRadius: "0.625rem",
-                        border: `1.5px solid ${hasErrors ? "#EF5B5B" : isSelected ? colors.dot : colors.border}`,
+                        border: `1.5px solid ${hasErrors ? "#FF5A5A" : isSelected ? colors.dot : colors.border}`,
                         background: isSelected ? colors.bg : "var(--panel)",
                         boxShadow: isSelected
                           ? `0 0 0 2px ${colors.dot}40, 0 12px 32px var(--shadow)`
@@ -1332,7 +1332,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                         {hasErrors && (
                           <span style={{
                             width: 16, height: 16, borderRadius: "50%",
-                            background: "#EF5B5B", color: "#fff",
+                            background: "#FF5A5A", color: "#fff",
                             fontSize: "0.55rem", fontWeight: 700,
                             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                           }}>
@@ -1366,7 +1366,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                       {!node.collapsed && hasErrors && (
                         <div style={{ marginTop: "0.25rem" }}>
                           {nodeErrors.slice(0, 2).map((err, i) => (
-                            <p key={i} style={{ fontSize: "0.6rem", color: "#EF5B5B", lineHeight: 1.4 }}>
+                            <p key={i} style={{ fontSize: "0.6rem", color: "#FF5A5A", lineHeight: 1.4 }}>
                               {err.message}
                             </p>
                           ))}
@@ -1379,8 +1379,8 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                       {/* Valid indicator */}
                       {!node.collapsed && !hasErrors && nodeErrors.length === 0 && node.entityType !== "world" && node.entityType !== "state" && (
                         <div style={{ marginTop: "0.375rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                          <span style={{ fontSize: "0.6rem", color: "#6DB889" }}>✓</span>
-                          <span style={{ fontSize: "0.55rem", color: "#6DB889" }}>Valid</span>
+                          <span style={{ fontSize: "0.6rem", color: "#6FBF88" }}>✓</span>
+                          <span style={{ fontSize: "0.55rem", color: "#6FBF88" }}>Valid</span>
                         </div>
                       )}
                     </article>
@@ -1405,7 +1405,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
             {/* Error/warning summary */}
             {validationErrors.length > 0 && (
               <>
-                <span style={{ color: "#EF5B5B" }}>
+                <span style={{ color: "#FF5A5A" }}>
                   {validationErrors.length} error{validationErrors.length > 1 ? "s" : ""}
                 </span>
                 <span style={{ color: "var(--border)" }}>|</span>
@@ -1418,11 +1418,11 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
             {/* Keyboard shortcuts */}
             <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
               <span>
-                <kbd style={{ padding: "0.0625rem 0.25rem", borderRadius: "0.1875rem", border: "1px solid var(--border)", fontSize: "0.6rem", fontFamily: "var(--font-mono)" }}>Space</kbd>
+                <kbd style={{ padding: "0.0625rem 0.25rem", borderRadius: "var(--radius-xs)", border: "1px solid var(--border)", fontSize: "0.6rem", fontFamily: "var(--font-mono)" }}>Space</kbd>
                 {" "}Pan
               </span>
               <span>
-                <kbd style={{ padding: "0.0625rem 0.25rem", borderRadius: "0.1875rem", border: "1px solid var(--border)", fontSize: "0.6rem", fontFamily: "var(--font-mono)" }}>Scroll</kbd>
+                <kbd style={{ padding: "0.0625rem 0.25rem", borderRadius: "var(--radius-xs)", border: "1px solid var(--border)", fontSize: "0.6rem", fontFamily: "var(--font-mono)" }}>Scroll</kbd>
                 {" "}Zoom
               </span>
             </div>
@@ -1432,18 +1432,18 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
             {/* Zoom controls */}
             <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
               <button type="button" onClick={() => setZoom((z) => clamp(z * 0.9, 0.25, 2.0))}
-                style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--foreground)", borderRadius: "0.25rem", padding: "0.125rem 0.375rem", cursor: "pointer", fontSize: "0.75rem" }}>
+                style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--foreground)", borderRadius: "var(--radius-xs)", padding: "0.125rem 0.375rem", cursor: "pointer", fontSize: "0.75rem" }}>
                 &minus;
               </button>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", minWidth: 36, textAlign: "center" }}>
                 {Math.round(zoom * 100)}%
               </span>
               <button type="button" onClick={() => setZoom((z) => clamp(z * 1.12, 0.25, 2.0))}
-                style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--foreground)", borderRadius: "0.25rem", padding: "0.125rem 0.375rem", cursor: "pointer", fontSize: "0.75rem" }}>
+                style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--foreground)", borderRadius: "var(--radius-xs)", padding: "0.125rem 0.375rem", cursor: "pointer", fontSize: "0.75rem" }}>
                 +
               </button>
               <button type="button" onClick={() => { setZoom(0.75); setCamera({ x: 0, y: 0 }); }}
-                style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--foreground)", borderRadius: "0.25rem", padding: "0.125rem 0.375rem", cursor: "pointer", fontSize: "0.7rem" }}>
+                style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--foreground)", borderRadius: "var(--radius-xs)", padding: "0.125rem 0.375rem", cursor: "pointer", fontSize: "0.7rem" }}>
                 ⤢
               </button>
             </div>

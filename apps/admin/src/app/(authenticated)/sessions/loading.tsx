@@ -3,7 +3,7 @@ import { Skeleton } from "@odyssey/ui";
 const CARD: React.CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--card-border)",
-  borderRadius: 12,
+  borderRadius: "var(--radius-xl)",
 };
 
 const COLS = ["ID", "World", "Role", "Status", "Version", "Created", "Last active"];
@@ -11,8 +11,8 @@ const GRID_COLS = "minmax(140px,1.4fr) minmax(140px,1.6fr) 100px 100px 100px 140
 
 export default function SessionsLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
         <Skeleton width={140} height={20} />
         <Skeleton width={36} height={14} />
       </div>
@@ -25,7 +25,7 @@ export default function SessionsLoading() {
             padding: "12px 16px",
             borderBottom: "1px solid var(--card-border)",
             background: "var(--panel)",
-            gap: 12,
+            gap: "var(--space-12)",
           }}
         >
           {COLS.map((c) => (
@@ -41,7 +41,7 @@ export default function SessionsLoading() {
               alignItems: "center",
               padding: "14px 16px",
               borderBottom: i === 7 ? "none" : "1px solid var(--card-border)",
-              gap: 12,
+              gap: "var(--space-12)",
             }}
           >
             <Skeleton width="70%" height={12} />

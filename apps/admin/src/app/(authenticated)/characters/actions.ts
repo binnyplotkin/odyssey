@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -13,10 +14,13 @@ import {
   type Perspective,
   type TimeIndex,
   type UpdateCharacterInput,
+  type VoiceSettingsOverride,
   type WikiPageType,
 } from "@odyssey/db";
 import { embedText, EMBEDDING_MODEL } from "@odyssey/engine";
 import { call, extractToolUse } from "@odyssey/wiki-ingest";
+import { invalidateCharactersList } from "@/lib/characters-cache";
+import { invalidateCharacterDetail } from "@/lib/character-detail-cache";
 
 /** Hooks passed to wiki.savePage so writes get a fresh embedding when the
  * textual content materially changes. Single shared object so manual edits,
@@ -59,7 +63,7 @@ export async function createCharacter(input: {
   // Normalize eras: trim, dedupe keys, reindex order 0..N-1.
   const normalizedEras = normalizeEras(input.eras ?? []);
 
-  await store.create({
+  const character = await store.create({
     slug,
     title,
     summary: input.summary?.trim() || undefined,
@@ -68,7 +72,31 @@ export async function createCharacter(input: {
   });
 
   revalidatePath("/characters");
-  redirect(`/characters/${slug}`);
+  invalidateCharactersList();
+  redirect(`/characters/${character.id}`);
+}
+
+export async function createUnnamedCharacter(): Promise<ActionResult<{ id: string }>> {
+  const store = getCharacterStore();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const slug = `character-${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const existing = await store.getBySlug(slug);
+    if (existing) continue;
+
+    const character = await store.create({
+      slug,
+      title: "Untitled character",
+      summary: undefined,
+      eras: [],
+    });
+
+    revalidatePath("/characters");
+    invalidateCharactersList();
+    redirect(`/characters/${character.id}`);
+  }
+
+  return { ok: false, error: "Could not create a unique character. Try again." };
 }
 
 function normalizeEras(eras: EraConfig[]): EraConfig[] {
@@ -99,6 +127,7 @@ export async function updateCharacterIngestionPrompt(
   await store.update(id, { ingestionPrompt: ingestionPrompt.trim() || null } as UpdateCharacterInput);
   revalidatePath(`/characters/${existing.slug}`);
   revalidatePath("/characters");
+  invalidateCharactersList();
   return { ok: true };
 }
 
@@ -120,7 +149,12 @@ export async function updateCharacterEras(
 
 export async function updateCharacterMeta(
   id: string,
-  meta: { title?: string; summary?: string; image?: string | null },
+  meta: {
+    title?: string;
+    summary?: string;
+    image?: string | null;
+    thumbnailColor?: string | null;
+  },
 ): Promise<ActionResult> {
   const store = getCharacterStore();
   const existing = await store.getById(id);
@@ -133,9 +167,33 @@ export async function updateCharacterMeta(
   }
   if (meta.summary !== undefined) patch.summary = meta.summary.trim() || null;
   if (meta.image !== undefined) patch.image = meta.image;
+  if (meta.thumbnailColor !== undefined) patch.thumbnailColor = meta.thumbnailColor;
   await store.update(id, patch);
   revalidatePath(`/characters/${existing.slug}`);
+  revalidatePath(`/characters/${existing.id}`);
   revalidatePath("/characters");
+  invalidateCharactersList();
+  invalidateCharacterDetail(existing.id);
+  return { ok: true };
+}
+
+/* ── Voice settings override ──────────────────────────────────── */
+
+/**
+ * Per-binding override of the bound voice's runtime tuning. `null` clears
+ * the override (inherit the voice row's `providerConfig` as-is); a non-
+ * null value overlays specific fields at synth time. Provider-keyed so
+ * the engine resolver can narrow safely.
+ */
+export async function updateCharacterVoiceSettings(
+  id: string,
+  voiceSettings: VoiceSettingsOverride | null,
+): Promise<ActionResult> {
+  const store = getCharacterStore();
+  const existing = await store.getById(id);
+  if (!existing) return { ok: false, error: "Character not found." };
+  await store.update(id, { voiceSettings });
+  revalidatePath(`/characters/${existing.slug}`);
   return { ok: true };
 }
 
@@ -148,6 +206,22 @@ export async function rebuildCharacterEdges(
   const result = await wiki.rebuildEdges(id);
   const existing = await getCharacterStore().getById(id);
   if (existing) revalidatePath(`/characters/${existing.slug}`);
+  return { ok: true, data: result };
+}
+
+export async function recomputeKnowledgeLayout(
+  id: string,
+): Promise<ActionResult<{ updated: number }>> {
+  const { computeKnowledgeLayout } = await import("@/lib/kg-layout");
+  const wiki = getWikiStore();
+  const pages = await wiki.listPages(id);
+  // Cold recompute — ignore existing seeds so the layout fully re-settles.
+  const layout = computeKnowledgeLayout(
+    pages.map((p) => ({ id: p.id, slug: p.slug, embedding: p.embedding, seed: null })),
+  );
+  const result = await wiki.saveLayout(id, layout);
+  const existing = await getCharacterStore().getById(id);
+  if (existing) revalidatePath(`/characters/${existing.slug}/knowledge`);
   return { ok: true, data: result };
 }
 
@@ -241,6 +315,24 @@ const KIND_DESCRIPTIONS: Record<SourceKindClassification, string> = {
 };
 
 const MAX_CLASSIFY_CHARS = 4000;
+const CLASSIFY_RETRY_DELAYS_MS = [800, 1800];
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isProviderOverloadedError(err: unknown): boolean {
+  const status = (err as { status?: unknown })?.status;
+  const message = err instanceof Error ? err.message : String(err);
+  return status === 529 || /529|overloaded_error|overloaded/i.test(message);
+}
+
+function formatClassifyError(err: unknown): string {
+  if (isProviderOverloadedError(err)) {
+    return "Model provider is overloaded. Try regenerate again in a moment.";
+  }
+  return err instanceof Error ? err.message : String(err);
+}
 
 export async function classifySource(
   characterId: string,
@@ -326,47 +418,62 @@ export async function classifySource(
   ].join("\n\n");
 
   try {
-    const result = await call({
-      model: "claude-haiku-4-5",
-      system,
-      messages: [{ role: "user", content: userMessage }],
-      tools: [
-        {
-          name: "classify_source",
-          description:
-            "Return the classification for the provided source text.",
-          input_schema: {
-            type: "object",
-            properties: {
-              title: {
-                type: "string",
-                description:
-                  "Short descriptive title (≤60 chars). Describe the text, not the character.",
-              },
-              kind: {
-                type: "string",
-                enum: [
-                  "primary",
-                  "commentary",
-                  "annotation",
-                  "transcript",
-                  "reference",
-                ],
-              },
-              tags: {
-                type: "array",
-                items: { type: "string" },
-                minItems: 2,
-                maxItems: 5,
+    let result: Awaited<ReturnType<typeof call>> | null = null;
+    for (let attempt = 0; attempt <= CLASSIFY_RETRY_DELAYS_MS.length; attempt += 1) {
+      try {
+        result = await call({
+          model: "claude-haiku-4-5",
+          system,
+          messages: [{ role: "user", content: userMessage }],
+          tools: [
+            {
+              name: "classify_source",
+              description:
+                "Return the classification for the provided source text.",
+              input_schema: {
+                type: "object",
+                properties: {
+                  title: {
+                    type: "string",
+                    description:
+                      "Short descriptive title (≤60 chars). Describe the text, not the character.",
+                  },
+                  kind: {
+                    type: "string",
+                    enum: [
+                      "primary",
+                      "commentary",
+                      "annotation",
+                      "transcript",
+                      "reference",
+                    ],
+                  },
+                  tags: {
+                    type: "array",
+                    items: { type: "string" },
+                    minItems: 2,
+                    maxItems: 5,
+                  },
+                },
+                required: ["title", "kind", "tags"],
               },
             },
-            required: ["title", "kind", "tags"],
-          },
-        },
-      ],
-      toolChoice: { type: "tool", name: "classify_source" },
-      maxTokens: 400,
-    });
+          ],
+          toolChoice: { type: "tool", name: "classify_source" },
+          maxTokens: 400,
+        });
+        break;
+      } catch (err: unknown) {
+        const retryDelay = CLASSIFY_RETRY_DELAYS_MS[attempt];
+        if (retryDelay !== undefined && isProviderOverloadedError(err)) {
+          await sleep(retryDelay);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!result) throw new Error("Classification did not return a response.");
 
     const out = extractToolUse<{
       title: string;
@@ -385,8 +492,7 @@ export async function classifySource(
 
     return { ok: true, data: { title, kind: out.kind, tags } };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: msg };
+    return { ok: false, error: formatClassifyError(err) };
   }
 }
 
@@ -553,5 +659,6 @@ export async function deleteCharacter(id: string): Promise<ActionResult> {
   if (!existing) return { ok: false, error: "Character not found." };
   await store.remove(id);
   revalidatePath("/characters");
+  invalidateCharactersList();
   redirect("/characters");
 }

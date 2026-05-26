@@ -46,7 +46,7 @@ const KIND_COLORS: Record<EntityKind, string> = {
   person: "#FBA7C0",
   place: "#7AB0E8",
   object: "#FACC15",
-  group: "#A88CFF",
+  group: "#8B5CF6",
 };
 
 const KIND_LABELS: Record<EntityKind, string> = {
@@ -244,10 +244,10 @@ export function EntityPicker({
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         style={{
-          display: "inline-flex", alignItems: "center", gap: 4,
-          padding: "2px 6px", borderRadius: 6, border: "none",
+          display: "inline-flex", alignItems: "center", gap: "var(--space-4)",
+          padding: "2px 6px", borderRadius: "var(--radius-sm)", border: "none",
           background: "transparent", color: T.muted,
-          fontFamily: T.fontBody, fontSize: 11,
+          fontFamily: T.fontBody, fontSize: "var(--font-size-sm)",
           cursor: "pointer", outline: "none",
           ...triggerStyle,
         }}
@@ -269,16 +269,16 @@ export function EntityPicker({
             zIndex: 900,
             display: "flex", flexDirection: "column",
             background: T.background,
-            borderRadius: 12,
+            borderRadius: "var(--radius-xl)",
             border: `1px solid ${T.border}`,
-            boxShadow: "0 24px 48px -12px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.4)",
+            boxShadow: "var(--elevation-menu)",
             maxHeight: "60vh",
             overflow: "hidden",
           }}
         >
           {/* Search */}
           <div style={{
-            display: "flex", alignItems: "center", gap: 8,
+            display: "flex", alignItems: "center", gap: "var(--space-8)",
             padding: "10px 12px", borderBottom: `1px solid ${T.border}`,
             flexShrink: 0,
           }}>
@@ -297,11 +297,11 @@ export function EntityPicker({
               placeholder="Search entities…"
               style={{
                 flex: 1, border: "none", outline: "none", background: "transparent",
-                color: T.fg, fontFamily: T.fontBody, fontSize: 12,
+                color: T.fg, fontFamily: T.fontBody, fontSize: "var(--font-size-base)",
               }}
             />
             <span style={{
-              fontFamily: T.fontMono, fontSize: 9, color: T.muted,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: T.muted,
               letterSpacing: "0.06em", textTransform: "uppercase",
               flexShrink: 0,
             }}>
@@ -312,7 +312,7 @@ export function EntityPicker({
           {/* Kind filter pills (hidden when locked via prop) */}
           {!kindFilter && (
             <div style={{
-              display: "flex", flexWrap: "wrap", gap: 4,
+              display: "flex", flexWrap: "wrap", gap: "var(--space-4)",
               padding: "8px 10px", borderBottom: `1px solid ${T.border}`,
               flexShrink: 0,
             }}>
@@ -337,11 +337,11 @@ export function EntityPicker({
           )}
 
           {/* List */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 4 }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "var(--space-4)" }}>
             {filtered.length === 0 ? (
               <div style={{
                 padding: "24px 12px", textAlign: "center",
-                fontFamily: T.fontBody, fontSize: 12, color: T.muted,
+                fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted,
               }}>
                 {entities.length === 0
                   ? "No entities yet — ingest some sources first."
@@ -361,9 +361,9 @@ export function EntityPicker({
                     onMouseEnter={() => setHighlightIdx(idx)}
                     onClick={() => pickRow(e.slug)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 10,
+                      display: "flex", alignItems: "center", gap: "var(--space-10)",
                       width: "100%", textAlign: "left",
-                      padding: "8px 10px", borderRadius: 8, border: "none",
+                      padding: "8px 10px", borderRadius: "var(--radius-md)", border: "none",
                       background: highlighted ? T.cardHover : "transparent",
                       cursor: "pointer", outline: "none",
                     }}
@@ -371,10 +371,10 @@ export function EntityPicker({
                     <Checkbox checked={selected} />
                     <div style={{
                       display: "flex", flexDirection: "column",
-                      gap: 2, flex: 1, minWidth: 0,
+                      gap: "var(--space-2)", flex: 1, minWidth: 0,
                     }}>
                       <span style={{
-                        fontFamily: T.fontBody, fontSize: 12, fontWeight: 500,
+                        fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500,
                         color: selected ? T.accent : T.fg,
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>
@@ -398,7 +398,7 @@ export function EntityPicker({
           {/* Hint footer */}
           <div style={{
             padding: "8px 12px", borderTop: `1px solid ${T.border}`,
-            fontFamily: T.fontMono, fontSize: 9, color: T.muted,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", color: T.muted,
             letterSpacing: "0.06em", textTransform: "uppercase",
             flexShrink: 0,
           }}>
@@ -426,8 +426,8 @@ function KindPill({
       type="button"
       onClick={onClick}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 6,
-        padding: "3px 9px", borderRadius: 999,
+        display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
+        padding: "3px 9px", borderRadius: "var(--radius-pill)",
         border: active
           ? `1px solid ${tint}55`
           : `1px solid ${T.border}`,
@@ -457,9 +457,9 @@ function KindBadge({ kind }: { kind: EntityKind }) {
     <span
       style={{
         display: "inline-flex", alignItems: "center",
-        padding: "1px 7px", borderRadius: 4,
+        padding: "1px 7px", borderRadius: "var(--radius-xs)",
         background: `${color}1F`, border: `1px solid ${color}33`,
-        color, fontFamily: T.fontMono, fontSize: 9, fontWeight: 600,
+        color, fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 600,
         letterSpacing: "0.06em", textTransform: "uppercase",
         flexShrink: 0,
       }}
@@ -475,7 +475,7 @@ function Checkbox({ checked }: { checked: boolean }) {
       aria-hidden
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 14, height: 14, borderRadius: 4,
+        width: 14, height: 14, borderRadius: "var(--radius-xs)",
         border: `1px solid ${checked ? T.accent : T.border}`,
         background: checked ? T.accent : "transparent",
         flexShrink: 0,

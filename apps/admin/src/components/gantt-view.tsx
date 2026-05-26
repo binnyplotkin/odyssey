@@ -486,14 +486,14 @@ export default function GanttView({
             height: 44,
             display: "flex",
             alignItems: "center",
-            paddingInline: 16,
+            paddingInline: "var(--space-16)",
             borderBottom: "1px solid var(--divider)",
             flexShrink: 0,
           }}
         >
           <span
             style={{
-              fontSize: 10,
+              fontSize: "var(--font-size-xs)",
               fontWeight: 600,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
@@ -519,8 +519,8 @@ export default function GanttView({
                     height: ROW_VERSION,
                     display: "flex",
                     alignItems: "center",
-                    paddingInline: 16,
-                    gap: 10,
+                    paddingInline: "var(--space-16)",
+                    gap: "var(--space-10)",
                     background: isVersionSelected ? "rgba(59, 130, 246, 0.08)" : "var(--card)",
                     borderBottom: "1px solid var(--divider)",
                     borderLeft: isVersionSelected ? "2px solid rgba(59, 130, 246, 0.5)" : "2px solid transparent",
@@ -535,15 +535,15 @@ export default function GanttView({
                       border: "none",
                       cursor: "pointer",
                       color: "var(--text-quaternary)",
-                      fontSize: 9,
-                      padding: 2,
+                      fontSize: "var(--font-size-2xs)",
+                      padding: "var(--space-2)",
                       width: 16,
                       height: 16,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       flexShrink: 0,
-                      borderRadius: 3,
+                      borderRadius: "var(--radius-xs)",
                       transition: "background 0.15s ease",
                     }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--card-hover)"; }}
@@ -564,7 +564,7 @@ export default function GanttView({
                   />
                   <span
                     style={{
-                      fontSize: 14,
+                      fontSize: "var(--font-size-lg)",
                       fontWeight: 700,
                       color: "var(--text-primary)",
                       fontFamily: "var(--font-mono, ui-monospace, monospace)",
@@ -574,7 +574,7 @@ export default function GanttView({
                   </span>
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: "var(--font-size-sm)",
                       color: "var(--text-quaternary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -587,12 +587,12 @@ export default function GanttView({
                   {isCollapsed && v.tasks.length > 0 && (
                     <span
                       style={{
-                        fontSize: 9,
+                        fontSize: "var(--font-size-2xs)",
                         fontWeight: 600,
                         color: "var(--text-quaternary)",
                         background: "var(--card-border)",
                         padding: "1px 6px",
-                        borderRadius: 8,
+                        borderRadius: "var(--radius-md)",
                         flexShrink: 0,
                       }}
                     >
@@ -616,8 +616,8 @@ export default function GanttView({
                     display: "flex",
                     alignItems: "center",
                     paddingLeft: 30,
-                    paddingRight: 16,
-                    gap: 8,
+                    paddingRight: "var(--space-16)",
+                    gap: "var(--space-8)",
                     borderBottom: "1px solid var(--divider)",
                     flexShrink: 0,
                     cursor: onFeatureClick ? "pointer" : undefined,
@@ -637,15 +637,15 @@ export default function GanttView({
                         border: "none",
                         cursor: "pointer",
                         color: "var(--text-quaternary)",
-                        fontSize: 8,
-                        padding: 2,
+                        fontSize: "var(--font-size-3xs)",
+                        padding: "var(--space-2)",
                         width: 14,
                         height: 14,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
-                        borderRadius: 3,
+                        borderRadius: "var(--radius-xs)",
                         transition: "background 0.15s ease",
                       }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--card-hover)"; }}
@@ -669,7 +669,7 @@ export default function GanttView({
                   />
                   <span
                     style={{
-                      fontSize: 12,
+                      fontSize: "var(--font-size-base)",
                       color: isSelected ? "var(--text-primary)" : "var(--text-tertiary)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
@@ -682,12 +682,12 @@ export default function GanttView({
                   {hasTickets && isFeatureCollapsed && (
                     <span
                       style={{
-                        fontSize: 9,
+                        fontSize: "var(--font-size-2xs)",
                         fontWeight: 600,
                         color: "var(--text-placeholder)",
                         background: "var(--input-bg)",
                         padding: "1px 5px",
-                        borderRadius: 6,
+                        borderRadius: "var(--radius-sm)",
                         flexShrink: 0,
                       }}
                     >
@@ -716,8 +716,8 @@ export default function GanttView({
                   display: "flex",
                   alignItems: "center",
                   paddingLeft: 50,
-                  paddingRight: 16,
-                  gap: 6,
+                  paddingRight: "var(--space-16)",
+                  gap: "var(--space-6)",
                   borderBottom: "1px solid var(--divider)",
                   flexShrink: 0,
                   background: isBeingReordered
@@ -739,7 +739,7 @@ export default function GanttView({
                     style={{
                       cursor: "grab",
                       color: "var(--text-placeholder)",
-                      fontSize: 9,
+                      fontSize: "var(--font-size-2xs)",
                       flexShrink: 0,
                       lineHeight: 1,
                       touchAction: "none",
@@ -764,7 +764,7 @@ export default function GanttView({
                 />
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: "var(--font-size-sm)",
                     color: isTicketSelected ? "var(--text-secondary)" : "var(--text-quaternary)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -808,9 +808,9 @@ export default function GanttView({
                   flex: 1,
                   display: "flex",
                   alignItems: "center",
-                  paddingLeft: 12,
+                  paddingLeft: "var(--space-12)",
                   borderLeft: i > 0 ? "1px solid var(--divider)" : "none",
-                  fontSize: 11,
+                  fontSize: "var(--font-size-sm)",
                   fontWeight: isCurrent ? 600 : 400,
                   color: isCurrent
                     ? "var(--text-primary)"
@@ -913,17 +913,17 @@ export default function GanttView({
                       position: "absolute",
                       top: 12,
                       bottom: 12,
-                      borderRadius: 6,
+                      borderRadius: "var(--radius-sm)",
                       background: v.barBg,
                       border: `1px solid ${v.barBorder}`,
                       display: "flex",
                       alignItems: "center",
-                      paddingInline: 10,
+                      paddingInline: "var(--space-10)",
                       minWidth: 1,
                     },
                     <span
                       style={{
-                        fontSize: 10,
+                        fontSize: "var(--font-size-xs)",
                         fontWeight: 600,
                         fontFamily: "var(--font-mono, ui-monospace, monospace)",
                         color: v.color,
@@ -987,19 +987,19 @@ export default function GanttView({
                       position: "absolute",
                       top: 10,
                       bottom: 10,
-                      borderRadius: 5,
+                      borderRadius: "var(--radius-sm)",
                       background: t.color,
                       border: barSelected ? `2px solid ${t.borderColor}` : `1px solid ${t.borderColor}`,
                       boxShadow: barSelected ? `0 0 12px ${t.borderColor}` : "none",
                       display: "flex",
                       alignItems: "center",
-                      paddingInline: 8,
+                      paddingInline: "var(--space-8)",
                       minWidth: 1,
                       overflow: "hidden",
                     },
                     <span
                       style={{
-                        fontSize: 10,
+                        fontSize: "var(--font-size-xs)",
                         fontWeight: 500,
                         fontFamily: "var(--font-mono, ui-monospace, monospace)",
                         color: "var(--text-tertiary)",
@@ -1044,20 +1044,20 @@ export default function GanttView({
                     position: "absolute",
                     top: 7,
                     bottom: 7,
-                    borderRadius: 4,
+                    borderRadius: "var(--radius-xs)",
                     background: tk.color,
                     border: ticketSelected ? `2px solid ${tk.borderColor}` : `1px solid ${tk.borderColor}`,
                     boxShadow: ticketSelected ? `0 0 12px ${tk.borderColor}` : "none",
                     display: "flex",
                     alignItems: "center",
-                    paddingInline: 6,
+                    paddingInline: "var(--space-6)",
                     minWidth: 1,
                     overflow: "hidden",
                     cursor: onTicketClick ? "pointer" : undefined,
                   },
                   <span
                     style={{
-                      fontSize: 9,
+                      fontSize: "var(--font-size-2xs)",
                       fontWeight: 500,
                       fontFamily: "var(--font-mono, ui-monospace, monospace)",
                       color: "var(--text-tertiary)",

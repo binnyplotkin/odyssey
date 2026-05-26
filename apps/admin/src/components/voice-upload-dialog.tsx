@@ -202,13 +202,13 @@ export function VoiceUploadDialog({ open, onClose, existingSlugs }: Props) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.60)",
+        background: "var(--modal-backdrop)",
         backdropFilter: "blur(8px)",
         zIndex: 100,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 24,
+        padding: "var(--space-24)",
       }}
     >
       <div
@@ -217,13 +217,15 @@ export function VoiceUploadDialog({ open, onClose, existingSlugs }: Props) {
           maxWidth: "100%",
           background: "var(--background)",
           border: "1px solid var(--border)",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.50)",
+          borderRadius: "var(--radius-xl)",
+          overflow: "hidden",
+          boxShadow: "var(--elevation-panel)",
           display: "flex",
           flexDirection: "column",
         }}
       >
         <DialogHeader state={state} onClose={onClose} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 28 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-24)", padding: 28 }}>
           {state.kind === "drop" && (
             <DropContent onFileSelected={handleFileSelected} />
           )}
@@ -252,11 +254,14 @@ export function VoiceUploadDialog({ open, onClose, existingSlugs }: Props) {
             <div
               style={{
                 padding: "10px 14px",
-                background: "rgba(232,160,160,0.06)",
-                border: "1px solid rgba(232,160,160,0.30)",
-                color: "#E8A0A0",
+                background:
+                  "var(--critical-wash)",
+                border:
+                  "1px solid var(--critical-border)",
+                borderRadius: "var(--radius-md)",
+                color: "var(--status-error)",
                 fontFamily: FONT_MONO,
-                fontSize: 12,
+                fontSize: "var(--font-size-base)",
               }}
             >
               {error}
@@ -303,11 +308,11 @@ function DialogHeader({
         borderBottom: "1px solid var(--border)",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
         <div
           style={{
             fontFamily: FONT_HEAD,
-            fontSize: 18,
+            fontSize: "var(--font-size-2xl)",
             fontWeight: 600,
             color: "var(--text-primary)",
             letterSpacing: "-0.01em",
@@ -315,7 +320,7 @@ function DialogHeader({
         >
           {titles[state.kind]}
         </div>
-        <div style={{ fontFamily: FONT_HEAD, fontSize: 12, color: "var(--text-secondary)" }}>
+        <div style={{ fontFamily: FONT_HEAD, fontSize: "var(--font-size-base)", color: "var(--text-secondary)" }}>
           {subtitles[state.kind]}
         </div>
       </div>
@@ -332,6 +337,7 @@ function DialogHeader({
           height: 30,
           background: "transparent",
           border: "1px solid var(--border)",
+          borderRadius: "var(--radius-pill)",
           color: "var(--text-tertiary)",
           cursor: dismissable ? "pointer" : "not-allowed",
           opacity: dismissable ? 1 : 0.4,
@@ -377,9 +383,9 @@ function DialogFooter({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
+          gap: "var(--space-6)",
           fontFamily: FONT_HEAD,
-          fontSize: 12,
+          fontSize: "var(--font-size-base)",
           color: "var(--text-tertiary)",
         }}
       >
@@ -399,11 +405,14 @@ function DialogFooter({
           alignItems: "center",
           gap: 7,
           padding: "9px 16px",
-          background: canSubmit ? "var(--accent-strong)" : "rgba(255,255,255,0.04)",
+          background: canSubmit
+            ? "var(--accent-strong)"
+            : "var(--ink-soft)",
           border: `1px solid ${canSubmit ? "var(--accent-strong)" : "var(--border)"}`,
+          borderRadius: "var(--radius-md)",
           color: canSubmit ? "var(--background)" : "var(--text-quaternary)",
           fontFamily: FONT_HEAD,
-          fontSize: 13,
+          fontSize: "var(--font-size-md)",
           fontWeight: 600,
           cursor: canSubmit ? "pointer" : "not-allowed",
         }}
@@ -453,12 +462,13 @@ function DropContent({ onFileSelected }: { onFileSelected: (f: File) => void }) 
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: 16,
+          gap: "var(--space-16)",
           padding: "56px 32px",
           background: hovering
-            ? "rgba(140,231,210,0.08)"
-            : "rgba(140,231,210,0.03)",
-          border: `1.5px dashed ${hovering ? "var(--accent-strong)" : "rgba(140,231,210,0.30)"}`,
+            ? "color-mix(in srgb, var(--accent-strong) 8%, transparent)"
+            : "color-mix(in srgb, var(--accent-strong) 3%, transparent)",
+          border: `1.5px dashed ${hovering ? "var(--accent-strong)" : "var(--accent-border)"}`,
+          borderRadius: "var(--radius-xl)",
           cursor: "pointer",
           transition: "background 100ms, border-color 100ms",
         }}
@@ -470,8 +480,9 @@ function DropContent({ onFileSelected }: { onFileSelected: (f: File) => void }) 
             justifyContent: "center",
             width: 56,
             height: 56,
-            background: "rgba(140,231,210,0.08)",
-            border: "1px solid rgba(140,231,210,0.18)",
+            background: "color-mix(in srgb, var(--accent-strong) 8%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--accent-strong) 18%, transparent)",
+            borderRadius: "var(--radius-xl)",
           }}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-strong)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -480,18 +491,18 @@ function DropContent({ onFileSelected }: { onFileSelected: (f: File) => void }) 
             <line x1="12" x2="12" y1="3" y2="15" />
           </svg>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-6)" }}>
           <div style={{ fontFamily: FONT_HEAD, fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
             Drop your audio clip here
           </div>
-          <div style={{ fontFamily: FONT_HEAD, fontSize: 13, color: "var(--text-secondary)" }}>
+          <div style={{ fontFamily: FONT_HEAD, fontSize: "var(--font-size-md)", color: "var(--text-secondary)" }}>
             or <span style={{ color: "var(--accent-strong)", textDecoration: "underline" }}>browse files</span>
           </div>
         </div>
         <div
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: "var(--text-quaternary)",
             letterSpacing: "0.06em",
           }}
@@ -511,10 +522,11 @@ function ReviewContent({ file, objectUrl }: { file: File; objectUrl: string }) {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 14,
-        padding: 20,
-        background: "rgba(140,231,210,0.04)",
-        border: "1px solid rgba(140,231,210,0.18)",
+        gap: "var(--space-14)",
+        padding: "var(--space-20)",
+        background: "color-mix(in srgb, var(--accent-strong) 4%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--accent-strong) 18%, transparent)",
+        borderRadius: "var(--radius-xl)",
       }}
     >
       <audio controls preload="metadata" src={objectUrl} style={{ width: "100%" }} />
@@ -523,16 +535,16 @@ function ReviewContent({ file, objectUrl }: { file: File; objectUrl: string }) {
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          paddingTop: 12,
-          borderTop: "1px solid rgba(140,231,210,0.10)",
-          gap: 12,
+          paddingTop: "var(--space-12)",
+          borderTop: "1px solid color-mix(in srgb, var(--accent-strong) 10%, transparent)",
+          gap: "var(--space-12)",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", flex: 1, minWidth: 0 }}>
           <div
             style={{
               fontFamily: FONT_MONO,
-              fontSize: 11,
+              fontSize: "var(--font-size-sm)",
               color: "var(--text-primary)",
               letterSpacing: "0.02em",
               overflow: "hidden",
@@ -542,7 +554,7 @@ function ReviewContent({ file, objectUrl }: { file: File; objectUrl: string }) {
           >
             {file.name}
           </div>
-          <div style={{ fontFamily: FONT_HEAD, fontSize: 11, color: "var(--text-tertiary)" }}>
+          <div style={{ fontFamily: FONT_HEAD, fontSize: "var(--font-size-sm)", color: "var(--text-tertiary)" }}>
             {(file.size / (1024 * 1024)).toFixed(2)} MB · {file.type || "audio"}
           </div>
         </div>
@@ -571,18 +583,19 @@ function ExtractingContent({
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: 18,
+          gap: "var(--space-18)",
           padding: "32px 24px",
-          background: "rgba(250,204,21,0.04)",
-          border: "1px solid rgba(250,204,21,0.18)",
+          background: "color-mix(in srgb, var(--status-draft) 4%, transparent)",
+          border: "1px solid color-mix(in srgb, var(--status-draft) 18%, transparent)",
+          borderRadius: "var(--radius-xl)",
         }}
       >
         <SpinnerSquare />
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-6)" }}>
           <div style={{ fontFamily: FONT_HEAD, fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
             {state.kind === "creating" ? "Uploading source clip" : "Computing voice embedding"}
           </div>
-          <div style={{ fontFamily: FONT_HEAD, fontSize: 12, color: "var(--text-secondary)" }}>
+          <div style={{ fontFamily: FONT_HEAD, fontSize: "var(--font-size-base)", color: "var(--text-secondary)" }}>
             {state.kind === "creating"
               ? "voice-sources bucket"
               : `Pocket TTS · audio-rt-production · ${elapsedSec}s elapsed`}
@@ -590,7 +603,7 @@ function ExtractingContent({
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
         <StepRow
           done={true}
           label="Upload to voice-sources"
@@ -630,8 +643,9 @@ function SpinnerSquare() {
           justifyContent: "center",
           width: 56,
           height: 56,
-          background: "rgba(250,204,21,0.10)",
-          border: "1px solid rgba(250,204,21,0.30)",
+          background: "color-mix(in srgb, var(--status-draft) 10%, transparent)",
+          border: "1px solid color-mix(in srgb, var(--status-draft) 30%, transparent)",
+          borderRadius: "var(--radius-xl)",
         }}
       >
         <svg
@@ -639,7 +653,7 @@ function SpinnerSquare() {
           height="24"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#FACC15"
+          stroke="var(--status-draft)"
           strokeWidth="2.4"
           strokeLinecap="round"
           style={{
@@ -671,20 +685,21 @@ function StepRow({
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
+        gap: "var(--space-12)",
         padding: "10px 12px",
         background: active
-          ? "rgba(250,204,21,0.05)"
+          ? "color-mix(in srgb, var(--status-draft) 5%, transparent)"
           : done
-            ? "rgba(255,255,255,0.025)"
+            ? "color-mix(in srgb, var(--text-primary) 2.5%, transparent)"
             : "transparent",
         border: `1px ${done || active ? "solid" : "dashed"} ${
           active
-            ? "rgba(250,204,21,0.30)"
+            ? "color-mix(in srgb, var(--status-draft) 30%, transparent)"
             : done
               ? "var(--border)"
-              : "rgba(255,255,255,0.06)"
+              : "var(--ink-fill)"
         }`,
+        borderRadius: "var(--radius-md)",
       }}
     >
       {done ? (
@@ -692,17 +707,17 @@ function StepRow({
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
         </svg>
       ) : active ? (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FACC15" strokeWidth="2.5" strokeLinecap="round" style={{ animation: "voice-upload-spin 1.2s linear infinite", transformOrigin: "center" }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--status-draft)" strokeWidth="2.5" strokeLinecap="round" style={{ animation: "voice-upload-spin 1.2s linear infinite", transformOrigin: "center" }}>
           <path d="M21 12a9 9 0 1 1-9-9" />
         </svg>
       ) : (
-        <div style={{ width: 12, height: 12, borderRadius: 999, border: "1.5px solid rgba(255,255,255,0.20)" }} />
+        <div style={{ width: 12, height: 12, borderRadius: "var(--radius-pill)", border: "1.5px solid color-mix(in srgb, var(--text-primary) 20%, transparent)" }} />
       )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", flex: 1 }}>
         <span
           style={{
             fontFamily: FONT_HEAD,
-            fontSize: 12,
+            fontSize: "var(--font-size-base)",
             fontWeight: 600,
             color: active ? "var(--text-primary)" : done ? "var(--text-primary)" : "var(--text-quaternary)",
           }}
@@ -712,8 +727,8 @@ function StepRow({
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 10,
-            color: active ? "rgba(250,204,21,0.92)" : "var(--text-tertiary)",
+            fontSize: "var(--font-size-xs)",
+            color: active ? "var(--status-draft)" : "var(--text-tertiary)",
           }}
         >
           {sub}
@@ -741,7 +756,7 @@ function FieldsBlock({
   disabled: boolean;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-14)" }}>
       <Field label="VOICE NAME">
         <input
           type="text"
@@ -752,11 +767,12 @@ function FieldsBlock({
           style={{
             width: "100%",
             padding: "10px 12px",
-            background: "rgba(0,0,0,0.30)",
+            background: "var(--input-bg)",
             border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
             color: "var(--text-primary)",
             fontFamily: FONT_HEAD,
-            fontSize: 14,
+            fontSize: "var(--font-size-lg)",
             outline: "none",
             opacity: disabled ? 0.5 : 1,
           }}
@@ -768,7 +784,7 @@ function FieldsBlock({
           slug && slugAvailable === true
             ? { text: "✓ available", color: "var(--accent-strong)" }
             : slug && slugAvailable === false
-              ? { text: "✗ taken or invalid", color: "#E8A0A0" }
+              ? { text: "✗ taken or invalid", color: "var(--status-error)" }
               : { text: "auto from name", color: "var(--text-quaternary)" }
         }
       >
@@ -781,17 +797,18 @@ function FieldsBlock({
           style={{
             width: "100%",
             padding: "10px 12px",
-            background: "rgba(0,0,0,0.30)",
+            background: "var(--input-bg)",
             border: `1px solid ${
               slug && slugAvailable === true
-                ? "rgba(140,231,210,0.40)"
+                ? "var(--accent-glow)"
                 : slug && slugAvailable === false
-                  ? "rgba(232,160,160,0.40)"
+                  ? "color-mix(in srgb, var(--status-error) 40%, transparent)"
                   : "var(--border)"
             }`,
+            borderRadius: "var(--radius-md)",
             color: "var(--text-primary)",
             fontFamily: FONT_MONO,
-            fontSize: 13,
+            fontSize: "var(--font-size-md)",
             outline: "none",
             opacity: disabled ? 0.5 : 1,
           }}
@@ -811,12 +828,12 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 10,
+            fontSize: "var(--font-size-xs)",
             color: "var(--text-tertiary)",
             letterSpacing: "0.14em",
             textTransform: "uppercase",
@@ -825,7 +842,7 @@ function Field({
           {label}
         </span>
         {hint && (
-          <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: hint.color, letterSpacing: "0.06em" }}>
+          <span style={{ fontFamily: FONT_MONO, fontSize: "var(--font-size-xs)", color: hint.color, letterSpacing: "0.06em" }}>
             {hint.text}
           </span>
         )}

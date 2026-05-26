@@ -68,10 +68,10 @@ export function WorldSettingsPanel({ detail }: { detail: WorldDetail }) {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: T.fontBody }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)", fontFamily: T.fontBody }}>
       <header>
         <div style={{
-          fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+          fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
           letterSpacing: "0.1em", textTransform: "uppercase", color: T.dim,
         }}>
           Settings
@@ -87,37 +87,37 @@ export function WorldSettingsPanel({ detail }: { detail: WorldDetail }) {
       {sections.map((section) => (
         <section key={section.number} style={{
           background: T.panel, border: `1px solid ${T.border}`,
-          borderRadius: 12, padding: "22px 24px",
+          borderRadius: "var(--radius-xl)", padding: "22px 24px",
         }}>
-          <header style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 14 }}>
+          <header style={{ display: "flex", alignItems: "baseline", gap: "var(--space-12)", marginBottom: "var(--space-14)" }}>
             <span style={{
-              fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
               letterSpacing: "0.1em", color: T.dim,
             }}>
               {section.number}
             </span>
             <h2 style={{
-              fontFamily: T.fontHeading, fontSize: 22, fontWeight: 600,
+              fontFamily: T.fontHeading, fontSize: "var(--font-size-3xl)", fontWeight: 600,
               letterSpacing: "-0.02em", lineHeight: "28px", margin: 0, color: T.fg,
             }}>
               {section.title}
             </h2>
           </header>
           <p style={{
-            fontFamily: T.fontBody, fontSize: 12, color: T.muted,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted,
             lineHeight: "18px", margin: "0 0 16px", maxWidth: 640,
           }}>
             {section.description}
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
             {section.rows.map((row) => (
               <div key={row.label} style={{
-                display: "grid", gridTemplateColumns: "180px 1fr", gap: 16,
+                display: "grid", gridTemplateColumns: "180px 1fr", gap: "var(--space-16)",
                 padding: "10px 0", borderBottom: `1px solid ${T.border}`,
                 alignItems: "baseline",
               }}>
                 <div style={{
-                  fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+                  fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
                   letterSpacing: "0.08em", textTransform: "uppercase", color: T.dim,
                 }}>
                   {row.label}
@@ -140,39 +140,39 @@ export function WorldSettingsPanel({ detail }: { detail: WorldDetail }) {
       <section style={{
         background: T.panel,
         border: `1px solid rgba(248, 113, 113, 0.2)`,
-        borderRadius: 12, padding: "22px 24px",
+        borderRadius: "var(--radius-xl)", padding: "22px 24px",
       }}>
-        <header style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
+        <header style={{ display: "flex", alignItems: "baseline", gap: "var(--space-12)", marginBottom: "var(--space-10)" }}>
           <span style={{
-            fontFamily: T.fontMono, fontSize: 10, fontWeight: 500,
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500,
             letterSpacing: "0.1em", color: T.dim,
           }}>
             05
           </span>
           <h2 style={{
-            fontFamily: T.fontHeading, fontSize: 22, fontWeight: 600,
+            fontFamily: T.fontHeading, fontSize: "var(--font-size-3xl)", fontWeight: 600,
             letterSpacing: "-0.02em", lineHeight: "28px", margin: 0, color: T.danger,
           }}>
             Danger zone
           </h2>
         </header>
         <p style={{
-          fontFamily: T.fontBody, fontSize: 12, color: T.muted,
+          fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted,
           lineHeight: "18px", margin: "0 0 16px", maxWidth: 640,
         }}>
           {editable
             ? "Archiving removes the world from Live filters but preserves its sessions. Deletion is permanent."
             : "This world is static and sourced from code. It cannot be archived or deleted from the admin."}
         </p>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: "var(--space-10)" }}>
           <button
             type="button"
             disabled={!editable}
             style={{
-              padding: "7px 14px", borderRadius: 8,
+              padding: "7px 14px", borderRadius: "var(--radius-md)",
               border: `1px solid ${T.border}`, background: "transparent",
               color: editable ? T.fg : T.dim,
-              fontFamily: T.fontBody, fontSize: 12, fontWeight: 500,
+              fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500,
               cursor: editable ? "pointer" : "not-allowed",
             }}
           >
@@ -182,10 +182,10 @@ export function WorldSettingsPanel({ detail }: { detail: WorldDetail }) {
             type="button"
             disabled={!editable}
             style={{
-              padding: "7px 14px", borderRadius: 8, border: "none",
+              padding: "7px 14px", borderRadius: "var(--radius-md)", border: "none",
               background: editable ? "rgba(248, 113, 113, 0.12)" : "rgba(255,255,255,0.04)",
               color: editable ? T.danger : T.dim,
-              fontFamily: T.fontBody, fontSize: 12, fontWeight: 600,
+              fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 600,
               cursor: editable ? "pointer" : "not-allowed",
             }}
           >

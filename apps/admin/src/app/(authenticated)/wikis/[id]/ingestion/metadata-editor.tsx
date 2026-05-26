@@ -1,32 +1,43 @@
 "use client";
 
-import { type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { EnumMenu, type EnumMenuOption } from "./enum-menu";
 
 /**
  * Metadata editor — Section 02 of the wiki ingestion flow.
  *
- * Eyebrow + classifier status on top, then a 2-column row (source title +
- * kind dropdown), then a tags chip row. Mirrors the Paper V1 direction:
- * sharp-cornered terminal chrome throughout, with the AI classifier surfaced
- * as a two-segment status/action control on the trailing edge of the header.
+ * Eyebrow + classifier status on top, then source title / kind controls,
+ * followed by a dedicated tags row.
  *
  * Self-contained: depends only on CSS variables from the admin theme. Generic
  * over the kind enum so callers can pass their own narrow union without
  * losing type safety on `onKindChange`.
  */
 
-const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
+const FONT_BODY = "var(--font-body, Inter), system-ui, sans-serif";
+const FONT_MONO =
+  "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
 const ACCENT_SOFT = "var(--accent-soft)";
-const ACCENT_LINE = "color-mix(in srgb, var(--accent-strong) 30%, transparent)";
+const ACCENT_LINE =
+  "color-mix(in srgb, var(--accent-strong) 30%, transparent)";
 const DANGER = "var(--danger)";
+const ACTIVE_RING =
+  "0 0 0 3px color-mix(in srgb, var(--accent-strong) 22%, transparent)";
 
-// Placeholder text matches the Section 1 ghost overlay (rgba 255/255/255 .15).
-// Inline `style` can't target ::placeholder, so we inject a scoped rule.
+// Inline `style` can't target ::placeholder, so this keeps placeholder copy
+// on the global token used by the source ghost and other form controls.
 const PLACEHOLDER_CSS = `
   .ingestion-metadata-input::placeholder {
     color: var(--text-placeholder);
+  }
+  .ingestion-metadata-input:focus {
+    border-color: var(--accent-border) !important;
+    box-shadow: var(--ring-shadow-selected);
+  }
+  .ingestion-tags-field:focus-within {
+    border-color: var(--accent-border) !important;
+    box-shadow: var(--ring-shadow-selected);
   }
 `;
 
@@ -68,23 +79,33 @@ export function MetadataEditor<K extends string>({
   onRegenerate,
   stepLabel = "metadata",
 }: MetadataEditorProps<K>) {
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [tagsFocused, setTagsFocused] = useState(false);
+
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-12)",
+        paddingTop: "var(--space-2)",
+      }}
+    >
       <style>{PLACEHOLDER_CSS}</style>
       <header
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 24,
+          gap: "var(--space-24)",
           flexWrap: "wrap",
-          rowGap: 14,
+          rowGap: "var(--space-10)",
         }}
       >
         <span
           style={{
             fontFamily: FONT_MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             color: ACCENT,
@@ -104,17 +125,23 @@ export function MetadataEditor<K extends string>({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1.5fr 1fr",
-          gap: 14,
+          gridTemplateColumns:
+            "minmax(260px, 1fr) minmax(142px, 220px)",
+          gap: "var(--space-10)",
+          alignItems: "end",
         }}
       >
         <FieldLabel label="Source title">
           <input
+            data-ingestion-title-input
             value={title}
             onChange={(e) => onTitleChange(e.target.value)}
+            onPointerDown={() => setTitleFocused(true)}
+            onFocus={() => setTitleFocused(true)}
+            onBlur={() => setTitleFocused(false)}
             placeholder="e.g. KJV · the binding (ch. 22)"
             className="ingestion-metadata-input"
-            style={inputStyle()}
+            style={inputStyle(titleFocused)}
           />
         </FieldLabel>
         <FieldLabel label="Kind">
@@ -125,14 +152,15 @@ export function MetadataEditor<K extends string>({
             ariaLabel="Source kind"
           />
         </FieldLabel>
+        <FieldLabel label="Tags" trailing="frontmatter" style={{ gridColumn: "1 / -1" }}>
+          <TagsField
+            tags={tags}
+            focused={tagsFocused}
+            onFocusChange={setTagsFocused}
+            onTagsChange={onTagsChange}
+          />
+        </FieldLabel>
       </div>
-
-      <FieldLabel
-        label="Tags · feed the page frontmatter"
-        trailing="⌘K · suggestions"
-      >
-        <TagsField tags={tags} onTagsChange={onTagsChange} />
-      </FieldLabel>
     </section>
   );
 }
@@ -165,13 +193,17 @@ function ClassifierStatus({
   if (classifyError) {
     return (
       <div
-        style={{ display: "inline-flex", alignItems: "stretch", height: 24 }}
+        style={{
+          display: "inline-flex",
+          alignItems: "stretch",
+          gap: "var(--space-6)",
+          height: 22,
+        }}
       >
         <StatusChip
           dot={<Dot color={DANGER} />}
           text={`failed · ${classifyError.slice(0, 60)}`}
           color={DANGER}
-          attached
         />
         {canRegenerate && onRegenerate && (
           <ActionButton onClick={onRegenerate} label="Retry" color={DANGER} />
@@ -183,18 +215,22 @@ function ClassifierStatus({
   if (classifiedBy === "ai") {
     return (
       <div
-        style={{ display: "inline-flex", alignItems: "stretch", height: 24 }}
+        style={{
+          display: "inline-flex",
+          alignItems: "stretch",
+          gap: "var(--space-6)",
+          height: 22,
+        }}
       >
         <StatusChip
           dot={<Dot color={ACCENT} glow />}
           text="Haiku · auto-filled"
-          attached
         />
         {onRegenerate && (
-          <ActionButton
+          <IconActionButton
             onClick={onRegenerate}
             disabled={!canRegenerate}
-            label="Regenerate"
+            ariaLabel="Regenerate metadata"
           />
         )}
       </div>
@@ -231,11 +267,16 @@ function StatusChip({
         alignItems: "center",
         gap: 7,
         padding: "0 10px",
-        height: 24,
-        border: "1px solid var(--border)",
-        borderRight: attached ? "none" : "1px solid var(--border)",
+        height: 22,
+        border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
+        borderRight: attached
+          ? "none"
+          : "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
+        borderRadius: attached
+          ? "var(--radius-pill) 0 0 var(--radius-pill)"
+          : "var(--radius-pill)",
         fontFamily: FONT_MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         letterSpacing: "0.12em",
         textTransform: "uppercase",
         color,
@@ -252,11 +293,13 @@ function ActionButton({
   label,
   disabled = false,
   color = ACCENT,
+  attached = false,
 }: {
   onClick: () => void;
   label: string;
   disabled?: boolean;
   color?: string;
+  attached?: boolean;
 }) {
   return (
     <button
@@ -266,21 +309,62 @@ function ActionButton({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 6,
+        gap: "var(--space-6)",
         padding: "0 12px",
-        height: 24,
+        height: 22,
         background: disabled ? "transparent" : ACCENT_SOFT,
         border: `1px solid ${disabled ? "var(--border)" : ACCENT_LINE}`,
+        borderRadius: attached
+          ? "0 var(--radius-pill) var(--radius-pill) 0"
+          : "var(--radius-pill)",
         color: disabled ? "var(--text-placeholder)" : color,
         cursor: disabled ? "not-allowed" : "pointer",
         fontFamily: FONT_MONO,
-        fontSize: 10,
+        fontSize: "var(--font-size-xs)",
         letterSpacing: "0.12em",
         textTransform: "uppercase",
       }}
     >
       <RegenerateIcon color={disabled ? "var(--text-placeholder)" : color} />
       {label}
+    </button>
+  );
+}
+
+function IconActionButton({
+  onClick,
+  disabled = false,
+  ariaLabel,
+  color = ACCENT,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  ariaLabel: string;
+  color?: string;
+}) {
+  const iconColor = disabled ? "var(--text-placeholder)" : color;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      title={ariaLabel}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 28,
+        height: 22,
+        padding: 0,
+        background: disabled ? "transparent" : ACCENT_SOFT,
+        border: `1px solid ${disabled ? "var(--border)" : ACCENT_LINE}`,
+        borderRadius: "var(--radius-pill)",
+        color: iconColor,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      <RegenerateIcon color={iconColor} />
     </button>
   );
 }
@@ -293,7 +377,7 @@ function Dot({ color, glow = false }: { color: string; glow?: boolean }) {
         display: "inline-block",
         width: 6,
         height: 6,
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         background: color,
         boxShadow: glow ? `0 0 6px ${color}` : undefined,
         flexShrink: 0,
@@ -311,7 +395,7 @@ function PulseDot({ color }: { color: string }) {
           display: "inline-block",
           width: 6,
           height: 6,
-          borderRadius: 999,
+          borderRadius: "var(--radius-pill)",
           background: color,
           animation: "pulse 1.1s ease-in-out infinite",
           flexShrink: 0,
@@ -348,20 +432,29 @@ function FieldLabel({
   label,
   trailing,
   children,
+  style,
 }: {
   label: string;
   trailing?: string;
   children: ReactNode;
+  style?: CSSProperties;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-6)",
+        ...style,
+      }}
+    >
       <div
         style={{
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
           fontFamily: FONT_MONO,
-          fontSize: 10,
+          fontSize: "var(--font-size-xs)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
           color: "var(--text-tertiary)",
@@ -377,16 +470,22 @@ function FieldLabel({
   );
 }
 
-function inputStyle(): CSSProperties {
+function inputStyle(focused = false): CSSProperties {
   return {
     width: "100%",
-    padding: "8px 12px",
-    border: "1px solid var(--border)",
-    background: "var(--card)",
+    height: 34,
+    padding: "0 11px",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: focused ? ACCENT_LINE : "var(--input-border)",
+    borderRadius: "var(--radius-md)",
+    background: "var(--input-bg)",
+    boxShadow: focused ? ACTIVE_RING : undefined,
     color: "var(--text-primary)",
-    fontFamily: FONT_MONO,
-    fontSize: 12,
+    fontFamily: FONT_BODY,
+    fontSize: "var(--font-size-base)",
     outline: "none",
+    transition: "border-color 140ms ease, box-shadow 140ms ease",
   };
 }
 
@@ -394,22 +493,40 @@ function inputStyle(): CSSProperties {
 
 function TagsField({
   tags,
+  focused,
+  onFocusChange,
   onTagsChange,
 }: {
   tags: string[];
+  focused: boolean;
+  onFocusChange: (next: boolean) => void;
   onTagsChange: (next: string[]) => void;
 }) {
   return (
     <div
+      className="ingestion-tags-field"
+      data-ingestion-tags-field
+      onPointerDownCapture={() => onFocusChange(true)}
+      onFocusCapture={() => onFocusChange(true)}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          onFocusChange(false);
+        }
+      }}
       style={{
         display: "flex",
         flexWrap: "wrap",
         alignItems: "center",
-        gap: 6,
-        padding: "7px 12px",
-        border: "1px solid var(--border)",
-        background: "var(--card)",
-        minHeight: 36,
+        gap: "var(--space-6)",
+        padding: "5px 10px",
+        borderWidth: 1,
+        borderStyle: "solid",
+        borderColor: focused ? ACCENT_LINE : "var(--input-border)",
+        borderRadius: "var(--radius-md)",
+        background: "var(--input-bg)",
+        boxShadow: focused ? ACTIVE_RING : undefined,
+        minHeight: 34,
+        transition: "border-color 140ms ease, box-shadow 140ms ease",
       }}
     >
       {tags.map((t) => (
@@ -418,12 +535,13 @@ function TagsField({
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 5,
-            padding: "2px 8px",
+            gap: "var(--space-5)",
+            padding: "1px 7px",
             background: ACCENT_SOFT,
             border: `1px solid ${ACCENT_LINE}`,
-            fontFamily: FONT_MONO,
-            fontSize: 11,
+            borderRadius: "var(--radius-pill)",
+            fontFamily: FONT_BODY,
+            fontSize: "var(--font-size-xs)",
             color: ACCENT,
           }}
         >
@@ -437,7 +555,7 @@ function TagsField({
               color: ACCENT,
               cursor: "pointer",
               padding: 0,
-              fontSize: 12,
+              fontSize: "var(--font-size-base)",
               opacity: 0.7,
               lineHeight: 1,
             }}
@@ -480,8 +598,8 @@ function TagDraftInput({
         border: "none",
         background: "transparent",
         color: "var(--text-primary)",
-        fontFamily: FONT_MONO,
-        fontSize: 11,
+        fontFamily: FONT_BODY,
+        fontSize: "var(--font-size-xs)",
         outline: "none",
       }}
     />

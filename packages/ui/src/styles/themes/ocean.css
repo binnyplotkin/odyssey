@@ -1,217 +1,620 @@
 /*
- * Odyssey — Forest Theme
+ * Odyssey — Atmospheric Theme
  *
- * Immersive, narrative-driven palette extracted from the landing-page
- * hero image (packages/media/landing_page.jpeg).
- *
- * Default: dark. Light mode via prefers-color-scheme or data-theme attribute.
- *
- * Palette anchors:
- *   #000500  near-black green    → forest-950
- *   #0F2006  dark forest         → forest-900
- *   #192922  deep forest         → forest-800
- *   #2A4535  dark sage           → forest-700
- *   #05473F  deep teal           → forest-600
- *   #105A59  teal                → forest-500
- *   #8CE7D2  mint                → forest-300
- *   #C7F7E5  light mint          → forest-200 / forest-100
- *   #DBFDFF  ice cyan            → forest-50
+ * A calm, spatial UI language for simulated worlds. The public import path is
+ * still `ocean.css` for compatibility with existing apps.
  */
 
 :root {
-  /* ── Raw palette scale ──────────────────────────────────── */
-  --forest-950: #000500;
-  --forest-900: #0F2006;
-  --forest-800: #192922;
-  --forest-700: #2A4535;
-  --forest-600: #05473F;
-  --forest-500: #105A59;
-  --forest-400: #3A8B7A;
-  --forest-300: #8CE7D2;
-  --forest-200: #C7F7E5;
-  --forest-100: #E3FBF2;
-  --forest-50:  #DBFDFF;
+  /* Typography */
+  --font-body: Inter;
+  --font-display: "Space Grotesk";
+  --font-mono: "JetBrains Mono";
 
-  /* ── Semantic tokens — Dark (default) ─────────────────────── */
+  /* Raw legacy palette aliases retained for older Tailwind mappings. */
+  --forest-950: #07090B;
+  --forest-900: #0D1013;
+  --forest-800: #111417;
+  --forest-700: #151A1E;
+  --forest-600: #1C2328;
+  --forest-500: #6F8F88;
+  --forest-400: #8AA8A1;
+  --forest-300: #BFD1CB;
+  --forest-200: #DFFFF5;
+  --forest-100: #ECFFF9;
+  --forest-50:  #F7FFFC;
 
-  /* Surfaces */
-  --background: #0C0E14;
-  --foreground: #f1f5f9;
-  --panel: rgba(255, 255, 255, 0.05);
-  --panel-strong: rgba(255, 255, 255, 0.12);
-  --panel-strong-text: #E3FBF2;
-
-  /* Borders & shadows */
-  --border: rgba(255, 255, 255, 0.10);
-  --shadow: rgba(0, 0, 0, 0.40);
-
-  /* Accent — lighter teal for dark backgrounds */
-  --accent: #8fd1cb;
-  --accent-strong: #8CE7D2;
-  --accent-soft: rgba(143, 209, 203, 0.12);
+  /* Foundation surfaces — dark default.
+   *
+   * Elevation ladder (post "elevated soft-dark" shift, was anchored at
+   * near-black #07090B + card #111417). Whole ladder shifted up so the
+   * page reads as a confident dark mode rather than void-black, while
+   * preserving proportional spacing between rungs so card / panel /
+   * hover / active still separate cleanly:
+   *   bg       #13181D  (was #07090B)
+   *   sidebar  #161B20  (was #0B0D10)   ← sits between bg and surface-1
+   *   surface-1 #1A1F24 (was #111417)   ← --card / --panel / --dropdown
+   *   surface-2 #1E252B (was #151A1E)   ← drawer, --node-canvas tracks
+   *   hover    #20282F  (was #171D22)
+   *   active   #252E35  (was #1C2328)   ← --panel-strong
+   */
+  --app-background: #13181D;
+  --background: #13181D;
+  --sidebar: #161B20;
+  --surface-1: #1A1F24;
+  --surface-2: #1E252B;
+  --surface-hover: #20282F;
+  --surface-active: #252E35;
+  --foreground: rgba(255, 255, 255, 0.92);
 
   /* Text */
-  --muted: rgba(255, 255, 255, 0.60);
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.70);
+  --text-tertiary: rgba(255, 255, 255, 0.45);
+  --text-quaternary: rgba(255, 255, 255, 0.20);
+  --text-placeholder: rgba(255, 255, 255, 0.28);
+  --muted: var(--text-tertiary);
+  --dim: var(--text-quaternary);
 
-  /* Status */
-  --success: #8CE7D2;
-  --danger: #f87171;
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-medium: rgba(255, 255, 255, 0.08);
+  --border-active: rgba(143, 209, 203, 0.12);
+  --border: var(--border-subtle);
+  --divider: rgba(255, 255, 255, 0.05);
 
-  /* Grid overlay (body::before) — subtle light grid on dark */
-  --grid-color: rgba(143, 209, 203, 0.04);
-  --grid-size: 28px;
+  /* Ink-wash scale — neutral tints on top of any surface. Use these
+   * instead of inline color-mix(text-primary, N%) for row stripes,
+   * subtle borders, panel insets. Five rungs cover the real-world
+   * range we found in audit (2% → 18%). */
+  --ink-wash: color-mix(in srgb, var(--text-primary) 2%, transparent);
+  --ink-soft: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  --ink-fill: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  --ink-line: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  --ink-edge: color-mix(in srgb, var(--text-primary) 18%, transparent);
 
-  /* Glass surfaces */
-  --sidebar-glass: rgba(255, 255, 255, 0.04);
-  --sidebar-inset: rgba(255, 255, 255, 0.06);
+  /* Accents — aligned to Paper Brand Guidelines (NKD-0 / LAM-0).
+   * Was passive #6F8F88 / active #BFD1CB (desaturated grayed-mint);
+   * Paper specifies passive #6FBF88 (mint-sage with green chroma) and
+   * active #8FD1CB (clean bright mint teal). Every D-card pill, CTA,
+   * and accent now matches what the designs paint against. */
+  --passive-teal: #6FBF88;
+  --active-teal: #8FD1CB;
+  --accent-secondary: #7FE6C3;
+  --neural_color: #6FBF88;
+  --emissive-mint: #DFFFF5;
+  --signal-blue: #6E8BFF;
+  --event-violet: #8B5CF6;
+  --warning-amber: #FFB84D;
+  --critical-crimson: #FF5A5A;
+  --accent: var(--passive-teal);
+  --accent-strong: var(--active-teal);
+  /* Accent fill scale — translucent tints of --accent-strong for hover
+   * washes, chip fills, borders, glow rings. Use these instead of
+   * inline color-mix(accent-strong, N%) calls. Five rungs cover the
+   * 4% → 40% real-world range we found in audit. --accent-soft kept
+   * for backwards compat (alias of --accent-fill). */
+  --accent-wash: color-mix(in srgb, var(--accent-strong) 6%, transparent);
+  --accent-fill: color-mix(in srgb, var(--accent-strong) 14%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent-strong) 30%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent-strong) 40%, transparent);
+  --accent-soft: var(--accent-fill);
+  /* Text color when sitting on top of an --accent-strong fill (CTAs).
+   * Hardcoded dark so light-mode CTAs stay readable even though the
+   * accent darkens for contrast over there. Pairs with the brand mark
+   * decoupling in admin-shell. */
+  --accent-on: #0A0F12;
 
-  /* Component tokens — cards, dropdowns, inputs */
-  --card: rgba(255, 255, 255, 0.03);
-  --card-hover: rgba(255, 255, 255, 0.06);
-  --card-border: rgba(255, 255, 255, 0.06);
-  --input-bg: rgba(255, 255, 255, 0.04);
-  --input-border: rgba(255, 255, 255, 0.10);
-  --dropdown-bg: #0f1117;
-  --dropdown-border: rgba(255, 255, 255, 0.10);
-  --divider: rgba(255, 255, 255, 0.06);
+  /* Status — `--status-error` softened from #FF5A5A (alarm red) to
+   * #FCA5A5 (pastel coral) per Paper's FailedBlock spec. The brand's
+   * saturated red stays on --critical-crimson for destructive flows. */
+  --status-live: #4ADE80;
+  --status-draft: #FACC15;
+  --status-archived: #A1A1AA;
+  --status-error: #FCA5A5;
+  /* Processing distinct from draft so in-flight operations aren't
+   * mis-read as "needs work". Cool amber rather than draft yellow. */
+  --status-processing: #FFB84D;
+  /* Info uses --signal-blue under a status-namespace alias so the
+   * semantic intent is explicit at the call site. */
+  --status-info: var(--signal-blue);
+  --success: var(--status-live);
+  --danger: var(--status-error);
 
-  /* Text opacity variants */
-  --text-primary: rgba(255, 255, 255, 0.88);
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --text-tertiary: rgba(255, 255, 255, 0.5);
-  --text-quaternary: rgba(255, 255, 255, 0.35);
-  --text-placeholder: rgba(255, 255, 255, 0.25);
+  /* Critical fill scale — translucent tints of --status-error for
+   * error chip bgs, borders, and the destructive-confirm modal accents.
+   * Parallel to --accent-* scale. */
+  --critical-wash: color-mix(in srgb, var(--status-error) 6%, transparent);
+  --critical-fill: color-mix(in srgb, var(--status-error) 14%, transparent);
+  --critical-border: color-mix(in srgb, var(--status-error) 30%, transparent);
 
-  /* Color scheme hint */
+  /* Materials */
+  --surface-material:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0)),
+    var(--surface-1);
+  --card-material:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
+    var(--surface-1);
+  --canvas-background:
+    radial-gradient(circle at center, rgba(191, 209, 203, 0.05), transparent 45%),
+    #050608;
+  /* Flat canvas surface for ReactFlow node graphs (character editor, etc).
+   * Tracks --surface-2 — the canvas reads as a raised stage above the
+   * page shell, slightly brighter than the cards on it. Card separation
+   * relies on the --card-material top-edge highlight + border. */
+  --node-canvas: #1E252B;
+  --app-atmosphere:
+    radial-gradient(circle at 20% 20%, rgba(141, 252, 203, 0.04), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(110, 139, 255, 0.03), transparent 35%),
+    var(--app-background);
+
+  /* Legacy component aliases */
+  --panel: var(--surface-1);
+  --panel-strong: var(--surface-active);
+  --panel-strong-text: var(--emissive-mint);
+  --card: var(--surface-material);
+  --card-hover: var(--surface-hover);
+  --card-border: var(--border-subtle);
+  --input-bg: rgba(255, 255, 255, 0.035);
+  --input-border: rgba(255, 255, 255, 0.08);
+  --dropdown-bg: #1A1F24;
+  --dropdown-border: rgba(255, 255, 255, 0.08);
+
+  /* Radius scale — calibrated to actual usage (audit found 4/6/8/10/pill
+   * dominate, while old card/panel/floating values were barely used).
+   * Old aliases kept for backwards compat — new code should use the
+   * t-shirt sized tokens. */
+  --radius-2xs: 2px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --radius-3xl: 16px;
+  --radius-pill: 999px;
+  --radius-button: 12px;
+  --radius-card: 18px;
+  --radius-panel: 20px;
+  --radius-floating: 24px;
+
+  /* Typography scale — px-based, theme-independent (font sizes don't shift dark/light).
+   * Covers the top 11 sizes found in the admin app; odd sizes (15, 17, 20, etc.) stay inline. */
+  --font-size-3xs: 8px;
+  --font-size-2xs: 9px;
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-base: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 14px;
+  --font-size-xl: 16px;
+  --font-size-2xl: 18px;
+  --font-size-3xl: 22px;
+  --font-size-4xl: 24px;
+
+  /* Spacing scale — px values named by their pixel value.
+   * Theme-independent (spacing doesn't shift between dark/light). */
+  --space-1: 1px;
+  --space-2: 2px;
+  --space-3: 3px;
+  --space-4: 4px;
+  --space-5: 5px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-18: 18px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  /* Focus ring */
+  --ring-color: var(--accent-strong);
+  --ring-width: 2px;
+  --ring-offset: 2px;
+  --ring-shadow: 0 0 0 var(--ring-width) color-mix(in srgb, var(--ring-color) 10%, transparent);
+  --ring-shadow-selected: 0 0 0 3px color-mix(in srgb, var(--ring-color) 22%, transparent);
+
+  /* Modal backdrop — replaces inline rgba(0,0,0,0.5) on dialog overlays */
+  --modal-backdrop: rgba(0, 0, 0, 0.55);
+
+  --shadow: rgba(0, 0, 0, 0.45);
+  --elevation-surface:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 8px 40px rgba(0, 0, 0, 0.45);
+  --elevation-card:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 8px 40px rgba(0, 0, 0, 0.45);
+  --elevation-panel:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 18px 70px rgba(0, 0, 0, 0.52);
+  --elevation-modal:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 32px 64px -16px rgba(0, 0, 0, 0.65);
+  --elevation-menu:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 24px 48px -12px rgba(0, 0, 0, 0.60),
+    0 4px 12px rgba(0, 0, 0, 0.40);
+  --elevation-side:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    -8px 0 32px rgba(0, 0, 0, 0.45);
+
+  /* Atmosphere and motion */
+  --grid-color: rgba(191, 209, 203, 0.035);
+  --grid-size: 32px;
+  --noise-opacity: 0.22;
+  --motion-drift: 18s;
+  --motion-breathe: 3.8s;
+
+  --sidebar-glass: rgba(22, 27, 32, 0.82);
+  --sidebar-inset: rgba(255, 255, 255, 0.045);
+  --header-bg: rgba(19, 24, 29, 0.72);
+  --header-border: rgba(255, 255, 255, 0.055);
+  --header-blur: 18px;
+  --sidebar-bg: var(--header-bg);
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-hover: rgba(255, 255, 255, 0.045);
+  --sidebar-active: var(--accent-soft);
+  --sidebar-active-border: var(--accent-border);
+
   color-scheme: dark;
 }
 
-/* ── Light — OS preference (when no explicit data-theme) ───── */
+:root[data-theme="dark"] {
+  --app-background: #05070A;
+  --background: #05070A;
+  --sidebar: #080C11;
+  --surface-1: #0B1016;
+  --surface-2: #0F151D;
+  --surface-hover: #111923;
+  --surface-active: #15202B;
+  --foreground: rgba(255, 255, 255, 0.94);
+
+  --accent: #6FBF88;
+  --accent-strong: #8FD1CB;
+  --accent-secondary: #7FE6C3;
+  --neural_color: #6FBF88;
+  --passive-teal: #6FBF88;
+  --active-teal: #8FD1CB;
+  --accent-wash: color-mix(in srgb, #8FD1CB 6%, transparent);
+  --accent-fill: color-mix(in srgb, #8FD1CB 14%, transparent);
+  --accent-soft: color-mix(in srgb, #8FD1CB 14%, transparent);
+  --accent-border: color-mix(in srgb, #8FD1CB 30%, transparent);
+  --accent-glow: color-mix(in srgb, #8FD1CB 40%, transparent);
+
+  --surface-material:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
+    var(--surface-1);
+  --card-material:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
+    var(--surface-1);
+  --canvas-background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--accent-strong) 5%, transparent), transparent 45%),
+    var(--background);
+  --node-canvas: #080C11;
+  --app-atmosphere:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent-strong) 4%, transparent), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(110, 139, 255, 0.03), transparent 35%),
+    var(--app-background);
+
+  --panel: #0B1016;
+  --panel-strong: var(--surface-active);
+  --card:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
+    #0B1016;
+  --card-hover: #111923;
+  --card-border: rgba(255, 255, 255, 0.065);
+
+  --border-subtle: rgba(255, 255, 255, 0.065);
+  --border-medium: rgba(255, 255, 255, 0.09);
+  --border-active: color-mix(in srgb, var(--accent-strong) 18%, transparent);
+  --border: rgba(255, 255, 255, 0.065);
+  --divider: rgba(255, 255, 255, 0.055);
+
+  --input-bg: rgba(255, 255, 255, 0.04);
+  --input-border: rgba(255, 255, 255, 0.09);
+  --dropdown-bg: #0B1016;
+  --dropdown-border: rgba(255, 255, 255, 0.09);
+
+  --danger: #FCA5A5;
+
+  --muted: rgba(255, 255, 255, 0.46);
+  --text-primary: rgba(255, 255, 255, 0.94);
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --text-tertiary: rgba(255, 255, 255, 0.46);
+  --text-quaternary: rgba(255, 255, 255, 0.22);
+  --text-placeholder: rgba(255, 255, 255, 0.30);
+
+  --ink-wash: color-mix(in srgb, rgba(255, 255, 255, 0.94) 2%, transparent);
+  --ink-soft: color-mix(in srgb, rgba(255, 255, 255, 0.94) 4%, transparent);
+  --ink-fill: color-mix(in srgb, rgba(255, 255, 255, 0.94) 6%, transparent);
+  --ink-line: color-mix(in srgb, rgba(255, 255, 255, 0.94) 10%, transparent);
+  --ink-edge: color-mix(in srgb, rgba(255, 255, 255, 0.94) 18%, transparent);
+  --modal-backdrop: rgba(0, 0, 0, 0.62);
+
+  --elevation-panel:
+    0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 24px 90px rgba(0, 0, 0, 0.58);
+
+  --ring-shadow-selected: 0 0 0 3px color-mix(in srgb, #8FD1CB 22%, transparent);
+
+  --header-bg: rgba(5, 7, 10, 0.72);
+  --header-border: rgba(255, 255, 255, 0.055);
+  --header-blur: 18px;
+
+  --sidebar-bg: var(--header-bg);
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-hover: var(--card-hover);
+  --sidebar-active: var(--accent-soft);
+  --sidebar-active-border: var(--accent-strong);
+  --sidebar-glass: rgba(8, 12, 17, 0.82);
+  --sidebar-inset: rgba(255, 255, 255, 0.04);
+}
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    /* Surfaces */
-    --background: #F5F5F5;
-    --foreground: #111111;
-    --panel: rgba(0, 0, 0, 0.03);
-    --panel-strong: rgba(0, 0, 0, 0.88);
-    --panel-strong-text: #F5F5F5;
+    --app-background: #F5F6F4;
+    --background: #F5F6F4;
+    --sidebar: #F0F1EE;
+    --surface-1: #FFFFFF;
+    --surface-2: #F3F4F2;
+    --surface-hover: #E8EBE7;
+    --surface-active: #E1E6E1;
+    --foreground: rgba(0, 0, 0, 0.88);
 
-    /* Borders & shadows */
-    --border: rgba(0, 0, 0, 0.12);
-    --shadow: rgba(0, 0, 0, 0.10);
-
-    /* Accent — darker + less vibrant in light mode so it doesn't shout. */
-    --accent: #0a3f3e;
-    --accent-strong: #02302a;
-    --accent-soft: rgba(10, 63, 62, 0.10);
-
-    /* Text */
-    --muted: rgba(0, 0, 0, 0.5);
-
-    /* Status */
-    --success: #05473F;
-    --danger: #dc2626;
-
-    /* Grid overlay */
-    --grid-color: rgba(0, 0, 0, 0.03);
-
-    /* Glass surfaces */
-    --sidebar-glass: rgba(255, 255, 255, 0.7);
-    --sidebar-inset: rgba(255, 255, 255, 0.5);
-
-    /* Component tokens */
-    --card: rgba(0, 0, 0, 0.03);
-    --card-hover: rgba(0, 0, 0, 0.06);
-    --card-border: rgba(0, 0, 0, 0.08);
-    --input-bg: rgba(0, 0, 0, 0.04);
-    --input-border: rgba(0, 0, 0, 0.12);
-    --dropdown-bg: #ffffff;
-    --dropdown-border: rgba(0, 0, 0, 0.12);
-    --divider: rgba(0, 0, 0, 0.08);
-
-    /* Text opacity variants */
     --text-primary: rgba(0, 0, 0, 0.88);
-    --text-secondary: rgba(0, 0, 0, 0.7);
-    --text-tertiary: rgba(0, 0, 0, 0.5);
-    --text-quaternary: rgba(0, 0, 0, 0.35);
-    --text-placeholder: rgba(0, 0, 0, 0.25);
+    --text-secondary: rgba(0, 0, 0, 0.68);
+    --text-tertiary: rgba(0, 0, 0, 0.42);
+    --text-quaternary: rgba(0, 0, 0, 0.18);
+    --text-placeholder: rgba(0, 0, 0, 0.28);
+    --muted: var(--text-tertiary);
+    --dim: var(--text-quaternary);
 
-    /* Color scheme hint */
+    --border-subtle: rgba(0, 0, 0, 0.06);
+    --border-medium: rgba(0, 0, 0, 0.08);
+    --border-active: rgba(111, 143, 136, 0.18);
+    --border: var(--border-subtle);
+    --divider: rgba(0, 0, 0, 0.06);
+
+    /* Accent is darker in light mode so white-on-mint CTAs (sandbox pill,
+     * + new voice, etc.) keep readable contrast. The brand mark itself
+     * uses a hardcoded #8FD1CB regardless of theme — see admin-shell. */
+    --passive-teal: #6F8F88;
+    --active-teal: #5E8E84;
+    --emissive-mint: #CFEDE2;
+    --signal-blue: #5D74D9;
+    --event-violet: #7C5BE3;
+    --warning-amber: #D89A2B;
+    --critical-crimson: #E04F4F;
+    --accent: var(--passive-teal);
+    --accent-strong: var(--active-teal);
+    /* ink-*, accent-*, critical-* scales cascade automatically from the
+     * underlying tokens (--text-primary, --accent-strong, --status-error)
+     * via color-mix — no need to redeclare here. */
+
+    --status-live: #22A35A;
+    --status-draft: #D89A2B;
+    --status-archived: #71717A;
+    --status-error: #E04F4F;
+    --status-processing: #D89A2B;
+    --success: var(--status-live);
+    --danger: var(--status-error);
+
+    --surface-material:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0)),
+      var(--surface-1);
+    --card-material:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0)),
+      var(--surface-1);
+    --canvas-background:
+      radial-gradient(circle at center, rgba(111, 143, 136, 0.10), transparent 48%),
+      #F0F2EF;
+    --node-canvas: #E8EAE6;
+    --app-atmosphere:
+      radial-gradient(circle at 20% 20%, rgba(111, 143, 136, 0.12), transparent 40%),
+      radial-gradient(circle at 80% 30%, rgba(93, 116, 217, 0.08), transparent 35%),
+      var(--app-background);
+
+    --panel: var(--surface-1);
+    --panel-strong: var(--surface-active);
+    --panel-strong-text: var(--text-primary);
+    --card: var(--surface-material);
+    --card-hover: var(--surface-hover);
+    --card-border: var(--border-subtle);
+    --input-bg: rgba(0, 0, 0, 0.025);
+    --input-border: rgba(0, 0, 0, 0.08);
+    --dropdown-bg: #FFFFFF;
+    --dropdown-border: rgba(0, 0, 0, 0.08);
+
+    --shadow: rgba(0, 0, 0, 0.08);
+    --elevation-surface:
+      0 0 0 1px rgba(0, 0, 0, 0.04),
+      0 10px 30px rgba(0, 0, 0, 0.06);
+    --elevation-card:
+      0 0 0 1px rgba(0, 0, 0, 0.04),
+      0 10px 30px rgba(0, 0, 0, 0.06);
+    --elevation-panel:
+      0 0 0 1px rgba(0, 0, 0, 0.04),
+      0 18px 50px rgba(0, 0, 0, 0.10);
+    --elevation-modal:
+      0 0 0 1px rgba(0, 0, 0, 0.04),
+      0 32px 64px -16px rgba(0, 0, 0, 0.12);
+    --elevation-menu:
+      0 0 0 1px rgba(0, 0, 0, 0.04),
+      0 24px 48px -12px rgba(0, 0, 0, 0.10),
+      0 4px 12px rgba(0, 0, 0, 0.06);
+    --elevation-side:
+      0 0 0 1px rgba(0, 0, 0, 0.04),
+      -8px 0 32px rgba(0, 0, 0, 0.08);
+
+    --grid-color: rgba(0, 0, 0, 0.025);
+    --noise-opacity: 0.16;
+    --sidebar-glass: rgba(236, 237, 233, 0.84);
+    --sidebar-inset: rgba(255, 255, 255, 0.72);
+    --header-bg: rgba(245, 246, 244, 0.78);
+    --header-border: rgba(0, 0, 0, 0.06);
+    --header-blur: 18px;
+    --sidebar-bg: var(--header-bg);
+    --sidebar-border: rgba(0, 0, 0, 0.06);
+    --sidebar-hover: rgba(0, 0, 0, 0.045);
+    --sidebar-active: var(--accent-soft);
+    --sidebar-active-border: var(--accent-border);
+
     color-scheme: light;
   }
 }
 
-/* ── Light — explicit toggle override ──────────────────────── */
-
 :root[data-theme="light"] {
-  /* Surfaces */
-  --background: #F5F5F5;
-  --foreground: #111111;
-  --panel: rgba(0, 0, 0, 0.03);
-  --panel-strong: rgba(0, 0, 0, 0.88);
-  --panel-strong-text: #F5F5F5;
+  --app-background: #F5F6F4;
+  --background: #F5F6F4;
+  --sidebar: #F0F1EE;
+  --surface-1: #FFFFFF;
+  --surface-2: #F3F4F2;
+  --surface-hover: #E8EBE7;
+  --surface-active: #E1E6E1;
+  --foreground: rgba(0, 0, 0, 0.88);
 
-  /* Borders & shadows */
-  --border: rgba(0, 0, 0, 0.12);
-  --shadow: rgba(0, 0, 0, 0.10);
-
-  /* Accent — darker + less vibrant in light mode so it doesn't shout. */
-  --accent: #0a3f3e;
-  --accent-strong: #02302a;
-  --accent-soft: rgba(10, 63, 62, 0.10);
-
-  /* Text */
-  --muted: rgba(0, 0, 0, 0.5);
-
-  /* Status */
-  --success: #05473F;
-  --danger: #dc2626;
-
-  /* Grid overlay */
-  --grid-color: rgba(0, 0, 0, 0.03);
-
-  /* Glass surfaces */
-  --sidebar-glass: rgba(255, 255, 255, 0.7);
-  --sidebar-inset: rgba(255, 255, 255, 0.5);
-
-  /* Component tokens */
-  --card: rgba(0, 0, 0, 0.03);
-  --card-hover: rgba(0, 0, 0, 0.06);
-  --card-border: rgba(0, 0, 0, 0.08);
-  --input-bg: rgba(0, 0, 0, 0.04);
-  --input-border: rgba(0, 0, 0, 0.12);
-  --dropdown-bg: #ffffff;
-  --dropdown-border: rgba(0, 0, 0, 0.12);
-  --divider: rgba(0, 0, 0, 0.08);
-
-  /* Text opacity variants */
   --text-primary: rgba(0, 0, 0, 0.88);
-  --text-secondary: rgba(0, 0, 0, 0.7);
-  --text-tertiary: rgba(0, 0, 0, 0.5);
-  --text-quaternary: rgba(0, 0, 0, 0.35);
-  --text-placeholder: rgba(0, 0, 0, 0.25);
+  --text-secondary: rgba(0, 0, 0, 0.68);
+  --text-tertiary: rgba(0, 0, 0, 0.42);
+  --text-quaternary: rgba(0, 0, 0, 0.18);
+  --text-placeholder: rgba(0, 0, 0, 0.28);
+  --muted: var(--text-tertiary);
+  --dim: var(--text-quaternary);
 
-  /* Color scheme hint */
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-medium: rgba(0, 0, 0, 0.08);
+  --border-active: rgba(111, 143, 136, 0.18);
+  --border: var(--border-subtle);
+  --divider: rgba(0, 0, 0, 0.06);
+
+  /* Accent darkens in light mode so white-on-mint CTAs stay readable;
+   * see the light-media block for the matching note. */
+  --passive-teal: #6F8F88;
+  --active-teal: #5E8E84;
+  --emissive-mint: #CFEDE2;
+  --signal-blue: #5D74D9;
+  --event-violet: #7C5BE3;
+  --warning-amber: #D89A2B;
+  --critical-crimson: #E04F4F;
+  --accent: var(--passive-teal);
+  --accent-strong: var(--active-teal);
+  /* ink-*, accent-*, critical-* scales cascade automatically — see :root. */
+
+  --status-live: #22A35A;
+  --status-draft: #D89A2B;
+  --status-archived: #71717A;
+  --status-error: #E04F4F;
+  --status-processing: #D89A2B;
+  --success: var(--status-live);
+  --danger: var(--status-error);
+
+  --surface-material:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0)),
+    var(--surface-1);
+  --card-material:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0)),
+    var(--surface-1);
+  --canvas-background:
+    radial-gradient(circle at center, rgba(111, 143, 136, 0.10), transparent 48%),
+    #F0F2EF;
+  --node-canvas: #E8EAE6;
+  --app-atmosphere:
+    radial-gradient(circle at 20% 20%, rgba(111, 143, 136, 0.12), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(93, 116, 217, 0.08), transparent 35%),
+    var(--app-background);
+
+  --panel: var(--surface-1);
+  --panel-strong: var(--surface-active);
+  --panel-strong-text: var(--text-primary);
+  --card: var(--surface-material);
+  --card-hover: var(--surface-hover);
+  --card-border: var(--border-subtle);
+  --input-bg: rgba(0, 0, 0, 0.025);
+  --input-border: rgba(0, 0, 0, 0.08);
+  --dropdown-bg: #FFFFFF;
+  --dropdown-border: rgba(0, 0, 0, 0.08);
+
+  --shadow: rgba(0, 0, 0, 0.08);
+  --elevation-surface:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 10px 30px rgba(0, 0, 0, 0.06);
+  --elevation-card:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 10px 30px rgba(0, 0, 0, 0.06);
+  --elevation-panel:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 18px 50px rgba(0, 0, 0, 0.10);
+  --elevation-modal:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 32px 64px -16px rgba(0, 0, 0, 0.12);
+  --elevation-menu:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 24px 48px -12px rgba(0, 0, 0, 0.10),
+    0 4px 12px rgba(0, 0, 0, 0.06);
+  --elevation-side:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    -8px 0 32px rgba(0, 0, 0, 0.08);
+
+  --grid-color: rgba(0, 0, 0, 0.025);
+  --noise-opacity: 0.16;
+  --sidebar-glass: rgba(236, 237, 233, 0.84);
+  --sidebar-inset: rgba(255, 255, 255, 0.72);
+  --header-bg: rgba(245, 246, 244, 0.78);
+  --header-border: rgba(0, 0, 0, 0.06);
+  --header-blur: 18px;
+  --sidebar-bg: var(--header-bg);
+  --sidebar-border: rgba(0, 0, 0, 0.06);
+  --sidebar-hover: rgba(0, 0, 0, 0.045);
+  --sidebar-active: var(--accent-soft);
+  --sidebar-active-border: var(--accent-border);
+
   color-scheme: light;
 }
 
-/* ── Atmospheric grid overlay ─────────────────────────────── */
+html {
+  background: var(--app-background);
+}
 
-body::before {
+body {
+  font-family: var(--font-body, Inter), ui-sans-serif, system-ui, sans-serif;
+  background: var(--app-atmosphere);
+}
+
+body::before,
+body::after {
   position: fixed;
   inset: 0;
   pointer-events: none;
   content: "";
+}
+
+body::before {
   background-image:
     linear-gradient(var(--grid-color) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
   background-size: var(--grid-size) var(--grid-size);
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 90%);
+  mask-image: radial-gradient(circle at 50% 18%, rgba(0, 0, 0, 0.58), transparent 78%);
 }
 
-/* ── Forest-specific typography ───────────────────────────── */
+body::after {
+  opacity: var(--noise-opacity);
+  background-image:
+    radial-gradient(circle at 18% 24%, rgba(223, 255, 245, 0.055), transparent 18%),
+    radial-gradient(circle at 78% 10%, rgba(110, 139, 255, 0.04), transparent 20%),
+    radial-gradient(circle at 70% 86%, rgba(139, 92, 246, 0.025), transparent 22%);
+  animation: odyssey-atmosphere-drift var(--motion-drift) ease-in-out infinite alternate;
+}
 
-body {
-  font-family: var(--font-display, "Fraunces"), serif;
+@keyframes odyssey-atmosphere-drift {
+  from { transform: translate3d(0, 0, 0); opacity: calc(var(--noise-opacity) * 0.8); }
+  to { transform: translate3d(0, -10px, 0); opacity: var(--noise-opacity); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none;
+  }
 }

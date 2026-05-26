@@ -3,7 +3,7 @@ import { Skeleton } from "@odyssey/ui";
 const CARD: React.CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--card-border)",
-  borderRadius: 14,
+  borderRadius: "var(--radius-2xl)",
   overflow: "hidden",
 };
 
@@ -18,13 +18,13 @@ function DocCardSkeleton({ flip }: { flip: boolean }) {
         padding: "24px 28px",
         display: "flex",
         flexDirection: "column",
-        gap: 10,
+        gap: "var(--space-10)",
         justifyContent: "center",
       }}
     >
       <Skeleton width={80} height={11} />
       <Skeleton width="80%" height={22} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", marginTop: "var(--space-4)" }}>
         <Skeleton width="100%" height={13} />
         <Skeleton width="92%" height={13} />
         <Skeleton width="64%" height={13} />
@@ -41,13 +41,13 @@ function DocCardSkeleton({ flip }: { flip: boolean }) {
 
 export default function DocsLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Skeleton width={100} height={20} />
         <Skeleton width={120} height={28} radius={8} />
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
         {Array.from({ length: 4 }).map((_, i) => (
           <DocCardSkeleton key={i} flip={i % 2 === 1} />
         ))}

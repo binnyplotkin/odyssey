@@ -1,6 +1,8 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   getCharacterStore,
   getWikiStore,
@@ -79,6 +81,28 @@ const wikiSaveHooks = {
 type ActionResult<T = undefined> =
   | { ok: true; data?: T }
   | { ok: false; error: string };
+
+export async function createUnnamedWiki(): Promise<ActionResult<{ id: string }>> {
+  const wikis = getWikisStore();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const slug = `wiki-${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const existing = await wikis.getWikiBySlug(slug);
+    if (existing) continue;
+
+    const wiki = await wikis.createWiki({
+      slug,
+      title: "Untitled wiki",
+      summary: null,
+      eras: [],
+    });
+
+    revalidatePath("/wikis");
+    redirect(`/wikis/${wiki.id}`);
+  }
+
+  return { ok: false, error: "Could not create a unique wiki. Try again." };
+}
 
 export type WikiMetaPatch = {
   title?: string;

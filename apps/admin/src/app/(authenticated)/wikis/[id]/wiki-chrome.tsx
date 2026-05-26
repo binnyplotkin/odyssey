@@ -110,25 +110,25 @@ function WikiTopBar({
         display: "flex",
         alignItems: "stretch",
         justifyContent: "space-between",
-        gap: 16,
+        gap: "var(--space-16)",
         width: "100%",
         alignSelf: "stretch",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
           <Link
             href="/wikis"
             style={{
               fontFamily: MONO,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
               color: TEXT_MUTED,
               textDecoration: "none",
             }}
           >
             wikis
           </Link>
-          <span style={{ fontFamily: MONO, fontSize: 13, color: TEXT_FADED }}>
+          <span style={{ fontFamily: MONO, fontSize: "var(--font-size-md)", color: TEXT_FADED }}>
             /
           </span>
           <EditableTitle
@@ -227,7 +227,7 @@ function EditableTitle({
         position: "relative",
         display: "inline-flex",
         alignItems: "center",
-        gap: 6,
+        gap: "var(--space-6)",
         minWidth: 0,
       }}
     >
@@ -239,7 +239,7 @@ function EditableTitle({
           visibility: "hidden",
           whiteSpace: "pre",
           fontFamily: MONO,
-          fontSize: 13,
+          fontSize: "var(--font-size-md)",
           fontWeight: 600,
         }}
       >
@@ -270,7 +270,7 @@ function EditableTitle({
               height: 28,
               padding: "0 8px",
               fontFamily: MONO,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
               fontWeight: 600,
               color: TEXT_PRIMARY,
               background: "var(--card)",
@@ -300,7 +300,7 @@ function EditableTitle({
           <span
             style={{
               fontFamily: MONO,
-              fontSize: 13,
+              fontSize: "var(--font-size-md)",
               fontWeight: 600,
               color: TEXT_PRIMARY,
               textTransform: "lowercase",
@@ -325,7 +325,7 @@ function EditableTitle({
         <span
           style={{
             fontFamily: MONO,
-            fontSize: 11,
+            fontSize: "var(--font-size-sm)",
             color: DANGER,
           }}
         >

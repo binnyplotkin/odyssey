@@ -518,7 +518,7 @@ export default function VoiceTestPage() {
           : "Resting";
 
   const confidenceColor =
-    metrics.confidence > 0.7 ? "var(--success, #8CE7D2)"
+    metrics.confidence > 0.7 ? "var(--success, #8FD1CB)"
       : metrics.confidence > 0.4 ? "var(--accent, #8fd1cb)"
         : "var(--muted)";
 
@@ -547,7 +547,7 @@ export default function VoiceTestPage() {
         ref={containerRef}
         style={{
           position: "relative",
-          borderRadius: "0.75rem",
+          borderRadius: "var(--radius-xl)",
           overflow: "hidden",
           border: "1px solid var(--border)",
           aspectRatio: "16 / 9",
@@ -585,9 +585,9 @@ export default function VoiceTestPage() {
               left: 16,
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: "var(--space-8)",
               padding: "0.3rem 0.7rem",
-              borderRadius: 9999,
+              borderRadius: "var(--radius-pill)",
               background: "rgba(0,0,0,0.5)",
               backdropFilter: "blur(8px)",
             }}
@@ -618,8 +618,8 @@ export default function VoiceTestPage() {
           <div
             style={{
               position: "absolute", top: 16, right: 16,
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "0.25rem 0.6rem", borderRadius: 9999,
+              display: "flex", alignItems: "center", gap: "var(--space-6)",
+              padding: "0.25rem 0.6rem", borderRadius: "var(--radius-pill)",
               background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
               fontSize: "0.7rem", fontWeight: 600, color: "white",
               letterSpacing: "0.06em", textTransform: "uppercase",
@@ -641,7 +641,7 @@ export default function VoiceTestPage() {
           <div
             style={{
               position: "absolute", bottom: 16, right: 16,
-              padding: "0.25rem 0.6rem", borderRadius: 9999,
+              padding: "0.25rem 0.6rem", borderRadius: "var(--radius-pill)",
               background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
               fontSize: "0.7rem", fontWeight: 600, color: "rgba(255,255,255,0.7)",
               fontVariantNumeric: "tabular-nums",
@@ -657,7 +657,7 @@ export default function VoiceTestPage() {
         <button
           onClick={audio.isRecording ? audio.stop : audio.start}
           style={{
-            padding: "0.5rem 1.5rem", borderRadius: 9999, border: "none",
+            padding: "0.5rem 1.5rem", borderRadius: "var(--radius-pill)", border: "none",
             background: audio.isRecording ? "var(--danger, #f87171)" : "var(--accent, #8fd1cb)",
             color: audio.isRecording ? "white" : "#0C0E14",
             fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
@@ -693,7 +693,7 @@ export default function VoiceTestPage() {
                 style={{
                   background: "var(--panel)",
                   border: `1px solid ${stat.accent ? "var(--accent, #8fd1cb)" + "33" : "var(--border)"}`,
-                  borderRadius: "0.5rem",
+                  borderRadius: "var(--radius-md)",
                   padding: "0.6rem 0.75rem",
                 }}
               >
@@ -716,14 +716,14 @@ export default function VoiceTestPage() {
                 </div>
                 <div
                   style={{
-                    marginTop: "0.35rem", height: 3, borderRadius: 2,
+                    marginTop: "0.35rem", height: 3, borderRadius: "var(--radius-2xs)",
                     background: "rgba(255,255,255,0.06)", overflow: "hidden",
                   }}
                 >
                   <div
                     style={{
                       width: `${clamp(stat.value) * 100}%`, height: "100%",
-                      borderRadius: 2, transition: "width 0.15s ease-out",
+                      borderRadius: "var(--radius-2xs)", transition: "width 0.15s ease-out",
                       background: stat.accent ? "var(--accent, #8fd1cb)" : "var(--muted)",
                     }}
                   />
@@ -753,7 +753,7 @@ export default function VoiceTestPage() {
                 style={{
                   background: "var(--panel)",
                   border: "1px solid var(--border)",
-                  borderRadius: "0.5rem",
+                  borderRadius: "var(--radius-md)",
                   padding: "0.5rem 0.6rem",
                 }}
               >

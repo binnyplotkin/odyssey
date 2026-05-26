@@ -107,7 +107,7 @@ export function PurgeConfirmModal({
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
         display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 16,
+        padding: "var(--space-16)",
         backgroundColor: T.backdrop,
         backdropFilter: "blur(3px)",
         WebkitBackdropFilter: "blur(3px)",
@@ -123,24 +123,24 @@ export function PurgeConfirmModal({
           width: 520, maxWidth: "100%",
           background: T.panel,
           border: `1px solid ${T.border}`,
-          borderRadius: 16,
-          boxShadow: "0 24px 64px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.03) inset",
+          borderRadius: "var(--radius-3xl)",
+          boxShadow: "var(--elevation-panel)",
           overflow: "hidden",
           animation: "purgeRise 180ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
         {/* Header */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "24px 24px 20px 24px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)", padding: "24px 24px 20px 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
             <span style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 22, height: 22, borderRadius: 6,
+              width: 22, height: 22, borderRadius: "var(--radius-sm)",
               background: T.dangerBg12, flexShrink: 0,
             }}>
               <TrashIcon size={11} stroke={T.danger} strokeWidth={2.4} />
             </span>
             <span style={{
-              fontFamily: T.fontMono, fontSize: 10, fontWeight: 600,
+              fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 600,
               color: T.danger, letterSpacing: "0.12em", textTransform: "uppercase",
             }}>
               {eyebrow}
@@ -149,14 +149,14 @@ export function PurgeConfirmModal({
           <div
             id="purge-modal-title"
             style={{
-              fontFamily: T.fontHeading, fontSize: 22, fontWeight: 600,
+              fontFamily: T.fontHeading, fontSize: "var(--font-size-3xl)", fontWeight: 600,
               color: T.fg, lineHeight: "28px", letterSpacing: "-0.005em",
             }}
           >
             {title}
           </div>
           <div style={{
-            fontFamily: T.fontBody, fontSize: 13, color: T.muted, lineHeight: "20px",
+            fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: T.muted, lineHeight: "20px",
           }}>
             {subtitle}
           </div>
@@ -167,7 +167,7 @@ export function PurgeConfirmModal({
           display: "flex", flexDirection: "column",
           margin: "0 24px",
           border: `1px solid ${T.dangerBorderSoft}`,
-          borderRadius: 12,
+          borderRadius: "var(--radius-xl)",
           background: T.dangerBg04,
           overflow: "hidden",
         }}>
@@ -183,7 +183,7 @@ export function PurgeConfirmModal({
             }}>
               Blast radius
             </span>
-            <span style={{ fontFamily: T.fontBody, fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
+            <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: "rgba(255,255,255,0.45)" }}>
               {loading ? "computing…" : "cannot be undone"}
             </span>
           </div>
@@ -222,10 +222,10 @@ export function PurgeConfirmModal({
           <div style={{
             margin: "14px 24px 0 24px",
             padding: "10px 14px",
-            borderRadius: 10,
+            borderRadius: "var(--radius-lg)",
             background: T.dangerBg08,
             border: "1px solid rgba(232,144,144,0.20)",
-            fontFamily: T.fontBody, fontSize: 12, color: T.dangerText,
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.dangerText,
           }}>
             {error}
           </div>
@@ -234,14 +234,14 @@ export function PurgeConfirmModal({
         {/* Footer */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "flex-end",
-          gap: 8, padding: "18px 24px 22px 24px",
+          gap: "var(--space-8)", padding: "18px 24px 22px 24px",
         }}>
           <button
             type="button"
             onClick={onCancel}
             disabled={pending}
             style={{
-              padding: "8px 16px", borderRadius: 8,
+              padding: "8px 16px", borderRadius: "var(--radius-md)",
               border: `1px solid ${T.borderBtn}`,
               background: "transparent",
               color: "rgba(237,238,243,0.85)",
@@ -258,7 +258,7 @@ export function PurgeConfirmModal({
             disabled={pending || loading}
             style={{
               display: "flex", alignItems: "center", gap: 7,
-              padding: "8px 16px", borderRadius: 8,
+              padding: "8px 16px", borderRadius: "var(--radius-md)",
               border: `1px solid ${T.dangerBorder}`,
               background: T.dangerBg14,
               color: T.dangerText,
@@ -292,26 +292,26 @@ function BlastRow({
 }) {
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 12,
+      display: "flex", alignItems: "center", gap: "var(--space-12)",
       padding: "12px 16px",
       borderBottom: bordered ? `1px solid ${T.dangerRowBorder}` : "none",
     }}>
       <span style={{
-        width: 22, height: 22, borderRadius: 6, background: iconBg,
+        width: 22, height: 22, borderRadius: "var(--radius-sm)", background: iconBg,
         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       }}>
         {icon}
       </span>
-      <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", flex: 1, minWidth: 0 }}>
         <span style={{
-          fontFamily: T.fontBody, fontSize: 13, fontWeight: 500,
+          fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 500,
           color: muted ? T.fgDim : T.fg, lineHeight: "18px",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
           {title}
         </span>
         <span style={{
-          fontFamily: T.fontBody, fontSize: 11,
+          fontFamily: T.fontBody, fontSize: "var(--font-size-sm)",
           color: muted ? T.mutedFaint : T.mutedSoft, lineHeight: "16px",
         }}>
           {meta}
