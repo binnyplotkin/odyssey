@@ -6,6 +6,8 @@
  * versionable — if a shape needs to change, prefer additive fields.
  */
 
+import type { VoiceSettingsOverride } from "./voice-store";
+
 /* ── Character & era config ────────────────────────────────────── */
 
 export type EraConfig = {
@@ -100,6 +102,15 @@ export type CharacterRecord = {
    * the audio-rt Docker image).
    */
   voiceId: string | null;
+  /**
+   * Per-binding override of the bound voice's runtime knobs (provider-
+   * specific — e.g. ElevenLabs stability/style/modelId). Null = inherit
+   * the voice row's `providerConfig` unchanged. Provider-discriminated;
+   * see `VoiceSettingsOverride` in voice-store.ts. The voice's identity
+   * (e.g. ElevenLabs `voiceId`) is never overrideable here — re-bind to
+   * a different voice for that.
+   */
+  voiceSettings: VoiceSettingsOverride | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -151,8 +162,8 @@ export type CharacterIdentity = {
  * Anthropic's default temp/top_p and max_tokens 1024.
  *
  * Constraints:
- *   - `provider` is "anthropic", "openai", or "cerebras" today (last is
- *     OpenAI-compatible open-weights served on Cerebras silicon). New
+ *   - `provider` is "anthropic", "openai", "cerebras", or "groq" today
+ *     (the last two are OpenAI-compatible low-latency inference). New
  *     providers welcome; widen the union here + the chat-providers
  *     factory + the L04 validation schema in lockstep.
  *   - `temperature` ∈ [0, 2]; `topP` ∈ [0, 1]; `maxTokens` ∈ [64, 4096].
@@ -161,7 +172,7 @@ export type CharacterIdentity = {
  *     and a future pass can wire it. The chat route ignores them for now.
  */
 export type CharacterBrainModel = {
-  provider?: "anthropic" | "openai" | "cerebras";
+  provider?: "anthropic" | "openai" | "cerebras" | "groq";
   /** Model id from MODEL_REGISTRY (e.g., "claude-sonnet-4-5", "gpt-5", "qwen-3-235b-a22b-instruct-2507"). */
   model?: string;
   /** 0 = deterministic, 1 = neutral, 2 = chaotic. Provider defaults to ~1. */
@@ -184,7 +195,7 @@ export type CharacterBrainModel = {
    * can document intent and a future pass can wire retry.
    */
   fallbacks?: Array<{
-    provider: "anthropic" | "openai" | "cerebras";
+    provider: "anthropic" | "openai" | "cerebras" | "groq";
     model: string;
     /** What triggers this fallback. Default "5xx" (server errors). */
     trigger?: "5xx" | "rate_limit";
@@ -211,7 +222,7 @@ export type CharacterBrainModel = {
    * declaring a chain at this layer would shadow that without acting.
    */
   voice?: {
-    provider?: "anthropic" | "openai" | "cerebras";
+    provider?: "anthropic" | "openai" | "cerebras" | "groq";
     /** Voice-capable model id from MODEL_REGISTRY. */
     model?: string;
     temperature?: number;

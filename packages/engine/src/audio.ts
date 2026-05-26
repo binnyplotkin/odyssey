@@ -1,11 +1,9 @@
 import { createRequire } from "node:module";
-import type * as WSModule from "ws";
 // Avoid a broken optional `bufferutil` native binding from taking down
 // ElevenLabs streaming sends. `ws` falls back to its pure-JS masking path.
 process.env.WS_NO_BUFFER_UTIL ??= "1";
 process.env.WS_NO_UTF_8_VALIDATE ??= "1";
 const require = createRequire(import.meta.url);
-const WebSocket = (require("ws") as typeof WSModule).WebSocket;
 import { getOpenAIClient } from "./openai-client";
 import {
   SpeechToTextAdapter,
@@ -31,6 +29,28 @@ export const ELEVENLABS_DEFAULT_MODEL_ID = "eleven_flash_v2_5";
 export const POCKET_TTS_PUBLIC_BASE_URL = "https://audio-rt-production.up.railway.app";
 export const POCKET_TTS_SAMPLE_RATE = 24000;
 const DEFAULT_TTS_FIRST_AUDIO_TIMEOUT_MS = 15_000;
+
+type StreamReadResult<T> =
+  | { done: false; value: T }
+  | { done: true; value?: T };
+
+type NodeWebSocket = {
+  on(event: "message", listener: (data: unknown) => void): void;
+  on(event: "error", listener: (err: unknown) => void): void;
+  on(event: "close", listener: () => void): void;
+  once(event: "open", listener: () => void): void;
+  once(event: "error", listener: (err: unknown) => void): void;
+  once(event: "close", listener: (code: number, reason: Buffer) => void): void;
+  send(data: string): void;
+  close(code?: number, reason?: string | Buffer): void;
+};
+
+type NodeWebSocketCtor = new (
+  url: string,
+  options?: { headers?: Record<string, string> },
+) => NodeWebSocket;
+
+const WebSocket = (require("ws") as { WebSocket: NodeWebSocketCtor }).WebSocket;
 
 function getKyutaiSttBaseUrl(): string | null {
   const raw = (process.env.KYUTAI_BASE_URL ?? "").trim().replace(/\/+$/, "");
@@ -404,12 +424,12 @@ export class PocketTtsStreamingAdapter implements StreamingTextToSpeechAdapter {
 async function readWithTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   timeoutMs: number,
-): Promise<ReadableStreamReadResult<Uint8Array>> {
+): Promise<StreamReadResult<Uint8Array>> {
   let timeout: ReturnType<typeof setTimeout> | null = null;
   try {
     return await Promise.race([
       reader.read(),
-      new Promise<ReadableStreamReadResult<Uint8Array>>((_, reject) => {
+      new Promise<StreamReadResult<Uint8Array>>((_, reject) => {
         timeout = setTimeout(() => {
           reject(new Error(`TTS first audio timed out after ${timeoutMs}ms.`));
         }, timeoutMs);
