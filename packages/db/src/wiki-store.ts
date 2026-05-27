@@ -64,6 +64,20 @@ function requireIso(d: Date | string): string {
   return d instanceof Date ? d.toISOString() : String(d);
 }
 
+function column(row: object, camel: string, snake: string): unknown {
+  const record = row as Record<string, unknown>;
+  return record[camel] ?? record[snake];
+}
+
+function nullableString(value: unknown): string | null {
+  return value == null ? null : String(value);
+}
+
+function nullableIso(value: unknown): string | null {
+  if (value == null) return null;
+  return toIso(value as Date | string | null);
+}
+
 function requireDb() {
   const db = getDb();
   if (!db) throw new Error("DATABASE_URL is required for the wiki store");
@@ -314,39 +328,41 @@ function normalizeSourceRef(
 function normalizeIngestion(
   row: typeof wikiIngestionLogTable.$inferSelect,
 ): WikiIngestionLogRecord {
+  const startedAt = column(row, "startedAt", "started_at");
   return {
     id: row.id,
-    characterId: row.characterId ?? "",
-    wikiId: row.wikiId ?? null,
-    sourceId: row.sourceId,
-    startedAt: requireIso(row.startedAt),
-    finishedAt: toIso(row.finishedAt),
-    status: row.status as IngestionStatus,
-    model: row.model,
-    promptHash: row.promptHash,
-    pagesCreated: row.pagesCreated,
-    pagesUpdated: row.pagesUpdated,
-    edgesAdded: row.edgesAdded,
-    contradictionsFound: row.contradictionsFound,
-    tokensUsed: row.tokensUsed,
-    errorMessage: row.errorMessage,
-    notes: row.notes,
-    workerId: row.workerId,
-    claimedAt: toIso(row.claimedAt),
-    heartbeatAt: toIso(row.heartbeatAt),
+    characterId: nullableString(column(row, "characterId", "character_id")) ?? "",
+    wikiId: nullableString(column(row, "wikiId", "wiki_id")),
+    sourceId: nullableString(column(row, "sourceId", "source_id")),
+    startedAt: requireIso(startedAt as Date | string),
+    finishedAt: nullableIso(column(row, "finishedAt", "finished_at")),
+    status: String(column(row, "status", "status")) as IngestionStatus,
+    model: nullableString(column(row, "model", "model")),
+    promptHash: nullableString(column(row, "promptHash", "prompt_hash")),
+    pagesCreated: Number(column(row, "pagesCreated", "pages_created") ?? 0),
+    pagesUpdated: Number(column(row, "pagesUpdated", "pages_updated") ?? 0),
+    edgesAdded: Number(column(row, "edgesAdded", "edges_added") ?? 0),
+    contradictionsFound: Number(column(row, "contradictionsFound", "contradictions_found") ?? 0),
+    tokensUsed: Number(column(row, "tokensUsed", "tokens_used") ?? 0),
+    errorMessage: nullableString(column(row, "errorMessage", "error_message")),
+    notes: nullableString(column(row, "notes", "notes")),
+    workerId: nullableString(column(row, "workerId", "worker_id")),
+    claimedAt: nullableIso(column(row, "claimedAt", "claimed_at")),
+    heartbeatAt: nullableIso(column(row, "heartbeatAt", "heartbeat_at")),
   };
 }
 
 function normalizeIngestionEvent(
   row: typeof wikiIngestionEventsTable.$inferSelect,
 ): WikiIngestionEventRecord {
+  const createdAt = column(row, "createdAt", "created_at");
   return {
     id: row.id,
-    runId: row.runId,
-    seq: row.seq,
-    type: row.type,
-    payload: row.payload,
-    createdAt: requireIso(row.createdAt),
+    runId: String(column(row, "runId", "run_id")),
+    seq: Number(column(row, "seq", "seq")),
+    type: String(column(row, "type", "type")),
+    payload: column(row, "payload", "payload"),
+    createdAt: requireIso(createdAt as Date | string),
   };
 }
 
@@ -1492,7 +1508,26 @@ function neonStore(): WikiStore {
               error_message = NULL
           FROM candidate
           WHERE l.id = candidate.id
-          RETURNING l.*
+          RETURNING
+            l.id,
+            l.character_id AS "characterId",
+            l.wiki_id AS "wikiId",
+            l.source_id AS "sourceId",
+            l.started_at AS "startedAt",
+            l.finished_at AS "finishedAt",
+            l.status,
+            l.model,
+            l.prompt_hash AS "promptHash",
+            l.pages_created AS "pagesCreated",
+            l.pages_updated AS "pagesUpdated",
+            l.edges_added AS "edgesAdded",
+            l.contradictions_found AS "contradictionsFound",
+            l.tokens_used AS "tokensUsed",
+            l.error_message AS "errorMessage",
+            l.notes,
+            l.worker_id AS "workerId",
+            l.claimed_at AS "claimedAt",
+            l.heartbeat_at AS "heartbeatAt"
         `),
       );
       const list = (
@@ -1576,7 +1611,13 @@ function neonStore(): WikiStore {
           ${JSON.stringify(payload)}::jsonb,
           NOW()
         )
-        RETURNING *
+        RETURNING
+          id,
+          run_id AS "runId",
+          seq,
+          type,
+          payload,
+          created_at AS "createdAt"
       `);
       const list = (
         Array.isArray(rows) ? rows : ((rows as { rows: unknown[] }).rows ?? [])
