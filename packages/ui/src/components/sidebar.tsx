@@ -34,7 +34,7 @@ export type SidebarTab = {
 export type SidebarAction = {
   label: string;
   onClick: () => void;
-  icon?: ReactNode;
+  icon?: ReactNode | ((state: { hovered: boolean }) => ReactNode);
 };
 
 export type SidebarProps = {
@@ -102,6 +102,8 @@ export type SidebarProps = {
   mainPadding?: string;
   /** Page content — rendered beside the sidebar. */
   children?: ReactNode;
+  /** Optional right-side rail rendered as a flex sibling of the main column. */
+  rightRail?: ReactNode;
 };
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -218,9 +220,11 @@ export function Sidebar({
   headerContent,
   mainPadding = "2rem",
   children,
+  rightRail,
 }: SidebarProps) {
   const LinkTag = linkComponent ?? "a";
   const icon = brandIcon ?? <DefaultBrandIcon />;
+  const hasHeaderActions = (actions?.length ?? 0) > 0;
 
   const [activeTab, setActiveTab] = useState<string | null>(
     () => tabs?.[0]?.key ?? null,
@@ -296,10 +300,8 @@ export function Sidebar({
     if (!userMenuOpen) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
-      const insideTrigger =
-        userMenuRef.current?.contains(target) ?? false;
-      const insideSidecar =
-        sidecarRef.current?.contains(target) ?? false;
+      const insideTrigger = userMenuRef.current?.contains(target) ?? false;
+      const insideSidecar = sidecarRef.current?.contains(target) ?? false;
       if (!insideTrigger && !insideSidecar) {
         setUserMenuOpen(false);
       }
@@ -340,7 +342,7 @@ export function Sidebar({
           background: active
             ? "var(--sidebar-active, var(--accent-soft))"
             : hovered
-              ? "var(--sidebar-hover, var(--panel))"
+              ? "var(--sidebar-hover, var(--surface-1))"
               : "transparent",
           color: active ? "var(--foreground)" : "var(--text-secondary)",
           transition: "background 150ms, color 150ms",
@@ -446,7 +448,9 @@ export function Sidebar({
           borderRight: collapsed
             ? "none"
             : "1px solid var(--sidebar-border, var(--border-subtle, var(--border)))",
-          boxShadow: collapsed ? "none" : "inset -1px 0 0 rgba(255,255,255,0.018)",
+          boxShadow: collapsed
+            ? "none"
+            : "inset -1px 0 0 rgba(255,255,255,0.018)",
           backdropFilter: "blur(18px)",
           flexShrink: 0,
           overflow: "hidden",
@@ -487,7 +491,7 @@ export function Sidebar({
               borderRadius: "var(--radius-button, 12px)",
               background:
                 hoveredId === "collapse"
-                  ? "var(--sidebar-hover, var(--panel))"
+                  ? "var(--sidebar-hover, var(--surface-1))"
                   : "transparent",
               color:
                 hoveredId === "collapse"
@@ -534,7 +538,7 @@ export function Sidebar({
                     background: selected
                       ? "var(--sidebar-active, var(--accent-soft))"
                       : hovered
-                        ? "var(--sidebar-hover, var(--card-hover))"
+                        ? "var(--sidebar-hover, var(--surface-hover))"
                         : "transparent",
                     borderBottom: `1.5px solid ${
                       selected
@@ -617,12 +621,11 @@ export function Sidebar({
                 padding: "12px 16px 12px 18px",
                 borderTop: "1px solid var(--border-subtle, var(--border))",
                 borderLeft: `2px solid ${userMenuOpen ? "var(--accent-strong)" : "transparent"}`,
-                background:
-                  userMenuOpen
-                    ? "var(--sidebar-active, var(--accent-soft))"
-                    : hoveredId === "user-trigger"
-                      ? "var(--sidebar-hover, var(--panel))"
-                      : "transparent",
+                background: userMenuOpen
+                  ? "var(--sidebar-active, var(--accent-soft))"
+                  : hoveredId === "user-trigger"
+                    ? "var(--sidebar-hover, var(--surface-1))"
+                    : "transparent",
                 cursor: "pointer",
                 textAlign: "left",
                 fontFamily: "inherit",
@@ -714,12 +717,15 @@ export function Sidebar({
                     bottom: sidecarPos.bottom,
                     left: sidecarPos.left,
                     width: 320,
-                    background: "var(--surface-material, var(--background))",
+                    background: "var(--material-surface, var(--background))",
                     borderTop: "1px solid var(--border-subtle, var(--border))",
-                    borderRight: "1px solid var(--border-subtle, var(--border))",
-                    borderBottom: "1px solid var(--border-subtle, var(--border))",
+                    borderRight:
+                      "1px solid var(--border-subtle, var(--border))",
+                    borderBottom:
+                      "1px solid var(--border-subtle, var(--border))",
                     borderRadius: "0 var(--radius-panel, 20px) 0 0",
-                    boxShadow: "var(--elevation-panel, 8px 0 32px var(--shadow))",
+                    boxShadow:
+                      "var(--elevation-panel, 8px 0 32px var(--shadow))",
                     backdropFilter: "blur(22px)",
                     zIndex: 200,
                     display: "flex",
@@ -733,7 +739,8 @@ export function Sidebar({
                       flexDirection: "column",
                       gap: 14,
                       padding: "20px 20px 18px 20px",
-                      borderBottom: "1px solid var(--border-subtle, var(--border))",
+                      borderBottom:
+                        "1px solid var(--border-subtle, var(--border))",
                     }}
                   >
                     <div
@@ -887,7 +894,8 @@ export function Sidebar({
                       style={{
                         display: "flex",
                         flexDirection: "column",
-                        borderTop: "1px solid var(--border-subtle, var(--border))",
+                        borderTop:
+                          "1px solid var(--border-subtle, var(--border))",
                       }}
                     >
                       <div
@@ -932,21 +940,20 @@ export function Sidebar({
                                 key={t}
                                 type="button"
                                 onClick={() => onThemeChange(t)}
-                                onMouseEnter={() =>
-                                  setHoveredId(`theme-${t}`)
-                                }
+                                onMouseEnter={() => setHoveredId(`theme-${t}`)}
                                 onMouseLeave={() => setHoveredId(null)}
                                 style={{
                                   flex: 1,
                                   padding: "10px 0",
-                                  border: "1px solid var(--border-subtle, var(--border))",
+                                  border:
+                                    "1px solid var(--border-subtle, var(--border))",
                                   borderRight: isLast
                                     ? "1px solid var(--border-subtle, var(--border))"
                                     : "none",
                                   background: selected
                                     ? "var(--accent-soft)"
                                     : hoveredId === `theme-${t}`
-                                      ? "var(--panel)"
+                                      ? "var(--surface-1)"
                                       : "transparent",
                                   color: selected
                                     ? "var(--accent-strong)"
@@ -974,7 +981,8 @@ export function Sidebar({
                     style={{
                       display: "flex",
                       flexDirection: "column",
-                      borderTop: "1px solid var(--border-subtle, var(--border))",
+                      borderTop:
+                        "1px solid var(--border-subtle, var(--border))",
                     }}
                   >
                     {onSettings && (
@@ -993,10 +1001,10 @@ export function Sidebar({
                           width: "100%",
                           padding: "14px 20px",
                           border: "none",
-                          borderBottom: "1px solid var(--divider)",
+                          borderBottom: "1px solid var(--border-subtle)",
                           background:
                             hoveredId === "menu-settings"
-                              ? "var(--panel)"
+                              ? "var(--surface-1)"
                               : "transparent",
                           cursor: "pointer",
                           textAlign: "left",
@@ -1063,7 +1071,7 @@ export function Sidebar({
                           padding: "14px 20px",
                           background:
                             hoveredId === "menu-docs"
-                              ? "var(--panel)"
+                              ? "var(--surface-1)"
                               : "transparent",
                           textDecoration: "none",
                           transition: "background 150ms",
@@ -1132,7 +1140,8 @@ export function Sidebar({
                         width: "100%",
                         padding: "14px 20px",
                         border: "none",
-                        borderTop: "1px solid var(--border-subtle, var(--border))",
+                        borderTop:
+                          "1px solid var(--border-subtle, var(--border))",
                         background:
                           hoveredId === "menu-signout"
                             ? "rgba(248, 113, 113, 0.06)"
@@ -1150,7 +1159,7 @@ export function Sidebar({
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          color: "var(--danger)",
+                          color: "var(--status-error)",
                         }}
                       >
                         <svg
@@ -1169,7 +1178,7 @@ export function Sidebar({
                       <span
                         style={{
                           flex: 1,
-                          color: "var(--danger)",
+                          color: "var(--status-error)",
                           fontSize: "0.8125rem",
                         }}
                       >
@@ -1264,6 +1273,7 @@ export function Sidebar({
                 display: "flex",
                 alignItems: "stretch",
                 minWidth: 0,
+                paddingRight: hasHeaderActions ? 16 : 0,
               }}
             >
               {headerContent}
@@ -1273,42 +1283,57 @@ export function Sidebar({
           )}
 
           {/* Actions */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {actions?.map((action) => (
-              <button
-                key={action.label}
-                type="button"
-                onClick={action.onClick}
-                onMouseEnter={() => setHoveredId(`action-${action.label}`)}
-                onMouseLeave={() => setHoveredId(null)}
-                aria-label={action.label}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
-                  border: "none",
-                  background:
-                    hoveredId === `action-${action.label}`
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              alignSelf: "stretch",
+              marginRight: hasHeaderActions ? -24 : 0,
+            }}
+          >
+            {actions?.map((action) => {
+              const actionHovered = hoveredId === `action-${action.label}`;
+              const actionIcon =
+                typeof action.icon === "function"
+                  ? action.icon({ hovered: actionHovered })
+                  : action.icon;
+
+              return (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={action.onClick}
+                  onMouseEnter={() => setHoveredId(`action-${action.label}`)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  aria-label={action.label}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 56,
+                    height: HEADER_HEIGHT,
+                    borderRadius: 0,
+                    border: "none",
+                    borderLeft:
+                      "1px solid var(--header-border, var(--border-subtle, var(--border)))",
+                    background: actionHovered
                       ? "var(--accent-soft)"
-                      : "var(--panel)",
-                  color:
-                    hoveredId === `action-${action.label}`
+                      : "transparent",
+                    color: actionHovered
                       ? "var(--foreground)"
-                      : "var(--muted)",
-                  cursor: "pointer",
-                  transition: "background 150ms, color 150ms",
-                }}
-              >
-                {action.icon ?? (
-                  <span style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                    {action.label.charAt(0)}
-                  </span>
-                )}
-              </button>
-            ))}
+                      : "var(--text-tertiary)",
+                    cursor: "pointer",
+                    transition: "background 150ms, color 150ms",
+                  }}
+                >
+                  {actionIcon ?? (
+                    <span style={{ fontSize: "0.75rem", fontWeight: 500 }}>
+                      {action.label.charAt(0)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </header>
 
@@ -1324,6 +1349,7 @@ export function Sidebar({
           {children}
         </main>
       </div>
+      {rightRail}
     </div>
   );
 }

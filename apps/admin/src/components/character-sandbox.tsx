@@ -2,18 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { modelMetaFor, type ModelOption } from "@/lib/model-registry";
+import { type ModelOption } from "@/lib/model-registry";
 import type { OrchestratorDecision, SceneState } from "@odyssey/types";
 import { useHeaderContent } from "@/components/header-context";
 import { Pathname } from "@/components/pathname";
 import {
   PcmPlayer,
-  blobToBase64,
   captureMic,
   prepareSandboxVoiceTurn,
-  streamChat,
   streamVoice,
-  transcribeAudio,
   warmSandboxVoiceContext,
   type ChatHistoryTurn,
 } from "@/lib/sandbox-streams";
@@ -25,20 +22,20 @@ import type {
 } from "@/app/(authenticated)/characters/[slug]/sandbox/page";
 import { SandboxVoiceStage } from "./character-sandbox/sandbox-voice-stage";
 import { SandboxChatStage } from "./character-sandbox/sandbox-chat-stage";
-import { SandboxConfigSidebar } from "./character-sandbox/sandbox-config-sidebar";
-import { SandboxMissionControl } from "./character-sandbox/sandbox-mission-control";
 import { SandboxPreSession } from "./character-sandbox/sandbox-pre-session";
 import { SandboxTraceDrawer } from "./character-sandbox/sandbox-trace-drawer";
+import {
+  WavefieldStage,
+  createEmptyAudioData,
+  type AudioData,
+} from "@/components/wavefield-stage";
 
 /**
  * CharacterSandbox — the V1 HUD Console implementation. Voice (default) ↔
- * chat modes, with two independently dismissible panels:
- *   - Right sidebar: live config snapshot (Identity / Voice / Mind /
- *     Knowledge / Limits)
- *   - Bottom pane: mission control (telemetry stats grid + terminal log)
+ * chat modes, with one independently dismissible bottom diagnostics panel.
  *
- * Both panel toggles live in the top toolbar, right-most. The center stage
- * stays anchored regardless of which panels are open.
+ * The center stage stays as the main body: WavefieldStage sits behind the
+ * voice/chat renderer, while diagnostics live below that body when opened.
  *
  * Voice/chat conversation wiring is stubbed for now (mock turns + a no-op
  * mic handler) — the real STT/TTS/LLM stream plugs in via the
@@ -49,8 +46,9 @@ import { SandboxTraceDrawer } from "./character-sandbox/sandbox-trace-drawer";
 const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
-const DANGER = "var(--danger)";
+const DANGER = "var(--status-error)";
 const CHARACTER_SANDBOX_SCENE_PREFIX = "character-sandbox:";
+const STREAMING_COMMIT_HOLD_MS = 900;
 
 export type SandboxMode = "voice" | "chat";
 export type SandboxPhase = "pre-session" | "live" | "post-session";
@@ -113,9 +111,7 @@ type EndedSandboxSession = {
 export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<SandboxMode>("voice");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [bottomOpen, setBottomOpen] = useState(true);
-  const [traceOpen, setTraceOpen] = useState(true);
+  const [debugOpen, setDebugOpen] = useState(false);
 
   // Session lifecycle. The page lands in the pre-session manifest, advances
   // into a persisted live session, then lands in a post-session review before
@@ -125,7 +121,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   const [worldSessionId, setWorldSessionId] = useState<string | null>(null);
   const worldSessionIdRef = useRef<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [endedSession, setEndedSession] = useState<EndedSandboxSession | null>(null);
+  const [endedSession, setEndedSession] = useState<EndedSandboxSession | null>(
+    null,
+  );
 
   const [turns, setTurns] = useState<SandboxTurn[]>([]);
   const [traceRecords, setTraceRecords] = useState<SandboxTraceRecord[]>([]);
@@ -134,8 +132,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 
   // Streaming machinery — abort controller for the in-flight LLM call,
   // PcmPlayer for serial audio playback (voice mode), MediaRecorder
-  // refs for push-to-talk mic capture, and a `voiceState` for the
-  // wavefield state pill.
+  // refs for mic capture, and a `voiceState` for the wavefield state pill.
   const abortRef = useRef<AbortController | null>(null);
   const pcmPlayerRef = useRef<PcmPlayer | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -147,16 +144,96 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   const streamingSttRef = useRef<AudioRtStreamingSttSession | null>(null);
   const streamingTranscriptRef = useRef("");
   const streamingTurnIdRef = useRef<string | null>(null);
-  const lastPrepareRef = useRef<{ transcript: string; at: number } | null>(null);
+  const lastPrepareRef = useRef<{ transcript: string; at: number } | null>(
+    null,
+  );
+  const autoCommitTimerRef = useRef<number | null>(null);
   const [voiceState, setVoiceState] = useState<
     "idle" | "listening" | "thinking" | "speaking"
   >("idle");
+  const micOnRef = useRef(micOn);
+  const voiceStateRef = useRef(voiceState);
+  const waveAudioRef = useRef<AudioData>(createEmptyAudioData());
 
   const activeModel = character.brainModel?.model ?? defaultModel;
   const activeVoiceModel =
-    character.brainModel?.voice?.model ?? character.brainModel?.model ?? activeModel;
+    character.brainModel?.voice?.model ??
+    character.brainModel?.model ??
+    activeModel;
   const totals = useMemo(() => computeTotals(turns), [turns]);
   const lastTurn = turns[turns.length - 1] ?? null;
+
+  useEffect(() => {
+    micOnRef.current = micOn;
+    voiceStateRef.current = voiceState;
+  }, [micOn, voiceState]);
+
+  useEffect(() => {
+    const audio = waveAudioRef.current;
+    let pulse = 0;
+
+    const tick = () => {
+      pulse += 0.18;
+      const shimmer = 0.5 + Math.sin(pulse) * 0.5;
+      const voiceActive = phase === "live" && (voiceState !== "idle" || micOn);
+      const target =
+        phase !== "live"
+          ? {
+              energy: 0.04,
+              bass: 0.03,
+              mid: 0.04,
+              high: 0.03,
+              peak: 0.02,
+              active: false,
+            }
+          : voiceState === "listening"
+            ? {
+                energy: 0.5,
+                bass: 0.18,
+                mid: 0.46,
+                high: 0.34,
+                peak: 0.3,
+                active: true,
+              }
+            : voiceState === "thinking"
+              ? {
+                  energy: 0.26,
+                  bass: 0.1,
+                  mid: 0.28,
+                  high: 0.22,
+                  peak: 0.14,
+                  active: true,
+                }
+              : voiceState === "speaking"
+                ? {
+                    energy: 0.72,
+                    bass: 0.34,
+                    mid: 0.62,
+                    high: 0.48,
+                    peak: 0.5,
+                    active: true,
+                  }
+                : {
+                    energy: 0.08,
+                    bass: 0.04,
+                    mid: 0.06,
+                    high: 0.04,
+                    peak: 0.03,
+                    active: false,
+                  };
+
+      audio.energy += (target.energy + shimmer * 0.08 - audio.energy) * 0.12;
+      audio.bass += (target.bass + shimmer * 0.04 - audio.bass) * 0.12;
+      audio.mid += (target.mid + shimmer * 0.05 - audio.mid) * 0.12;
+      audio.high += (target.high + shimmer * 0.04 - audio.high) * 0.12;
+      audio.peak = Math.max(audio.peak * 0.82, target.peak + shimmer * 0.08);
+      audio.active = voiceActive;
+    };
+
+    tick();
+    const id = window.setInterval(tick, 80);
+    return () => window.clearInterval(id);
+  }, [micOn, phase, voiceState]);
 
   async function handleStart() {
     setStartedAt(Date.now());
@@ -173,7 +250,10 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     }).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
       setSessionError(message);
-      console.warn("[sandbox] world session create failed; launch blocked", err);
+      console.warn(
+        "[sandbox] world session create failed; launch blocked",
+        err,
+      );
       return null;
     });
     if (!sessionId) {
@@ -188,39 +268,42 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       voiceContextWarmRef.current = warmSandboxVoiceContext({
         characterId: character.id,
         sessionId,
-      }).then((context) => {
-        setTraceRecords((prev) => [
-          ...prev.slice(-49),
-          {
-            id: `voice-context-${Date.now()}`,
-            kind: "session",
-            at: new Date().toISOString(),
-            trace: {
-              startedAt: new Date().toISOString(),
-              elapsedMs: context.elapsedMs,
-              events: [
-                {
-                  name: "sandbox.voice_context.warmed",
-                  elapsedMs: context.elapsedMs,
-                  meta: {
-                    tokensUsed: context.tokensUsed,
-                    pageSlugs: context.pageSlugs,
-                    cacheKey: context.cacheKey,
-                    cacheScope: context.cacheScope,
+      })
+        .then((context) => {
+          setTraceRecords((prev) => [
+            ...prev.slice(-49),
+            {
+              id: `voice-context-${Date.now()}`,
+              kind: "session",
+              at: new Date().toISOString(),
+              trace: {
+                startedAt: new Date().toISOString(),
+                elapsedMs: context.elapsedMs,
+                events: [
+                  {
+                    name: "sandbox.voice_context.warmed",
+                    elapsedMs: context.elapsedMs,
+                    meta: {
+                      tokensUsed: context.tokensUsed,
+                      pageSlugs: context.pageSlugs,
+                      cacheKey: context.cacheKey,
+                      cacheScope: context.cacheScope,
+                    },
                   },
-                },
-              ],
-            } as unknown as TracePayload,
-            meta: {
-              model: activeVoiceModel,
+                ],
+              } as unknown as TracePayload,
+              meta: {
+                model: activeVoiceModel,
+              },
             },
-          },
-        ]);
-        return context;
-      }).catch((err) => {
-        console.warn("[sandbox] voice context warm failed", err);
-        return null;
-      });
+          ]);
+          return context;
+        })
+        .catch((err) => {
+          console.warn("[sandbox] voice context warm failed", err);
+          return null;
+        });
+      void startVoiceInput();
     } else {
       voiceContextWarmRef.current = null;
     }
@@ -253,7 +336,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       endedAt: Date.now(),
       durationMs,
       turnCount: turns.length,
-      characterTurnCount: turns.filter((turn) => turn.speaker === "character").length,
+      characterTurnCount: turns.filter((turn) => turn.speaker === "character")
+        .length,
       traceCount: traceRecords.length,
       tokens: currentTotals.tokens,
       spent: currentTotals.spent,
@@ -269,18 +353,22 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         turns: turns.length,
         traces: traceRecords.length,
         durationMs,
-      }).then(() => {
-        setEndedSession((current) =>
-          current?.id === sessionId ? { ...current, status: "ended", error: null } : current,
-        );
-      }).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        setEndedSession((current) =>
-          current?.id === sessionId
-            ? { ...current, status: "ended", error: message }
-            : current,
-        );
-      });
+      })
+        .then(() => {
+          setEndedSession((current) =>
+            current?.id === sessionId
+              ? { ...current, status: "ended", error: null }
+              : current,
+          );
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          setEndedSession((current) =>
+            current?.id === sessionId
+              ? { ...current, status: "ended", error: message }
+              : current,
+          );
+        });
     }
   }
 
@@ -325,12 +413,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     setMicOn(false);
   }
 
-  /* ── Chat-mode send ────────────────────────────────────────── */
+  /* ── Unified text/voice send ───────────────────────────────── */
 
   const sendUtterance = useCallback(
     async (
       text: string,
-      viaVoice: boolean,
       audioInput?: { blob: Blob; mimeType: string; durationMs: number | null },
       options?: { turnId?: string },
     ): Promise<void> => {
@@ -341,7 +428,6 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       const characterTurnId = options?.turnId ?? `chr-${now}`;
       const sessionId = worldSessionIdRef.current;
       const sceneId = buildSandboxSceneId(character.slug);
-      let replyText = "";
       const userTurn: SandboxTurn = {
         id: userTurnId,
         speaker: "user",
@@ -374,11 +460,10 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 
       const controller = new AbortController();
       abortRef.current = controller;
+      voiceStateRef.current = "thinking";
       setVoiceState("thinking");
 
-      const finalize = (
-        update: (turn: SandboxTurn) => SandboxTurn,
-      ) => {
+      const finalize = (update: (turn: SandboxTurn) => SandboxTurn) => {
         setTurns((prev) =>
           prev.map((t) => (t.id === characterTurnId ? update(t) : t)),
         );
@@ -393,7 +478,10 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
               turns: [...turns, userTurn],
               lastUserMessage: trimmed,
             }).catch((err) => {
-              console.warn("[sandbox] orchestrator failed; using direct character stream", err);
+              console.warn(
+                "[sandbox] orchestrator failed; using direct character stream",
+                err,
+              );
               return null;
             })
           : null;
@@ -419,26 +507,20 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             trace: t.trace ?? orchestratorTrace,
           }));
           if (orchestration.degraded) {
-            console.warn("[sandbox] orchestrator degraded:", orchestration.reason);
-          } else if (decision.action === "narrate" && decision.narration?.trim()) {
-            finalize((t) => ({
-              ...t,
-              inFlight: false,
-              text: decision.narration!.trim(),
-              tokens: Math.ceil(decision.narration!.length / 4),
-              provider: orchestration.orchestrator?.provider ?? t.provider ?? null,
-              model: orchestration.orchestrator?.model ?? t.model ?? null,
-            }));
-            setVoiceState("idle");
-            return;
+            console.warn(
+              "[sandbox] orchestrator degraded:",
+              orchestration.reason,
+            );
           } else if (decision.action === "end-scene") {
             finalize((t) => ({
               ...t,
               inFlight: false,
               text: "[scene ended by orchestrator]",
-              provider: orchestration.orchestrator?.provider ?? t.provider ?? null,
+              provider:
+                orchestration.orchestrator?.provider ?? t.provider ?? null,
               model: orchestration.orchestrator?.model ?? t.model ?? null,
             }));
+            voiceStateRef.current = "idle";
             setVoiceState("idle");
             return;
           }
@@ -451,9 +533,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         const promptChunk = buildSandboxPromptChunk(decision);
         const executionScene = buildSandboxExecutionScene(character, decision);
 
-        if (viaVoice) {
-          // Lazy-init the audio queue — Web Audio APIs need a user
-          // gesture, which we already have from the mic capture press.
+        // Always use the voice stream so typed chat and mic input share the
+        // same orchestrated character response, TTS playback, and trace path.
           if (!pcmPlayerRef.current) pcmPlayerRef.current = new PcmPlayer();
           if (voiceContextWarmRef.current) {
             await Promise.race([
@@ -462,7 +543,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             ]);
           }
           let firstAudioAt: number | null = null;
-          const outputFrames: Array<{ pcmBase64: string; samples: number; sampleRate: number }> = [];
+          const outputFrames: Array<{
+            pcmBase64: string;
+            samples: number;
+            sampleRate: number;
+          }> = [];
           await streamVoice({
             characterId: character.id,
             sessionId,
@@ -489,7 +574,6 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                 finalize((t) => ({ ...t, trace: trace as TracePayload }));
               },
               onToken: (delta) => {
-                replyText += delta;
                 finalize((t) => ({
                   ...t,
                   text: t.text + delta,
@@ -497,6 +581,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
               },
               onFirstAudio: (latencyMs) => {
                 firstAudioAt = performance.now();
+                voiceStateRef.current = "speaking";
                 setVoiceState("speaking");
                 finalize((t) => ({
                   ...t,
@@ -504,7 +589,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                 }));
               },
               onAudio: (pcm, samples, rate) => {
-                outputFrames.push({ pcmBase64: pcm, samples, sampleRate: rate });
+                outputFrames.push({
+                  pcmBase64: pcm,
+                  samples,
+                  sampleRate: rate,
+                });
                 pcmPlayerRef.current?.enqueue(pcm, samples, rate);
               },
               onDone: (totals) => {
@@ -558,7 +647,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                   inFlight: false,
                   ttftMs: t.ttftMs ?? ttft,
                   tokens:
-                    typeof done.inputTokens === "number" || typeof done.outputTokens === "number"
+                    typeof done.inputTokens === "number" ||
+                    typeof done.outputTokens === "number"
                       ? (done.inputTokens ?? 0) + (done.outputTokens ?? 0)
                       : Math.ceil(t.text.length / 4),
                   provider: done.provider ?? t.provider ?? null,
@@ -566,7 +656,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                   estimatedCostUsd: done.estimatedCostUsd ?? t.estimatedCostUsd,
                   trace: done.serverTrace ?? t.trace,
                 }));
-                setVoiceState(micOn ? "listening" : "idle");
+                const nextVoiceState = micOnRef.current ? "listening" : "idle";
+                voiceStateRef.current = nextVoiceState;
+                setVoiceState(nextVoiceState);
               },
               onError: (msg) => {
                 finalize((t) => ({
@@ -574,77 +666,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                   inFlight: false,
                   text: t.text || `[error: ${msg}]`,
                 }));
+                voiceStateRef.current = "idle";
                 setVoiceState("idle");
               },
             },
           });
-        } else {
-          await streamChat({
-            characterId: character.id,
-            sessionId,
-            turnId: characterTurnId,
-            message: trimmed,
-            history,
-            scene: executionScene,
-            model: activeModel,
-            signal: controller.signal,
-            callbacks: {
-              onCurator: (cur) => {
-                const trace = cur.timingTrace ?? cur.trace;
-                if (trace) {
-                  const record: SandboxTraceRecord = {
-                    id: `trace-${characterTurnId}`,
-                    turnId: characterTurnId,
-                    kind: "chat",
-                    at: new Date().toISOString(),
-                    trace: trace as TracePayload,
-                    meta: {
-                      model: activeModel,
-                    },
-                  };
-                  setTraceRecords((prev) => [...prev.slice(-49), record]);
-                  finalize((t) => ({ ...t, trace: trace as TracePayload }));
-                }
-                finalize((t) => ({
-                  ...t,
-                  factsRecalled: cur.pages.length,
-                }));
-              },
-              onToken: (delta) => {
-                replyText += delta;
-                finalize((t) => ({
-                  ...t,
-                  text: t.text + delta,
-                  ttftMs:
-                    t.ttftMs ??
-                    Math.round(performance.now() - sentAt),
-                }));
-              },
-              onDone: ({ outputTokens, inputTokens, provider, model, estimatedCostUsd }) => {
-                const resolvedProvider =
-                  provider ?? modelMetaFor(model ?? activeModel)?.provider ?? null;
-                const resolvedModel = model ?? activeModel;
-                finalize((t) => ({
-                  ...t,
-                  inFlight: false,
-                  tokens: outputTokens + inputTokens,
-                  provider: resolvedProvider,
-                  model: resolvedModel,
-                  estimatedCostUsd,
-                }));
-                setVoiceState("idle");
-              },
-              onError: (msg) => {
-                finalize((t) => ({
-                  ...t,
-                  inFlight: false,
-                  text: t.text || `[error: ${msg}]`,
-                }));
-                setVoiceState("idle");
-              },
-            },
-          });
-        }
       } catch (err) {
         // AbortError lands here when the user ends the session mid-stream;
         // the turn is already marked done by handleEnd/handleReset, so just
@@ -661,11 +687,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         abortRef.current = null;
       }
     },
-    [character, turns, startedAt, activeModel, activeVoiceModel, micOn],
+    [character, turns, startedAt, activeVoiceModel],
   );
 
   function handleSendText() {
-    void sendUtterance(composerValue, false);
+    void sendUtterance(composerValue);
     setComposerValue("");
   }
 
@@ -728,14 +754,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         return next;
       });
       try {
-        const res = await fetch(
-          `/api/characters/${character.id}/directive`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ directive: nextDirective }),
-          },
-        );
+        const res = await fetch(`/api/characters/${character.id}/directive`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ directive: nextDirective }),
+        });
         if (!res.ok) throw new Error(`${res.status}`);
         directiveRef.current = nextDirective;
       } catch {
@@ -768,6 +791,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   }
 
   function stopStreamingStt() {
+    clearStreamingCommitTimer();
     const session = streamingSttRef.current;
     streamingSttRef.current = null;
     if (session) {
@@ -782,10 +806,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     if (partial.length < 8) return;
     const now = performance.now();
     const last = lastPrepareRef.current;
-    if (
-      last &&
-      (partial === last.transcript || now - last.at < 350)
-    ) {
+    if (last && (partial === last.transcript || now - last.at < 350)) {
       return;
     }
     lastPrepareRef.current = { transcript: partial, at: now };
@@ -800,101 +821,34 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     });
   }
 
-  const handleMicToggle = useCallback(async () => {
-    if (micOn) {
-      // Releasing the mic: stop the recorder, send the captured blob to
-      // STT, then fire the voice-stream once we have a transcript.
-      const rec = recorderRef.current;
-      const mimeType = recorderMimeRef.current || "audio/webm";
-      setMicOn(false);
-      setVoiceState("thinking");
-      if (!rec) {
-        streamingTurnIdRef.current = null;
-        lastPrepareRef.current = null;
-        return;
-      }
-      const finished = new Promise<Blob>((resolve) => {
-        rec.addEventListener(
-          "stop",
-          () => {
-            const blob = new Blob(recorderChunksRef.current, {
-              type: mimeType,
-            });
-            resolve(blob);
-          },
-          { once: true },
-        );
-      });
-      try {
-        rec.stop();
-      } catch {
-        /* already stopped */
-      }
-      const blob = await finished;
-      const durationMs =
-        recorderStartedAtRef.current !== null
-          ? Math.max(0, Math.round(performance.now() - recorderStartedAtRef.current))
-          : null;
-      const streamingTranscript = streamingTranscriptRef.current.trim();
-      const preparedTurnId = streamingTurnIdRef.current ?? `chr-${crypto.randomUUID()}`;
-      streamingTurnIdRef.current = preparedTurnId;
-      stopStreamingStt();
-      stopRecorder();
-      if (blob.size === 0) {
-        streamingTurnIdRef.current = null;
-        lastPrepareRef.current = null;
-        setVoiceState("idle");
-        return;
-      }
-      try {
-        let transcript = streamingTranscript;
-        if (!transcript) {
-          const audioBase64 = await blobToBase64(blob);
-          const result = await transcribeAudio(audioBase64, mimeType);
-          transcript = result.transcript;
-        }
-        if (!transcript.trim()) {
-          setVoiceState("idle");
-          return;
-        }
-        prepareVoiceContextFromPartial(transcript);
-        await sendUtterance(
-          transcript,
-          true,
-          {
-            blob,
-            mimeType,
-            durationMs,
-          },
-          {
-            turnId: preparedTurnId,
-          },
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        // Surface as an in-line "system" turn so the user sees what
-        // happened without leaving the sandbox.
-        setTurns((prev) => [
-          ...prev,
-          {
-            id: `err-${Date.now()}`,
-            speaker: "character",
-            text: `[transcribe error: ${msg}]`,
-            timestampMs: Date.now() - startedAt,
-          },
-        ]);
-        setVoiceState("idle");
-      } finally {
-        if (streamingTurnIdRef.current === preparedTurnId) {
-          streamingTurnIdRef.current = null;
-        }
-        lastPrepareRef.current = null;
-      }
-      return;
+  function clearStreamingCommitTimer() {
+    if (autoCommitTimerRef.current !== null) {
+      window.clearTimeout(autoCommitTimerRef.current);
+      autoCommitTimerRef.current = null;
     }
+  }
 
-    // Arming the mic: request the stream, start the recorder, buffer
-    // chunks until stop.
+  function commitStreamingTranscript() {
+    clearStreamingCommitTimer();
+    if (voiceStateRef.current !== "listening") return;
+    const transcript = streamingTranscriptRef.current.trim();
+    if (!transcript) return;
+    const turnId = streamingTurnIdRef.current ?? `chr-${crypto.randomUUID()}`;
+    streamingTranscriptRef.current = "";
+    streamingTurnIdRef.current = `chr-${crypto.randomUUID()}`;
+    lastPrepareRef.current = null;
+    void sendUtterance(transcript, undefined, { turnId });
+  }
+
+  function scheduleStreamingCommit() {
+    clearStreamingCommitTimer();
+    autoCommitTimerRef.current = window.setTimeout(() => {
+      autoCommitTimerRef.current = null;
+      commitStreamingTranscript();
+    }, STREAMING_COMMIT_HOLD_MS);
+  }
+
+  async function startVoiceInput(): Promise<void> {
     try {
       const { recorder, stream, mimeType } = await captureMic();
       recorderRef.current = recorder;
@@ -913,16 +867,17 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       lastPrepareRef.current = null;
       const streamingSession = new AudioRtStreamingSttSession();
       streamingSttRef.current = streamingSession;
-      void streamingSession.start(
-        stream,
-        {
+      void streamingSession
+        .start(stream, {
           onWord: (word) => {
+            if (voiceStateRef.current !== "listening") return;
             const next = [streamingTranscriptRef.current, word]
               .filter(Boolean)
               .join(" ")
               .trim();
             streamingTranscriptRef.current = next;
             prepareVoiceContextFromPartial(next);
+            scheduleStreamingCommit();
           },
           onError: (message) => {
             console.warn("[sandbox] streaming STT error", message);
@@ -932,13 +887,18 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
               streamingSttRef.current = null;
             }
           },
-        },
-      ).catch((err) => {
-        console.warn("[sandbox] streaming STT start failed; blob STT fallback remains active", err);
-        if (streamingSttRef.current === streamingSession) {
-          streamingSttRef.current = null;
-        }
-      });
+        })
+        .catch((err) => {
+          console.warn(
+            "[sandbox] streaming STT start failed; blob STT fallback remains active",
+            err,
+          );
+          if (streamingSttRef.current === streamingSession) {
+            streamingSttRef.current = null;
+          }
+        });
+      micOnRef.current = true;
+      voiceStateRef.current = "listening";
       setMicOn(true);
       setVoiceState("listening");
     } catch (err) {
@@ -952,12 +912,38 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           timestampMs: Date.now() - startedAt,
         },
       ]);
+      micOnRef.current = false;
+      voiceStateRef.current = "idle";
       setVoiceState("idle");
       setMicOn(false);
       streamingTurnIdRef.current = null;
       lastPrepareRef.current = null;
     }
-  }, [micOn, sendUtterance, startedAt]);
+  }
+
+  async function handleMicToggle() {
+    if (micOn) {
+      clearStreamingCommitTimer();
+      const transcript = streamingTranscriptRef.current.trim();
+      const preparedTurnId =
+        streamingTurnIdRef.current ?? `chr-${crypto.randomUUID()}`;
+      streamingTranscriptRef.current = "";
+      streamingTurnIdRef.current = null;
+      lastPrepareRef.current = null;
+      micOnRef.current = false;
+      voiceStateRef.current = transcript ? "thinking" : "idle";
+      setMicOn(false);
+      setVoiceState(transcript ? "thinking" : "idle");
+      stopStreamingStt();
+      stopRecorder();
+      if (transcript) {
+        await sendUtterance(transcript, undefined, { turnId: preparedTurnId });
+      }
+      return;
+    }
+
+    await startVoiceInput();
+  }
 
   // Tear down audio + mic on unmount so background sessions don't keep
   // streaming after the user navigates away.
@@ -984,12 +970,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           title={character.title}
           mode={mode}
           onModeChange={setMode}
-          bottomOpen={bottomOpen}
-          sidebarOpen={sidebarOpen}
-          traceOpen={traceOpen}
-          onToggleBottom={() => setBottomOpen((v) => !v)}
-          onToggleSidebar={() => setSidebarOpen((v) => !v)}
-          onToggleTrace={() => setTraceOpen((v) => !v)}
+          debugOpen={debugOpen}
+          traceCount={traceRecords.length}
+          onToggleDebug={() => setDebugOpen((v) => !v)}
           onReset={handleReset}
           onEnd={handleEnd}
         />
@@ -998,18 +981,18 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           slug={character.slug}
           title={character.title}
           sessionId={endedSession?.id ?? worldSessionId}
-          traceOpen={traceOpen}
+          debugOpen={debugOpen}
           traceCount={traceRecords.length}
-          onToggleTrace={() => setTraceOpen((v) => !v)}
+          onToggleDebug={() => setDebugOpen((v) => !v)}
           onStartNext={handlePrepareNextSession}
         />
       ) : (
         <SandboxPreSessionToolbar
           slug={character.slug}
           title={character.title}
-          traceOpen={traceOpen}
+          debugOpen={debugOpen}
           traceCount={traceRecords.length}
-          onToggleTrace={() => setTraceOpen((v) => !v)}
+          onToggleDebug={() => setDebugOpen((v) => !v)}
         />
       ),
     );
@@ -1021,14 +1004,12 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     character.slug,
     character.title,
     mode,
-    bottomOpen,
-    sidebarOpen,
-    traceOpen,
+    debugOpen,
     traceRecords.length,
     phase,
     endedSession?.id,
     worldSessionId,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+  ]);
 
   return (
     // /characters/* is a flush route — admin-shell drops <main>'s padding to
@@ -1036,6 +1017,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     // fill that space exactly so the outer <main> never has to scroll.
     <div
       style={{
+        position: "relative",
         width: "100%",
         height: "100%",
         display: "flex",
@@ -1045,99 +1027,96 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         overflow: "hidden",
       }}
     >
-      {phase === "pre-session" ? (
-        <SandboxPreSession
-          character={character}
-          bindings={bindings}
-          activeModel={activeModel}
-          mode={mode}
-          sessionError={sessionError}
-          onModeChange={setMode}
-          onStart={handleStart}
-          onCancel={handleCancel}
-        />
-      ) : phase === "post-session" && endedSession ? (
-        <SandboxPostSession
-          character={character}
-          summary={endedSession}
-          turns={turns}
-          traceRecords={traceRecords}
-          onStartNext={handlePrepareNextSession}
-          onReturnToCharacter={handleCancel}
-        />
-      ) : (
-        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            minWidth: 0,
-          }}
-        >
-          <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-            <TelemetryStrip
-              elapsedSec={Math.floor((Date.now() - startedAt) / 1000)}
-              ttftMs={lastTurn?.ttftMs ?? null}
-              spent={totals.spent}
-              turn={turns.length}
-              tokens={totals.tokens}
-            />
-            {mode === "voice" ? (
-              <SandboxVoiceStage
-                character={character}
-                micOn={micOn}
-                onMicToggle={() => void handleMicToggle()}
-                lastUserUtterance={
-                  [...turns].reverse().find((t) => t.speaker === "user")
-                    ?.text ?? null
-                }
-                state={voiceState}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {phase === "pre-session" ? (
+          <SandboxPreSession
+            character={character}
+            bindings={bindings}
+            activeModel={activeModel}
+            mode={mode}
+            sessionError={sessionError}
+            onModeChange={setMode}
+            onStart={handleStart}
+            onCancel={handleCancel}
+            heroBackground={
+              <SandboxWavefieldCell atmosphere={0.28} audioData={waveAudioRef.current} />
+            }
+          />
+        ) : phase === "post-session" && endedSession ? (
+          <SandboxPostSession
+            character={character}
+            summary={endedSession}
+            turns={turns}
+            traceRecords={traceRecords}
+            onStartNext={handlePrepareNextSession}
+            onReturnToCharacter={handleCancel}
+          />
+        ) : (
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <SandboxWavefieldCell atmosphere={1} audioData={waveAudioRef.current} />
+            <div
+              style={{
+                position: "relative",
+                zIndex: 1,
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <TelemetryStrip
+                elapsedSec={Math.floor((Date.now() - startedAt) / 1000)}
+                ttftMs={lastTurn?.ttftMs ?? null}
+                spent={totals.spent}
+                turn={turns.length}
+                tokens={totals.tokens}
               />
-            ) : (
-              <SandboxChatStage
-                character={character}
-                turns={turns}
-                composerValue={composerValue}
-                onComposerChange={setComposerValue}
-                onSend={handleSendText}
-                savedTurnIds={savedTurnIds}
-                onSaveExample={handleSaveExample}
-              />
-            )}
+              {mode === "voice" ? (
+                <SandboxVoiceStage
+                  character={character}
+                  micOn={micOn}
+                  onMicToggle={() => void handleMicToggle()}
+                  lastUserUtterance={
+                    [...turns].reverse().find((t) => t.speaker === "user")
+                      ?.text ?? null
+                  }
+                  state={voiceState}
+                />
+              ) : (
+                <SandboxChatStage
+                  character={character}
+                  turns={turns}
+                  composerValue={composerValue}
+                  onComposerChange={setComposerValue}
+                  onSend={handleSendText}
+                  savedTurnIds={savedTurnIds}
+                  onSaveExample={handleSaveExample}
+                />
+              )}
+            </div>
           </div>
-          {bottomOpen && (
-            <SandboxMissionControl
-              turns={turns}
-              sessionId={worldSessionId}
-              traceCount={traceRecords.length}
-              sessionError={sessionError}
-              ttftMs={lastTurn?.ttftMs ?? null}
-              tokensUsed={totals.tokens}
-              spent={totals.spent}
-              model={activeModel}
-              scopeTags={extractScopeTags(character)}
-              lastRecall={lastTurn?.factsRecalled ?? 0}
-              onCollapse={() => setBottomOpen(false)}
-              savedTurnIds={savedTurnIds}
-              onSaveExample={handleSaveExample}
-            />
-          )}
-        </div>
-          {sidebarOpen && (
-            <SandboxConfigSidebar
-              character={character}
-              bindings={bindings}
-              activeModel={activeModel}
-              lastTurn={lastTurn}
-              savedTurnIds={savedTurnIds}
-              onSaveExample={handleSaveExample}
-            />
-          )}
-        </div>
-      )}
+        )}
+      </div>
       <SandboxTraceDrawer
-        open={traceOpen}
+        open={debugOpen}
         phase={phase}
         mode={mode}
         records={traceRecords}
@@ -1147,8 +1126,31 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         sessionError={sessionError}
         chatModel={activeModel}
         voiceModel={activeVoiceModel}
-        onClose={() => setTraceOpen(false)}
+        onClose={() => setDebugOpen(false)}
       />
+    </div>
+  );
+}
+
+function SandboxWavefieldCell({
+  atmosphere,
+  audioData,
+}: {
+  atmosphere: number;
+  audioData: AudioData;
+}) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 0,
+        overflow: "hidden",
+        pointerEvents: "none",
+      }}
+    >
+      <WavefieldStage audioData={audioData} atmosphere={atmosphere} />
     </div>
   );
 }
@@ -1158,15 +1160,15 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 function SandboxPreSessionToolbar({
   slug,
   title,
-  traceOpen,
+  debugOpen,
   traceCount,
-  onToggleTrace,
+  onToggleDebug,
 }: {
   slug: string;
   title: string;
-  traceOpen: boolean;
+  debugOpen: boolean;
   traceCount: number;
-  onToggleTrace: () => void;
+  onToggleDebug: () => void;
 }) {
   return (
     <div
@@ -1190,7 +1192,14 @@ function SandboxPreSessionToolbar({
           },
         ]}
       />
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", flexShrink: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-8)",
+          flexShrink: 0,
+        }}
+      >
         <span
           style={{
             fontFamily: FONT_MONO,
@@ -1202,10 +1211,10 @@ function SandboxPreSessionToolbar({
         >
           ready · pre-session
         </span>
-        <HeaderTraceToggle
-          active={traceOpen}
+        <HeaderDebugToggle
+          active={debugOpen}
           traceCount={traceCount}
-          onClick={onToggleTrace}
+          onClick={onToggleDebug}
         />
       </div>
     </div>
@@ -1216,17 +1225,17 @@ function SandboxPostSessionToolbar({
   slug,
   title,
   sessionId,
-  traceOpen,
+  debugOpen,
   traceCount,
-  onToggleTrace,
+  onToggleDebug,
   onStartNext,
 }: {
   slug: string;
   title: string;
   sessionId: string | null;
-  traceOpen: boolean;
+  debugOpen: boolean;
   traceCount: number;
-  onToggleTrace: () => void;
+  onToggleDebug: () => void;
   onStartNext: () => void;
 }) {
   return (
@@ -1251,19 +1260,34 @@ function SandboxPostSessionToolbar({
           },
         ]}
       />
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", flexShrink: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-8)",
+          flexShrink: 0,
+        }}
+      >
         {sessionId ? (
           <a
             href={`/sessions/${encodeURIComponent(sessionId)}`}
             style={{
-              padding: "6px 12px",
-              border: "1px solid var(--border)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 30,
+              padding: "0 14px",
+              border:
+                "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
+              borderRadius: "var(--radius-pill)",
+              background: "transparent",
               color: "var(--text-secondary)",
               fontFamily: FONT_MONO,
               fontSize: "var(--font-size-sm)",
-              letterSpacing: "0.14em",
+              letterSpacing: "0.10em",
               textTransform: "uppercase",
               textDecoration: "none",
+              whiteSpace: "nowrap",
             }}
           >
             view session
@@ -1273,23 +1297,28 @@ function SandboxPostSessionToolbar({
           type="button"
           onClick={onStartNext}
           style={{
-            padding: "6px 12px",
-            border: "1px solid var(--accent-border)",
-            background: "var(--accent-fill)",
-            color: ACCENT,
-            fontFamily: FONT_MONO,
-            fontSize: "var(--font-size-sm)",
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 30,
+            padding: "0 16px",
+            border: `1px solid ${ACCENT}`,
+            borderRadius: "var(--radius-pill)",
+            background: ACCENT,
+            color: "var(--accent-on)",
+            fontFamily: FONT_HEAD,
+            fontSize: "var(--font-size-base)",
+            fontWeight: 600,
             cursor: "pointer",
+            whiteSpace: "nowrap",
           }}
         >
           new run
         </button>
-        <HeaderTraceToggle
-          active={traceOpen}
+        <HeaderDebugToggle
+          active={debugOpen}
           traceCount={traceCount}
-          onClick={onToggleTrace}
+          onClick={onToggleDebug}
         />
       </div>
     </div>
@@ -1316,12 +1345,11 @@ function SandboxPostSession({
   const lastCharacterTurn = [...turns]
     .reverse()
     .find((turn) => turn.speaker === "character" && turn.text.trim());
-  const statusLabel =
-    summary.error
-      ? "ended · sync warning"
-      : summary.status === "ending"
-        ? "ending session"
-        : "ended";
+  const statusLabel = summary.error
+    ? "ended · sync warning"
+    : summary.status === "ending"
+      ? "ending session"
+      : "ended";
 
   return (
     <div
@@ -1344,7 +1372,14 @@ function SandboxPostSession({
           gap: "var(--space-32)",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)", maxWidth: 880 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-12)",
+            maxWidth: 880,
+          }}
+        >
           <span
             style={{
               fontFamily: FONT_MONO,
@@ -1388,8 +1423,10 @@ function SandboxPostSession({
               role="alert"
               style={{
                 maxWidth: 760,
-                border: "1px solid color-mix(in srgb, var(--danger) 45%, transparent)",
-                background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+                border:
+                  "1px solid color-mix(in srgb, var(--status-error) 45%, transparent)",
+                background:
+                  "color-mix(in srgb, var(--status-error) 10%, transparent)",
                 color: DANGER,
                 padding: "12px 14px",
                 fontFamily: FONT_MONO,
@@ -1397,7 +1434,8 @@ function SandboxPostSession({
                 lineHeight: "18px",
               }}
             >
-              The local review is available, but the final session-ended update failed: {summary.error}
+              The local review is available, but the final session-ended update
+              failed: {summary.error}
             </div>
           ) : null}
         </div>
@@ -1410,13 +1448,29 @@ function SandboxPostSession({
             maxWidth: 920,
           }}
         >
-          <PostMetric label="duration" value={formatDurationMs(summary.durationMs)} />
-          <PostMetric label="turns" value={String(summary.characterTurnCount).padStart(2, "0")} hint={`${summary.turnCount} events`} />
-          <PostMetric label="ttft" value={summary.ttftMs != null ? `${summary.ttftMs}ms` : "—"} />
-          <PostMetric label="tokens" value={summary.tokens.toLocaleString()} hint={formatCost(summary.spent)} />
+          <PostMetric
+            label="duration"
+            value={formatDurationMs(summary.durationMs)}
+          />
+          <PostMetric
+            label="turns"
+            value={String(summary.characterTurnCount).padStart(2, "0")}
+            hint={`${summary.turnCount} events`}
+          />
+          <PostMetric
+            label="ttft"
+            value={summary.ttftMs != null ? `${summary.ttftMs}ms` : "—"}
+          />
+          <PostMetric
+            label="tokens"
+            value={summary.tokens.toLocaleString()}
+            hint={formatCost(summary.spent)}
+          />
         </div>
 
-        <div style={{ display: "flex", gap: "var(--space-12)", flexWrap: "wrap" }}>
+        <div
+          style={{ display: "flex", gap: "var(--space-12)", flexWrap: "wrap" }}
+        >
           <a
             href={`/sessions/${encodeURIComponent(summary.id)}`}
             style={{
@@ -1481,7 +1535,7 @@ function SandboxPostSession({
         style={{
           minHeight: 0,
           borderLeft: "1px solid var(--border)",
-          background: "var(--card)",
+          background: "var(--material-card)",
           display: "flex",
           flexDirection: "column",
         }}
@@ -1524,7 +1578,8 @@ function SandboxPostSession({
               color: "var(--text-tertiary)",
             }}
           >
-            {summary.mode} · {traceRecords.length} traces · ended {formatClockTime(summary.endedAt)}
+            {summary.mode} · {traceRecords.length} traces · ended{" "}
+            {formatClockTime(summary.endedAt)}
           </span>
         </div>
 
@@ -1547,7 +1602,13 @@ function SandboxPostSession({
             />
           ) : null}
           {recentTurns.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-10)",
+              }}
+            >
               <span
                 style={{
                   fontFamily: FONT_MONO,
@@ -1599,7 +1660,7 @@ function PostMetric({
     <div
       style={{
         border: "1px solid var(--border)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         padding: "16px",
         minHeight: 92,
         display: "flex",
@@ -1692,12 +1753,9 @@ function SandboxHeaderToolbar({
   title,
   mode,
   onModeChange,
-  bottomOpen,
-  sidebarOpen,
-  traceOpen,
-  onToggleBottom,
-  onToggleSidebar,
-  onToggleTrace,
+  debugOpen,
+  traceCount,
+  onToggleDebug,
   onReset,
   onEnd,
 }: {
@@ -1705,12 +1763,9 @@ function SandboxHeaderToolbar({
   title: string;
   mode: SandboxMode;
   onModeChange: (next: SandboxMode) => void;
-  bottomOpen: boolean;
-  sidebarOpen: boolean;
-  traceOpen: boolean;
-  onToggleBottom: () => void;
-  onToggleSidebar: () => void;
-  onToggleTrace: () => void;
+  debugOpen: boolean;
+  traceCount: number;
+  onToggleDebug: () => void;
   onReset: () => void;
   onEnd: () => void;
 }) {
@@ -1740,21 +1795,33 @@ function SandboxHeaderToolbar({
       <ModeToggle mode={mode} onChange={onModeChange} />
 
       <div
-        style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", flexShrink: 0 }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-8)",
+          flexShrink: 0,
+        }}
       >
         <button
           type="button"
           onClick={onReset}
           style={{
-            padding: "6px 12px",
-            border: "1px solid var(--border)",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 30,
+            padding: "0 14px",
+            border:
+              "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
+            borderRadius: "var(--radius-pill)",
             background: "transparent",
             color: "var(--text-secondary)",
             fontFamily: FONT_MONO,
             fontSize: "var(--font-size-sm)",
-            letterSpacing: "0.14em",
+            letterSpacing: "0.10em",
             textTransform: "uppercase",
             cursor: "pointer",
+            whiteSpace: "nowrap",
           }}
         >
           reset
@@ -1763,26 +1830,30 @@ function SandboxHeaderToolbar({
           type="button"
           onClick={onEnd}
           style={{
-            padding: "6px 12px",
-            border: `1px solid ${DANGER}`,
-            background: `color-mix(in srgb, ${DANGER} 12%, transparent)`,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 30,
+            padding: "0 14px",
+            border:
+              "1px solid color-mix(in srgb, var(--status-error) 34%, transparent)",
+            borderRadius: "var(--radius-pill)",
+            background: "color-mix(in srgb, var(--status-error) 10%, transparent)",
             color: DANGER,
             fontFamily: FONT_MONO,
             fontSize: "var(--font-size-sm)",
-            letterSpacing: "0.14em",
+            letterSpacing: "0.10em",
             textTransform: "uppercase",
             cursor: "pointer",
+            whiteSpace: "nowrap",
           }}
         >
           ■ end
         </button>
-        <PanelToggleGroup
-          bottomOpen={bottomOpen}
-          sidebarOpen={sidebarOpen}
-          traceOpen={traceOpen}
-          onToggleBottom={onToggleBottom}
-          onToggleSidebar={onToggleSidebar}
-          onToggleTrace={onToggleTrace}
+        <HeaderDebugToggle
+          active={debugOpen}
+          traceCount={traceCount}
+          onClick={onToggleDebug}
         />
       </div>
     </div>
@@ -1803,7 +1874,12 @@ function ModeToggle({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        border: "1px solid var(--border)",
+        minHeight: 30,
+        border:
+          "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
+        borderRadius: "var(--radius-pill)",
+        background: "transparent",
+        overflow: "hidden",
       }}
     >
       <ModeButton
@@ -1841,16 +1917,17 @@ function ModeButton({
       type="button"
       onClick={onClick}
       style={{
-        padding: "7px 18px",
-        background: active
-          ? "var(--accent-fill)"
-          : "transparent",
+        minHeight: 28,
+        padding: "0 14px",
+        background: active ? "var(--accent-fill)" : "transparent",
         border: "none",
-        borderLeft: leftBorder ? "1px solid var(--border)" : "none",
+        borderLeft: leftBorder
+          ? "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)"
+          : "none",
         color: active ? ACCENT : "var(--text-tertiary)",
         fontFamily: FONT_MONO,
         fontSize: "var(--font-size-sm)",
-        letterSpacing: "0.18em",
+        letterSpacing: "0.10em",
         textTransform: "uppercase",
         fontWeight: active ? 600 : 400,
         cursor: "pointer",
@@ -1865,68 +1942,7 @@ function ModeButton({
   );
 }
 
-function PanelToggleGroup({
-  bottomOpen,
-  sidebarOpen,
-  traceOpen,
-  onToggleBottom,
-  onToggleSidebar,
-  onToggleTrace,
-}: {
-  bottomOpen: boolean;
-  sidebarOpen: boolean;
-  traceOpen: boolean;
-  onToggleBottom: () => void;
-  onToggleSidebar: () => void;
-  onToggleTrace: () => void;
-}) {
-  return (
-    <div
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        border: "1px solid var(--border)",
-        marginLeft: "var(--space-4)",
-      }}
-    >
-      <IconToggle
-        active={bottomOpen}
-        onClick={onToggleBottom}
-        title="Mission control"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <g stroke="currentColor" strokeWidth={2} fill="none">
-            <rect x="3" y="4" width="18" height="16" />
-            <line x1="3" y1="14" x2="21" y2="14" />
-          </g>
-        </svg>
-      </IconToggle>
-      <IconToggle
-        active={sidebarOpen}
-        onClick={onToggleSidebar}
-        title="Config sidebar"
-        leftBorder
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <g stroke="currentColor" strokeWidth={2} fill="none">
-            <rect x="3" y="4" width="18" height="16" />
-            <line x1="15" y1="4" x2="15" y2="20" />
-          </g>
-        </svg>
-      </IconToggle>
-      <IconToggle
-        active={traceOpen}
-        onClick={onToggleTrace}
-        title="Diagnostics panel"
-        leftBorder
-      >
-        <TraceIcon />
-      </IconToggle>
-    </div>
-  );
-}
-
-function HeaderTraceToggle({
+function HeaderDebugToggle({
   active,
   traceCount,
   onClick,
@@ -1945,62 +1961,26 @@ function HeaderTraceToggle({
         display: "inline-flex",
         alignItems: "center",
         gap: "var(--space-8)",
-        height: 28,
-        padding: "0 10px",
-        border: "1px solid var(--border)",
+        minHeight: 30,
+        padding: "0 12px",
+        border: active
+          ? `1px solid ${ACCENT}`
+          : "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
+        borderRadius: "var(--radius-pill)",
         background: active
-          ? "color-mix(in srgb, var(--accent-strong) 18%, transparent)"
+          ? "var(--accent-fill)"
           : "transparent",
         color: active ? ACCENT : "var(--text-tertiary)",
         fontFamily: FONT_MONO,
-        fontSize: "var(--font-size-xs)",
-        letterSpacing: "0.14em",
+        fontSize: "var(--font-size-sm)",
+        letterSpacing: "0.10em",
         textTransform: "uppercase",
         cursor: "pointer",
+        whiteSpace: "nowrap",
       }}
     >
       <TraceIcon />
       diagnostics {traceCount > 0 ? traceCount : ""}
-    </button>
-  );
-}
-
-function IconToggle({
-  active,
-  onClick,
-  title,
-  leftBorder,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  leftBorder?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-pressed={active}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 34,
-        height: 28,
-        padding: 0,
-        background: active
-          ? "color-mix(in srgb, var(--accent-strong) 18%, transparent)"
-          : "transparent",
-        border: "none",
-        borderLeft: leftBorder ? "1px solid var(--border)" : "none",
-        color: active ? ACCENT : "var(--text-tertiary)",
-        cursor: "pointer",
-      }}
-    >
-      {children}
     </button>
   );
 }
@@ -2085,7 +2065,10 @@ async function createSandboxWorldSession(input: {
 }): Promise<string> {
   const id = crypto.randomUUID();
   const sceneId = buildSandboxSceneId(input.characterSlug);
-  const currentScene = buildInitialSandboxSceneSnapshot(sceneId, input.characterSlug);
+  const currentScene = buildInitialSandboxSceneSnapshot(
+    sceneId,
+    input.characterSlug,
+  );
   const res = await fetch("/api/world-sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2151,7 +2134,10 @@ function buildSandboxSceneId(characterSlug: string): string {
   return `${CHARACTER_SANDBOX_SCENE_PREFIX}${characterSlug}`;
 }
 
-function buildInitialSandboxSceneSnapshot(sceneId: string, characterSlug: string) {
+function buildInitialSandboxSceneSnapshot(
+  sceneId: string,
+  characterSlug: string,
+) {
   return {
     version: 1 as const,
     sceneId,
@@ -2182,8 +2168,23 @@ function collectSceneTurns(
     }));
 }
 
-function buildSandboxPromptChunk(decision: OrchestratorDecision | null): string | undefined {
-  if (!decision || decision.action !== "speak") return undefined;
+function buildSandboxPromptChunk(
+  decision: OrchestratorDecision | null,
+): string | undefined {
+  if (!decision) return undefined;
+  if (decision.action === "narrate") {
+    const narration = decision.narration?.trim();
+    if (!narration) return undefined;
+    return [
+      "Scene direction (orchestrator): narrate this response through the character voice.",
+      decision.beat ? `Beat: ${decision.beat}` : "",
+      decision.sceneCue ? `Scene cue: ${decision.sceneCue}` : "",
+      `Speak exactly this narration, without adding anything: ${JSON.stringify(narration)}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (decision.action !== "speak") return undefined;
   const parts = [
     decision.beat ? `Scene direction (orchestrator): ${decision.beat}` : "",
     decision.sceneCue ? `Scene cue: ${decision.sceneCue}` : "",
@@ -2244,13 +2245,17 @@ async function uploadSandboxAudioArtifact(input: {
   form.set("file", input.blob, input.filename);
   form.set("direction", input.direction);
   form.set("turnId", input.turnId);
-  if (input.durationMs !== null) form.set("durationMs", String(input.durationMs));
+  if (input.durationMs !== null)
+    form.set("durationMs", String(input.durationMs));
   if (input.sampleRate) form.set("sampleRate", String(input.sampleRate));
   await fetch(`/api/world-sessions/${input.sessionId}/audio`, {
     method: "POST",
     body: form,
   }).catch((err) => {
-    console.warn(`[sandbox] ${input.direction} audio artifact upload failed`, err);
+    console.warn(
+      `[sandbox] ${input.direction} audio artifact upload failed`,
+      err,
+    );
   });
 }
 
@@ -2312,7 +2317,11 @@ function encodeMonoPcm16Wav(samples: Float32Array, sampleRate: number): Blob {
   let offset = 44;
   for (const sample of samples) {
     const clamped = Math.max(-1, Math.min(1, sample));
-    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+    view.setInt16(
+      offset,
+      clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff,
+      true,
+    );
     offset += bytesPerSample;
   }
   return new Blob([buffer], { type: "audio/wav" });
@@ -2435,9 +2444,4 @@ function truncateText(value: string, maxLength: number): string {
   const text = value.trim();
   if (text.length <= maxLength) return text;
   return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
-}
-
-function extractScopeTags(character: SandboxCharacter): string[] {
-  const tags = character.identity?.traits?.map((t) => t.name.toLowerCase()) ?? [];
-  return tags.filter((t) => t.trim()).slice(0, 3);
 }
