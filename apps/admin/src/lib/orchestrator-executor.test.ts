@@ -118,7 +118,7 @@ describe("orchestrator executor", () => {
           strict: true,
         },
       },
-      max_completion_tokens: 256,
+      max_completion_tokens: 1024,
     });
     expect(body.messages[0].role).toBe("system");
   });

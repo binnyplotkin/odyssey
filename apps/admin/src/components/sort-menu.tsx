@@ -59,9 +59,9 @@ export function SortMenu<K extends string>({
           alignItems: "center",
           gap: "var(--space-8)",
           padding: "8px 16px",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-pill)",
-          background: "var(--input-bg)",
+          background: "var(--control-bg)",
           color: "var(--text-primary)",
           cursor: "pointer",
           fontFamily: FONT_MONO,
@@ -120,7 +120,7 @@ function SortMenuPanel<K extends string>({
          * light `#F5F6F4`. Solid, theme-flipping, no gradients. */
         backgroundColor: "var(--background)",
         backgroundImage: "none",
-        border: "1px solid var(--card-border)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-2xl)",
         /* Theme-aware shadow — `--shadow` is a soft rgba in light mode
          * and a deep one in dark mode. */

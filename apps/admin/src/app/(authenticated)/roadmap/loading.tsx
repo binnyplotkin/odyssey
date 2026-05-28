@@ -1,8 +1,8 @@
 import { Skeleton } from "@odyssey/ui";
 
 const CARD: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--card-border)",
+  background: "var(--material-card)",
+  border: "1px solid var(--border-subtle)",
   borderRadius: "var(--radius-xl)",
 };
 
@@ -47,7 +47,7 @@ export default function RoadmapLoading() {
                 position: "relative",
                 flex: 1,
                 height: 24,
-                background: "var(--panel)",
+                background: "var(--surface-1)",
                 borderRadius: "var(--radius-sm)",
               }}
             >

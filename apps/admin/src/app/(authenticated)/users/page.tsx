@@ -17,7 +17,7 @@ export default async function UsersPage() {
   const db = getDb();
   if (!db) {
     return (
-      <div style={{ padding: "2rem", color: "var(--muted)" }}>
+      <div style={{ padding: "2rem", color: "var(--text-tertiary)" }}>
         Database unavailable.
       </div>
     );

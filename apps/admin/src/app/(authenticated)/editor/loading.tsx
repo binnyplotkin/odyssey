@@ -26,7 +26,7 @@ export default function EditorLoading() {
                 gap: "var(--space-8)",
                 padding: "8px 10px",
                 borderRadius: "var(--radius-md)",
-                background: "var(--panel)",
+                background: "var(--surface-1)",
               }}
             >
               <Skeleton width={12} height={12} variant="circle" static />
@@ -57,7 +57,7 @@ export default function EditorLoading() {
         <div
           style={{
             flex: 1,
-            background: "var(--panel)",
+            background: "var(--surface-1)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-xl)",
             position: "relative",

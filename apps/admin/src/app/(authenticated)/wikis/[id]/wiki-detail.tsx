@@ -24,30 +24,32 @@ const MONO = '"JetBrains Mono", ui-monospace, monospace';
 const DISPLAY = '"Space Grotesk", system-ui, sans-serif';
 const BODY = '"Geist", "Inter", system-ui, sans-serif';
 
-const FG = "rgba(255, 255, 255, 0.95)";
-const TEXT_PRIMARY = "rgba(255, 255, 255, 0.88)";
-const TEXT_SECONDARY = "rgba(255, 255, 255, 0.7)";
-const TEXT_MUTED = "rgba(255, 255, 255, 0.5)";
-const TEXT_FADED = "rgba(255, 255, 255, 0.4)";
-const TEXT_GHOST = "rgba(255, 255, 255, 0.32)";
-const TEXT_QUIET = "rgba(255, 255, 255, 0.2)";
+const FG = "var(--foreground)";
+const TEXT_PRIMARY = "var(--text-primary)";
+const TEXT_SECONDARY = "var(--text-secondary)";
+const TEXT_MUTED = "var(--text-tertiary)";
+const TEXT_FADED = "var(--text-placeholder)";
+const TEXT_GHOST = "var(--text-quaternary)";
+const TEXT_QUIET = "color-mix(in srgb, var(--text-primary) 14%, transparent)";
 
-const GROUND = "#0A0A0A";
-const BORDER = "rgba(255, 255, 255, 0.08)";
-const DIVIDER = "rgba(255, 255, 255, 0.06)";
-const INPUT_BG = "rgba(255, 255, 255, 0.02)";
+const GROUND = "var(--page-atmosphere)";
+const BORDER = "var(--border-medium)";
+const DIVIDER = "var(--border-subtle)";
+const INPUT_BG = "var(--control-bg)";
 
-const ACCENT = "#8FD1CB";
-const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
-const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
+const ACCENT = "var(--accent-strong)";
+const ACCENT_SOFT = "var(--accent-wash)";
+const ACCENT_RING = "var(--accent-border)";
 
-const SECONDARY = "#B79EFF";
-const SECONDARY_SOFT = "rgba(183, 158, 255, 0.08)";
-const SECONDARY_RING = "rgba(183, 158, 255, 0.3)";
+const SECONDARY = "var(--accent-secondary)";
+const SECONDARY_SOFT =
+  "color-mix(in srgb, var(--accent-secondary) 8%, transparent)";
+const SECONDARY_RING =
+  "color-mix(in srgb, var(--accent-secondary) 30%, transparent)";
 
-const DANGER = "#f87171";
-const DANGER_SOFT = "rgba(248, 113, 113, 0.06)";
-const DANGER_RING = "rgba(248, 113, 113, 0.36)";
+const DANGER = "var(--status-error)";
+const DANGER_SOFT = "var(--critical-wash)";
+const DANGER_RING = "var(--critical-border)";
 
 const PRIORITY_STYLE: Record<
   string,
@@ -68,7 +70,7 @@ const PRIORITY_STYLE: Record<
   reference: {
     dot: TEXT_MUTED,
     chipBorder: BORDER,
-    chipBg: "rgba(255, 255, 255, 0.03)",
+    chipBg: "var(--ink-soft)",
     chipText: TEXT_SECONDARY,
   },
 };
@@ -749,7 +751,7 @@ function PromptBlock({
             alignItems: "center",
             gap: "var(--space-6)",
             padding: "6px 14px",
-            border: `1px solid rgba(255, 255, 255, 0.16)`,
+            border: `1px solid var(--ink-edge)`,
             color: TEXT_PRIMARY,
             fontFamily: MONO,
             fontSize: "var(--font-size-xs)",
@@ -811,7 +813,7 @@ function RuntimeBlock() {
         }
       />
       <RuntimeRow label="max output" value="4,096" />
-      <RuntimeRow label="embeddings" value="text-embedding-3-large" last />
+      <RuntimeRow label="embeddings" value="text-embedding-3-small" last />
     </div>
   );
 }
@@ -1015,10 +1017,10 @@ function CharacterRow({
     justifyContent: "center",
     background:
       binding.priority === "primary"
-        ? "rgba(140, 231, 210, 0.18)"
+        ? "var(--accent-fill)"
         : binding.priority === "secondary"
-          ? "rgba(183, 158, 255, 0.16)"
-          : "rgba(255, 255, 255, 0.06)",
+          ? SECONDARY_SOFT
+          : "var(--ink-fill)",
     color: style.chipText,
     fontFamily: MONO,
     fontSize: "var(--font-size-base)",
@@ -1185,7 +1187,7 @@ function RecentIngestionCard({
             alignItems: "center",
             gap: "var(--space-6)",
             padding: "6px 12px",
-            border: `1px solid rgba(255, 255, 255, 0.16)`,
+            border: `1px solid var(--ink-edge)`,
             color: TEXT_PRIMARY,
             fontFamily: MONO,
             fontSize: "var(--font-size-xs)",
@@ -1205,7 +1207,7 @@ function RecentIngestionCard({
             gap: "var(--space-6)",
             padding: "6px 12px",
             background: ACCENT,
-            color: "#050505",
+            color: "var(--accent-on)",
             fontFamily: MONO,
             fontSize: "var(--font-size-xs)",
             fontWeight: 600,

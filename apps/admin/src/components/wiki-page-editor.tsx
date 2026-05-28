@@ -17,10 +17,10 @@ import { updateWikiPage } from "@/app/(authenticated)/characters/actions";
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
-  cardHover: "var(--card-hover)",
+  cardHover: "var(--surface-hover)",
   accent: "var(--accent-strong)",
   fontHeading: "'Space Grotesk', sans-serif",
   fontBody: "'Inter', sans-serif",
@@ -133,7 +133,7 @@ export function WikiPageEditor({ characterId, page, eras, onSaved, onCancel }: P
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         gap: "var(--space-10)", padding: "12px 20px",
-        borderBottom: `1px solid ${T.border}`, background: "var(--card-hover)",
+        borderBottom: `1px solid ${T.border}`, background: "var(--surface-hover)",
         flexShrink: 0, position: "sticky", top: 0, zIndex: 2,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", minWidth: 0 }}>
@@ -521,14 +521,14 @@ function perspectiveEq(a: Perspective, b: Perspective): boolean {
 
 const textInput: React.CSSProperties = {
   width: "100%", padding: "7px 10px", borderRadius: "var(--radius-button, 12px)",
-  background: "var(--input-bg)", border: "1px solid var(--input-border)",
+  background: "var(--control-bg)", border: "1px solid var(--control-border)",
   color: T.fg, outline: "none",
   fontFamily: T.fontBody, fontSize: "var(--font-size-base)", boxSizing: "border-box",
 };
 
 const btnGhost: React.CSSProperties = {
   padding: "5px 12px", borderRadius: "var(--radius-button, 12px)",
-  border: "1px solid var(--input-border)", background: "var(--input-bg)",
+  border: "1px solid var(--control-border)", background: "var(--control-bg)",
   color: T.fg, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", cursor: "pointer",
 };
 

@@ -23,6 +23,7 @@ import {
   wikiPageVersionsTable,
   wikiSourceRefsTable,
   wikiSourcesTable,
+  characterKnowledgeBindingsTable,
 } from "./schema";
 import { extractReferencedSlugs } from "./wiki-links";
 import type {
@@ -166,7 +167,9 @@ async function purgeSourceImpl(sourceId: string): Promise<{
   const { orphanPageIds, edgeCount } = await collectPurgeImpact(sourceId);
 
   if (orphanPageIds.length > 0) {
-    await db.delete(wikiPagesTable).where(inArray(wikiPagesTable.id, orphanPageIds));
+    await db
+      .delete(wikiPagesTable)
+      .where(inArray(wikiPagesTable.id, orphanPageIds));
   }
 
   const sourceResult = await db
@@ -217,7 +220,9 @@ function parseEmbedding(value: unknown): number[] | null {
   return out;
 }
 
-function normalizePage(row: typeof wikiPagesTable.$inferSelect): WikiPageRecord {
+function normalizePage(
+  row: typeof wikiPagesTable.$inferSelect,
+): WikiPageRecord {
   return {
     id: row.id,
     characterId: row.characterId ?? "",
@@ -248,7 +253,7 @@ function normalizePage(row: typeof wikiPagesTable.$inferSelect): WikiPageRecord 
 
 /** Source text for embedding a page. Single function so backfill, savePage,
  * and any future re-embed flow always agree on what gets vectorized. */
-function embeddingSource(input: {
+export function wikiEmbeddingSource(input: {
   title: string;
   summary?: string | null;
   body?: string;
@@ -280,7 +285,9 @@ function normalizeVersion(
   };
 }
 
-function normalizeEdge(row: typeof wikiEdgesTable.$inferSelect): WikiEdgeRecord {
+function normalizeEdge(
+  row: typeof wikiEdgesTable.$inferSelect,
+): WikiEdgeRecord {
   return {
     id: row.id,
     characterId: row.characterId ?? "",
@@ -446,13 +453,16 @@ function deriveEdges(
     for (const p of fm.participants ?? []) {
       push({ toSlug: p, kind: "participates_in", strength: 1 });
     }
-    for (const c of fm.causes ?? []) push({ toSlug: c, kind: "mentions", strength: 0.8 });
-    for (const e of fm.effects ?? []) push({ toSlug: e, kind: "mentions", strength: 0.8 });
+    for (const c of fm.causes ?? [])
+      push({ toSlug: c, kind: "mentions", strength: 0.8 });
+    for (const e of fm.effects ?? [])
+      push({ toSlug: e, kind: "mentions", strength: 0.8 });
   } else if (type === "relationship") {
     const fm = frontmatter as RelationshipFrontmatter;
     if (fm.from) push({ toSlug: fm.from, kind: "relates_to", strength: 1 });
     if (fm.to) push({ toSlug: fm.to, kind: "relates_to", strength: 1 });
-    for (const ev of fm.evolution ?? []) push({ toSlug: ev, kind: "mentions", strength: 0.7 });
+    for (const ev of fm.evolution ?? [])
+      push({ toSlug: ev, kind: "mentions", strength: 0.7 });
   }
 
   // 3. Contradictions are edges too (they reference pageIds directly, not slugs,
@@ -471,7 +481,12 @@ async function reconcileEdgesForPage(
   page: WikiPageRecord,
   slugToId: Map<string, string>,
 ): Promise<{ added: number; removed: number }> {
-  const derived = deriveEdges(page.type, page.body, page.frontmatter, page.contradictions);
+  const derived = deriveEdges(
+    page.type,
+    page.body,
+    page.frontmatter,
+    page.contradictions,
+  );
 
   // Desired edge set (only those whose target slug resolves)
   const desired = new Map<string, DerivedEdge & { toPageId: string }>();
@@ -500,7 +515,9 @@ async function reconcileEdgesForPage(
       .from(wikiEdgesTable)
       .where(eq(wikiEdgesTable.fromPageId, page.id)),
   );
-  const existing = new Map(existingRows.map((r) => [`${r.toPageId}::${r.kind}`, r]));
+  const existing = new Map(
+    existingRows.map((r) => [`${r.toPageId}::${r.kind}`, r]),
+  );
 
   // Compute diff
   const toInsert: { toPageId: string; kind: EdgeKind; strength: number }[] = [];
@@ -508,7 +525,11 @@ async function reconcileEdgesForPage(
 
   for (const [key, want] of desired) {
     if (!existing.has(key)) {
-      toInsert.push({ toPageId: want.toPageId, kind: want.kind, strength: want.strength });
+      toInsert.push({
+        toPageId: want.toPageId,
+        kind: want.kind,
+        strength: want.strength,
+      });
     }
   }
   for (const [key, have] of existing) {
@@ -521,9 +542,11 @@ async function reconcileEdgesForPage(
   }
   if (toInsert.length > 0) {
     const now = new Date();
+    const legacyCharacterId =
+      page.characterId || (await resolveLegacyEdgeCharacterId(db, page.wikiId));
     await db.insert(wikiEdgesTable).values(
       toInsert.map((e) => ({
-        characterId: page.characterId,
+        characterId: legacyCharacterId,
         wikiId: page.wikiId,
         fromPageId: page.id,
         toPageId: e.toPageId,
@@ -538,20 +561,55 @@ async function reconcileEdgesForPage(
   return { added: toInsert.length, removed: toDelete.length };
 }
 
+async function resolveLegacyEdgeCharacterId(
+  db: ReturnType<typeof requireDb>,
+  wikiId: string | null,
+): Promise<string | null> {
+  if (!wikiId) return null;
+  const [binding] = await retryRead(() =>
+    db
+      .select({ characterId: characterKnowledgeBindingsTable.characterId })
+      .from(characterKnowledgeBindingsTable)
+      .where(
+        and(
+          eq(characterKnowledgeBindingsTable.wikiId, wikiId),
+          eq(characterKnowledgeBindingsTable.isActive, true),
+        ),
+      )
+      .orderBy(desc(characterKnowledgeBindingsTable.createdAt))
+      .limit(1),
+  );
+  return binding?.characterId ?? null;
+}
+
 /**
  * Decide whether a save is a material change from the existing row.
  * Cosmetic updates (e.g. touch lastCompiledAt only) skip the version bump.
  */
-function isMaterialChange(existing: WikiPageRecord, input: NormalizedSavePageInput): boolean {
+function isMaterialChange(
+  existing: WikiPageRecord,
+  input: NormalizedSavePageInput,
+): boolean {
   if (existing.title !== input.title) return true;
   if ((existing.summary ?? "") !== (input.summary ?? "")) return true;
   if (existing.body !== input.body) return true;
   if (existing.confidence !== input.confidence) return true;
   if (existing.knowsFuture !== input.knowsFuture) return true;
-  if (JSON.stringify(existing.frontmatter) !== JSON.stringify(input.frontmatter)) return true;
-  if (JSON.stringify(existing.perspective) !== JSON.stringify(input.perspective)) return true;
-  if (JSON.stringify(existing.timeIndex) !== JSON.stringify(input.timeIndex)) return true;
-  if (JSON.stringify(existing.contradictions) !== JSON.stringify(input.contradictions)) return true;
+  if (
+    JSON.stringify(existing.frontmatter) !== JSON.stringify(input.frontmatter)
+  )
+    return true;
+  if (
+    JSON.stringify(existing.perspective) !== JSON.stringify(input.perspective)
+  )
+    return true;
+  if (JSON.stringify(existing.timeIndex) !== JSON.stringify(input.timeIndex))
+    return true;
+  if (
+    JSON.stringify(existing.contradictions) !==
+    JSON.stringify(input.contradictions)
+  )
+    return true;
   return false;
 }
 
@@ -559,12 +617,34 @@ function isMaterialChange(existing: WikiPageRecord, input: NormalizedSavePageInp
 
 export interface WikiStore {
   // Pages
-  savePage(input: SavePageInput, hooks?: SavePageHooks): Promise<SavePageResult>;
+  savePage(
+    input: SavePageInput,
+    hooks?: SavePageHooks,
+  ): Promise<SavePageResult>;
+  savePageEmbeddings(
+    embeddings: Array<{
+      pageId: string;
+      embedding: number[];
+      embeddingModel: string;
+    }>,
+  ): Promise<{ updated: number }>;
   getPage(id: string): Promise<WikiPageRecord | null>;
-  getPageBySlug(characterId: string, slug: string): Promise<WikiPageRecord | null>;
-  getPageByWikiSlug(wikiId: string, slug: string): Promise<WikiPageRecord | null>;
-  listPages(characterId: string, filter?: { type?: WikiPageType }): Promise<WikiPageRecord[]>;
-  listPagesForWiki(wikiId: string, filter?: { type?: WikiPageType }): Promise<WikiPageRecord[]>;
+  getPageBySlug(
+    characterId: string,
+    slug: string,
+  ): Promise<WikiPageRecord | null>;
+  getPageByWikiSlug(
+    wikiId: string,
+    slug: string,
+  ): Promise<WikiPageRecord | null>;
+  listPages(
+    characterId: string,
+    filter?: { type?: WikiPageType },
+  ): Promise<WikiPageRecord[]>;
+  listPagesForWiki(
+    wikiId: string,
+    filter?: { type?: WikiPageType },
+  ): Promise<WikiPageRecord[]>;
   removePage(id: string): Promise<boolean>;
   /**
    * Vector-search pages by cosine similarity to the supplied query embedding.
@@ -576,21 +656,30 @@ export interface WikiStore {
     characterId: string,
     queryEmbedding: number[],
     options?: { topK?: number; minSimilarity?: number },
-  ): Promise<Array<{ pageId: string; slug: string; title: string; similarity: number }>>;
+  ): Promise<
+    Array<{ pageId: string; slug: string; title: string; similarity: number }>
+  >;
   searchPagesByEmbeddingForWiki(
     wikiId: string,
     queryEmbedding: number[],
     options?: { topK?: number; minSimilarity?: number },
-  ): Promise<Array<{ pageId: string; slug: string; title: string; similarity: number }>>;
+  ): Promise<
+    Array<{ pageId: string; slug: string; title: string; similarity: number }>
+  >;
   searchPagesByEmbeddingForWikis(
     wikiIds: string[],
     queryEmbedding: number[],
     options?: { topK?: number; minSimilarity?: number },
-  ): Promise<Array<{ pageId: string; slug: string; title: string; similarity: number }>>;
+  ): Promise<
+    Array<{ pageId: string; slug: string; title: string; similarity: number }>
+  >;
 
   // Versions
   listPageVersions(pageId: string): Promise<WikiPageVersionRecord[]>;
-  getPageVersion(pageId: string, version: number): Promise<WikiPageVersionRecord | null>;
+  getPageVersion(
+    pageId: string,
+    version: number,
+  ): Promise<WikiPageVersionRecord | null>;
   /**
    * All page versions written by a single ingestion run. Matches on
    * `author_kind = 'llm' AND author_id = runId`, which is how the
@@ -613,10 +702,21 @@ export interface WikiStore {
   listCharacterEdges(characterId: string): Promise<WikiEdgeRecord[]>;
   listWikiEdges(wikiId: string): Promise<WikiEdgeRecord[]>;
   /**
+   * Reconcile edges for selected pages in a wiki using a complete wiki-level
+   * slug index. Useful after parallel page writes, where early saves may
+   * reference pages that did not exist yet.
+   */
+  reconcileEdgesForWikiPages(
+    wikiId: string,
+    pageIds: string[],
+  ): Promise<{ added: number; removed: number }>;
+  /**
    * Safety valve: wipe and rebuild every edge for a character, sourcing
    * edges from each page's current body + frontmatter + contradictions.
    */
-  rebuildEdges(characterId: string): Promise<{ added: number; removed: number }>;
+  rebuildEdges(
+    characterId: string,
+  ): Promise<{ added: number; removed: number }>;
 
   /**
    * Persist cached 2D coordinates for the Knowledge view. Stamps
@@ -637,7 +737,10 @@ export interface WikiStore {
   // Sources
   createSource(input: CreateSourceInput): Promise<WikiSourceRecord>;
   getSource(id: string): Promise<WikiSourceRecord | null>;
-  findSourceByHash(characterId: string, contentHash: string): Promise<WikiSourceRecord | null>;
+  findSourceByHash(
+    characterId: string,
+    contentHash: string,
+  ): Promise<WikiSourceRecord | null>;
   listSources(characterId: string): Promise<WikiSourceRecord[]>;
   listSourcesForWiki(wikiId: string): Promise<WikiSourceRecord[]>;
   removeSource(id: string): Promise<boolean>;
@@ -667,21 +770,31 @@ export interface WikiStore {
   clearSourceRefsForPage(pageId: string): Promise<void>;
   listSourceRefsForPage(pageId: string): Promise<WikiSourceRefRecord[]>;
   /** Every source ref for every page in this character — one JOIN, so cheap. */
-  listSourceRefsForCharacter(characterId: string): Promise<WikiSourceRefRecord[]>;
+  listSourceRefsForCharacter(
+    characterId: string,
+  ): Promise<WikiSourceRefRecord[]>;
   /** Every source ref for every page in this wiki — one JOIN, so cheap. */
   listSourceRefsForWiki(wikiId: string): Promise<WikiSourceRefRecord[]>;
 
   // Ingestion log
   startIngestion(input: StartIngestionInput): Promise<WikiIngestionLogRecord>;
   getIngestionRun(id: string): Promise<WikiIngestionLogRecord | null>;
-  claimNextQueuedIngestion(workerId: string): Promise<WikiIngestionLogRecord | null>;
+  claimNextQueuedIngestion(
+    workerId: string,
+  ): Promise<WikiIngestionLogRecord | null>;
   touchIngestionRun(id: string, workerId: string): Promise<void>;
   finishIngestion(
     id: string,
     result: FinishIngestionInput,
   ): Promise<WikiIngestionLogRecord | null>;
-  listIngestionRuns(characterId: string, limit?: number): Promise<WikiIngestionLogRecord[]>;
-  listIngestionRunsForWiki(wikiId: string, limit?: number): Promise<WikiIngestionLogRecord[]>;
+  listIngestionRuns(
+    characterId: string,
+    limit?: number,
+  ): Promise<WikiIngestionLogRecord[]>;
+  listIngestionRunsForWiki(
+    wikiId: string,
+    limit?: number,
+  ): Promise<WikiIngestionLogRecord[]>;
   appendIngestionEvent(
     runId: string,
     payload: unknown,
@@ -759,10 +872,7 @@ function neonStore(): WikiStore {
           .select()
           .from(wikiPagesTable)
           .where(
-            and(
-              scopeWhere(scope),
-              eq(wikiPagesTable.slug, normalized.slug),
-            ),
+            and(scopeWhere(scope), eq(wikiPagesTable.slug, normalized.slug)),
           )
           .limit(1),
       );
@@ -779,10 +889,14 @@ function neonStore(): WikiStore {
       // just misses the wiki-curator's semantic-seed pass.
       const computeEmbedding = async (
         shouldEmbed: boolean,
-      ): Promise<{ embedding: number[]; embeddingModel: string; embeddedAt: Date } | null> => {
+      ): Promise<{
+        embedding: number[];
+        embeddingModel: string;
+        embeddedAt: Date;
+      } | null> => {
         if (!shouldEmbed || !hooks?.embed) return null;
         try {
-          const vec = await hooks.embed(embeddingSource(normalized));
+          const vec = await hooks.embed(wikiEmbeddingSource(normalized));
           if (!vec) return null;
           return {
             embedding: vec,
@@ -790,7 +904,10 @@ function neonStore(): WikiStore {
             embeddedAt: now,
           };
         } catch (error) {
-          console.error("[wiki-store] embed hook failed; saving page without embedding", error);
+          console.error(
+            "[wiki-store] embed hook failed; saving page without embedding",
+            error,
+          );
           return null;
         }
       };
@@ -906,7 +1023,11 @@ function neonStore(): WikiStore {
       // a hook because the layout algorithm lives in the admin app — we
       // call it best-effort and swallow errors so a stale layout never
       // blocks the underlying save.
-      if ((versionCreated || created) && hooks?.recomputeWikiLayout && normalized.wikiId) {
+      if (
+        (versionCreated || created) &&
+        hooks?.recomputeWikiLayout &&
+        normalized.wikiId
+      ) {
         try {
           await hooks.recomputeWikiLayout(normalized.wikiId);
         } catch (error) {
@@ -915,7 +1036,11 @@ function neonStore(): WikiStore {
             error,
           );
         }
-      } else if ((versionCreated || created) && hooks?.recomputeLayout && normalized.characterId) {
+      } else if (
+        (versionCreated || created) &&
+        hooks?.recomputeLayout &&
+        normalized.characterId
+      ) {
         try {
           await hooks.recomputeLayout(normalized.characterId);
         } catch (error) {
@@ -933,6 +1058,27 @@ function neonStore(): WikiStore {
         edgesAdded: diff.added,
         edgesRemoved: diff.removed,
       };
+    },
+
+    async savePageEmbeddings(embeddings) {
+      if (embeddings.length === 0) return { updated: 0 };
+      const db = requireDb();
+      const now = new Date();
+      let updated = 0;
+      for (const item of embeddings) {
+        const rows = await db
+          .update(wikiPagesTable)
+          .set({
+            embedding: item.embedding,
+            embeddingModel: item.embeddingModel,
+            embeddedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(wikiPagesTable.id, item.pageId))
+          .returning({ id: wikiPagesTable.id });
+        updated += rows.length;
+      }
+      return { updated };
     },
 
     async getPage(id) {
@@ -953,7 +1099,12 @@ function neonStore(): WikiStore {
         db
           .select()
           .from(wikiPagesTable)
-          .where(and(eq(wikiPagesTable.characterId, characterId), eq(wikiPagesTable.slug, slug)))
+          .where(
+            and(
+              eq(wikiPagesTable.characterId, characterId),
+              eq(wikiPagesTable.slug, slug),
+            ),
+          )
           .limit(1),
       );
       return row ? normalizePage(row) : null;
@@ -965,7 +1116,12 @@ function neonStore(): WikiStore {
         db
           .select()
           .from(wikiPagesTable)
-          .where(and(eq(wikiPagesTable.wikiId, wikiId), eq(wikiPagesTable.slug, slug)))
+          .where(
+            and(
+              eq(wikiPagesTable.wikiId, wikiId),
+              eq(wikiPagesTable.slug, slug),
+            ),
+          )
           .limit(1),
       );
       return row ? normalizePage(row) : null;
@@ -982,7 +1138,9 @@ function neonStore(): WikiStore {
       const rows = await retryRead(() =>
         db.select().from(wikiPagesTable).where(whereClause),
       );
-      return rows.map(normalizePage).sort((a, b) => a.title.localeCompare(b.title));
+      return rows
+        .map(normalizePage)
+        .sort((a, b) => a.title.localeCompare(b.title));
     },
 
     async listPagesForWiki(wikiId, filter) {
@@ -996,7 +1154,9 @@ function neonStore(): WikiStore {
       const rows = await retryRead(() =>
         db.select().from(wikiPagesTable).where(whereClause),
       );
-      return rows.map(normalizePage).sort((a, b) => a.title.localeCompare(b.title));
+      return rows
+        .map(normalizePage)
+        .sort((a, b) => a.title.localeCompare(b.title));
     },
 
     async searchPagesByEmbedding(characterId, queryEmbedding, options) {
@@ -1008,7 +1168,12 @@ function neonStore(): WikiStore {
       // floor in JS so the optimizer can use the HNSW index for the sort.
       const vectorLiteral = `[${queryEmbedding.join(",")}]`;
       const rows = await retryRead(() =>
-        db.execute<{ id: string; slug: string; title: string; similarity: number }>(
+        db.execute<{
+          id: string;
+          slug: string;
+          title: string;
+          similarity: number;
+        }>(
           sql`
             SELECT id, slug, title,
                    1 - (embedding <=> ${vectorLiteral}::vector) AS similarity
@@ -1023,19 +1188,33 @@ function neonStore(): WikiStore {
       // Normalize across the two shapes we see in this codebase.
       const list = (
         Array.isArray(rows) ? rows : ((rows as { rows: unknown[] }).rows ?? [])
-      ) as Array<{ id: string; slug: string; title: string; similarity: number | string }>;
+      ) as Array<{
+        id: string;
+        slug: string;
+        title: string;
+        similarity: number | string;
+      }>;
       return list
         .map((r) => ({
           pageId: r.id,
           slug: r.slug,
           title: r.title,
-          similarity: typeof r.similarity === "string" ? Number(r.similarity) : r.similarity,
+          similarity:
+            typeof r.similarity === "string"
+              ? Number(r.similarity)
+              : r.similarity,
         }))
-        .filter((r) => Number.isFinite(r.similarity) && r.similarity >= minSimilarity);
+        .filter(
+          (r) => Number.isFinite(r.similarity) && r.similarity >= minSimilarity,
+        );
     },
 
     async searchPagesByEmbeddingForWiki(wikiId, queryEmbedding, options) {
-      return this.searchPagesByEmbeddingForWikis([wikiId], queryEmbedding, options);
+      return this.searchPagesByEmbeddingForWikis(
+        [wikiId],
+        queryEmbedding,
+        options,
+      );
     },
 
     async searchPagesByEmbeddingForWikis(wikiIds, queryEmbedding, options) {
@@ -1046,7 +1225,12 @@ function neonStore(): WikiStore {
       const vectorLiteral = `[${queryEmbedding.join(",")}]`;
       const wikiIdValues = wikiIds.map((id) => sql`${id}`);
       const rows = await retryRead(() =>
-        db.execute<{ id: string; slug: string; title: string; similarity: number }>(
+        db.execute<{
+          id: string;
+          slug: string;
+          title: string;
+          similarity: number;
+        }>(
           sql`
             SELECT id, slug, title,
                    1 - (embedding <=> ${vectorLiteral}::vector) AS similarity
@@ -1059,20 +1243,33 @@ function neonStore(): WikiStore {
       );
       const list = (
         Array.isArray(rows) ? rows : ((rows as { rows: unknown[] }).rows ?? [])
-      ) as Array<{ id: string; slug: string; title: string; similarity: number | string }>;
+      ) as Array<{
+        id: string;
+        slug: string;
+        title: string;
+        similarity: number | string;
+      }>;
       return list
         .map((r) => ({
           pageId: r.id,
           slug: r.slug,
           title: r.title,
-          similarity: typeof r.similarity === "string" ? Number(r.similarity) : r.similarity,
+          similarity:
+            typeof r.similarity === "string"
+              ? Number(r.similarity)
+              : r.similarity,
         }))
-        .filter((r) => Number.isFinite(r.similarity) && r.similarity >= minSimilarity);
+        .filter(
+          (r) => Number.isFinite(r.similarity) && r.similarity >= minSimilarity,
+        );
     },
 
     async removePage(id) {
       const db = requireDb();
-      const result = await db.delete(wikiPagesTable).where(eq(wikiPagesTable.id, id)).returning();
+      const result = await db
+        .delete(wikiPagesTable)
+        .where(eq(wikiPagesTable.id, id))
+        .returning();
       return result.length > 0;
     },
 
@@ -1189,6 +1386,42 @@ function neonStore(): WikiStore {
       return rows.map(normalizeEdge);
     },
 
+    async reconcileEdgesForWikiPages(wikiId, pageIds) {
+      if (pageIds.length === 0) return { added: 0, removed: 0 };
+      const db = requireDb();
+      const uniquePageIds = Array.from(new Set(pageIds));
+      const [pageRows, slugRows] = await Promise.all([
+        retryRead(() =>
+          db
+            .select()
+            .from(wikiPagesTable)
+            .where(
+              and(
+                eq(wikiPagesTable.wikiId, wikiId),
+                inArray(wikiPagesTable.id, uniquePageIds),
+              ),
+            ),
+        ),
+        retryRead(() =>
+          db
+            .select({ id: wikiPagesTable.id, slug: wikiPagesTable.slug })
+            .from(wikiPagesTable)
+            .where(eq(wikiPagesTable.wikiId, wikiId)),
+        ),
+      ]);
+
+      const slugToId = new Map(slugRows.map((r) => [r.slug, r.id]));
+      let added = 0;
+      let removed = 0;
+      for (const page of pageRows.map(normalizePage)) {
+        const diff = await reconcileEdgesForPage(db, page, slugToId);
+        added += diff.added;
+        removed += diff.removed;
+      }
+
+      return { added, removed };
+    },
+
     async rebuildEdges(characterId) {
       const db = requireDb();
 
@@ -1202,7 +1435,9 @@ function neonStore(): WikiStore {
       const existingCount = existingRows.length;
 
       // Wipe
-      await db.delete(wikiEdgesTable).where(eq(wikiEdgesTable.characterId, characterId));
+      await db
+        .delete(wikiEdgesTable)
+        .where(eq(wikiEdgesTable.characterId, characterId));
 
       // Load all pages for this character
       const pageRows = await retryRead(() =>
@@ -1238,7 +1473,9 @@ function neonStore(): WikiStore {
         FROM (VALUES ${sql.join(rows, sql`, `)}) AS d(id, x, y)
         WHERE wiki_pages.id = d.id AND wiki_pages.character_id = ${characterId}
       `);
-      return { updated: (result as { rowCount?: number }).rowCount ?? points.length };
+      return {
+        updated: (result as { rowCount?: number }).rowCount ?? points.length,
+      };
     },
 
     async saveLayoutForWiki(wikiId, points) {
@@ -1253,7 +1490,9 @@ function neonStore(): WikiStore {
         FROM (VALUES ${sql.join(rows, sql`, `)}) AS d(id, x, y)
         WHERE wiki_pages.id = d.id AND wiki_pages.wiki_id = ${wikiId}
       `);
-      return { updated: (result as { rowCount?: number }).rowCount ?? points.length };
+      return {
+        updated: (result as { rowCount?: number }).rowCount ?? points.length,
+      };
     },
 
     /* ── Sources ─────────────────────────────────────────── */
@@ -1372,7 +1611,9 @@ function neonStore(): WikiStore {
 
     async clearSourceRefsForPage(pageId) {
       const db = requireDb();
-      await db.delete(wikiSourceRefsTable).where(eq(wikiSourceRefsTable.pageId, pageId));
+      await db
+        .delete(wikiSourceRefsTable)
+        .where(eq(wikiSourceRefsTable.pageId, pageId));
     },
 
     async listSourceRefsForPage(pageId) {
@@ -1403,7 +1644,10 @@ function neonStore(): WikiStore {
             createdAt: wikiSourceRefsTable.createdAt,
           })
           .from(wikiSourceRefsTable)
-          .innerJoin(wikiPagesTable, eq(wikiSourceRefsTable.pageId, wikiPagesTable.id))
+          .innerJoin(
+            wikiPagesTable,
+            eq(wikiSourceRefsTable.pageId, wikiPagesTable.id),
+          )
           .where(eq(wikiPagesTable.characterId, characterId))
           .orderBy(desc(wikiSourceRefsTable.createdAt)),
       );
@@ -1432,7 +1676,10 @@ function neonStore(): WikiStore {
             createdAt: wikiSourceRefsTable.createdAt,
           })
           .from(wikiSourceRefsTable)
-          .innerJoin(wikiPagesTable, eq(wikiSourceRefsTable.pageId, wikiPagesTable.id))
+          .innerJoin(
+            wikiPagesTable,
+            eq(wikiSourceRefsTable.pageId, wikiPagesTable.id),
+          )
           .where(eq(wikiPagesTable.wikiId, wikiId))
           .orderBy(desc(wikiSourceRefsTable.createdAt)),
       );
@@ -1541,7 +1788,12 @@ function neonStore(): WikiStore {
       await db
         .update(wikiIngestionLogTable)
         .set({ heartbeatAt: new Date() })
-        .where(and(eq(wikiIngestionLogTable.id, id), eq(wikiIngestionLogTable.workerId, workerId)));
+        .where(
+          and(
+            eq(wikiIngestionLogTable.id, id),
+            eq(wikiIngestionLogTable.workerId, workerId),
+          ),
+        );
     },
 
     async finishIngestion(id, result) {
@@ -1601,7 +1853,9 @@ function neonStore(): WikiStore {
           ? (payload as { type: string }).type
           : "event";
 
-      const rows = await db.execute<typeof wikiIngestionEventsTable.$inferSelect>(sql`
+      const rows = await db.execute<
+        typeof wikiIngestionEventsTable.$inferSelect
+      >(sql`
         INSERT INTO wiki_ingestion_events (id, run_id, seq, type, payload, created_at)
         VALUES (
           ${id},
@@ -1633,7 +1887,12 @@ function neonStore(): WikiStore {
         db
           .select()
           .from(wikiIngestionEventsTable)
-          .where(and(eq(wikiIngestionEventsTable.runId, runId), sql`${wikiIngestionEventsTable.seq} > ${afterSeq}`))
+          .where(
+            and(
+              eq(wikiIngestionEventsTable.runId, runId),
+              sql`${wikiIngestionEventsTable.seq} > ${afterSeq}`,
+            ),
+          )
           .orderBy(wikiIngestionEventsTable.seq)
           .limit(limit),
       );
@@ -1650,7 +1909,12 @@ function neonStore(): WikiStore {
           .limit(1),
       );
       if (!run) {
-        return { runRemoved: 0, sourceRemoved: 0, pagesRemoved: 0, edgesRemoved: 0 };
+        return {
+          runRemoved: 0,
+          sourceRemoved: 0,
+          pagesRemoved: 0,
+          edgesRemoved: 0,
+        };
       }
 
       let purge = { sourceRemoved: 0, pagesRemoved: 0, edgesRemoved: 0 };
@@ -1671,23 +1935,29 @@ function neonStore(): WikiStore {
         }
       }
 
-      await db.delete(wikiIngestionLogTable).where(eq(wikiIngestionLogTable.id, runId));
+      await db
+        .delete(wikiIngestionLogTable)
+        .where(eq(wikiIngestionLogTable.id, runId));
       return { runRemoved: 1, ...purge };
     },
 
     async resetCharacterData(characterId) {
       const db = requireDb();
       const [edges, pages, sources, runs] = await Promise.all([
-        db.delete(wikiEdgesTable)
+        db
+          .delete(wikiEdgesTable)
           .where(eq(wikiEdgesTable.characterId, characterId))
           .returning({ id: wikiEdgesTable.id }),
-        db.delete(wikiPagesTable)
+        db
+          .delete(wikiPagesTable)
           .where(eq(wikiPagesTable.characterId, characterId))
           .returning({ id: wikiPagesTable.id }),
-        db.delete(wikiSourcesTable)
+        db
+          .delete(wikiSourcesTable)
           .where(eq(wikiSourcesTable.characterId, characterId))
           .returning({ id: wikiSourcesTable.id }),
-        db.delete(wikiIngestionLogTable)
+        db
+          .delete(wikiIngestionLogTable)
           .where(eq(wikiIngestionLogTable.characterId, characterId))
           .returning({ id: wikiIngestionLogTable.id }),
       ]);

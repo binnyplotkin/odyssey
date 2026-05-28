@@ -212,9 +212,9 @@ function LayerHeader({
             display: "flex",
             gap: "var(--space-4)",
             padding: "var(--space-3)",
-            background: "var(--card)",
+            background: "var(--material-card)",
             borderRadius: "var(--radius-sm)",
-            border: "1px solid var(--card-border)",
+            border: "1px solid var(--border-subtle)",
             flexShrink: 0,
           }}
         >

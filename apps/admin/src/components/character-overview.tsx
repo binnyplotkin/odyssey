@@ -14,12 +14,12 @@ import { EraEditor } from "@/components/era-editor";
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
   accent: "var(--accent-strong)",
   accentSoft: "var(--accent-soft)",
-  cardHover: "var(--card-hover)",
+  cardHover: "var(--surface-hover)",
   fontHeading: "'Space Grotesk', sans-serif",
   fontBody: "'Inter', sans-serif",
   fontMono: "var(--font-mono, 'JetBrains Mono', monospace)",
@@ -41,7 +41,7 @@ const GRADIENTS = [
 ];
 
 const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg, var(--emissive-mint) 0%, var(--active-teal) 100%)",
+  "linear-gradient(135deg, var(--emissive-mint) 0%, var(--accent-strong) 100%)",
   "linear-gradient(135deg, color-mix(in srgb, var(--status-error) 65%, white) 0%, var(--status-error) 100%)",
   "linear-gradient(135deg, color-mix(in srgb, var(--signal-blue) 65%, white) 0%, var(--signal-blue) 100%)",
   "linear-gradient(135deg, color-mix(in srgb, var(--event-violet) 70%, white) 0%, var(--event-violet) 100%)",
@@ -441,7 +441,7 @@ function KnowledgeGraphCard({
           position: "absolute", top: "50%", left: "50%", width: "120%", height: 280,
           transform: "translate(-50%, -50%)",
           background:
-            "radial-gradient(closest-side, color-mix(in srgb, var(--active-teal) 12%, transparent) 0%, color-mix(in srgb, var(--active-teal) 4%, transparent) 40%, transparent 70%)",
+            "radial-gradient(closest-side, color-mix(in srgb, var(--accent-strong) 12%, transparent) 0%, color-mix(in srgb, var(--accent-strong) 4%, transparent) 40%, transparent 70%)",
           pointerEvents: "none",
         }} />
         <svg
@@ -455,7 +455,7 @@ function KnowledgeGraphCard({
             transformOrigin: "190px 130px",
             transformBox: "fill-box",
           }}>
-            <path d={KG_EDGES_D} stroke="color-mix(in srgb, var(--active-teal) 32%, transparent)" strokeWidth={0.85} fill="none" />
+            <path d={KG_EDGES_D} stroke="color-mix(in srgb, var(--accent-strong) 32%, transparent)" strokeWidth={0.85} fill="none" />
             <circle cx={140} cy={64} r={4} fill="var(--accent-strong)" fillOpacity={0.92} />
             <circle cx={200} cy={56} r={6} fill="var(--accent-strong)" />
             <circle cx={262} cy={74} r={4} fill="var(--event-violet)" fillOpacity={0.9} />
@@ -629,7 +629,7 @@ function DangerZoneCard({ characterId, characterTitle }: { characterId: string; 
 
   return (
     <div style={{
-      background: "var(--card-material, var(--panel))",
+      background: "var(--material-card, var(--surface-1))",
       border: "1px solid color-mix(in srgb, var(--status-error) 20%, transparent)",
       borderRadius: "var(--radius-card, 18px)",
       boxShadow: "var(--elevation-card)",
@@ -702,7 +702,7 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 
 const cardShell: React.CSSProperties = {
   display: "flex", flexDirection: "column",
-  background: "var(--card-material, var(--panel))",
+  background: "var(--material-card, var(--surface-1))",
   border: "1px solid var(--border-subtle, var(--border))",
   borderRadius: "var(--radius-card, 18px)",
   boxShadow: "var(--elevation-card)",
@@ -711,7 +711,7 @@ const cardShell: React.CSSProperties = {
 
 const btnGhost: React.CSSProperties = {
   padding: "5px 12px", borderRadius: "var(--radius-button, 12px)",
-  border: "1px solid var(--input-border)", background: "var(--input-bg)",
+  border: "1px solid var(--control-border)", background: "var(--control-bg)",
   color: "var(--foreground)", fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", cursor: "pointer",
 };
 

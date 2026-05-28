@@ -61,9 +61,9 @@ export function ResolvedSummary({
         alignItems: "stretch",
         gap: "var(--space-24)",
         padding: "30px 32px",
-        border: "1px solid var(--input-border)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-lg)",
-        background: "var(--input-bg)",
+        background: "var(--control-bg)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -208,7 +208,7 @@ function MetricStrip({ items }: { items: Array<[string, string]> }) {
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-        border: "1px solid var(--divider)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
         overflow: "hidden",
         maxWidth: 620,
@@ -223,7 +223,7 @@ function MetricStrip({ items }: { items: Array<[string, string]> }) {
             gap: "var(--space-4)",
             padding: "12px 14px",
             borderRight:
-              index === items.length - 1 ? "none" : "1px solid var(--divider)",
+              index === items.length - 1 ? "none" : "1px solid var(--border-subtle)",
           }}
         >
           <span

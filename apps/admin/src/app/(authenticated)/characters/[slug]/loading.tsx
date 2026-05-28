@@ -5,7 +5,7 @@ import { Skeleton } from "@odyssey/ui";
 import { useHeaderContent } from "@/components/header-context";
 
 // Mirrors the live CharacterConfig workbench:
-//   • Canvas painted with --node-canvas (raised stage above the page)
+//   • Canvas painted with --canvas-surface (raised stage above the page)
 //   • CharacterNodeCard: 440w, padded 18, gap 14, radius 14, sitting on
 //     --background so the canvas grid doesn't bleed through (matches the
 //     live node's explicit backgroundColor: var(--background) trick)
@@ -57,7 +57,7 @@ function NodePortraitRowSkeleton() {
           height: 64,
           flexShrink: 0,
           borderRadius: "var(--radius-2xl)",
-          background: "var(--card-hover)",
+          background: "var(--surface-hover)",
           border: `1px solid color-mix(in srgb, ${MINT} 18%, transparent)`,
           overflow: "hidden",
         }}
@@ -222,7 +222,7 @@ function CharacterNodeSkeleton() {
 /* ── Sidebar skeleton (unchanged shape) ──────────────────────────── */
 
 const PANEL_LAYERED: CSSProperties = {
-  background: "var(--card)",
+  background: "var(--material-card)",
   border: "1px solid var(--border)",
 };
 
@@ -396,7 +396,7 @@ export default function CharacterDetailLoading() {
         background: "var(--background)",
       }}
     >
-      {/* Canvas area — painted with --node-canvas to match the live
+      {/* Canvas area — painted with --canvas-surface to match the live
           CanvasArea surface (raised stage above the page). Grid pattern
           drawn at 28px to mimic the React Flow Background lines variant. */}
       <div
@@ -407,7 +407,7 @@ export default function CharacterDetailLoading() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "var(--node-canvas)",
+          background: "var(--canvas-surface)",
           backgroundImage:
             "linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px)",
           backgroundSize: "28px 28px",

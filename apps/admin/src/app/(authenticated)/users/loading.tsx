@@ -1,8 +1,8 @@
 import { Skeleton } from "@odyssey/ui";
 
 const CARD: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--card-border)",
+  background: "var(--material-card)",
+  border: "1px solid var(--border-subtle)",
   borderRadius: "var(--radius-xl)",
 };
 
@@ -22,8 +22,8 @@ export default function UsersLoading() {
             display: "grid",
             gridTemplateColumns: "minmax(220px,2fr) 100px 120px 100px 140px 140px",
             padding: "12px 16px",
-            borderBottom: "1px solid var(--card-border)",
-            background: "var(--panel)",
+            borderBottom: "1px solid var(--border-subtle)",
+            background: "var(--surface-1)",
           }}
         >
           {COLS.map((c) => (
@@ -38,7 +38,7 @@ export default function UsersLoading() {
               gridTemplateColumns: "minmax(220px,2fr) 100px 120px 100px 140px 140px",
               alignItems: "center",
               padding: "14px 16px",
-              borderBottom: i === 7 ? "none" : "1px solid var(--card-border)",
+              borderBottom: i === 7 ? "none" : "1px solid var(--border-subtle)",
               gap: "var(--space-12)",
             }}
           >

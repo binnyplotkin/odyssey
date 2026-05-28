@@ -303,6 +303,127 @@ export const changelogEntriesTable = pgTable("changelog_entries", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// ── Admin AI agent audit ─────────────────────────────────────────────
+
+export const adminAgentConversationsTable = pgTable(
+  "admin_agent_conversations",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    adminUserId: text("admin_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+    title: text("title"),
+    routeContext: jsonb("route_context").notNull().default({}),
+    model: text("model"),
+    provider: text("provider"),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("admin_agent_conversations_admin_idx").on(table.adminUserId),
+    index("admin_agent_conversations_updated_idx").on(table.updatedAt),
+  ],
+);
+
+export const adminAgentMessagesTable = pgTable(
+  "admin_agent_messages",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => adminAgentConversationsTable.id, { onDelete: "cascade" }),
+    role: text("role").notNull(), // user | assistant | system
+    content: text("content").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("admin_agent_messages_conversation_idx").on(table.conversationId),
+    index("admin_agent_messages_created_idx").on(table.createdAt),
+  ],
+);
+
+export const adminAgentToolCallsTable = pgTable(
+  "admin_agent_tool_calls",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => adminAgentConversationsTable.id, { onDelete: "cascade" }),
+    messageId: text("message_id").references(() => adminAgentMessagesTable.id, { onDelete: "set null" }),
+    toolName: text("tool_name").notNull(),
+    toolKind: text("tool_kind").notNull(), // read | mutation
+    args: jsonb("args").notNull().default({}),
+    resultSummary: jsonb("result_summary").notNull().default({}),
+    status: text("status").notNull(),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("admin_agent_tool_calls_conversation_idx").on(table.conversationId),
+    index("admin_agent_tool_calls_tool_idx").on(table.toolName),
+    index("admin_agent_tool_calls_status_idx").on(table.status),
+  ],
+);
+
+export const adminAgentOperationsTable = pgTable(
+  "admin_agent_operations",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => adminAgentConversationsTable.id, { onDelete: "cascade" }),
+    toolCallId: text("tool_call_id").references(() => adminAgentToolCallsTable.id, { onDelete: "set null" }),
+    toolName: text("tool_name").notNull(),
+    intent: text("intent").notNull(),
+    riskLevel: text("risk_level").notNull(),
+    status: text("status").notNull().default("pending"),
+    args: jsonb("args").notNull().default({}),
+    affectedRecords: jsonb("affected_records").notNull().default([]),
+    previewDiff: jsonb("preview_diff").notNull().default({}),
+    beforeSnapshot: jsonb("before_snapshot"),
+    afterSnapshot: jsonb("after_snapshot"),
+    resultSummary: jsonb("result_summary").notNull().default({}),
+    errorMessage: text("error_message"),
+    requiresConfirmation: boolean("requires_confirmation").notNull().default(true),
+    proposedByUserId: text("proposed_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+    approvedByUserId: text("approved_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    executedAt: timestamp("executed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("admin_agent_operations_conversation_idx").on(table.conversationId),
+    index("admin_agent_operations_status_idx").on(table.status),
+    index("admin_agent_operations_risk_idx").on(table.riskLevel),
+  ],
+);
+
+export const adminAgentContextSummariesTable = pgTable(
+  "admin_agent_context_summaries",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => adminAgentConversationsTable.id, { onDelete: "cascade" }),
+    summary: text("summary").notNull(),
+    pinned: boolean("pinned").notNull().default(false),
+    sourceMessageCount: integer("source_message_count").notNull().default(0),
+    lastMessageId: text("last_message_id").references(() => adminAgentMessagesTable.id, { onDelete: "set null" }),
+    model: text("model"),
+    provider: text("provider"),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("admin_agent_context_summaries_conversation_idx").on(table.conversationId),
+    index("admin_agent_context_summaries_created_idx").on(table.createdAt),
+    index("admin_agent_context_summaries_pinned_idx").on(table.pinned),
+  ],
+);
+
 export const worldsTable = pgTable("worlds", {
   id: text("id").primaryKey(),
   userId: text("user_id").references(() => usersTable.id, { onDelete: "cascade" }),

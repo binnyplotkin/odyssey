@@ -678,7 +678,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
       <section className="panel rounded-[2rem] p-6 md:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="font-mono text-xs uppercase tracking-[0.32em] text-[var(--muted)]">Simulation session</p>
+            <p className="font-mono text-xs uppercase tracking-[0.32em] text-[var(--text-tertiary)]">Simulation session</p>
             <h1 className="mt-3 max-w-3xl text-3xl leading-none font-semibold md:text-5xl">{initialData.world.title}</h1>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-stone-700 md:text-base">{initialData.world.premise}</p>
           </div>
@@ -691,7 +691,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] border border-[var(--border)] bg-white/60 px-4 py-3">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Role</p>
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--text-tertiary)]">Role</p>
             <p className="text-sm text-stone-800">{activeRole?.title ?? session.roleId}</p>
           </div>
           <Link
@@ -707,10 +707,10 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
         <div className="panel rounded-[2rem] p-6 md:p-8">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Court transcript</p>
+              <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">Court transcript</p>
               <h2 className="mt-2 text-2xl">Live simulation</h2>
             </div>
-            <div className="rounded-full border border-[var(--border)] px-4 py-2 text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">
+            <div className="rounded-full border border-[var(--border)] px-4 py-2 text-xs font-medium uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
               Session {session.id.slice(-6)}
             </div>
           </div>
@@ -735,7 +735,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
                 if (entry.type === "dialogue") {
                   return (
                     <div key={renderKey} className="max-w-[88%] rounded-[1.5rem] border border-[var(--border)] bg-white px-4 py-3">
-                      <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">
+                      <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
                         {entry.speaker} · {entry.role}
                       </p>
                       <p className="mt-2 text-sm leading-7 text-stone-700">{entry.text}</p>
@@ -745,7 +745,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
 
                 return (
                   <div key={renderKey} className="rounded-[1.6rem] bg-[rgba(119,73,38,0.08)] px-4 py-4">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">Narrator</p>
+                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--text-tertiary)]">Narrator</p>
                     <p className="mt-2 text-base leading-7 text-balance text-stone-800">{entry.text}</p>
                   </div>
                 );
@@ -771,7 +771,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
               type="button"
               onClick={() => setVoiceOutputEnabled((current) => !current)}
               className={`rounded-full px-4 py-2 text-sm font-medium text-white transition ${
-                voiceOutputEnabled ? "bg-[var(--success)]" : "bg-stone-500"
+                voiceOutputEnabled ? "bg-[var(--status-live)]" : "bg-stone-500"
               }`}
             >
               {voiceOutputEnabled ? "Voice output on" : "Voice output off"}
@@ -785,7 +785,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
               <option value="elevenlabs">ElevenLabs voice</option>
             </select>
             {isSpeaking ? (
-              <span className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">
+              <span className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
                 Speaking...
               </span>
             ) : null}
@@ -811,7 +811,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
               }}
               disabled={isTranscribing}
               className={`rounded-[1.5rem] px-5 py-4 text-sm font-medium text-white transition ${
-                isListening ? "bg-[var(--danger)]" : "bg-[var(--success)]"
+                isListening ? "bg-[var(--status-error)]" : "bg-[var(--status-live)]"
               }`}
             >
               {isListening ? "Stop recording" : isTranscribing ? "Transcribing..." : "Voice input"}
@@ -825,11 +825,11 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
             </button>
           </form>
 
-          {error ? <p className="mt-4 text-sm text-[var(--danger)]">{error}</p> : null}
+          {error ? <p className="mt-4 text-sm text-[var(--status-error)]">{error}</p> : null}
         </div>
 
         <aside className="panel rounded-[2rem] p-6 md:p-8">
-          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">World status</p>
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">World status</p>
 
           <div className="mt-6 grid gap-4">
             {(initialData.world.metrics ?? [
@@ -845,7 +845,7 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
                 <div key={metric.id} className="rounded-[1.4rem] border border-[var(--border)] bg-white/60 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-stone-700">{metric.label}</p>
-                    <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">{value}</p>
+                    <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">{value}</p>
                   </div>
                   <div className="mt-3 h-2 rounded-full bg-stone-200">
                     <div className="h-2 rounded-full bg-[var(--accent-strong)]" style={{ width: `${value}%` }} />
@@ -856,13 +856,13 @@ export function SimulationShell({ initialData }: { initialData: SimulationBootst
           </div>
 
           <div className="mt-6 rounded-[1.5rem] bg-white/55 p-4">
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Group map</p>
+            <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">Group map</p>
             <div className="mt-4 space-y-3">
               {Object.entries(statusPanel.groupInfluence).map(([group, value]) => (
                 <div key={group}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="capitalize">{group}</span>
-                    <span className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">{value}</span>
+                    <span className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">{value}</span>
                   </div>
                   <div className="mt-2 h-2 rounded-full bg-stone-200">
                     <div className="h-2 rounded-full bg-[var(--accent)]" style={{ width: `${value}%` }} />

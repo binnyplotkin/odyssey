@@ -97,7 +97,7 @@ export function EditableText({
           style={{
             ...style,
             ...boxStyle,
-            background: "var(--input-bg)",
+            background: "var(--control-bg)",
             borderColor: "var(--border)",
             outline: "none",
             color: "var(--foreground)",

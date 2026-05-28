@@ -30,34 +30,39 @@ import { ResolvedSummary } from "./resolved-summary";
 import { FailedRecovery } from "./failed-recovery";
 import { estimateCost } from "@odyssey/wiki-ingest";
 import { classifySource } from "../../../characters/actions";
+import {
+  AdminPageShell,
+  AdminSplitLayout,
+  adminTokens,
+} from "@/components/admin-ui";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
 const T = {
-  bg: "var(--background)",
-  panel: "var(--card)",
-  panelStrong: "var(--card)",
-  border: "var(--border)",
-  divider: "var(--divider)",
-  fg: "var(--text-primary)",
-  text: "var(--text-secondary)",
-  muted: "var(--muted)",
-  faded: "var(--text-tertiary)",
-  ghost: "var(--text-placeholder)",
-  accent: "var(--accent-strong)",
-  accentSoft: "var(--accent-soft)",
-  accentLine: "color-mix(in srgb, var(--accent-strong) 18%, transparent)",
-  ok: "#4ADE80",
-  okSoft: "rgba(74, 222, 128, 0.08)",
-  amber: "#FACC15",
-  amberSoft: "rgba(250, 204, 21, 0.08)",
-  danger: "var(--danger)",
-  dangerSoft: "rgba(248, 113, 113, 0.08)",
-  dangerLine: "rgba(248, 113, 113, 0.25)",
-  onAccent: "var(--background)",
-  fontHead: "var(--font-display, 'Space Grotesk'), system-ui, sans-serif",
-  fontBody: "var(--font-body, Inter), system-ui, sans-serif",
-  fontMono: "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace",
+  bg: adminTokens.bg,
+  panel: adminTokens.card,
+  panelStrong: adminTokens.panelStrong,
+  border: adminTokens.border,
+  divider: adminTokens.divider,
+  fg: adminTokens.fg,
+  text: adminTokens.text,
+  muted: adminTokens.muted,
+  faded: adminTokens.muted,
+  ghost: adminTokens.ghost,
+  accent: adminTokens.accent,
+  accentSoft: adminTokens.accentSoft,
+  accentLine: adminTokens.accentBorder,
+  ok: adminTokens.success,
+  okSoft: "color-mix(in srgb, var(--status-live) 10%, transparent)",
+  amber: adminTokens.warning,
+  amberSoft: "color-mix(in srgb, var(--warning-amber) 10%, transparent)",
+  danger: adminTokens.danger,
+  dangerSoft: adminTokens.dangerFill,
+  dangerLine: adminTokens.dangerBorder,
+  onAccent: adminTokens.onAccent,
+  fontHead: adminTokens.fontDisplay,
+  fontBody: adminTokens.fontBody,
+  fontMono: adminTokens.fontMono,
 };
 
 /* ── Types ─────────────────────────────────────────────────────── */
@@ -178,10 +183,10 @@ function lightMatterBaseField(phase: MatterPhase) {
 // Dot colors per kind — config consumed by the EnumMenu in MetadataEditor.
 // Each kind gets its own hue so the dropdown reads at a glance.
 const KINDS: { value: SourceKind; label: string; dot: string }[] = [
-  { value: "primary", label: "primary", dot: "#8FD1CB" },
-  { value: "commentary", label: "commentary", dot: "#A48CE7" },
-  { value: "annotation", label: "annotation", dot: "#E78C8C" },
-  { value: "transcript", label: "transcript", dot: "#E7CB8C" },
+  { value: "primary", label: "primary", dot: "var(--accent-strong)" },
+  { value: "commentary", label: "commentary", dot: "var(--signal-blue)" },
+  { value: "annotation", label: "annotation", dot: "var(--status-error)" },
+  { value: "transcript", label: "transcript", dot: "var(--warning-amber)" },
   { value: "reference", label: "reference", dot: "var(--text-placeholder)" },
 ];
 
@@ -320,7 +325,10 @@ export function WikiIngestionView({
         const finalEvent = events.findLast(
           (event) => event.type === "succeeded" || event.type === "failed",
         );
-        if (finalEvent?.type === "succeeded" || body.run.status === "succeeded") {
+        if (
+          finalEvent?.type === "succeeded" ||
+          body.run.status === "succeeded"
+        ) {
           setRun({
             phase: "resolved",
             events,
@@ -336,7 +344,7 @@ export function WikiIngestionView({
           const error =
             finalEvent?.type === "failed"
               ? finalEvent.error
-              : body.run.errorMessage ?? "Ingestion failed.";
+              : (body.run.errorMessage ?? "Ingestion failed.");
           setRun({
             phase: "failed",
             events,
@@ -365,8 +373,9 @@ export function WikiIngestionView({
 
   const activePersistedRun = useMemo(
     () =>
-      runs.find((item) => item.status === "queued" || item.status === "running") ??
-      null,
+      runs.find(
+        (item) => item.status === "queued" || item.status === "running",
+      ) ?? null,
     [runs],
   );
 
@@ -383,17 +392,19 @@ export function WikiIngestionView({
       events: [],
       startedAt,
     });
-    void watchRun(activePersistedRun.id, startedAt, controller.signal).catch((err) => {
-      if (controller.signal.aborted) return;
-      const msg = err instanceof Error ? err.message : String(err);
-      setRun({
-        phase: "failed",
-        events: [],
-        error: msg,
-        startedAt,
-        finishedAt: Date.now(),
-      });
-    });
+    void watchRun(activePersistedRun.id, startedAt, controller.signal).catch(
+      (err) => {
+        if (controller.signal.aborted) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        setRun({
+          phase: "failed",
+          events: [],
+          error: msg,
+          startedAt,
+          finishedAt: Date.now(),
+        });
+      },
+    );
     return () => controller.abort();
   }, [activePersistedRun, watchRun]);
 
@@ -486,30 +497,13 @@ export function WikiIngestionView({
   }, []);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: "calc(100vh - 48px)",
-        background: T.bg,
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          flex: "1 1 auto",
-          // Composer is the per-run primary surface and should always get
-          // the dominant share. Right column (matter + runs) is context —
-          // kept narrow with a hard cap so it doesn't bloat on wide screens
-          // and never crushes the composer on narrow ones.
-          gridTemplateColumns: "minmax(0, 2.65fr) minmax(280px, 380px)",
-          gap: 34,
-          padding: "34px 40px 112px",
-          alignItems: "flex-start",
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          {run.phase === "idle" ? (
+    <AdminPageShell>
+      {/* Composer is the primary surface; the rail stays narrow contextual telemetry. */}
+      <AdminSplitLayout
+        gap="var(--space-32)"
+        padding="var(--space-32) 40px 112px"
+        main={
+          run.phase === "idle" ? (
             <ComposerCard
               characterId={characterId}
               wikiId={wikiId}
@@ -547,33 +541,25 @@ export function WikiIngestionView({
               onRetry={dismissResult}
               onDismiss={dismissResult}
             />
-          )}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--space-20)",
-            position: "sticky",
-            top: 20,
-            minWidth: 0,
-          }}
-        >
-          <MatterPanel
-            run={run}
-            height={sourceSectionHeight}
-            ready={canRun}
-          />
-          {run.phase === "live" && (
-            <LiveStream
-              events={run.events}
-              startedAt={run.startedAt}
-              activeWrite={deriveActiveWrite(run.events)}
+          )
+        }
+        rail={
+          <>
+            <MatterPanel
+              run={run}
+              height={sourceSectionHeight}
+              ready={canRun}
             />
-          )}
-        </div>
-      </div>
+            {run.phase === "live" && (
+              <LiveStream
+                events={run.events}
+                startedAt={run.startedAt}
+                activeWrites={deriveActiveWrites(run.events)}
+              />
+            )}
+          </>
+        }
+      />
 
       <StickyFooter
         state={footerStateFor(run.phase, canRun)}
@@ -627,7 +613,7 @@ export function WikiIngestionView({
         onClose={() => setPromptOpen(false)}
         onPromptSaved={() => router.refresh()}
       />
-    </div>
+    </AdminPageShell>
   );
 }
 
@@ -760,7 +746,13 @@ function ComposerCard({
   const canRun = title.trim().length > 0 && effectiveContent.trim().length > 20;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-18)" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-18)",
+      }}
+    >
       {/* Step 01 — Source */}
       <div ref={sourceSectionRef}>
         <SourceComposer
@@ -863,6 +855,8 @@ function LiveProgress({ run }: { run: Extract<RunPhase, { phase: "live" }> }) {
   const queue = deriveOpQueue(run.events);
   const opsTotal = queue.length;
   const opsDone = queue.filter((r) => r.state === "done").length;
+  const writingRows = queue.filter((r) => r.state === "writing");
+  const activeWriterCount = writingRows.length;
   const inFlightIndex = queue.findIndex((r) => r.state === "writing");
   const currentIndex = inFlightIndex >= 0 ? inFlightIndex : opsDone - 1;
   const opsCreate = queue.filter((r) => r.op.action === "create").length;
@@ -874,11 +868,14 @@ function LiveProgress({ run }: { run: Extract<RunPhase, { phase: "live" }> }) {
   );
   const elapsedMs = Date.now() - run.startedAt;
   // Naive ETA: if N/M done in T seconds, remaining = (M-N) * (T/N).
+  const effectiveDone = opsDone + activeWriterCount * 0.5;
   const etaSec =
-    opsDone > 0 && opsTotal > 0
+    effectiveDone > 0 && opsTotal > 0
       ? Math.max(
           1,
-          Math.round(((opsTotal - opsDone) * (elapsedMs / opsDone)) / 1000),
+          Math.round(
+            ((opsTotal - effectiveDone) * (elapsedMs / effectiveDone)) / 1000,
+          ),
         )
       : null;
 
@@ -896,23 +893,30 @@ function LiveProgress({ run }: { run: Extract<RunPhase, { phase: "live" }> }) {
   const elapsedSec = Math.max(0.001, elapsedMs / 1000);
   const tokensPerSec = opCompletes.length > 0 ? tokensUsed / elapsedSec : null;
   const sparklineSamples = opCompletes.slice(-20).map((e) => e.tokens);
-  const writingRow = queue.find((r) => r.state === "writing");
-  const currentOpLabel = writingRow
-    ? `${writingRow.op.action} · ${writingRow.op.title}`
-    : isLoadingIndex
-      ? "loading context · reading existing pages"
-      : isPlanning
-        ? loadedIndexEv
-          ? `planning · ${loadedIndexEv.pageCount} pages, ${loadedIndexEv.edgeCount} edges`
-          : "planning · analyzing context"
-        : null;
-  const currentOpStage = writingRow
-    ? writingRow.op.action === "create"
-      ? "writing → pages"
-      : "updating → pages"
-    : isPlanning && !isLoadingIndex
-      ? "planning → ops"
-      : null;
+  let currentOpLabel: string | null = null;
+  if (writingRows.length > 1) {
+    currentOpLabel = `${writingRows.length} writers active · ${summarizeActiveSlugs(writingRows)}`;
+  } else if (writingRows.length === 1) {
+    currentOpLabel = `${writingRows[0].op.action} · ${writingRows[0].op.title}`;
+  } else if (isLoadingIndex) {
+    currentOpLabel = "loading context · reading existing pages";
+  } else if (isPlanning) {
+    currentOpLabel = loadedIndexEv
+      ? `planning · ${loadedIndexEv.pageCount} pages, ${loadedIndexEv.edgeCount} edges`
+      : "planning · analyzing context";
+  }
+
+  let currentOpStage: string | null = null;
+  if (writingRows.length > 1) {
+    currentOpStage = "parallel writing → pages";
+  } else if (writingRows.length === 1) {
+    currentOpStage =
+      writingRows[0].op.action === "create"
+        ? "writing → pages"
+        : "updating → pages";
+  } else if (isPlanning && !isLoadingIndex) {
+    currentOpStage = "planning → ops";
+  }
   const startedEv = run.events.find(
     (e): e is Extract<IngestionEvent, { type: "started" }> =>
       e.type === "started",
@@ -920,7 +924,13 @@ function LiveProgress({ run }: { run: Extract<RunPhase, { phase: "live" }> }) {
   const liveModel = startedEv?.model ?? null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-18)" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-18)",
+      }}
+    >
       <div
         style={{
           display: "flex",
@@ -953,7 +963,9 @@ function LiveProgress({ run }: { run: Extract<RunPhase, { phase: "live" }> }) {
         <span style={{ color: T.faded }}>
           {isLoadingIndex || isPlanning
             ? " · streaming"
-            : ` · op ${currentIndex >= 0 ? currentIndex + 1 : opsDone || 1} of ${opsTotal || "—"} · streaming`}
+            : activeWriterCount > 1
+              ? ` · ${activeWriterCount} writers active · ${opsDone} of ${opsTotal || "—"} done`
+              : ` · op ${currentIndex >= 0 ? currentIndex + 1 : opsDone || 1} of ${opsTotal || "—"} · streaming`}
         </span>
       </div>
 
@@ -977,7 +989,12 @@ function LiveProgress({ run }: { run: Extract<RunPhase, { phase: "live" }> }) {
       />
 
       {/* 02 · ops — terminal log */}
-      <OpsLog queue={queue} opsDone={opsDone} opsTotal={opsTotal} />
+      <OpsLog
+        queue={queue}
+        opsDone={opsDone}
+        opsTotal={opsTotal}
+        opsActive={activeWriterCount}
+      />
 
       {/* Pipeline, tokens-used, spend, writes-to, and the cancel button
           all live in the sticky footer's running state now — no need to
@@ -1099,8 +1116,7 @@ function MatterPanel({
         height: height ?? 420,
         boxSizing: "border-box",
         overflow: "hidden",
-        background:
-          `radial-gradient(circle at 52% 46%, color-mix(in srgb, var(--accent-strong) ${isReadyIdle ? 16 : 10}%, transparent), transparent ${isReadyIdle ? 58 : 54}%)`,
+        background: `radial-gradient(circle at 52% 46%, color-mix(in srgb, var(--accent-strong) ${isReadyIdle ? 16 : 10}%, transparent), transparent ${isReadyIdle ? 58 : 54}%)`,
         opacity: isReadyIdle ? 0.9 : 0.82,
         transition: "background 220ms ease, opacity 220ms ease",
         WebkitMaskImage:
@@ -1125,7 +1141,7 @@ function MatterPanel({
           amplitude={visualState.amplitude}
           pulseAt={isReadyIdle ? 1 : visualState.pulseAt}
           color={canvasColor}
-          neuralColor="var(--neural_color, #6FBF88)"
+          neuralColor="var(--accent, #6FBF88)"
           baseFieldColor={isLightTheme ? "rgba(86, 96, 101, 1)" : undefined}
           baseFieldStrength={
             isLightTheme ? lightMatterBaseField(visualState.phase) : undefined
@@ -1290,32 +1306,26 @@ function ResolvedFromRun({
 
 /* ── Active-write derivation for LiveStream ────────────────────── */
 
-function deriveActiveWrite(
-  events: IngestionEvent[],
-): ActiveWriteSnapshot | null {
+function deriveActiveWrites(events: IngestionEvent[]): ActiveWriteSnapshot[] {
   const planEv = events.find(
     (e): e is Extract<IngestionEvent, { type: "plan-complete" }> =>
       e.type === "plan-complete",
   );
-  if (!planEv) return null;
+  if (!planEv) return [];
 
-  // Find the slug currently being written: latest op-start without a
-  // matching op-complete.
-  const completedSlugs = new Set(
-    events
-      .filter(
-        (e): e is Extract<IngestionEvent, { type: "op-complete" }> =>
-          e.type === "op-complete",
-      )
-      .map((e) => e.op.slug),
-  );
-  let activeStart: Extract<IngestionEvent, { type: "op-start" }> | null = null;
+  // Active slugs are all op-starts without a terminal op event. Parallel
+  // writers can complete out of order, so keep each start independently.
+  const terminalSlugs = new Set<string>();
   for (const ev of events) {
-    if (ev.type === "op-start" && !completedSlugs.has(ev.op.slug)) {
-      activeStart = ev;
+    if (ev.type === "op-complete" || ev.type === "op-failed") {
+      terminalSlugs.add(ev.op.slug);
     }
   }
-  if (!activeStart) return null;
+  const activeStarts = events.filter(
+    (ev): ev is Extract<IngestionEvent, { type: "op-start" }> =>
+      ev.type === "op-start" && !terminalSlugs.has(ev.op.slug),
+  );
+  if (activeStarts.length === 0) return [];
 
   // Per-op tokens accumulate across op-complete deltas; while a slug is
   // in flight we have no direct counter, so we proxy with elapsed-time-
@@ -1332,12 +1342,22 @@ function deriveActiveWrite(
         )
       : 0;
 
-  return {
-    op: activeStart.op,
-    indexInPlan: activeStart.index + 1,
-    totalOps: activeStart.total,
-    tokensStreamed: tokensCompletedAvg,
-  };
+  return activeStarts
+    .sort((a, b) => a.index - b.index)
+    .map((activeStart) => ({
+      op: activeStart.op,
+      indexInPlan: activeStart.index + 1,
+      totalOps: activeStart.total,
+      tokensStreamed: tokensCompletedAvg,
+    }));
+}
+
+function summarizeActiveSlugs(
+  rows: Array<Extract<OpQueueRow, { state: "writing" }>>,
+) {
+  const visible = rows.slice(0, 2).map((row) => row.op.slug);
+  const extra = rows.length - visible.length;
+  return extra > 0 ? `${visible.join(", ")} +${extra}` : visible.join(", ");
 }
 
 /* ── Footer state derivation ───────────────────────────────────── */
@@ -1399,7 +1419,8 @@ function deriveFooterTelemetry(
     const queue = deriveOpQueue(run.events);
     const opsTotal = queue.length;
     const opsDone = queue.filter((r) => r.state === "done").length;
-    const writingRow = queue.find((r) => r.state === "writing");
+    const writingRows = queue.filter((r) => r.state === "writing");
+    const writingRow = writingRows[0];
     const writingIndex = queue.findIndex((r) => r.state === "writing");
     const planEv = run.events.find((e) => e.type === "plan-complete");
     const isPlanning = !planEv;
@@ -1407,17 +1428,21 @@ function deriveFooterTelemetry(
       writingIndex >= 0 ? writingIndex + 1 : Math.min(opsTotal, opsDone + 1);
     const { input, output } = sumTokens(run.events);
     const elapsedSec = (nowMs - run.startedAt) / 1000;
+    const rawProgressFraction =
+      opsTotal > 0 ? (opsDone + writingRows.length * 0.5) / opsTotal : 0;
     const progressFraction =
-      opsTotal > 0 ? (opsDone + (writingRow ? 0.5 : 0)) / opsTotal : 0;
+      rawProgressFraction >= 1 ? 0.98 : Math.max(0, rawProgressFraction);
 
     return {
       runningOpNum: isPlanning ? 0 : currentNum,
       runningOpTotal: opsTotal,
       runningOpLabel: isPlanning
         ? "planning · analyzing context…"
-        : writingRow
-          ? `${writingRow.op.action} · ${writingRow.op.slug}`
-          : undefined,
+        : writingRows.length > 1
+          ? `${writingRows.length} writers active`
+          : writingRow
+            ? `${writingRow.op.action} · ${writingRow.op.slug}`
+            : undefined,
       elapsedSec,
       spentCost: estimateCost(model, input, output),
       progressFraction,
@@ -1486,7 +1511,13 @@ function Metric({
   valueColor?: string;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-2)",
+      }}
+    >
       <span
         style={{
           fontSize: "var(--font-size-xs)",
@@ -1520,7 +1551,13 @@ function Stat({
           ? T.danger
           : T.fg;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-6)",
+      }}
+    >
       <span
         style={{
           fontFamily: T.fontHead,

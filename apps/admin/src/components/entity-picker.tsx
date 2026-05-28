@@ -21,10 +21,10 @@ import { createPortal } from "react-dom";
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
+  muted: "var(--text-tertiary)",
   border: "var(--border)",
   background: "var(--background)",
-  cardHover: "var(--card-hover)",
+  cardHover: "var(--surface-hover)",
   accent: "var(--accent-strong)",
   fontBody: "'Inter', sans-serif",
   fontMono: "var(--font-mono, 'JetBrains Mono', monospace)",

@@ -19,10 +19,10 @@ import { WikiPageEditor } from "@/components/wiki-page-editor";
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
-  cardHover: "var(--card-hover)",
+  cardHover: "var(--surface-hover)",
   accent: "var(--accent-strong)",
   accentSoft: "var(--accent-soft)",
   fontHeading: "'Space Grotesk', sans-serif",
@@ -393,8 +393,8 @@ function BrowserCard(props: {
           background: "var(--background)", border: `1px solid ${T.border}`, width: 240,
         }}>
           <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-            <circle cx="6" cy="6" r="4.5" stroke="var(--muted)" strokeWidth="1.5" />
-            <line x1="9.5" y1="9.5" x2="12.5" y2="12.5" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="6" cy="6" r="4.5" stroke="var(--text-tertiary)" strokeWidth="1.5" />
+            <line x1="9.5" y1="9.5" x2="12.5" y2="12.5" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
           <input
             type="text" value={props.search}
@@ -609,7 +609,7 @@ function TopBar({
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "12px 20px", borderBottom: `1px solid ${T.border}`, background: "var(--card-hover)",
+      padding: "12px 20px", borderBottom: `1px solid ${T.border}`, background: "var(--surface-hover)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
         <span style={{
@@ -995,7 +995,7 @@ function SourcesBlock({
             <div key={ref.id} style={{
               display: "flex", flexDirection: "column", gap: "var(--space-4)",
               padding: "10px 12px", borderRadius: "var(--radius-lg)",
-              background: "var(--card-hover)", border: `1px solid ${T.border}`,
+              background: "var(--surface-hover)", border: `1px solid ${T.border}`,
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-8)" }}>
                 <span style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", fontWeight: 500, color: T.fg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1136,10 +1136,10 @@ function EmptyWiki({ routeBase }: { routeBase: string }) {
     }}>
       <div style={{
         width: 56, height: 56, borderRadius: "50%",
-        background: "var(--card-material, var(--panel))", border: "1px solid var(--border-subtle, var(--border))",
+        background: "var(--material-card, var(--surface-1))", border: "1px solid var(--border-subtle, var(--border))",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round">
           <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
           <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
         </svg>
@@ -1177,7 +1177,7 @@ function SelectPrompt() {
           width: 48, height: 48, borderRadius: "50%", background: T.cardHover,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round">
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </div>
@@ -1196,7 +1196,7 @@ function SelectPrompt() {
 
 const cardShell: React.CSSProperties = {
   display: "flex", flexDirection: "column",
-  background: "var(--card-material, var(--panel))",
+  background: "var(--material-card, var(--surface-1))",
   border: "1px solid var(--border-subtle, var(--border))",
   borderRadius: "var(--radius-card, 18px)",
   boxShadow: "var(--elevation-card)",

@@ -40,31 +40,31 @@ const MONO = '"JetBrains Mono", ui-monospace, monospace';
 const DISPLAY = '"Space Grotesk", system-ui, sans-serif';
 const BODY = '"Geist", "Inter", system-ui, sans-serif';
 
-const FG = "rgba(255, 255, 255, 0.95)";
-const TEXT_PRIMARY = "rgba(255, 255, 255, 0.88)";
-const TEXT_SECONDARY = "rgba(255, 255, 255, 0.7)";
-const TEXT_MUTED = "rgba(255, 255, 255, 0.55)";
-const TEXT_FADED = "rgba(255, 255, 255, 0.4)";
-const TEXT_GHOST = "rgba(255, 255, 255, 0.32)";
-const TEXT_QUIET = "rgba(255, 255, 255, 0.2)";
+const FG = "var(--foreground)";
+const TEXT_PRIMARY = "var(--text-primary)";
+const TEXT_SECONDARY = "var(--text-secondary)";
+const TEXT_MUTED = "var(--text-tertiary)";
+const TEXT_FADED = "var(--text-placeholder)";
+const TEXT_GHOST = "var(--text-quaternary)";
+const TEXT_QUIET = "color-mix(in srgb, var(--text-primary) 14%, transparent)";
 
-const GROUND = "#050505";
-const PANEL_BG = "#0A0A0A";
-const BORDER = "rgba(255, 255, 255, 0.1)";
-const DIVIDER = "rgba(255, 255, 255, 0.06)";
-const INPUT_BG = "rgba(255, 255, 255, 0.02)";
+const GROUND = "var(--page-atmosphere)";
+const PANEL_BG = "var(--material-card)";
+const BORDER = "var(--border-medium)";
+const DIVIDER = "var(--border-subtle)";
+const INPUT_BG = "var(--control-bg)";
 
-const ACCENT = "#8FD1CB";
-const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
-const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
+const ACCENT = "var(--accent-strong)";
+const ACCENT_SOFT = "var(--accent-wash)";
+const ACCENT_RING = "var(--accent-border)";
 
-const SECONDARY = "#B79EFF";
+const SECONDARY = "var(--accent-secondary)";
 const VOICE_ACCENT = "#F472B6";
-const BONE = "rgba(255, 255, 255, 0.7)";
+const BONE = "var(--text-secondary)";
 
-const DANGER = "#f87171";
-const DANGER_SOFT = "rgba(248, 113, 113, 0.06)";
-const DANGER_RING = "rgba(248, 113, 113, 0.36)";
+const DANGER = "var(--status-error)";
+const DANGER_SOFT = "var(--critical-wash)";
+const DANGER_RING = "var(--critical-border)";
 
 /** Scales normalized layout coords ([-1, 1]) up to a pixel canvas range. */
 const LAYOUT_SCALE = 600;
@@ -323,10 +323,10 @@ function WikiKnowledgeCanvas({
           stroke: isSel
             ? edgeColor
             : isContradiction
-              ? "rgba(248, 113, 113, 0.45)"
+              ? DANGER_RING
               : isStrong
-                ? "rgba(140, 231, 210, 0.42)"
-                : "rgba(255, 255, 255, 0.14)",
+                ? ACCENT_RING
+                : "var(--ink-edge)",
           strokeWidth: isSel ? 1.5 : isStrong ? 1.1 : 0.75,
           opacity: isSel ? 0.92 : isContradiction ? 0.55 : isStrong ? 0.7 : 0.5,
           strokeDasharray: isSel
@@ -406,7 +406,7 @@ function WikiKnowledgeCanvas({
           variant={BackgroundVariant.Lines}
           gap={40}
           size={1}
-          color="rgba(255, 255, 255, 0.025)"
+          color="var(--grid-color)"
         />
       </ReactFlow>
 
@@ -1219,7 +1219,7 @@ function NodeDetailPanel({
             alignItems: "center",
             gap: "var(--space-6)",
             padding: "7px 12px",
-            border: `1px solid rgba(255, 255, 255, 0.16)`,
+            border: `1px solid var(--ink-edge)`,
             color: TEXT_PRIMARY,
             fontFamily: MONO,
             fontSize: "var(--font-size-xs)",
@@ -1327,7 +1327,7 @@ function OverviewView({
               style={{
                 flex: 1,
                 height: 4,
-                background: "rgba(255, 255, 255, 0.06)",
+                background: "var(--ink-fill)",
                 position: "relative",
                 overflow: "hidden",
               }}
@@ -1407,7 +1407,7 @@ function OverviewView({
                         <Link
                           href={`${routeBase}/pages/${other.slug}`}
                           style={{
-                            color: "rgba(248, 113, 113, 0.95)",
+                            color: DANGER,
                             fontFamily: BODY,
                             fontSize: "var(--font-size-base)",
                             textDecoration: "none",
@@ -1418,7 +1418,7 @@ function OverviewView({
                       ) : (
                         <span
                           style={{
-                            color: "rgba(248, 113, 113, 0.7)",
+                            color: DANGER,
                             fontFamily: MONO,
                             fontSize: "var(--font-size-sm)",
                             fontStyle: "italic",
@@ -1429,7 +1429,7 @@ function OverviewView({
                       )}
                       <span
                         style={{
-                          color: "rgba(248, 113, 113, 0.7)",
+                          color: DANGER,
                           fontFamily: BODY,
                           fontSize: "var(--font-size-base)",
                           marginLeft: "var(--space-6)",
@@ -1845,7 +1845,7 @@ function PageReadContent({
             alignItems: "center",
             gap: "var(--space-6)",
             padding: "6px 12px",
-            border: `1px solid rgba(255, 255, 255, 0.16)`,
+            border: `1px solid var(--ink-edge)`,
             background: "transparent",
             color: TEXT_PRIMARY,
             fontFamily: MONO,
@@ -2302,7 +2302,7 @@ function PageEditForm({
             alignItems: "center",
             height: 30,
             padding: "0 14px",
-            border: `1px solid rgba(255, 255, 255, 0.16)`,
+            border: `1px solid var(--ink-edge)`,
             background: "transparent",
             color: TEXT_PRIMARY,
             fontFamily: MONO,
@@ -2327,7 +2327,7 @@ function PageEditForm({
             padding: "0 16px",
             border: "none",
             background: dirty && !pending ? ACCENT : ACCENT_SOFT,
-            color: dirty && !pending ? "#050505" : ACCENT,
+            color: dirty && !pending ? "var(--accent-on)" : ACCENT,
             fontFamily: MONO,
             fontSize: "var(--font-size-xs)",
             fontWeight: 600,
@@ -2348,7 +2348,7 @@ function editInputStyle(): CSSProperties {
   return {
     width: "100%",
     padding: "8px 12px",
-    border: `1px solid rgba(255, 255, 255, 0.12)`,
+    border: `1px solid `,
     background: INPUT_BG,
     color: FG,
     fontFamily: BODY,
@@ -2387,7 +2387,7 @@ function AutoTextarea({
       style={{
         width: "100%",
         padding: "8px 12px",
-        border: `1px solid rgba(255, 255, 255, 0.12)`,
+        border: `1px solid `,
         background: INPUT_BG,
         color: FG,
         fontFamily: mono ? MONO : BODY,

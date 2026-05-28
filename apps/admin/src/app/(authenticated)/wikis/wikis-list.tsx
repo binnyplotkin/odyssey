@@ -118,7 +118,7 @@ export function WikisList({ wikis }: { wikis: WikiListItem[] }) {
       <div
         style={{
           minHeight: "100%",
-          background: "var(--background)",
+          background: "var(--page-atmosphere)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -172,9 +172,9 @@ export function WikisList({ wikis }: { wikis: WikiListItem[] }) {
             letterSpacing: "0.04em",
             color: "var(--text-tertiary)",
             padding: "8px 12px",
-            border: "1px solid var(--card-border)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-sm)",
-            background: "var(--card)",
+            background: "var(--material-card)",
           }}
         >
           scripts/migrate-wikis-to-shared.ts
@@ -188,7 +188,7 @@ export function WikisList({ wikis }: { wikis: WikiListItem[] }) {
     <div
       style={{
         minHeight: "100%",
-        background: "var(--background)",
+        background: "var(--page-atmosphere)",
         display: "flex",
         flexDirection: "column",
       }}
@@ -219,8 +219,8 @@ export function WikisList({ wikis }: { wikis: WikiListItem[] }) {
               alignItems: "center",
               gap: "var(--space-10)",
               padding: "9px 16px",
-              background: "var(--input-bg)",
-              border: "1px solid var(--input-border)",
+              background: "var(--control-bg)",
+              border: "1px solid var(--control-border)",
               borderRadius: "var(--radius-pill)",
               width: 360,
               maxWidth: "100%",
@@ -348,8 +348,8 @@ function WikiCard({ wiki }: { wiki: WikiListItem }) {
         padding: "var(--space-18)",
         gap: "var(--space-14)",
         borderRadius: "var(--radius-2xl)",
-        background: "var(--card)",
-        border: `1px solid ${hovered ? "var(--accent-glow)" : "var(--card-border)"}`,
+        background: "var(--material-card)",
+        border: `1px solid ${hovered ? "var(--accent-glow)" : "var(--border-subtle)"}`,
         textDecoration: "none",
         color: "inherit",
         cursor: "pointer",
@@ -721,7 +721,7 @@ function CreateWikiButton({
           border: `1px solid ${ACCENT}`,
           borderRadius: "var(--radius-pill)",
           background: ACCENT,
-          color: "var(--background)",
+          color: "var(--accent-on)",
           fontFamily: FONT_HEAD,
           fontSize: large ? "var(--font-size-lg)" : "var(--font-size-base)",
           fontWeight: 600,

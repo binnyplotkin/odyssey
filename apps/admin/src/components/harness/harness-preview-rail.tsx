@@ -416,7 +416,7 @@ function PromptView({
       }}
     >
       {error && (
-        <div style={{ color: "var(--danger)" }}>
+        <div style={{ color: "var(--status-error)" }}>
           <strong>preview error:</strong> {error}
         </div>
       )}
@@ -578,8 +578,8 @@ function Sandbox({
           alignItems: "center",
           gap: "var(--space-8)",
           padding: "8px 10px",
-          background: "var(--input-bg)",
-          border: "1px solid var(--input-border)",
+          background: "var(--control-bg)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-sm)",
           marginTop: "auto",
         }}
@@ -658,7 +658,7 @@ function TurnView({ turn }: { turn: SandboxTurn }) {
               fontFamily: T.fontMono,
               fontSize: "var(--font-size-2xs)",
               letterSpacing: "0.1em",
-              color: turn.status === "error" ? "var(--danger)" : "var(--accent-strong)",
+              color: turn.status === "error" ? "var(--status-error)" : "var(--accent-strong)",
               textTransform: "uppercase",
             }}
           >

@@ -5,9 +5,9 @@ import type { EraConfig } from "@odyssey/db";
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
+  muted: "var(--text-tertiary)",
   border: "var(--border)",
-  cardHover: "var(--card-hover)",
+  cardHover: "var(--surface-hover)",
   fontMono: "var(--font-mono, 'JetBrains Mono', monospace)",
   fontBody: "'Inter', sans-serif",
   fontHeading: "'Space Grotesk', sans-serif",
@@ -208,5 +208,5 @@ const dashedAdd: React.CSSProperties = {
   display: "inline-flex", alignSelf: "flex-start", alignItems: "center", gap: "var(--space-6)",
   padding: "7px 14px", borderRadius: "var(--radius-md)",
   border: "1px dashed var(--border)", background: "transparent",
-  color: "var(--muted)", fontFamily: T.fontBody, fontSize: "var(--font-size-base)", cursor: "pointer",
+  color: "var(--text-tertiary)", fontFamily: T.fontBody, fontSize: "var(--font-size-base)", cursor: "pointer",
 };

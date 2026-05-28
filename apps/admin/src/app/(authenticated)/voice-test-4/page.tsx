@@ -631,9 +631,9 @@ export default function VoiceTest4Page() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
       <header className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Tools</p>
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">Tools</p>
         <h1 className="mt-2 text-3xl font-semibold">Voice Test 4</h1>
-        <p className="mt-2 max-w-3xl text-sm text-[var(--muted)]">
+        <p className="mt-2 max-w-3xl text-sm text-[var(--text-tertiary)]">
           Live conversation mode: continuous listening with automatic end-of-speech detection, then STT, AI reply, and spoken playback.
         </p>
       </header>
@@ -641,7 +641,7 @@ export default function VoiceTest4Page() {
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
           <h2 className="text-lg font-medium">Live Session</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">State machine: listening - processing - speaking - listening.</p>
+          <p className="mt-1 text-sm text-[var(--text-tertiary)]">State machine: listening - processing - speaking - listening.</p>
 
           <div className="mt-4 flex gap-2">
             {!sessionActive ? (
@@ -656,31 +656,31 @@ export default function VoiceTest4Page() {
               <button
                 type="button"
                 onClick={stopLiveSession}
-                className="rounded-lg border border-[var(--danger)] bg-[var(--danger)]/10 px-4 py-2 text-sm text-[var(--danger)]"
+                className="rounded-lg border border-[var(--status-error)] bg-[var(--status-error)]/10 px-4 py-2 text-sm text-[var(--status-error)]"
               >
                 Stop live session
               </button>
             )}
           </div>
 
-          <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-            <p className="text-xs uppercase tracking-[0.08em] text-[var(--muted)]">Phase</p>
+          <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-4">
+            <p className="text-xs uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Phase</p>
             <p className="mt-1 text-sm">{phase}</p>
-            <p className="mt-3 text-xs uppercase tracking-[0.08em] text-[var(--muted)]">Mic level</p>
+            <p className="mt-3 text-xs uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Mic level</p>
             <div className="mt-2 h-2 w-full rounded-full bg-black/30">
               <div
                 className="h-2 rounded-full bg-[var(--accent)] transition-all"
                 style={{ width: `${micPercent}%` }}
               />
             </div>
-            <p className="mt-2 text-xs text-[var(--muted)]">{micPercent}%</p>
+            <p className="mt-2 text-xs text-[var(--text-tertiary)]">{micPercent}%</p>
           </div>
 
           <div className="mt-4 grid gap-3">
             <div className="rounded-lg border border-[var(--border)] bg-black/30 p-3">
-              <p className="text-xs uppercase tracking-[0.08em] text-[var(--muted)]">Current audio routing</p>
+              <p className="text-xs uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Current audio routing</p>
               {routing ? (
-                <div className="mt-2 space-y-1 text-xs text-[var(--muted)]">
+                <div className="mt-2 space-y-1 text-xs text-[var(--text-tertiary)]">
                   <p>STT: {routing.sttProvider}</p>
                   <p>LLM: {routing.replyModel}</p>
                   <p>TTS: {routing.ttsProvider}</p>
@@ -688,40 +688,40 @@ export default function VoiceTest4Page() {
                   {routing.kyutaiBaseUrl ? <p className="truncate">Kyutai URL: {routing.kyutaiBaseUrl}</p> : null}
                 </div>
               ) : (
-                <p className="mt-1 text-sm text-[var(--muted)]">Routing not loaded yet.</p>
+                <p className="mt-1 text-sm text-[var(--text-tertiary)]">Routing not loaded yet.</p>
               )}
             </div>
             <div className="rounded-lg border border-[var(--border)] bg-black/30 p-3">
-              <p className="text-xs uppercase tracking-[0.08em] text-[var(--muted)]">Last transcript</p>
-              <p className="mt-1 text-sm text-[var(--muted)]">{lastTranscript || "Waiting for speech..."}</p>
+              <p className="text-xs uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Last transcript</p>
+              <p className="mt-1 text-sm text-[var(--text-tertiary)]">{lastTranscript || "Waiting for speech..."}</p>
             </div>
             <div className="rounded-lg border border-[var(--border)] bg-black/30 p-3">
-              <p className="text-xs uppercase tracking-[0.08em] text-[var(--muted)]">Last reply</p>
-              <p className="mt-1 text-sm text-[var(--muted)]">{lastReply || "No assistant reply yet."}</p>
-              <p className="mt-2 text-xs text-[var(--muted)]">{lastModel ? `model=${lastModel}` : ""}</p>
+              <p className="text-xs uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Last reply</p>
+              <p className="mt-1 text-sm text-[var(--text-tertiary)]">{lastReply || "No assistant reply yet."}</p>
+              <p className="mt-2 text-xs text-[var(--text-tertiary)]">{lastModel ? `model=${lastModel}` : ""}</p>
             </div>
           </div>
         </div>
 
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
           <h2 className="text-lg font-medium">Recent Probe Results</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">Latest route checks and runtime failures.</p>
+          <p className="mt-1 text-sm text-[var(--text-tertiary)]">Latest route checks and runtime failures.</p>
           <div className="mt-4 flex max-h-80 flex-col gap-2 overflow-auto">
             {checks.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]">No checks yet.</p>
+              <p className="text-sm text-[var(--text-tertiary)]">No checks yet.</p>
             ) : (
               checks.map((check) => (
                 <div
                   key={`${check.name}:${check.at}:${check.detail}`}
-                  className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 text-xs"
+                  className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-3 text-xs"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono uppercase tracking-[0.08em] text-[var(--muted)]">{check.name}</span>
-                    <span className={check.ok ? "text-[var(--success)]" : "text-[var(--danger)]"}>
+                    <span className="font-mono uppercase tracking-[0.08em] text-[var(--text-tertiary)]">{check.name}</span>
+                    <span className={check.ok ? "text-[var(--status-live)]" : "text-[var(--status-error)]"}>
                       {check.ok ? "PASS" : "FAIL"} · {check.at}
                     </span>
                   </div>
-                  <p className="mt-1 text-[var(--muted)]">{check.detail}</p>
+                  <p className="mt-1 text-[var(--text-tertiary)]">{check.detail}</p>
                 </div>
               ))
             )}
@@ -731,22 +731,22 @@ export default function VoiceTest4Page() {
 
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <h2 className="text-lg font-medium">Turn History</h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">Most recent live turns with total loop latency.</p>
+        <p className="mt-1 text-sm text-[var(--text-tertiary)]">Most recent live turns with total loop latency.</p>
         <div className="mt-4 flex max-h-80 flex-col gap-3 overflow-auto">
           {turns.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">No turns yet.</p>
+            <p className="text-sm text-[var(--text-tertiary)]">No turns yet.</p>
           ) : (
             turns.map((turn) => (
               <article
                 key={turn.id}
-                className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4"
+                className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-4"
               >
-                <p className="text-xs text-[var(--muted)]">{turn.at} · {turn.latencyMs} ms</p>
-                <p className="mt-1 text-xs text-[var(--muted)]">
+                <p className="text-xs text-[var(--text-tertiary)]">{turn.at} · {turn.latencyMs} ms</p>
+                <p className="mt-1 text-xs text-[var(--text-tertiary)]">
                   stt={turn.sttProvider ?? "unknown"} · llm={turn.llmModel ?? "unknown"} · tts={turn.ttsProvider ?? "unknown"}
                 </p>
-                <p className="mt-2 text-sm"><span className="text-[var(--muted)]">You:</span> {turn.userText}</p>
-                <p className="mt-2 text-sm"><span className="text-[var(--muted)]">AI:</span> {turn.assistantText}</p>
+                <p className="mt-2 text-sm"><span className="text-[var(--text-tertiary)]">You:</span> {turn.userText}</p>
+                <p className="mt-2 text-sm"><span className="text-[var(--text-tertiary)]">AI:</span> {turn.assistantText}</p>
               </article>
             ))
           )}
@@ -754,7 +754,7 @@ export default function VoiceTest4Page() {
       </section>
 
       {error ? (
-        <p className="rounded-lg border border-[var(--danger)] bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">
+        <p className="rounded-lg border border-[var(--status-error)] bg-[var(--status-error)]/10 px-4 py-3 text-sm text-[var(--status-error)]">
           {error}
         </p>
       ) : null}

@@ -1,8 +1,8 @@
 import { Skeleton } from "@odyssey/ui";
 
 const CARD: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--card-border)",
+  background: "var(--material-card)",
+  border: "1px solid var(--border-subtle)",
   borderRadius: "var(--radius-xl)",
 };
 
@@ -23,8 +23,8 @@ export default function SessionsLoading() {
             display: "grid",
             gridTemplateColumns: GRID_COLS,
             padding: "12px 16px",
-            borderBottom: "1px solid var(--card-border)",
-            background: "var(--panel)",
+            borderBottom: "1px solid var(--border-subtle)",
+            background: "var(--surface-1)",
             gap: "var(--space-12)",
           }}
         >
@@ -40,7 +40,7 @@ export default function SessionsLoading() {
               gridTemplateColumns: GRID_COLS,
               alignItems: "center",
               padding: "14px 16px",
-              borderBottom: i === 7 ? "none" : "1px solid var(--card-border)",
+              borderBottom: i === 7 ? "none" : "1px solid var(--border-subtle)",
               gap: "var(--space-12)",
             }}
           >

@@ -9,7 +9,7 @@
 const FONT_MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
 const FONT_HEAD = "var(--font-body, Inter), system-ui, sans-serif";
 const ACCENT = "var(--accent-strong)";
-const AMBER = "#FACC15";
+const AMBER = "var(--status-processing)";
 
 const SPARK_W = 320;
 const SPARK_H = 48;
@@ -67,17 +67,23 @@ export function MissionControl({
   const progressFraction = opsTotal > 0 ? opsDone / opsTotal : 0;
   const sparklinePath = buildSparklinePath(sparklineSamples);
   const lastSample = sparklineSamples[sparklineSamples.length - 1] ?? 0;
-  const sparkLastX = sparklineSamples.length > 0
-    ? ((sparklineSamples.length - 1) /
-        Math.max(1, sparklineSamples.length - 1)) *
-      SPARK_W
-    : SPARK_W;
+  const sparkLastX =
+    sparklineSamples.length > 0
+      ? ((sparklineSamples.length - 1) /
+          Math.max(1, sparklineSamples.length - 1)) *
+        SPARK_W
+      : SPARK_W;
   const sparkMax = Math.max(...sparklineSamples, 1);
-  const sparkLastY =
-    SPARK_H - (lastSample / sparkMax) * (SPARK_H - 4) - 2;
+  const sparkLastY = SPARK_H - (lastSample / sparkMax) * (SPARK_H - 4) - 2;
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-12)",
+      }}
+    >
       <style>{ANIM_CSS}</style>
 
       <header
@@ -124,9 +130,9 @@ export function MissionControl({
         style={{
           display: "flex",
           flexDirection: "column",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-lg)",
-          background: "var(--input-bg)",
+          background: "var(--control-bg)",
           overflow: "hidden",
         }}
       >
@@ -135,7 +141,7 @@ export function MissionControl({
           style={{
             display: "flex",
             alignItems: "stretch",
-            borderBottom: "1px solid var(--divider)",
+            borderBottom: "1px solid var(--border-subtle)",
           }}
         >
           <div
@@ -145,7 +151,7 @@ export function MissionControl({
               flexDirection: "column",
               gap: "var(--space-10)",
               padding: "18px 22px",
-              borderRight: "1px solid var(--divider)",
+              borderRight: "1px solid var(--border-subtle)",
             }}
           >
             <span
@@ -159,7 +165,13 @@ export function MissionControl({
             >
               Op queue
             </span>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-14)" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                gap: "var(--space-14)",
+              }}
+            >
               <span
                 style={{
                   fontFamily: FONT_HEAD,
@@ -199,7 +211,7 @@ export function MissionControl({
               style={{
                 position: "relative",
                 height: 3,
-                background: "rgba(255, 255, 255, 0.06)",
+                background: "var(--ink-fill)",
                 borderRadius: "var(--radius-pill)",
                 overflow: "hidden",
               }}
@@ -264,7 +276,7 @@ export function MissionControl({
             </div>
             <svg
               width="100%"
-                height={SPARK_H}
+              height={SPARK_H}
               viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
               preserveAspectRatio="none"
               style={{ display: "block", opacity: 0.78 }}
@@ -272,8 +284,16 @@ export function MissionControl({
             >
               <defs>
                 <linearGradient id="mc-spark-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8FD1CB" stopOpacity="0.30" />
-                  <stop offset="100%" stopColor="#8FD1CB" stopOpacity="0" />
+                  <stop
+                    offset="0%"
+                    stopColor="var(--accent-strong)"
+                    stopOpacity="0.30"
+                  />
+                  <stop
+                    offset="100%"
+                    stopColor="var(--accent-strong)"
+                    stopOpacity="0"
+                  />
                 </linearGradient>
               </defs>
               {sparklinePath && (
@@ -318,7 +338,7 @@ export function MissionControl({
           style={{
             display: "flex",
             alignItems: "stretch",
-            borderBottom: "1px solid var(--divider)",
+            borderBottom: "1px solid var(--border-subtle)",
           }}
         >
           <Counter label="Create" value={`${opsCreate}`} />
@@ -342,7 +362,8 @@ export function MissionControl({
             fontFamily: FONT_MONO,
             fontSize: "var(--font-size-sm)",
             color: "var(--text-secondary)",
-            background: "color-mix(in srgb, var(--background) 42%, transparent)",
+            background:
+              "color-mix(in srgb, var(--background) 42%, transparent)",
             gap: 0,
             overflow: "hidden",
             whiteSpace: "nowrap",
@@ -413,11 +434,8 @@ function Counter({
   tone?: "amber";
   last?: boolean;
 }) {
-  const valueColor = tone === "amber"
-    ? AMBER
-    : accent
-      ? ACCENT
-      : "var(--text-primary)";
+  const valueColor =
+    tone === "amber" ? AMBER : accent ? ACCENT : "var(--text-primary)";
   const labelColor = tone === "amber" ? AMBER : "var(--text-tertiary)";
   return (
     <div
@@ -427,7 +445,7 @@ function Counter({
         flexDirection: "column",
         gap: "var(--space-4)",
         padding: "11px 18px",
-        borderRight: last ? "none" : "1px solid var(--divider)",
+        borderRight: last ? "none" : "1px solid var(--border-subtle)",
       }}
     >
       <span

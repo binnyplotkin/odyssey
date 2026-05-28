@@ -100,10 +100,10 @@ function clamp(v: number, min: number, max: number) {
 function MiniBar({ value, max = 100, color }: { value: number; max?: number; color: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", width: "100%" }}>
-      <div style={{ flex: 1, height: 4, borderRadius: "var(--radius-2xs)", background: "var(--card-hover)" }}>
+      <div style={{ flex: 1, height: 4, borderRadius: "var(--radius-2xs)", background: "var(--surface-hover)" }}>
         <div style={{ width: `${(value / max) * 100}%`, height: "100%", borderRadius: "var(--radius-2xs)", background: color }} />
       </div>
-      <span style={{ fontSize: "0.6rem", color: "var(--muted)", fontFamily: "var(--font-mono)", minWidth: 18, textAlign: "right" }}>
+      <span style={{ fontSize: "0.6rem", color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", minWidth: 18, textAlign: "right" }}>
         {value}
       </span>
     </div>
@@ -118,8 +118,8 @@ function Badge({ text, color, textColor }: { text: string; color?: string; textC
       borderRadius: "var(--radius-xs)",
       fontSize: "0.6rem",
       fontWeight: 500,
-      background: color ? `${color}20` : "var(--card-hover)",
-      color: textColor ?? color ?? "var(--muted)",
+      background: color ? `${color}20` : "var(--surface-hover)",
+      color: textColor ?? color ?? "var(--text-tertiary)",
       lineHeight: 1.4,
     }}>
       {text}
@@ -136,7 +136,7 @@ function PortDot({ color, label, side = "right" }: { color: string; label?: stri
       justifyContent: side === "right" ? "flex-end" : "flex-start",
     }}>
       {side === "right" && label && (
-        <span style={{ fontSize: "0.55rem", color: "var(--muted)" }}>{label}</span>
+        <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)" }}>{label}</span>
       )}
       <span style={{
         width: 6,
@@ -146,7 +146,7 @@ function PortDot({ color, label, side = "right" }: { color: string; label?: stri
         flexShrink: 0,
       }} />
       {side === "left" && label && (
-        <span style={{ fontSize: "0.55rem", color: "var(--muted)" }}>{label}</span>
+        <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)" }}>{label}</span>
       )}
     </div>
   );
@@ -380,7 +380,7 @@ function generateId() {
 function WorldCoreContent({ world }: { world: WorldDefinition }) {
   return (
     <div style={{ marginTop: "0.5rem" }}>
-      <p style={{ fontSize: "0.7rem", color: "var(--muted)", lineHeight: 1.4, marginBottom: "0.5rem" }}>
+      <p style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", lineHeight: 1.4, marginBottom: "0.5rem" }}>
         {world.setting.slice(0, 100)}...
       </p>
       <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
@@ -401,7 +401,7 @@ function CharacterContent({ char, world }: { char: CharacterDefinition; world: W
   const groups = groupIds.map((gid) => world.groups.find((g) => g.id === gid)).filter(Boolean);
   return (
     <div style={{ marginTop: "0.375rem" }}>
-      <p style={{ fontSize: "0.7rem", color: "var(--muted)", marginBottom: "0.375rem" }}>{char.title}</p>
+      <p style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", marginBottom: "0.375rem" }}>{char.title}</p>
       <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
         <Badge text={char.archetype} color={NODE_COLORS.character.dot} />
         {groups.map((group) => group && <Badge key={group.id} text={group.name} color={NODE_COLORS.group.dot} />)}
@@ -415,19 +415,19 @@ function CharacterContent({ char, world }: { char: CharacterDefinition; world: W
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-          <span style={{ fontSize: "0.55rem", color: "var(--muted)", width: 36 }}>anger</span>
+          <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)", width: 36 }}>anger</span>
           <MiniBar value={char.emotionalBaseline.anger} color="#FF5A5A" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-          <span style={{ fontSize: "0.55rem", color: "var(--muted)", width: 36 }}>fear</span>
+          <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)", width: 36 }}>fear</span>
           <MiniBar value={char.emotionalBaseline.fear} color="#E2A55A" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-          <span style={{ fontSize: "0.55rem", color: "var(--muted)", width: 36 }}>hope</span>
+          <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)", width: 36 }}>hope</span>
           <MiniBar value={char.emotionalBaseline.hope} color="#6FBF88" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-          <span style={{ fontSize: "0.55rem", color: "var(--muted)", width: 36 }}>loyalty</span>
+          <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)", width: 36 }}>loyalty</span>
           <MiniBar value={char.emotionalBaseline.loyalty} color="#5B8DEF" />
         </div>
       </div>
@@ -439,7 +439,7 @@ function GroupContent({ group, world }: { group: GroupDefinition; world: WorldDe
   const leader = group.leaderId ? world.characters.find((c) => c.id === group.leaderId) : undefined;
   return (
     <div style={{ marginTop: "0.375rem" }}>
-      <p style={{ fontSize: "0.7rem", color: "var(--muted)", marginBottom: "0.375rem", lineHeight: 1.3 }}>
+      <p style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", marginBottom: "0.375rem", lineHeight: 1.3 }}>
         {group.description.length > 80 ? group.description.slice(0, 78) + "…" : group.description}
       </p>
       <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.375rem", flexWrap: "wrap" }}>
@@ -460,12 +460,12 @@ function GroupContent({ group, world }: { group: GroupDefinition; world: WorldDe
         <span style={{ fontSize: "0.65rem", fontWeight: 600 }}>{group.volatility ?? 50}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.375rem", marginTop: "-0.25rem" }}>
-        <span style={{ fontSize: "0.5rem", color: "var(--muted)", textTransform: "uppercase" }}>inf</span>
-        <span style={{ fontSize: "0.5rem", color: "var(--muted)", textTransform: "uppercase" }}>coh</span>
-        <span style={{ fontSize: "0.5rem", color: "var(--muted)", textTransform: "uppercase" }}>vol</span>
+        <span style={{ fontSize: "0.5rem", color: "var(--text-tertiary)", textTransform: "uppercase" }}>inf</span>
+        <span style={{ fontSize: "0.5rem", color: "var(--text-tertiary)", textTransform: "uppercase" }}>coh</span>
+        <span style={{ fontSize: "0.5rem", color: "var(--text-tertiary)", textTransform: "uppercase" }}>vol</span>
       </div>
       {leader && (
-        <div style={{ fontSize: "0.6rem", color: "var(--muted)", marginBottom: "0.375rem" }}>
+        <div style={{ fontSize: "0.6rem", color: "var(--text-tertiary)", marginBottom: "0.375rem" }}>
           <span style={{ fontSize: "0.5rem", textTransform: "uppercase", marginRight: "0.25rem" }}>leader</span>
           {leader.name}
         </div>
@@ -491,7 +491,7 @@ function RoleContent({ role, world }: { role: RoleDefinition; world: WorldDefini
     .map((c) => c!.name);
   return (
     <div style={{ marginTop: "0.375rem" }}>
-      <p style={{ fontSize: "0.7rem", color: "var(--muted)", lineHeight: 1.4, marginBottom: "0.375rem" }}>
+      <p style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", lineHeight: 1.4, marginBottom: "0.375rem" }}>
         {role.summary.length > 80 ? role.summary.slice(0, 78) + "…" : role.summary}
       </p>
       <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.375rem", flexWrap: "wrap" }}>
@@ -512,7 +512,7 @@ function RoleContent({ role, world }: { role: RoleDefinition; world: WorldDefini
       </div>
       {innerCircleNames.length > 0 && (
         <div style={{ marginBottom: "0.375rem" }}>
-          <span style={{ fontSize: "0.5rem", color: "var(--muted)", textTransform: "uppercase", marginRight: "0.25rem" }}>inner circle</span>
+          <span style={{ fontSize: "0.5rem", color: "var(--text-tertiary)", textTransform: "uppercase", marginRight: "0.25rem" }}>inner circle</span>
           <span style={{ fontSize: "0.6rem", color: "var(--fg)" }}>{innerCircleNames.join(", ")}</span>
         </div>
       )}
@@ -536,7 +536,7 @@ function EventContent({ event, world }: { event: EventTemplate; world: WorldDefi
 
   return (
     <div style={{ marginTop: "0.375rem" }}>
-      <p style={{ fontSize: "0.7rem", color: "var(--muted)", lineHeight: 1.4, marginBottom: "0.375rem" }}>
+      <p style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", lineHeight: 1.4, marginBottom: "0.375rem" }}>
         {event.summary.slice(0, 80)}...
       </p>
       {/* v2 badges: tone + location */}
@@ -547,24 +547,24 @@ function EventContent({ event, world }: { event: EventTemplate; world: WorldDefi
         </div>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.375rem" }}>
-        <span style={{ fontSize: "0.6rem", color: "var(--muted)" }}>Urgency</span>
+        <span style={{ fontSize: "0.6rem", color: "var(--text-tertiary)" }}>Urgency</span>
         <MiniBar value={event.urgency} color={event.urgency > 70 ? "#FF5A5A" : "#E2A55A"} />
       </div>
       {triggerParts.length > 0 && (
-        <p style={{ fontSize: "0.6rem", color: "var(--muted)", marginBottom: "0.375rem" }}>
+        <p style={{ fontSize: "0.6rem", color: "var(--text-tertiary)", marginBottom: "0.375rem" }}>
           Trigger: {triggerParts.join(", ")}
         </p>
       )}
       {/* v2: turn range + weight */}
       {(event.turnRange || (event.weight ?? 1) > 1) && (
-        <p style={{ fontSize: "0.6rem", color: "var(--muted)", marginBottom: "0.375rem" }}>
+        <p style={{ fontSize: "0.6rem", color: "var(--text-tertiary)", marginBottom: "0.375rem" }}>
           {event.turnRange ? `Turns ${event.turnRange.min}–${event.turnRange.max}` : ""}
           {event.turnRange && (event.weight ?? 1) > 1 ? " · " : ""}
           {(event.weight ?? 1) > 1 ? `wt ${event.weight}` : ""}
         </p>
       )}
       <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
-        <span style={{ fontSize: "0.55rem", color: "var(--muted)", marginRight: "0.125rem" }}>Actors:</span>
+        <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)", marginRight: "0.125rem" }}>Actors:</span>
         {event.actorIds.map((id) => {
           const char = world.characters.find((c) => c.id === id);
           return <Badge key={id} text={char?.name ?? id} color={NODE_COLORS.character.dot} />;
@@ -573,7 +573,7 @@ function EventContent({ event, world }: { event: EventTemplate; world: WorldDefi
       {/* v2: involved groups */}
       {event.involvedGroupIds && event.involvedGroupIds.length > 0 && (
         <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
-          <span style={{ fontSize: "0.55rem", color: "var(--muted)", marginRight: "0.125rem" }}>Groups:</span>
+          <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)", marginRight: "0.125rem" }}>Groups:</span>
           {event.involvedGroupIds.map((id) => {
             const group = world.groups.find((g) => g.id === id);
             return <Badge key={id} text={group?.name ?? id} color={NODE_COLORS.group.dot} />;
@@ -605,23 +605,23 @@ function InitialStateContent({ world }: { world: WorldDefinition }) {
     <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
       {metrics.map((m, i) => (
         <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-          <span style={{ fontSize: "0.6rem", color: "var(--muted)", width: 56 }}>{m.label}</span>
+          <span style={{ fontSize: "0.6rem", color: "var(--text-tertiary)", width: 56 }}>{m.label}</span>
           <MiniBar value={s.metricValues[m.id] ?? (s as Record<string, unknown>)[m.id] as number ?? m.initialValue} color={metricColors[i % metricColors.length]} />
         </div>
       ))}
       {/* v2: Groups with dispositions */}
       {world.groups.length > 0 && (
         <div style={{ marginTop: "0.25rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          <span style={{ fontSize: "0.55rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Groups</span>
+          <span style={{ fontSize: "0.55rem", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Groups</span>
           {world.groups.map((g) => {
             const influence = s.groupInfluence[g.id] ?? g.influence;
             return (
               <div key={g.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6rem" }}>
-                <span style={{ color: "var(--muted)" }}>{g.name}</span>
+                <span style={{ color: "var(--text-tertiary)" }}>{g.name}</span>
                 <span style={{ fontWeight: 600 }}>
                   <span style={{ color: "#6FBF88" }}>{influence}</span>
                   {" "}
-                  <span style={{ color: g.disposition === "hostile" ? "#FF5A5A" : g.disposition === "volatile" ? "#E2A55A" : "var(--muted)", fontSize: "0.5rem" }}>
+                  <span style={{ color: g.disposition === "hostile" ? "#FF5A5A" : g.disposition === "volatile" ? "#E2A55A" : "var(--text-tertiary)", fontSize: "0.5rem" }}>
                     {g.disposition}
                   </span>
                 </span>
@@ -634,11 +634,11 @@ function InitialStateContent({ world }: { world: WorldDefinition }) {
       {world.progressionModel && (
         <div style={{ marginTop: "0.25rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6rem" }}>
-            <span style={{ color: "var(--muted)" }}>Phase</span>
+            <span style={{ color: "var(--text-tertiary)" }}>Phase</span>
             <span style={{ fontWeight: 600 }}>1 / {world.progressionModel.phases}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6rem" }}>
-            <span style={{ color: "var(--muted)" }}>Momentum</span>
+            <span style={{ color: "var(--text-tertiary)" }}>Momentum</span>
             <span style={{ fontWeight: 600, color: "#8B6FC0" }}>stable</span>
           </div>
         </div>
@@ -1006,7 +1006,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
     fontWeight: 600,
     letterSpacing: "0.12em",
     textTransform: "uppercase",
-    color: "var(--muted)",
+    color: "var(--text-tertiary)",
   };
 
   const worldTitle = worlds.find((w) => w.id === worldId)?.title ?? "Untitled World";
@@ -1022,7 +1022,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
           alignItems: "center",
           padding: "0.625rem 1.25rem",
           borderBottom: "1px solid var(--border)",
-          background: "var(--panel)",
+          background: "var(--surface-1)",
           gap: "0.75rem",
           flexShrink: 0,
         }}
@@ -1045,7 +1045,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
           }}
         >
           {worlds.map((w) => (
-            <option key={w.id} value={w.id} style={{ background: "var(--panel)", color: "var(--foreground)" }}>
+            <option key={w.id} value={w.id} style={{ background: "var(--surface-1)", color: "var(--foreground)" }}>
               {w.title}
             </option>
           ))}
@@ -1069,7 +1069,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
 
         <div style={{ flex: 1 }} />
 
-        {saveError && <span style={{ fontSize: "0.75rem", color: "var(--danger)" }}>{saveError}</span>}
+        {saveError && <span style={{ fontSize: "0.75rem", color: "var(--status-error)" }}>{saveError}</span>}
 
         <button
           type="button"
@@ -1080,7 +1080,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
             borderRadius: "var(--radius-md)",
             border: "none",
             background: dirty ? "var(--accent-strong, var(--accent))" : "var(--border)",
-            color: dirty ? "#fff" : "var(--muted)",
+            color: dirty ? "#fff" : "var(--text-tertiary)",
             fontSize: "0.8125rem",
             fontWeight: 600,
             cursor: dirty ? "pointer" : "not-allowed",
@@ -1101,7 +1101,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
             width: 200,
             flexShrink: 0,
             borderRight: "1px solid var(--border)",
-            background: "var(--panel)",
+            background: "var(--surface-1)",
             padding: "1rem 0.75rem",
             display: "flex",
             flexDirection: "column",
@@ -1141,7 +1141,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                 </span>
                 <div>
                   <div style={{ fontSize: "0.8125rem", fontWeight: 600 }}>{ENTITY_LABELS[type]}</div>
-                  <div style={{ fontSize: "0.65rem", color: "var(--muted)", marginTop: "0.125rem" }}>
+                  <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", marginTop: "0.125rem" }}>
                     {ENTITY_DESCRIPTIONS[type]}
                   </div>
                 </div>
@@ -1171,7 +1171,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
             <span style={{ fontSize: "1rem", lineHeight: 1.2 }}>✦</span>
             <div>
               <div style={{ fontSize: "0.8125rem", fontWeight: 600 }}>Generate World</div>
-              <div style={{ fontSize: "0.65rem", color: "var(--muted)", marginTop: "0.125rem" }}>
+              <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", marginTop: "0.125rem" }}>
                 From a text prompt
               </div>
             </div>
@@ -1198,7 +1198,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
           >
             {/* Loading */}
             {isLoading && (
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 50, fontSize: "0.875rem", color: "var(--muted)" }}>
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 50, fontSize: "0.875rem", color: "var(--text-tertiary)" }}>
                 Loading world...
               </div>
             )}
@@ -1223,7 +1223,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                 </div>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "1.125rem", fontWeight: 600, marginBottom: "0.375rem" }}>Start building your world</div>
-                  <div style={{ fontSize: "0.8125rem", color: "var(--muted)", maxWidth: 320, lineHeight: 1.5 }}>
+                  <div style={{ fontSize: "0.8125rem", color: "var(--text-tertiary)", maxWidth: 320, lineHeight: 1.5 }}>
                     Drag node types from the palette or use AI to generate a complete world from a prompt.
                   </div>
                 </div>
@@ -1235,8 +1235,8 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
               <div style={{
                 position: "absolute", top: 12, left: 12, zIndex: 10,
                 display: "flex", gap: "0.5rem",
-                fontSize: "0.7rem", color: "var(--muted)",
-                background: "var(--panel)", border: "1px solid var(--border)",
+                fontSize: "0.7rem", color: "var(--text-tertiary)",
+                background: "var(--surface-1)", border: "1px solid var(--border)",
                 borderRadius: "var(--radius-sm)", padding: "0.25rem 0.625rem",
               }}>
                 <span>{nodes.length} nodes</span>
@@ -1263,7 +1263,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                 >
                   <defs>
                     <marker id="editor-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" fillOpacity="0.4" />
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-tertiary)" fillOpacity="0.4" />
                     </marker>
                   </defs>
                   {edges.map((edge) => {
@@ -1300,7 +1300,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                         padding: node.collapsed ? "0.5rem 0.75rem" : "0.75rem",
                         borderRadius: "0.625rem",
                         border: `1.5px solid ${hasErrors ? "#FF5A5A" : isSelected ? colors.dot : colors.border}`,
-                        background: isSelected ? colors.bg : "var(--panel)",
+                        background: isSelected ? colors.bg : "var(--surface-1)",
                         boxShadow: isSelected
                           ? `0 0 0 2px ${colors.dot}40, 0 12px 32px var(--shadow)`
                           : "0 4px 16px var(--shadow)",
@@ -1345,7 +1345,7 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
                           type="button"
                           onClick={(e) => { e.stopPropagation(); toggleCollapse(node.id); }}
                           style={{
-                            border: "none", background: "transparent", color: "var(--muted)",
+                            border: "none", background: "transparent", color: "var(--text-tertiary)",
                             cursor: "pointer", fontSize: "0.75rem", padding: 0, lineHeight: 1,
                           }}
                         >
@@ -1396,11 +1396,11 @@ export function WorldEditor({ worlds }: WorldEditorProps) {
             alignItems: "center",
             padding: "0.375rem 1rem",
             borderTop: "1px solid var(--border)",
-            background: "var(--panel)",
+            background: "var(--surface-1)",
             gap: "1rem",
             flexShrink: 0,
             fontSize: "0.7rem",
-            color: "var(--muted)",
+            color: "var(--text-tertiary)",
           }}>
             {/* Error/warning summary */}
             {validationErrors.length > 0 && (

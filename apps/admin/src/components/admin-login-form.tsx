@@ -56,7 +56,7 @@ export function AdminLoginForm({ variant = "floating" }: AdminLoginFormProps) {
         width: isSidePanel ? "100%" : "min(calc(100vw - 32px), 390px)",
         maxWidth: isSidePanel ? 360 : undefined,
         padding: isSidePanel ? 0 : "2rem",
-        background: isSidePanel ? "transparent" : "var(--panel)",
+        background: isSidePanel ? "transparent" : "var(--surface-1)",
         backdropFilter: isSidePanel ? undefined : "blur(24px) saturate(1.25)",
         WebkitBackdropFilter: isSidePanel ? undefined : "blur(24px) saturate(1.25)",
         borderRadius: isSidePanel ? 0 : "var(--radius-3xl)",
@@ -123,7 +123,7 @@ export function AdminLoginForm({ variant = "floating" }: AdminLoginFormProps) {
             ...inputStyle,
             borderColor: error
               ? "var(--status-error, #FCA5A5)"
-              : "var(--input-border)",
+              : "var(--control-border)",
           }}
         />
       </label>
@@ -144,7 +144,7 @@ export function AdminLoginForm({ variant = "floating" }: AdminLoginFormProps) {
             ...inputStyle,
             borderColor: error
               ? "var(--status-error, #FCA5A5)"
-              : "var(--input-border)",
+              : "var(--control-border)",
           }}
         />
       </label>
@@ -206,8 +206,8 @@ const inputStyle: React.CSSProperties = {
   minHeight: 48,
   padding: "0.75rem 0.9rem",
   borderRadius: "var(--radius-button, 12px)",
-  border: "1px solid var(--input-border)",
-  background: "var(--input-bg)",
+  border: "1px solid var(--control-border)",
+  background: "var(--control-bg)",
   color: "var(--foreground)",
   fontSize: "var(--font-size-base)",
   outline: "none",

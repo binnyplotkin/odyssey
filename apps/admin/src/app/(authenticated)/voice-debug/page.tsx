@@ -130,11 +130,11 @@ function statusColor(status: StageStatus) {
     case "running":
       return "var(--accent)";
     case "ok":
-      return "var(--success, #4ade80)";
+      return "var(--status-live, #4ade80)";
     case "error":
-      return "var(--danger, #f87171)";
+      return "var(--status-error, #f87171)";
     default:
-      return "var(--muted, #71717a)";
+      return "var(--text-tertiary, #71717a)";
   }
 }
 
@@ -628,9 +628,9 @@ export default function VoiceDebugPage() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
       <header className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Tools · Debug</p>
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">Tools · Debug</p>
         <h1 className="mt-2 text-3xl font-semibold">Voice Debug</h1>
-        <p className="mt-2 max-w-3xl text-sm text-[var(--muted)]">
+        <p className="mt-2 max-w-3xl text-sm text-[var(--text-tertiary)]">
           Stage-by-stage tester for the STT → LLM → TTS pipeline. Pick providers per stage, record or
           upload audio, and run each step independently to isolate failures and compare latencies.
         </p>
@@ -640,14 +640,14 @@ export default function VoiceDebugPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-medium">Kyutai Gateway</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">audio-rt FastAPI service health and runtime state.</p>
+            <p className="mt-1 text-sm text-[var(--text-tertiary)]">audio-rt FastAPI service health and runtime state.</p>
           </div>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => void probeGateway()}
               disabled={gatewayLoading}
-              className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-1.5 text-xs hover:bg-[var(--panel)]/70 disabled:opacity-50"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-1.5 text-xs hover:bg-[var(--surface-1)]/70 disabled:opacity-50"
             >
               {gatewayLoading ? "Probing…" : "Probe /healthz"}
             </button>
@@ -664,39 +664,39 @@ export default function VoiceDebugPage() {
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <div className="rounded-lg border border-[var(--border)] bg-black/30 p-3 text-xs">
-            <p className="font-mono uppercase tracking-[0.08em] text-[var(--muted)]">Health probe</p>
+            <p className="font-mono uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Health probe</p>
             {gateway === null ? (
-              <p className="mt-2 text-[var(--muted)]">Not probed yet.</p>
+              <p className="mt-2 text-[var(--text-tertiary)]">Not probed yet.</p>
             ) : !gateway.configured ? (
-              <p className="mt-2 text-[var(--danger,#f87171)]">KYUTAI_BASE_URL not set.</p>
+              <p className="mt-2 text-[var(--status-error,#f87171)]">KYUTAI_BASE_URL not set.</p>
             ) : (
-              <div className="mt-2 space-y-1 text-[var(--muted)]">
+              <div className="mt-2 space-y-1 text-[var(--text-tertiary)]">
                 <p>URL: <span className="break-all">{gateway.baseUrl}</span></p>
                 <p>HTTP: {gateway.status ?? "—"} · {gateway.latencyMs ?? "—"}ms</p>
                 {gateway.error ? (
-                  <p className="text-[var(--danger,#f87171)]">Error: {gateway.error}</p>
+                  <p className="text-[var(--status-error,#f87171)]">Error: {gateway.error}</p>
                 ) : null}
               </div>
             )}
-            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] text-[var(--muted)]">
+            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] text-[var(--text-tertiary)]">
               {gateway?.payload ? JSON.stringify(gateway.payload, null, 2) : "—"}
             </pre>
           </div>
 
           <div className="rounded-lg border border-[var(--border)] bg-black/30 p-3 text-xs">
-            <p className="font-mono uppercase tracking-[0.08em] text-[var(--muted)]">Warm-up result</p>
+            <p className="font-mono uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Warm-up result</p>
             {warmResult === null ? (
-              <p className="mt-2 text-[var(--muted)]">No warm-up yet. First /transcribe call lazy-loads the model on the gateway (often 30-90s on CPU).</p>
+              <p className="mt-2 text-[var(--text-tertiary)]">No warm-up yet. First /transcribe call lazy-loads the model on the gateway (often 30-90s on CPU).</p>
             ) : (
-              <div className="mt-2 space-y-1 text-[var(--muted)]">
-                <p>Status: <span style={{ color: warmResult.ok ? "var(--success,#4ade80)" : "var(--danger,#f87171)" }}>{warmResult.ok ? "OK" : "FAIL"}</span></p>
+              <div className="mt-2 space-y-1 text-[var(--text-tertiary)]">
+                <p>Status: <span style={{ color: warmResult.ok ? "var(--status-live,#4ade80)" : "var(--status-error,#f87171)" }}>{warmResult.ok ? "OK" : "FAIL"}</span></p>
                 <p>Latency: {warmResult.latencyMs ?? "—"}ms</p>
                 {warmResult.error ? (
-                  <p className="text-[var(--danger,#f87171)]">{warmResult.error}</p>
+                  <p className="text-[var(--status-error,#f87171)]">{warmResult.error}</p>
                 ) : null}
               </div>
             )}
-            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] text-[var(--muted)]">
+            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] text-[var(--text-tertiary)]">
               {warmResult?.payload ? JSON.stringify(warmResult.payload, null, 2) : "—"}
             </pre>
           </div>
@@ -705,7 +705,7 @@ export default function VoiceDebugPage() {
 
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <h2 className="text-lg font-medium">1. Audio input</h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">Record from mic or upload an audio file. Re-usable across stages — uploads keep tests repeatable.</p>
+        <p className="mt-1 text-sm text-[var(--text-tertiary)]">Record from mic or upload an audio file. Re-usable across stages — uploads keep tests repeatable.</p>
 
         <div className="mt-4 flex flex-wrap gap-2">
           {!recording ? (
@@ -720,13 +720,13 @@ export default function VoiceDebugPage() {
             <button
               type="button"
               onClick={stopRecording}
-              className="rounded-lg border border-[var(--danger,#f87171)] bg-[var(--danger,#f87171)]/10 px-4 py-2 text-sm text-[var(--danger,#f87171)]"
+              className="rounded-lg border border-[var(--status-error,#f87171)] bg-[var(--status-error,#f87171)]/10 px-4 py-2 text-sm text-[var(--status-error,#f87171)]"
             >
               ■ Stop
             </button>
           )}
 
-          <label className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm hover:bg-[var(--panel)]/70">
+          <label className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-4 py-2 text-sm hover:bg-[var(--surface-1)]/70">
             Upload audio file
             <input
               type="file"
@@ -744,7 +744,7 @@ export default function VoiceDebugPage() {
             <button
               type="button"
               onClick={clearAudio}
-              className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-xs text-[var(--muted)] hover:bg-[var(--panel)]/70"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-xs text-[var(--text-tertiary)] hover:bg-[var(--surface-1)]/70"
             >
               Clear
             </button>
@@ -752,13 +752,13 @@ export default function VoiceDebugPage() {
         </div>
 
         {recordingError ? (
-          <p className="mt-3 rounded-lg border border-[var(--danger,#f87171)] bg-[var(--danger,#f87171)]/10 px-3 py-2 text-sm text-[var(--danger,#f87171)]">
+          <p className="mt-3 rounded-lg border border-[var(--status-error,#f87171)] bg-[var(--status-error,#f87171)]/10 px-3 py-2 text-sm text-[var(--status-error,#f87171)]">
             {recordingError}
           </p>
         ) : null}
 
         {audioInput ? (
-          <div className="mt-4 rounded-lg border border-[var(--border)] bg-black/30 p-3 text-xs text-[var(--muted)]">
+          <div className="mt-4 rounded-lg border border-[var(--border)] bg-black/30 p-3 text-xs text-[var(--text-tertiary)]">
             <div className="flex flex-wrap gap-x-6 gap-y-1">
               <p>Source: {audioInput.sourceLabel}</p>
               <p>Mime: {audioInput.mimeType}</p>
@@ -769,7 +769,7 @@ export default function VoiceDebugPage() {
             <audio src={audioInput.blobUrl} controls className="mt-3 w-full" />
           </div>
         ) : (
-          <p className="mt-4 text-sm text-[var(--muted)]">No audio loaded.</p>
+          <p className="mt-4 text-sm text-[var(--text-tertiary)]">No audio loaded.</p>
         )}
       </section>
 
@@ -777,7 +777,7 @@ export default function VoiceDebugPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-medium">2. Pipeline</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">Run each stage individually, or fire all three in sequence.</p>
+            <p className="mt-1 text-sm text-[var(--text-tertiary)]">Run each stage individually, or fire all three in sequence.</p>
           </div>
           <button
             type="button"
@@ -789,7 +789,7 @@ export default function VoiceDebugPage() {
           </button>
         </div>
 
-        <div className="mt-3 text-xs text-[var(--muted)]">
+        <div className="mt-3 text-xs text-[var(--text-tertiary)]">
           Total round-trip: {totalLatencyMs > 0 ? `${totalLatencyMs} ms` : "—"}
         </div>
 
@@ -801,7 +801,7 @@ export default function VoiceDebugPage() {
               <select
                 value={sttProvider}
                 onChange={(event) => setSttProvider(event.target.value as SttProvider)}
-                className="rounded-md border border-[var(--border)] bg-[var(--panel)] px-2 py-1 text-xs"
+                className="rounded-md border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1 text-xs"
               >
                 <option value="kyutai-rust">kyutai-rust (moshi-server, streaming)</option>
                 <option value="kyutai">kyutai (pytorch, batch)</option>
@@ -814,17 +814,17 @@ export default function VoiceDebugPage() {
           >
             {sttStage.result ? (
               <div className="space-y-1">
-                <p className="text-xs text-[var(--muted)]">
+                <p className="text-xs text-[var(--text-tertiary)]">
                   provider={sttStage.result.provider} {sttStage.result.model ? `· model=${sttStage.result.model}` : ""}
                 </p>
                 <p className="rounded border border-[var(--border)] bg-black/40 p-2 text-sm">
-                  {sttStage.result.transcript || <span className="text-[var(--muted)]">(empty transcript)</span>}
+                  {sttStage.result.transcript || <span className="text-[var(--text-tertiary)]">(empty transcript)</span>}
                 </p>
               </div>
             ) : sttStage.error ? (
-              <p className="text-xs text-[var(--danger,#f87171)]">{sttStage.error}</p>
+              <p className="text-xs text-[var(--status-error,#f87171)]">{sttStage.error}</p>
             ) : (
-              <p className="text-xs text-[var(--muted)]">Waiting on audio input.</p>
+              <p className="text-xs text-[var(--text-tertiary)]">Waiting on audio input.</p>
             )}
           </StageCard>
 
@@ -832,7 +832,7 @@ export default function VoiceDebugPage() {
             label="Reply (LLM)"
             stage={replyStage}
             controls={
-              <span className="rounded-md border border-[var(--border)] bg-[var(--panel)] px-2 py-1 text-xs text-[var(--muted)]">
+              <span className="rounded-md border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1 text-xs text-[var(--text-tertiary)]">
                 openai · {process.env.NEXT_PUBLIC_AUDIO_REPLY_MODEL ?? "gpt-4o-mini"}
               </span>
             }
@@ -844,14 +844,14 @@ export default function VoiceDebugPage() {
                 value={systemPrompt}
                 onChange={(event) => setSystemPrompt(event.target.value)}
                 rows={2}
-                className="w-full rounded border border-[var(--border)] bg-black/30 p-2 font-mono text-[11px] text-[var(--muted)]"
+                className="w-full rounded border border-[var(--border)] bg-black/30 p-2 font-mono text-[11px] text-[var(--text-tertiary)]"
                 placeholder="System prompt"
               />
             }
           >
             {replyStage.result ? (
               <div className="space-y-1">
-                <p className="text-xs text-[var(--muted)]">
+                <p className="text-xs text-[var(--text-tertiary)]">
                   provider={replyStage.result.provider} · model={replyStage.result.model}
                 </p>
                 <p className="rounded border border-[var(--border)] bg-black/40 p-2 text-sm">
@@ -859,9 +859,9 @@ export default function VoiceDebugPage() {
                 </p>
               </div>
             ) : replyStage.error ? (
-              <p className="text-xs text-[var(--danger,#f87171)]">{replyStage.error}</p>
+              <p className="text-xs text-[var(--status-error,#f87171)]">{replyStage.error}</p>
             ) : (
-              <p className="text-xs text-[var(--muted)]">Run STT first.</p>
+              <p className="text-xs text-[var(--text-tertiary)]">Run STT first.</p>
             )}
           </StageCard>
 
@@ -872,7 +872,7 @@ export default function VoiceDebugPage() {
               <select
                 value={ttsProvider}
                 onChange={(event) => setTtsProvider(event.target.value as TtsProvider)}
-                className="rounded-md border border-[var(--border)] bg-[var(--panel)] px-2 py-1 text-xs"
+                className="rounded-md border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1 text-xs"
               >
                 <option value="elevenlabs">elevenlabs</option>
                 <option value="openai">openai (gpt-4o-mini-tts)</option>
@@ -884,15 +884,15 @@ export default function VoiceDebugPage() {
           >
             {ttsStage.result ? (
               <div className="space-y-2">
-                <p className="text-xs text-[var(--muted)]">
+                <p className="text-xs text-[var(--text-tertiary)]">
                   provider={ttsStage.result.provider} {ttsStage.result.fallbackUsed ? "· fallback=true" : ""} · {ttsStage.result.mimeType}
                 </p>
                 <audio src={ttsStage.result.blobUrl} controls className="w-full" />
               </div>
             ) : ttsStage.error ? (
-              <p className="text-xs text-[var(--danger,#f87171)]">{ttsStage.error}</p>
+              <p className="text-xs text-[var(--status-error,#f87171)]">{ttsStage.error}</p>
             ) : (
-              <p className="text-xs text-[var(--muted)]">Run Reply first.</p>
+              <p className="text-xs text-[var(--text-tertiary)]">Run Reply first.</p>
             )}
           </StageCard>
         </div>
@@ -902,7 +902,7 @@ export default function VoiceDebugPage() {
 
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <h2 className="text-lg font-medium">Raw responses</h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">Last server payload from each stage.</p>
+        <p className="mt-1 text-sm text-[var(--text-tertiary)]">Last server payload from each stage.</p>
         <div className="mt-3 grid gap-3 md:grid-cols-3">
           <RawPanel title="STT" raw={sttStage.raw} />
           <RawPanel title="Reply" raw={replyStage.raw} />
@@ -933,9 +933,9 @@ function StageCard<T>({
   secondary?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-4">
       <div className="flex items-center justify-between">
-        <p className="font-mono text-xs uppercase tracking-[0.08em] text-[var(--muted)]">{label}</p>
+        <p className="font-mono text-xs uppercase tracking-[0.08em] text-[var(--text-tertiary)]">{label}</p>
         <span
           className="rounded-full border px-2 py-0.5 font-mono text-[10px]"
           style={{ color: statusColor(stage.status), borderColor: statusColor(stage.status) }}
@@ -966,8 +966,8 @@ function StageCard<T>({
 function RawPanel({ title, raw }: { title: string; raw: unknown }) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-black/30 p-3">
-      <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">{title}</p>
-      <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] text-[var(--muted)]">
+      <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-tertiary)]">{title}</p>
+      <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] text-[var(--text-tertiary)]">
         {raw ? JSON.stringify(raw, null, 2) : "—"}
       </pre>
     </div>

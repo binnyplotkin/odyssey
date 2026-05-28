@@ -1,8 +1,8 @@
 import { Skeleton } from "@odyssey/ui";
 
 const CARD: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--card-border)",
+  background: "var(--material-card)",
+  border: "1px solid var(--border-subtle)",
   borderRadius: "var(--radius-xl)",
 };
 
@@ -62,7 +62,7 @@ export default function SessionDetailLoading() {
             <div
               style={{
                 paddingTop: "var(--space-10)",
-                borderTop: "1px solid var(--card-border)",
+                borderTop: "1px solid var(--border-subtle)",
                 display: "flex",
                 flexDirection: "column",
                 gap: "var(--space-6)",

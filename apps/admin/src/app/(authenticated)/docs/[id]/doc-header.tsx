@@ -15,14 +15,14 @@ export function DocHeader({ title }: { title: string }) {
           style={{
             fontSize: "var(--font-size-xl)",
             fontWeight: 700,
-            color: "var(--muted)",
+            color: "var(--text-tertiary)",
             textDecoration: "none",
             whiteSpace: "nowrap",
           }}
         >
           Docs
         </Link>
-        <span style={{ color: "var(--muted)", fontSize: "var(--font-size-lg)" }}>/</span>
+        <span style={{ color: "var(--text-tertiary)", fontSize: "var(--font-size-lg)" }}>/</span>
         <span
           style={{
             fontSize: "var(--font-size-xl)",

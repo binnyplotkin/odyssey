@@ -39,6 +39,7 @@ ANTHROPIC_API_KEY
 OPENAI_API_KEY
 WIKI_INGEST_WORKER_ID=railway-wiki-ingest-1
 WIKI_INGEST_POLL_MS=2000
+WIKI_INGEST_WRITER_CONCURRENCY=3
 ```
 
 Use the same `DATABASE_URL` as the admin app. If the database is a Railway
@@ -50,6 +51,10 @@ Start with one replica. The queue claim uses Postgres row locking, so multiple
 workers can run later, but a single worker is easier to observe first.
 
 Scale up when queued runs regularly wait longer than a few minutes.
+
+Within a single run, `WIKI_INGEST_WRITER_CONCURRENCY` controls how many page
+writer LLM calls run at once. Start at `3`; lower it if provider rate limits
+show up, raise it cautiously after observing stable runs.
 
 ## Verification
 

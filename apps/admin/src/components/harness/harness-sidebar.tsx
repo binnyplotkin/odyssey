@@ -158,7 +158,7 @@ export function HarnessSidebar({ character, stats }: Props) {
               display: "flex",
               gap: "var(--space-12)",
               paddingTop: "var(--space-6)",
-              borderTop: "1px solid var(--divider)",
+              borderTop: "1px solid var(--border-subtle)",
             }}
           >
             <SidebarStat

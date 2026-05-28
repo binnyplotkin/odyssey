@@ -37,7 +37,7 @@ export default function WorldEditorLoading() {
         style={{
           flex: 1,
           minWidth: 0,
-          background: "var(--panel)",
+          background: "var(--surface-1)",
           position: "relative",
           overflow: "hidden",
         }}

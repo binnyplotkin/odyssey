@@ -15,7 +15,7 @@ import type { SandboxTurn } from "../character-sandbox";
 const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
-const AMBER = "#FACC15";
+const AMBER = "var(--warning-amber)";
 
 export function SandboxMissionControl({
   turns,
@@ -54,7 +54,7 @@ export function SandboxMissionControl({
         height: 340,
         flexShrink: 0,
         borderTop: "1px solid var(--border)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -159,7 +159,7 @@ function StatsGrid({
       style={{
         display: "flex",
         borderBottom: "1px solid var(--border)",
-        background: "var(--card-hover)",
+        background: "var(--surface-hover)",
         flexShrink: 0,
       }}
     >
@@ -280,7 +280,7 @@ function StatCell({
       style={{
         flex: 1,
         padding: "14px 22px",
-        borderRight: last ? "none" : "1px solid var(--divider)",
+        borderRight: last ? "none" : "1px solid var(--border-subtle)",
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-4)",
@@ -330,7 +330,7 @@ function LogTable({
           display: "flex",
           alignItems: "center",
           padding: "8px 22px",
-          borderBottom: "1px solid var(--divider)",
+          borderBottom: "1px solid var(--border-subtle)",
           fontSize: "var(--font-size-2xs)",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
@@ -441,7 +441,7 @@ function LogRow({
         paddingLeft: rowStyle.paddingLeft,
         background: rowStyle.background,
         borderLeft: rowStyle.borderLeft,
-        borderBottom: "1px solid rgba(255,255,255,0.04)",
+        borderBottom: "1px solid var(--ink-soft)",
       }}
     >
       <span style={{ width: 22, flexShrink: 0, color: glyphColor }}>

@@ -342,7 +342,7 @@ export function CharacterIngestionRedirectLoadingSkeleton() {
           alignItems: "flex-start",
         }}
       >
-        <div style={{ ...panelStyle, background: "var(--card)", padding: "var(--space-24)" }}>
+        <div style={{ ...panelStyle, background: "var(--material-card)", padding: "var(--space-24)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
             <Skeleton width={118} height={10} radius={3} />
             <div style={{ flex: 1 }} />
@@ -368,13 +368,13 @@ export function CharacterIngestionRedirectLoadingSkeleton() {
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-24)", position: "sticky", top: 24 }}>
-          <div style={{ ...panelStyle, background: "var(--card)", height: 300, padding: "var(--space-18)" }}>
+          <div style={{ ...panelStyle, background: "var(--material-card)", height: 300, padding: "var(--space-18)" }}>
             <Skeleton width={120} height={12} />
             <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <GraphConstellationSkeleton />
             </div>
           </div>
-          <div style={{ ...panelStyle, background: "var(--card)", padding: "var(--space-18)" }}>
+          <div style={{ ...panelStyle, background: "var(--material-card)", padding: "var(--space-18)" }}>
             <Skeleton width={132} height={13} />
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)", marginTop: "var(--space-16)" }}>
               {Array.from({ length: 4 }).map((_, i) => (

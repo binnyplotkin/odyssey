@@ -289,7 +289,7 @@ function ContextMenuFloatingPanel({
               aria-hidden
               style={{
                 height: 1,
-                background: "var(--divider)",
+                background: "var(--border-subtle)",
                 margin: "4px 0",
               }}
             />

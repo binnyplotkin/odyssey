@@ -17,6 +17,11 @@ export {
   ticketsTable,
   platformVersionsTable,
   changelogEntriesTable,
+  adminAgentConversationsTable,
+  adminAgentMessagesTable,
+  adminAgentToolCallsTable,
+  adminAgentOperationsTable,
+  adminAgentContextSummariesTable,
   charactersTable,
   voicesTable,
   voicePreviewsTable,
@@ -69,6 +74,27 @@ export { getPlatformVersionStore } from "./platform-version-store";
 export type { PlatformVersionStore, PlatformVersionRecord, CreatePlatformVersionInput, UpdatePlatformVersionInput } from "./platform-version-store";
 export { getChangelogStore } from "./changelog-store";
 export type { ChangelogStore, ChangelogEntryRecord, CreateChangelogEntryInput, UpdateChangelogEntryInput } from "./changelog-store";
+export { getAdminAgentStore } from "./admin-agent-store";
+export type {
+  AdminAgentStore,
+  AdminAgentConversationRecord,
+  AdminAgentMessageRecord,
+  AdminAgentToolCallRecord,
+  AdminAgentOperationRecord,
+  AdminAgentContextSummaryRecord,
+  AdminAgentConversationDetail,
+  AdminAgentMessageRole,
+  AdminAgentToolKind,
+  AdminAgentToolStatus,
+  AdminAgentRiskLevel,
+  AdminAgentOperationStatus,
+  CreateConversationInput,
+  AppendMessageInput,
+  RecordToolCallInput,
+  CreateOperationInput,
+  UpdateOperationInput,
+  CreateContextSummaryInput,
+} from "./admin-agent-store";
 
 export { getCharacterStore } from "./character-store";
 export type { CharacterStore } from "./character-store";
@@ -125,7 +151,7 @@ export type {
   PublishDraftInput,
 } from "./eval-store";
 
-export { getWikiStore } from "./wiki-store";
+export { getWikiStore, wikiEmbeddingSource } from "./wiki-store";
 export type { WikiStore } from "./wiki-store";
 
 export { getWikisStore } from "./wikis-store";
@@ -217,6 +243,7 @@ export type {
   CreateSourceRefInput,
   IngestionStatus,
   WikiIngestionLogRecord,
+  WikiIngestionEventRecord,
   StartIngestionInput,
   FinishIngestionInput,
   ParsedWikilink,

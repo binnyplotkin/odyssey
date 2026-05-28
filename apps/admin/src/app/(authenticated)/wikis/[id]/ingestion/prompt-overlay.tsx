@@ -15,14 +15,14 @@ const BODY = "var(--font-body, Inter), system-ui, sans-serif";
 
 const T = {
   bg: "var(--background)",
-  panel: "var(--panel)",
-  card: "var(--card)",
+  panel: "var(--surface-1)",
+  card: "var(--material-card)",
   border: "var(--border)",
-  divider: "var(--divider)",
-  inputBg: "var(--input-bg)",
-  inputBorder: "var(--input-border)",
+  divider: "var(--border-subtle)",
+  inputBg: "var(--control-bg)",
+  inputBorder: "var(--control-border)",
   headerBg: "var(--header-bg, var(--background))",
-  headerBorder: "var(--header-border, var(--divider))",
+  headerBorder: "var(--header-border, var(--border-subtle))",
   headerBlur: "var(--header-blur, 18px)",
   fg: "var(--text-primary)",
   text: "var(--text-secondary)",
@@ -32,7 +32,7 @@ const T = {
   accent: "var(--accent-strong)",
   accentSoft: "var(--accent-soft)",
   accentLine: "var(--accent-border)",
-  onAccent: "var(--background)",
+  onAccent: "var(--accent-on)",
 };
 
 const PROMPT_OVERLAY_CSS = `
@@ -48,7 +48,7 @@ const PROMPT_OVERLAY_CSS = `
   }
 `;
 
-const MINT_PURPLE = "#B79EFF"; // secondary dot for model
+const MINT_PURPLE = "var(--accent-secondary)"; // secondary dot for model
 
 export type PromptOverlayProps = {
   open: boolean;
@@ -351,24 +351,24 @@ function Topbar({
         ? "unsaved"
         : "saved";
   const statusActive = isDirty || saving || errored;
-  const statusColor = errored ? "var(--danger)" : T.accent;
+  const statusColor = errored ? "var(--status-error)" : T.accent;
   const statusBorder = errored
-    ? `1px solid color-mix(in srgb, var(--danger) 36%, transparent)`
+    ? `1px solid color-mix(in srgb, var(--status-error) 36%, transparent)`
     : statusActive
       ? `1px solid ${T.accentLine}`
       : `1px solid ${T.border}`;
   const statusBg = errored
-    ? "color-mix(in srgb, var(--danger) 8%, transparent)"
+    ? "color-mix(in srgb, var(--status-error) 8%, transparent)"
     : statusActive
       ? T.accentSoft
       : "transparent";
   const statusDot = errored
-    ? "var(--danger)"
+    ? "var(--status-error)"
     : statusActive
       ? T.accent
       : T.faded;
   const statusText = errored
-    ? "var(--danger)"
+    ? "var(--status-error)"
     : statusActive
       ? statusColor
       : T.muted;
@@ -502,7 +502,7 @@ function Topbar({
           border: "none",
           borderRadius: "var(--radius-sm)",
           background:
-            hovered === "close" ? "var(--sidebar-hover, var(--panel))" : "transparent",
+            hovered === "close" ? "var(--sidebar-hover, var(--surface-1))" : "transparent",
           color: hovered === "close" ? T.fg : T.muted,
           fontFamily: MONO,
           fontSize: "var(--font-size-xl)",
@@ -709,13 +709,13 @@ function EditorCard({
           : "saved";
   const footerDotColor =
     saveState === "error"
-      ? "var(--danger)"
+      ? "var(--status-error)"
       : isDirty || saveState === "saving"
         ? T.accent
         : T.faded;
   const footerTextColor =
     saveState === "error"
-      ? "var(--danger)"
+      ? "var(--status-error)"
       : isDirty || saveState === "saving"
         ? T.accent
         : T.muted;
@@ -1102,13 +1102,13 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
               alignItems: "center",
               gap: "var(--space-10)",
               padding: "10px 14px",
-              border: `1px solid color-mix(in srgb, var(--danger) 36%, transparent)`,
+              border: `1px solid color-mix(in srgb, var(--status-error) 36%, transparent)`,
               borderRadius: "var(--radius-md)",
               background:
-                "color-mix(in srgb, var(--danger) 8%, transparent)",
+                "color-mix(in srgb, var(--status-error) 8%, transparent)",
               fontFamily: MONO,
               fontSize: "var(--font-size-sm)",
-              color: "var(--danger)",
+              color: "var(--status-error)",
               letterSpacing: "0.04em",
             }}
           >
@@ -1117,7 +1117,7 @@ function TestPanel({ wikiId, draft }: { wikiId: string; draft: string }) {
                 width: 6,
                 height: 6,
                 borderRadius: "50%",
-                background: "var(--danger)",
+                background: "var(--status-error)",
               }}
             />
             <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>
@@ -1202,7 +1202,7 @@ function TestResultPanel({
             border: "none",
             borderRadius: "var(--radius-sm)",
             background:
-              hovered === "clear" ? "var(--sidebar-hover, var(--panel))" : "transparent",
+              hovered === "clear" ? "var(--sidebar-hover, var(--surface-1))" : "transparent",
             color: hovered === "clear" ? T.fg : T.muted,
             fontFamily: MONO,
             fontSize: "var(--font-size-lg)",
@@ -1270,8 +1270,8 @@ function StateCard({
                 ? "save failed"
                 : "unsaved"
           }
-          metaColor={saveState === "error" ? "var(--danger)" : T.accent}
-          dotColor={saveState === "error" ? "var(--danger)" : T.accent}
+          metaColor={saveState === "error" ? "var(--status-error)" : T.accent}
+          dotColor={saveState === "error" ? "var(--status-error)" : T.accent}
           detail={
             <>
               {draftTokens} tok ·{" "}
@@ -1295,7 +1295,7 @@ function StateCard({
         <div
           style={{
             padding: "10px 16px",
-            color: "var(--danger)",
+            color: "var(--status-error)",
             fontFamily: MONO,
             fontSize: "var(--font-size-sm)",
             letterSpacing: "0.04em",
@@ -1699,7 +1699,7 @@ function GhostButton({
         alignItems: "center",
         height: 30,
         padding: "0 14px",
-        background: hovered && !disabled ? "var(--sidebar-hover, var(--panel))" : "transparent",
+        background: hovered && !disabled ? "var(--sidebar-hover, var(--surface-1))" : "transparent",
         color: disabled ? T.faded : T.text,
         border: `1px solid ${disabled ? T.divider : T.border}`,
         borderRadius: "var(--radius-sm)",

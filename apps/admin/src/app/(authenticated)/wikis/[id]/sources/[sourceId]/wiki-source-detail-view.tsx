@@ -19,31 +19,31 @@ const MONO = '"JetBrains Mono", ui-monospace, monospace';
 const DISPLAY = '"Space Grotesk", system-ui, sans-serif';
 const BODY = '"Geist", "Inter", system-ui, sans-serif';
 
-const FG = "rgba(255, 255, 255, 0.95)";
-const TEXT_PRIMARY = "rgba(255, 255, 255, 0.88)";
-const TEXT_SECONDARY = "rgba(255, 255, 255, 0.7)";
-const TEXT_MUTED = "rgba(255, 255, 255, 0.55)";
-const TEXT_FADED = "rgba(255, 255, 255, 0.4)";
-const TEXT_GHOST = "rgba(255, 255, 255, 0.32)";
-const TEXT_QUIET = "rgba(255, 255, 255, 0.2)";
+const FG = "var(--foreground)";
+const TEXT_PRIMARY = "var(--text-primary)";
+const TEXT_SECONDARY = "var(--text-secondary)";
+const TEXT_MUTED = "var(--text-tertiary)";
+const TEXT_FADED = "var(--text-placeholder)";
+const TEXT_GHOST = "var(--text-quaternary)";
+const TEXT_QUIET = "color-mix(in srgb, var(--text-primary) 14%, transparent)";
 
-const PANEL_BG = "#0A0A0A";
-const BORDER = "rgba(255, 255, 255, 0.08)";
-const BORDER_STRONG = "rgba(255, 255, 255, 0.12)";
-const DIVIDER = "rgba(255, 255, 255, 0.06)";
-const INPUT_BG = "rgba(255, 255, 255, 0.02)";
+const PANEL_BG = "var(--material-card)";
+const BORDER = "var(--border-medium)";
+const BORDER_STRONG = "var(--ink-edge)";
+const DIVIDER = "var(--border-subtle)";
+const INPUT_BG = "var(--control-bg)";
 
-const ACCENT = "#8FD1CB";
-const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
-const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
+const ACCENT = "var(--accent-strong)";
+const ACCENT_SOFT = "var(--accent-wash)";
+const ACCENT_RING = "var(--accent-border)";
 
-const WARN = "#FACC15";
-const WARN_SOFT = "rgba(250, 204, 21, 0.06)";
-const WARN_RING = "rgba(250, 204, 21, 0.3)";
+const WARN = "var(--warning-amber)";
+const WARN_SOFT = "color-mix(in srgb, var(--warning-amber) 6%, transparent)";
+const WARN_RING = "color-mix(in srgb, var(--warning-amber) 30%, transparent)";
 
-const DANGER = "#F87171";
-const DANGER_SOFT = "rgba(248, 113, 113, 0.06)";
-const DANGER_RING = "rgba(248, 113, 113, 0.4)";
+const DANGER = "var(--status-error)";
+const DANGER_SOFT = "var(--critical-wash)";
+const DANGER_RING = "var(--critical-border)";
 
 const TYPE_COLOR: Record<WikiPageType, string> = {
   entity: "#8FD1CB",
@@ -510,7 +510,7 @@ function PrimaryBtn({
         fontWeight: 700,
         letterSpacing: "0.16em",
         textTransform: "uppercase",
-        color: "#0A0A0A",
+        color: "var(--accent-on)",
         cursor: "pointer",
       }}
     >
@@ -984,7 +984,7 @@ function PipelineHeader({ run }: { run: WikiIngestionLogRecord }) {
       ? DANGER_SOFT
       : status.tone === "warn"
         ? WARN_SOFT
-        : "rgba(140, 231, 210, 0.1)";
+        : ACCENT_SOFT;
 
   return (
     <div

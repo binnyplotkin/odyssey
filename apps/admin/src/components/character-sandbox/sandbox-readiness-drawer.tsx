@@ -13,8 +13,8 @@ import type { SandboxMode } from "../character-sandbox";
 const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
-const DANGER = "var(--danger)";
-const AMBER = "#FACC15";
+const DANGER = "var(--status-error)";
+const AMBER = "var(--warning-amber)";
 
 type ReadinessStatus =
   | "not_checked"
@@ -154,7 +154,7 @@ export function SandboxReadinessDrawer({
           position: "absolute",
           inset: 0,
           border: "none",
-          background: "rgba(0,0,0,0.32)",
+          background: "var(--modal-backdrop)",
           cursor: "default",
           pointerEvents: "auto",
         }}
@@ -167,12 +167,12 @@ export function SandboxReadinessDrawer({
           bottom: 0,
           width: 520,
           maxWidth: "calc(100vw - 24px)",
-          background: "#0B0C0D",
-          borderLeft: "1px solid rgba(255,255,255,0.10)",
+          background: "var(--material-card)",
+          borderLeft: "1px solid var(--border-medium)",
           display: "flex",
           flexDirection: "column",
           pointerEvents: "auto",
-          boxShadow: "-28px 0 80px rgba(0,0,0,0.48)",
+          boxShadow: "var(--elevation-modal)",
         }}
       >
         <SandboxReadinessPanel
@@ -283,7 +283,7 @@ export function SandboxReadinessPanel({
         flex: 1,
         display: "flex",
         flexDirection: "column",
-        background: "#0B0C0D",
+        background: "var(--material-card)",
         overflow: "hidden",
       }}
     >
@@ -310,7 +310,7 @@ export function SandboxReadinessPanel({
           gridTemplateColumns: "164px 1fr",
           minHeight: 0,
           flex: 1,
-          borderTop: "1px solid rgba(255,255,255,0.06)",
+          borderTop: "1px solid var(--border-subtle)",
         }}
       >
         <GroupRail
@@ -348,7 +348,7 @@ function DrawerHeader({
     <header
       style={{
         padding: "24px 28px 18px",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        borderBottom: "1px solid var(--border-medium)",
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-12)",
@@ -403,8 +403,8 @@ function DrawerHeader({
           onClick={onRefresh}
           disabled={refreshing}
           style={{
-            border: "1px solid rgba(255,255,255,0.10)",
-            background: "rgba(255,255,255,0.03)",
+            border: "1px solid var(--border-medium)",
+            background: "var(--ink-soft)",
             color: refreshing ? "var(--text-quaternary)" : tone.color,
             fontFamily: FONT_MONO,
             fontSize: "var(--font-size-xs)",
@@ -437,7 +437,7 @@ function SelectedRuntime({
     <section
       style={{
         padding: "16px 28px",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        borderBottom: "1px solid var(--border-subtle)",
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
         gap: "var(--space-10)",
@@ -467,7 +467,7 @@ function RuntimeCell({
   return (
     <div
       style={{
-        border: "1px solid rgba(255,255,255,0.06)",
+        border: "1px solid var(--border-subtle)",
         padding: "10px 12px",
         minWidth: 0,
       }}
@@ -529,7 +529,7 @@ function ActionBar({
         padding: "14px 28px",
         display: "flex",
         gap: "var(--space-8)",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        borderBottom: "1px solid var(--border-subtle)",
       }}
     >
       {[
@@ -547,11 +547,11 @@ function ActionBar({
           style={{
             flex: action === "run_all" ? "1 1 92px" : "0 0 auto",
             padding: "8px 10px",
-            border: "1px solid rgba(143,209,203,0.32)",
+            border: "1px solid var(--accent-border)",
             background:
               runningAction === action
-                ? "rgba(143,209,203,0.16)"
-                : "rgba(143,209,203,0.06)",
+                ? "var(--accent-fill)"
+                : "var(--accent-wash)",
             color: runningAction ? "var(--text-tertiary)" : ACCENT,
             fontFamily: FONT_MONO,
             fontSize: "var(--font-size-xs)",
@@ -579,7 +579,7 @@ function GroupRail({
   return (
     <nav
       style={{
-        borderRight: "1px solid rgba(255,255,255,0.06)",
+        borderRight: "1px solid var(--border-subtle)",
         padding: "14px 0",
         overflow: "auto",
       }}
@@ -602,7 +602,7 @@ function GroupRail({
               padding: "11px 14px",
               border: "none",
               borderLeft: active ? `2px solid ${statusTone(status).color}` : "2px solid transparent",
-              background: active ? "rgba(255,255,255,0.045)" : "transparent",
+              background: active ? "var(--ink-soft)" : "transparent",
               color: active ? "var(--text-primary)" : "var(--text-tertiary)",
               cursor: "pointer",
               textAlign: "left",
@@ -665,7 +665,7 @@ function CheckPane({
       <div
         style={{
           padding: "16px 20px 12px",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          borderBottom: "1px solid var(--border-subtle)",
           display: "flex",
           justifyContent: "space-between",
           gap: "var(--space-12)",
@@ -688,8 +688,8 @@ function CheckPane({
             onClick={() => onRun(groupMeta.action!)}
             disabled={Boolean(runningAction)}
             style={{
-              border: "1px solid rgba(255,255,255,0.10)",
-              background: "rgba(255,255,255,0.03)",
+              border: "1px solid var(--border-medium)",
+              background: "var(--ink-soft)",
               color: runningAction ? "var(--text-tertiary)" : ACCENT,
               fontFamily: FONT_MONO,
               fontSize: "var(--font-size-2xs)",
@@ -723,7 +723,7 @@ function CheckRow({ check }: { check: ReadinessCheck }) {
   return (
     <div
       style={{
-        borderBottom: "1px solid rgba(255,255,255,0.045)",
+        borderBottom: "1px solid var(--ink-soft)",
         padding: "14px 20px",
       }}
     >
@@ -789,8 +789,8 @@ function CheckRow({ check }: { check: ReadinessCheck }) {
           style={{
             marginTop: "var(--space-12)",
             marginLeft: 28,
-            border: "1px solid rgba(255,255,255,0.06)",
-            background: "rgba(255,255,255,0.025)",
+            border: "1px solid var(--border-subtle)",
+            background: "var(--ink-wash)",
             padding: "10px 12px",
             display: "flex",
             flexDirection: "column",
@@ -881,8 +881,8 @@ function ErrorBanner({ message }: { message: string }) {
     <div
       style={{
         margin: "12px 28px 0",
-        border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)",
-        background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--status-error) 35%, transparent)",
+        background: "color-mix(in srgb, var(--status-error) 10%, transparent)",
         color: "var(--text-primary)",
         padding: "10px 12px",
         fontFamily: FONT_MONO,
@@ -998,16 +998,16 @@ function statusTone(status: ReadinessStatus): {
 } {
   switch (status) {
     case "ready":
-      return { color: ACCENT, border: "rgba(143,209,203,0.44)", bg: "rgba(143,209,203,0.10)" };
+      return { color: ACCENT, border: "var(--accent-glow)", bg: "var(--accent-wash)" };
     case "warning":
     case "degraded":
-      return { color: AMBER, border: "rgba(250,204,21,0.38)", bg: "rgba(250,204,21,0.08)" };
+      return { color: AMBER, border: "color-mix(in srgb, var(--warning-amber) 38%, transparent)", bg: "color-mix(in srgb, var(--warning-amber) 8%, transparent)" };
     case "blocked":
-      return { color: DANGER, border: "color-mix(in srgb, var(--danger) 42%, transparent)", bg: "color-mix(in srgb, var(--danger) 10%, transparent)" };
+      return { color: DANGER, border: "color-mix(in srgb, var(--status-error) 42%, transparent)", bg: "color-mix(in srgb, var(--status-error) 10%, transparent)" };
     case "checking":
-      return { color: "#93C5FD", border: "rgba(147,197,253,0.38)", bg: "rgba(147,197,253,0.08)" };
+      return { color: "var(--status-info)", border: "color-mix(in srgb, var(--status-info) 38%, transparent)", bg: "color-mix(in srgb, var(--status-info) 8%, transparent)" };
     default:
-      return { color: "var(--text-tertiary)", border: "rgba(255,255,255,0.12)", bg: "rgba(255,255,255,0.03)" };
+      return { color: "var(--text-tertiary)", border: "var(--ink-edge)", bg: "var(--ink-soft)" };
   }
 }
 
@@ -1043,8 +1043,8 @@ async function readError(res: Response): Promise<string> {
 const iconButtonStyle: CSSProperties = {
   width: 28,
   height: 28,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.04)",
+  border: "1px solid var(--border-medium)",
+  background: "var(--ink-soft)",
   color: "var(--text-secondary)",
   fontFamily: FONT_MONO,
   fontSize: 17,

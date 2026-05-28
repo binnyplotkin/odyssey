@@ -302,7 +302,7 @@ export type ASCIIMatterCanvasProps = {
   backgroundColor?: string | null;
   /** Optional color for the quiet source-field dots behind active matter. */
   baseFieldColor?: string;
-  /** Live neural activity color. Defaults to --neural_color. */
+  /** Live neural activity color. Defaults to --accent. */
   neuralColor?: string;
   /** Multiplier for the quiet source-field dots. Default 1. */
   baseFieldStrength?: number;
@@ -1390,7 +1390,7 @@ export function ASCIIMatterCanvas({
   color = "rgba(140,231,210,1)",
   backgroundColor = null,
   baseFieldColor,
-  neuralColor = "var(--neural_color, #6FBF88)",
+  neuralColor = "var(--accent, #6FBF88)",
   baseFieldStrength = 1,
   attractOverride,
   curlOverride,

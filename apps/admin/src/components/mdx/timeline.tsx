@@ -26,7 +26,7 @@ export function Timeline({ data }: { data: string }) {
     <div style={{
       border: "1px solid var(--border)",
       borderRadius: "var(--radius-lg)",
-      background: "var(--panel)",
+      background: "var(--surface-1)",
       overflow: "hidden",
       marginTop: "var(--space-8)",
       marginBottom: "var(--space-16)",
@@ -43,7 +43,7 @@ export function Timeline({ data }: { data: string }) {
             padding: "8px 14px",
             fontSize: "0.6875rem",
             fontWeight: 600,
-            color: "var(--muted)",
+            color: "var(--text-tertiary)",
             textTransform: "uppercase",
             letterSpacing: "0.04em",
           }}>
@@ -76,7 +76,7 @@ export function Timeline({ data }: { data: string }) {
             <div style={{
               padding: "8px 14px",
               fontSize: "0.8125rem",
-              color: "var(--muted)",
+              color: "var(--text-tertiary)",
               textDecoration: "line-through",
               opacity: 0.6,
             }}>
@@ -95,7 +95,7 @@ export function Timeline({ data }: { data: string }) {
               fontSize: "0.8125rem",
               fontWeight: 500,
               color: row.delta.toLowerCase().includes("earlier") ? "#34d399"
-                : row.delta.toLowerCase() === "same" ? "var(--muted)"
+                : row.delta.toLowerCase() === "same" ? "var(--text-tertiary)"
                 : "var(--accent)",
             }}>
               {row.delta}

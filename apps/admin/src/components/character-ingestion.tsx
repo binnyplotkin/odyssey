@@ -15,10 +15,10 @@ import { PurgeConfirmModal, type PurgePreview } from "./purge-confirm-modal";
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
-  cardHover: "var(--card-hover)",
+  cardHover: "var(--surface-hover)",
   accent: "var(--accent-strong)",
   accentSoft: "var(--accent-soft)",
   fontHeading: "'Space Grotesk', sans-serif",
@@ -370,7 +370,7 @@ function IngestionTabToggle({
       aria-label="Ingestion view"
       style={{
         display: "inline-flex", padding: "var(--space-2)", borderRadius: "var(--radius-md)",
-        border: `1px solid ${T.border}`, background: "var(--input-bg)",
+        border: `1px solid ${T.border}`, background: "var(--control-bg)",
         alignSelf: "flex-start",
       }}
     >
@@ -466,7 +466,7 @@ function IngestionPromptEditor({
       </div>
 
       <div style={{
-        padding: "12px 20px", background: "color-mix(in srgb, var(--active-teal) 5%, transparent)",
+        padding: "12px 20px", background: "color-mix(in srgb, var(--accent-strong) 5%, transparent)",
         borderBottom: `1px solid ${T.border}`,
         display: "flex", alignItems: "flex-start", gap: "var(--space-10)",
       }}>
@@ -819,7 +819,7 @@ function SourceForm(p: {
             style={{
               display: "inline-flex", alignItems: "center", gap: 7,
               padding: "8px 18px", borderRadius: "var(--radius-lg)", border: "none",
-              background: p.canCompile ? "var(--emissive-mint)" : "var(--card-hover)",
+              background: p.canCompile ? "var(--emissive-mint)" : "var(--surface-hover)",
               color: p.canCompile ? "#07100E" : T.muted,
               fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
               cursor: p.canCompile ? "pointer" : "not-allowed",
@@ -862,7 +862,7 @@ function IdleRunPanel() {
           width: 48, height: 48, borderRadius: "50%",
           background: T.cardHover, display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
           </svg>
         </div>
@@ -983,7 +983,7 @@ function LiveRunPanel({
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 20px", borderBottom: `1px solid ${T.border}`,
-        background: isDone ? "color-mix(in srgb, var(--status-live) 6%, transparent)" : isFail ? "var(--critical-wash)" : "color-mix(in srgb, var(--active-teal) 6%, transparent)",
+        background: isDone ? "color-mix(in srgb, var(--status-live) 6%, transparent)" : isFail ? "var(--critical-wash)" : "color-mix(in srgb, var(--accent-strong) 6%, transparent)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
           <span style={{
@@ -1014,7 +1014,7 @@ function LiveRunPanel({
             {progressPct}%
           </span>
         </div>
-        <div style={{ height: 4, borderRadius: "var(--radius-2xs)", background: "var(--card-hover)", position: "relative", overflow: "hidden" }}>
+        <div style={{ height: 4, borderRadius: "var(--radius-2xs)", background: "var(--surface-hover)", position: "relative", overflow: "hidden" }}>
           <div style={{
             position: "absolute", top: 0, left: 0, height: "100%",
             width: `${progressPct}%`,
@@ -1068,7 +1068,7 @@ type ProgressItem = {
 
 function StreamItem({ item }: { item: ProgressItem }) {
   const colors = {
-    active: { bg: "color-mix(in srgb, var(--active-teal) 12%, transparent)", icon: "var(--accent-strong)" },
+    active: { bg: "color-mix(in srgb, var(--accent-strong) 12%, transparent)", icon: "var(--accent-strong)" },
     done:   { bg: "color-mix(in srgb, var(--status-live) 10%, transparent)", icon: "var(--status-live)" },
     error:  { bg: "color-mix(in srgb, var(--status-error) 12%, transparent)", icon: "var(--status-error)" },
     success:{ bg: "color-mix(in srgb, var(--status-live) 15%, transparent)", icon: "var(--status-live)" },
@@ -1165,7 +1165,7 @@ function HistoryCard({
           <div style={{
             display: "flex", alignItems: "center", gap: "var(--space-16)",
             padding: "10px 20px",
-            borderBottom: `1px solid ${T.border}`, background: "var(--card-hover)",
+            borderBottom: `1px solid ${T.border}`, background: "var(--surface-hover)",
           }}>
             <span style={{ width: 20, flexShrink: 0 }} />
             <span style={{ ...colHeader, flex: 1 }}>Source</span>
@@ -1196,7 +1196,7 @@ function HistoryRowView({ row, characterId }: { row: HistoryRow; characterId: st
     ? "color-mix(in srgb, var(--status-live) 12%, transparent)"
     : row.status === "failed"
       ? "color-mix(in srgb, var(--status-error) 12%, transparent)"
-      : "color-mix(in srgb, var(--active-teal) 12%, transparent)";
+      : "color-mix(in srgb, var(--accent-strong) 12%, transparent)";
 
   function openPurge() {
     setError(null);
@@ -1341,14 +1341,14 @@ function Field({
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "10px 14px", borderRadius: "var(--radius-button, 12px)",
-  background: "var(--input-bg)", border: "1px solid var(--input-border)",
+  background: "var(--control-bg)", border: "1px solid var(--control-border)",
   color: T.fg, outline: "none", fontFamily: T.fontBody, fontSize: "var(--font-size-md)",
   boxSizing: "border-box",
 };
 
 const cardShell: React.CSSProperties = {
   display: "flex", flexDirection: "column",
-  background: "var(--card-material, var(--panel))",
+  background: "var(--material-card, var(--surface-1))",
   border: "1px solid var(--border-subtle, var(--border))",
   borderRadius: "var(--radius-card, 18px)",
   boxShadow: "var(--elevation-card)",
@@ -1357,7 +1357,7 @@ const cardShell: React.CSSProperties = {
 
 const ghostBtn: React.CSSProperties = {
   padding: "5px 12px", borderRadius: "var(--radius-button, 12px)",
-  border: "1px solid var(--input-border)", background: "var(--input-bg)",
+  border: "1px solid var(--control-border)", background: "var(--control-bg)",
   color: T.fg, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", cursor: "pointer",
 };
 
@@ -1367,9 +1367,9 @@ const colHeader: React.CSSProperties = {
 };
 
 const miniPill: React.CSSProperties = {
-  padding: "1px 7px", borderRadius: "var(--radius-xs)", background: "var(--card-hover)",
+  padding: "1px 7px", borderRadius: "var(--radius-xs)", background: "var(--surface-hover)",
   fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", fontWeight: 500,
-  color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase",
+  color: "var(--text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase",
 };
 
 /* ── Helpers ───────────────────────────────────────────────────── */

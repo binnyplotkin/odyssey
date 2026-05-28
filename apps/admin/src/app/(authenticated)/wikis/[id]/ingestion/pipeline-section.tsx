@@ -21,18 +21,18 @@ const ACCENT = "var(--accent-strong)";
 const ACCENT_LINE = "var(--accent-glow)";
 const ACCENT_FILL = "var(--accent-soft)";
 
-const PROMPT_DOT = "#8FD1CB";
-const MODEL_DOT = "#A48CE7";
-const EMBED_DOT = "#E7CB8C";
+const PROMPT_DOT = "var(--accent-strong)";
+const MODEL_DOT = "var(--signal-blue)";
+const EMBED_DOT = "var(--warning-amber)";
 
 export type PipelineSectionProps = {
   promptLabel: string;
   promptVersion: string;
   promptTokens: number;
   model: ModelId;
-  /** Defaults to "text-embedding-3-large". */
+  /** Defaults to "text-embedding-3-small". */
   embeddings?: string;
-  /** Defaults to "3072 dims · pgvector cosine". */
+  /** Defaults to "1536 dims · pgvector cosine". */
   embeddingsDetail?: string;
   /** Opens the prompt editor (existing PromptOverlay). */
   onEditPrompt: () => void;
@@ -48,8 +48,8 @@ export function PipelineSection({
   promptVersion,
   promptTokens,
   model,
-  embeddings = "text-embedding-3-large",
-  embeddingsDetail = "3072 dims · pgvector cosine",
+  embeddings = "text-embedding-3-small",
+  embeddingsDetail = "1536 dims · pgvector cosine",
   onEditPrompt,
   stepLabel = "pipeline",
   statusLabel = "defaults from wiki settings",
@@ -58,7 +58,13 @@ export function PipelineSection({
   const modelDetail = `$${modelMeta.inPerMTok} / Mtok · ${Math.round(modelMeta.context / 1000)}k context`;
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)" }}>
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-20)",
+      }}
+    >
       <header
         style={{
           display: "flex",
@@ -111,7 +117,13 @@ export function PipelineSection({
           shortcut="⌘P"
           detail={`${promptTokens} tokens · ${promptVersion}`}
         >
-          <div style={{ display: "flex", alignItems: "stretch", gap: "var(--space-8)" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "stretch",
+              gap: "var(--space-8)",
+            }}
+          >
             <div style={{ flex: 1 }}>
               <PickerVisual
                 dot={PROMPT_DOT}
@@ -148,7 +160,13 @@ function Column({
   children: ReactNode;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-10)",
+      }}
+    >
       <div
         style={{
           display: "flex",
@@ -182,7 +200,13 @@ function Column({
 function PickerVisual({ dot, value }: { dot: string; value: string }) {
   return (
     <div style={pickerStyle()}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-10)" }}>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "var(--space-10)",
+        }}
+      >
         <Dot color={dot} />
         <span
           style={{
@@ -290,7 +314,7 @@ function pickerStyle(): CSSProperties {
     padding: "8px 12px",
     height: 36,
     border: "1px solid var(--border)",
-    background: "var(--card)",
+    background: "var(--material-card)",
     fontFamily: FONT_MONO,
     fontSize: "var(--font-size-base)",
     color: "var(--text-primary)",

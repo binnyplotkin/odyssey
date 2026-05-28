@@ -234,7 +234,7 @@ const toneColors: Record<NodeTone, { border: string; dot: string }> = {
   api:     { border: "rgba(129,140,248,0.8)", dot: "rgb(129,140,248)" },
   engine:  { border: "rgba(251,191,36,0.8)",  dot: "rgb(251,191,36)" },
   ai:      { border: "rgba(167,139,250,0.8)", dot: "rgb(167,139,250)" },
-  data:    { border: "var(--success)",        dot: "var(--success)" },
+  data:    { border: "var(--status-live)",        dot: "var(--status-live)" },
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -244,9 +244,9 @@ function clamp(value: number, min: number, max: number) {
 function edgeStroke(kind: EdgeKind) {
   switch (kind) {
     case "blocked":
-      return "var(--danger)";
+      return "var(--status-error)";
     case "optional":
-      return "var(--muted)";
+      return "var(--text-tertiary)";
     default:
       return "var(--foreground)";
   }
@@ -462,7 +462,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
   /* ── Shared inline styles ────────────────────────────────── */
 
   const panelStyle: React.CSSProperties = {
-    background: "var(--panel)",
+    background: "var(--surface-1)",
     backdropFilter: "blur(16px)",
     border: "1px solid var(--border)",
     boxShadow: "0 24px 80px var(--shadow)",
@@ -475,7 +475,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
     fontWeight: 600,
     letterSpacing: "0.12em",
     textTransform: "uppercase",
-    color: "var(--muted)",
+    color: "var(--text-tertiary)",
   };
 
   const inputStyle: React.CSSProperties = {
@@ -483,7 +483,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
     padding: "0.5rem 0.75rem",
     borderRadius: "var(--radius-md)",
     border: "1px solid var(--border)",
-    background: "var(--panel)",
+    background: "var(--surface-1)",
     color: "var(--foreground)",
     fontSize: "0.8125rem",
     outline: "none",
@@ -517,7 +517,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
     padding: "0.25rem 0.625rem",
     borderRadius: "var(--radius-sm)",
     border: "1px solid var(--border)",
-    background: "var(--panel)",
+    background: "var(--surface-1)",
     color: "var(--foreground)",
     fontSize: "0.75rem",
     cursor: "pointer",
@@ -529,7 +529,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
       {/* Page header */}
       <div style={{ marginBottom: "1.5rem" }}>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700 }}>Engine</h1>
-        <p style={{ color: "var(--muted)", fontSize: "0.8125rem", marginTop: "0.25rem" }}>
+        <p style={{ color: "var(--text-tertiary)", fontSize: "0.8125rem", marginTop: "0.25rem" }}>
           Architecture map and execution trace for the simulation pipeline.
         </p>
       </div>
@@ -572,7 +572,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                   alignItems: "center",
                   gap: "0.25rem",
                   fontSize: "0.7rem",
-                  color: "var(--muted)",
+                  color: "var(--text-tertiary)",
                   marginRight: "0.25rem",
                 }}
               >
@@ -712,7 +712,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                     padding: "1rem",
                     borderRadius: "var(--radius-xl)",
                     border: `1.5px solid ${tone.border}`,
-                    background: "var(--panel)",
+                    background: "var(--surface-1)",
                     backdropFilter: "blur(12px)",
                     boxShadow: "0 12px 32px var(--shadow)",
                     cursor: dragState?.type === "node" && dragState.nodeId === node.id ? "grabbing" : "grab",
@@ -736,7 +736,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                       {node.title}
                     </span>
                   </div>
-                  <p style={{ marginTop: "0.5rem", fontSize: "0.8rem", lineHeight: 1.5, color: "var(--muted)" }}>
+                  <p style={{ marginTop: "0.5rem", fontSize: "0.8rem", lineHeight: 1.5, color: "var(--text-tertiary)" }}>
                     {node.detail}
                   </p>
                 </article>
@@ -750,7 +750,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
           {/* Trace form */}
           <aside style={{ ...panelStyle, padding: "1.25rem" }}>
             <h2 style={{ fontSize: "1rem", fontWeight: 600 }}>Run Turn Trace</h2>
-            <p style={{ color: "var(--muted)", fontSize: "0.8125rem", marginTop: "0.375rem", lineHeight: 1.5 }}>
+            <p style={{ color: "var(--text-tertiary)", fontSize: "0.8125rem", marginTop: "0.375rem", lineHeight: 1.5 }}>
               Submit a sample turn and inspect each transformation step.
             </p>
 
@@ -819,7 +819,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
               </button>
 
               {traceError ? (
-                <p style={{ fontSize: "0.8125rem", color: "var(--danger)" }}>{traceError}</p>
+                <p style={{ fontSize: "0.8125rem", color: "var(--status-error)" }}>{traceError}</p>
               ) : null}
             </div>
           </aside>
@@ -834,7 +834,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                     padding: "0.875rem",
                     borderRadius: "var(--radius-md)",
                     border: "1px solid var(--border)",
-                    background: "var(--panel)",
+                    background: "var(--surface-1)",
                   }}
                 >
                   <p style={labelStyle}>Trace Metadata</p>
@@ -899,7 +899,7 @@ export function EngineCanvas({ worlds }: { worlds: VisibleWorld[] }) {
                   minHeight: 420,
                   borderRadius: "var(--radius-md)",
                   border: "1px dashed var(--border)",
-                  color: "var(--muted)",
+                  color: "var(--text-tertiary)",
                   fontSize: "0.875rem",
                   textAlign: "center",
                   padding: "1.5rem",

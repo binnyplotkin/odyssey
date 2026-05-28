@@ -1,7 +1,7 @@
 import { Skeleton } from "@odyssey/ui";
 
 const PANEL: React.CSSProperties = {
-  background: "var(--panel)",
+  background: "var(--surface-1)",
   border: "1px solid var(--border)",
 };
 
@@ -15,7 +15,7 @@ function WorldCardSkeleton() {
         overflow: "hidden",
       }}
     >
-      <div style={{ height: 110, background: "var(--card-hover)", position: "relative" }}>
+      <div style={{ height: 110, background: "var(--surface-hover)", position: "relative" }}>
         <div style={{ position: "absolute", top: 12, right: 12 }}>
           <Skeleton width={56} height={20} radius={999} static />
         </div>

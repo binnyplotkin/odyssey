@@ -33,7 +33,7 @@ const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 
 /* Brand mint, used for the accent surface throughout the node. Pulled
- * from the brand guidelines (`--active-teal`); we use literal rgba in
+ * from the brand guidelines (`--accent-strong`); we use literal rgba in
  * `color-mix` substrates because the node is canvas-positioned and the
  * `var(--accent-strong)` token reads slightly differently on the dark
  * forest canvas background than against the page surface. */
@@ -105,7 +105,7 @@ export function CharacterNodeCard({
   const initial =
     (character.title.trim() || character.slug).charAt(0).toUpperCase() || "?";
   const portraitBg = character.image
-    ? `center/cover no-repeat url("${character.image}"), var(--card-hover)`
+    ? `center/cover no-repeat url("${character.image}"), var(--surface-hover)`
     : resolveAvatarGradient(character.thumbnailColor, character.slug);
   const essence = character.identity?.essence?.trim() || character.summary || "";
 
@@ -148,7 +148,7 @@ export function CharacterNodeCard({
         ? `1.5px solid color-mix(in srgb, ${MINT_HEX} 55%, transparent)`
         : isError
           ? `1px solid color-mix(in srgb, ${CORAL_HEX} 45%, transparent)`
-          : "1px solid var(--card-border)";
+          : "1px solid var(--border-subtle)";
 
   const outerShadow = isLive
     ? `0 0 0 5px color-mix(in srgb, ${MINT_HEX} 14%, transparent), 0 0 48px color-mix(in srgb, ${MINT_HEX} 18%, transparent)`
@@ -279,7 +279,7 @@ export function CharacterNodeCard({
             borderRadius: "var(--radius-2xl)",
             background: portraitBg,
             border: isEmpty
-              ? "1px solid var(--card-border)"
+              ? "1px solid var(--border-subtle)"
               : `1px solid color-mix(in srgb, ${MINT_HEX} 18%, transparent)`,
             display: "flex",
             alignItems: "center",

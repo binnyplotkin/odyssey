@@ -456,7 +456,7 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
             margin: 0,
             padding: "14px 16px",
             background: "rgba(0,0,0,0.25)",
-            border: "1px solid var(--input-border)",
+            border: "1px solid var(--control-border)",
             borderRadius: "var(--radius-sm)",
             fontFamily: T.fontMono,
             fontSize: 11.5,
@@ -533,8 +533,8 @@ function DirectiveTemplatesCard({
     <section
       style={{
         padding: "12px 16px 16px",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
         display: "flex",
         flexDirection: "column",
@@ -568,8 +568,8 @@ function DirectiveTemplatesCard({
             fontSize: "var(--font-size-xs)",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            background: open ? "rgba(140,231,210,0.1)" : "var(--input-bg)",
-            border: `1px solid ${open ? "rgba(140,231,210,0.3)" : "var(--input-border)"}`,
+            background: open ? "rgba(140,231,210,0.1)" : "var(--control-bg)",
+            border: `1px solid ${open ? "rgba(140,231,210,0.3)" : "var(--control-border)"}`,
             color: open ? "var(--accent-strong)" : "var(--text-secondary)",
             borderRadius: "var(--radius-xs)",
             cursor: "pointer",
@@ -633,7 +633,7 @@ function DirectiveTemplateRow({
       style={{
         padding: "12px 14px",
         background: "rgba(255,255,255,0.02)",
-        border: "1px solid var(--input-border)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
         display: "flex",
         gap: "var(--space-12)",
@@ -662,7 +662,7 @@ function DirectiveTemplateRow({
               lineHeight: 1.55,
               marginTop: "var(--space-2)",
               paddingLeft: "var(--space-10)",
-              borderLeft: "2px solid var(--input-border)",
+              borderLeft: "2px solid var(--control-border)",
             }}
           >
             “{firstExemplar.user}” → “{firstExemplar.you.slice(0, 120)}{firstExemplar.you.length > 120 ? "…" : ""}”
@@ -754,8 +754,8 @@ function PromoteCandidatesCard({
     <section
       style={{
         padding: "12px 16px 16px",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
         display: "flex",
         flexDirection: "column",
@@ -790,8 +790,8 @@ function PromoteCandidatesCard({
             fontSize: "var(--font-size-xs)",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            background: open ? "rgba(140,231,210,0.1)" : "var(--input-bg)",
-            border: `1px solid ${open ? "rgba(140,231,210,0.3)" : "var(--input-border)"}`,
+            background: open ? "rgba(140,231,210,0.1)" : "var(--control-bg)",
+            border: `1px solid ${open ? "rgba(140,231,210,0.3)" : "var(--control-border)"}`,
             color: open ? "var(--accent-strong)" : "var(--text-secondary)",
             borderRadius: "var(--radius-xs)",
             cursor: "pointer",
@@ -829,7 +829,7 @@ function PromoteCandidatesCard({
           style={{
             padding: "12px 14px",
             background: "rgba(255,255,255,0.02)",
-            border: "1px dashed var(--input-border)",
+            border: "1px dashed var(--control-border)",
             borderRadius: "var(--radius-sm)",
             fontFamily: T.fontBody,
             fontSize: "var(--font-size-base)",
@@ -875,7 +875,7 @@ function PromoteCandidateRow({
       style={{
         padding: "12px 14px",
         background: "rgba(255,255,255,0.02)",
-        border: "1px solid var(--input-border)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
         display: "flex",
         gap: "var(--space-12)",
@@ -977,7 +977,7 @@ function PromoteCandidateRow({
           letterSpacing: "0.1em",
           textTransform: "uppercase",
           background: alreadyExists ? "transparent" : "rgba(140,231,210,0.1)",
-          border: `1px solid ${alreadyExists ? "var(--input-border)" : "rgba(140,231,210,0.3)"}`,
+          border: `1px solid ${alreadyExists ? "var(--control-border)" : "rgba(140,231,210,0.3)"}`,
           color: alreadyExists ? "var(--text-quaternary)" : "var(--accent-strong)",
           borderRadius: "var(--radius-xs)",
           cursor: alreadyExists ? "default" : "pointer",
@@ -1017,8 +1017,8 @@ function L02Exemplars({ character }: { character: HarnessCharacter }) {
         <div
           style={{
             padding: "var(--space-24)",
-            background: "var(--card)",
-            border: "1px dashed var(--card-border)",
+            background: "var(--material-card)",
+            border: "1px dashed var(--border-subtle)",
             borderRadius: "var(--radius-md)",
             fontFamily: T.fontBody,
             fontSize: "var(--font-size-md)",
@@ -1142,8 +1142,8 @@ function ExemplarTestRow({
     <div
       style={{
         padding: "16px 18px",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
         display: "flex",
         flexDirection: "column",
@@ -1205,7 +1205,7 @@ function ExemplarTestRow({
             style={{
               padding: "10px 12px",
               background: "rgba(0,0,0,0.18)",
-              border: "1px solid var(--input-border)",
+              border: "1px solid var(--control-border)",
               borderRadius: "var(--radius-sm)",
               fontFamily: T.fontBody,
               fontSize: 12.5,
@@ -1227,7 +1227,7 @@ function ExemplarTestRow({
             style={{
               padding: "10px 12px",
               background: status === "idle" ? "transparent" : "rgba(0,0,0,0.18)",
-              border: `1px solid ${status === "idle" ? "var(--input-border)" : "rgba(140,231,210,0.2)"}`,
+              border: `1px solid ${status === "idle" ? "var(--control-border)" : "rgba(140,231,210,0.2)"}`,
               borderRadius: "var(--radius-sm)",
               fontFamily: T.fontBody,
               fontSize: 12.5,
@@ -1308,8 +1308,8 @@ function L02Never({ character }: { character: HarnessCharacter }) {
         <div
           style={{
             padding: "var(--space-24)",
-            background: "var(--card)",
-            border: "1px dashed var(--card-border)",
+            background: "var(--material-card)",
+            border: "1px dashed var(--border-subtle)",
             borderRadius: "var(--radius-md)",
             fontFamily: T.fontBody,
             fontSize: "var(--font-size-md)",
@@ -1392,7 +1392,7 @@ function NeverRuleCard({ rule }: { rule: NeverComplianceRule }) {
     >
       <header style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-3)", minWidth: 0 }}>
-          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", letterSpacing: "0.12em", color: "var(--danger)", textTransform: "uppercase" }}>
+          <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", letterSpacing: "0.12em", color: "var(--status-error)", textTransform: "uppercase" }}>
             do not
           </span>
           <span style={{ fontFamily: T.fontBody, fontSize: 13.5, color: "var(--text-secondary)", lineHeight: 1.5 }}>
@@ -1426,7 +1426,7 @@ function NeverRuleCard({ rule }: { rule: NeverComplianceRule }) {
               letterSpacing: "0.1em",
               textTransform: "uppercase",
               background: "transparent",
-              border: "1px solid var(--input-border)",
+              border: "1px solid var(--control-border)",
               color: "var(--text-tertiary)",
               borderRadius: "var(--radius-xs)",
               cursor: "pointer",
@@ -1446,7 +1446,7 @@ function NeverRuleCard({ rule }: { rule: NeverComplianceRule }) {
               style={{
                 padding: "10px 12px",
                 background: "rgba(0,0,0,0.18)",
-                border: "1px solid var(--input-border)",
+                border: "1px solid var(--control-border)",
                 borderRadius: "var(--radius-sm)",
                 display: "flex",
                 flexDirection: "column",
@@ -1564,8 +1564,8 @@ function L02History({ character }: { character: HarnessCharacter }) {
         <div
           style={{
             padding: "var(--space-24)",
-            background: "var(--card)",
-            border: "1px dashed var(--card-border)",
+            background: "var(--material-card)",
+            border: "1px dashed var(--border-subtle)",
             borderRadius: "var(--radius-md)",
             fontFamily: T.fontBody,
             fontSize: "var(--font-size-md)",
@@ -1611,8 +1611,8 @@ function L02History({ character }: { character: HarnessCharacter }) {
               key={entry.directiveHash}
               style={{
                 padding: "14px 18px",
-                background: entry.isCurrent ? "rgba(140,231,210,0.04)" : "var(--card)",
-                border: `1px solid ${entry.isCurrent ? "rgba(140,231,210,0.25)" : "var(--card-border)"}`,
+                background: entry.isCurrent ? "rgba(140,231,210,0.04)" : "var(--material-card)",
+                border: `1px solid ${entry.isCurrent ? "rgba(140,231,210,0.25)" : "var(--border-subtle)"}`,
                 borderRadius: "var(--radius-md)",
                 display: "flex",
                 gap: "var(--space-16)",
@@ -1659,7 +1659,7 @@ function L02History({ character }: { character: HarnessCharacter }) {
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   background: entry.isCurrent ? "transparent" : "rgba(255,184,112,0.08)",
-                  border: `1px solid ${entry.isCurrent ? "var(--input-border)" : "rgba(255,184,112,0.3)"}`,
+                  border: `1px solid ${entry.isCurrent ? "var(--control-border)" : "rgba(255,184,112,0.3)"}`,
                   color: entry.isCurrent ? "var(--text-quaternary)" : "rgba(255,184,112,0.95)",
                   borderRadius: "var(--radius-xs)",
                   cursor: entry.isCurrent || isReverting ? "default" : "pointer",
@@ -1750,8 +1750,8 @@ function SaveBar({
         alignItems: "center",
         gap: "var(--space-14)",
         padding: "12px 16px",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
       }}
     >
@@ -1777,8 +1777,8 @@ function SaveBar({
           fontSize: "var(--font-size-xs)",
           letterSpacing: "0.1em",
           textTransform: "uppercase",
-          background: isDirty ? "rgba(140,231,210,0.14)" : "var(--input-bg)",
-          border: `1px solid ${isDirty ? "rgba(140,231,210,0.4)" : "var(--input-border)"}`,
+          background: isDirty ? "rgba(140,231,210,0.14)" : "var(--control-bg)",
+          border: `1px solid ${isDirty ? "rgba(140,231,210,0.4)" : "var(--control-border)"}`,
           color: isDirty ? "var(--accent-strong)" : "var(--text-tertiary)",
           borderRadius: "var(--radius-xs)",
           cursor: isDirty && save.status !== "saving" ? "pointer" : "default",
@@ -1800,7 +1800,7 @@ function Status({
   const colorMap = {
     accent: "var(--accent-strong)",
     amber: "rgba(255,184,112,0.95)",
-    danger: "var(--danger)",
+    danger: "var(--status-error)",
     muted: "var(--text-tertiary)",
   };
   return (
@@ -1828,7 +1828,7 @@ function Card({
   const borderMap = {
     phosphor: "rgba(140,231,210,0.18)",
     danger: "rgba(248,113,113,0.20)",
-    muted: "var(--card-border)",
+    muted: "var(--border-subtle)",
   };
   const eyebrowMap = {
     phosphor: "var(--accent-strong)",
@@ -1839,7 +1839,7 @@ function Card({
     <section
       style={{
         padding: "var(--space-24)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         border: `1px solid ${borderMap[accent]}`,
         borderRadius: "var(--radius-md)",
         display: "flex",
@@ -1894,7 +1894,7 @@ function ChipList({
   onChange: (next: string[]) => void;
 }) {
   const [draft, setDraft] = useState("");
-  const accent = variant === "engage" ? "var(--accent-strong)" : "var(--danger)";
+  const accent = variant === "engage" ? "var(--accent-strong)" : "var(--status-error)";
   const chipBg =
     variant === "engage" ? "rgba(140,231,210,0.08)" : "rgba(248,113,113,0.06)";
   const chipBorder =
@@ -1915,8 +1915,8 @@ function ChipList({
     <div
       style={{
         padding: "var(--space-14)",
-        background: "var(--input-bg)",
-        border: "1px solid var(--input-border)",
+        background: "var(--control-bg)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
         display: "flex",
         flexDirection: "column",
@@ -1990,7 +1990,7 @@ function ChipList({
           gap: "var(--space-6)",
           padding: "6px 8px",
           background: "rgba(0,0,0,0.20)",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-xs)",
         }}
       >
@@ -2127,7 +2127,7 @@ function ExemplarList({
             gap: "var(--space-14)",
             padding: "12px 16px",
             background: "transparent",
-            border: "1px dashed var(--input-border)",
+            border: "1px dashed var(--control-border)",
             borderRadius: "var(--radius-sm)",
             color: "inherit",
             cursor: "pointer",
@@ -2194,11 +2194,11 @@ function ExemplarRow({
         display: "flex",
         gap: "var(--space-14)",
         padding: "14px 16px",
-        background: "var(--input-bg)",
-        border: `1px solid ${isDragOver ? "rgba(140,231,210,0.5)" : "var(--input-border)"}`,
+        background: "var(--control-bg)",
+        border: `1px solid ${isDragOver ? "rgba(140,231,210,0.5)" : "var(--control-border)"}`,
         borderTop: isDragOver
           ? "3px solid var(--accent-strong)"
-          : "1px solid var(--input-border)",
+          : "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
         opacity: isDragging ? 0.4 : 1,
         transition: "opacity 150ms, border-color 100ms",
@@ -2247,7 +2247,7 @@ function ExemplarRow({
         onClick={onRemove}
         style={{
           background: "transparent",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           color: "var(--text-tertiary)",
           borderRadius: "var(--radius-xs)",
           padding: "3px 8px",
@@ -2308,7 +2308,7 @@ function ExemplarField({
           minHeight: 34,
           padding: "7px 10px",
           background: "rgba(0,0,0,0.20)",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-xs)",
           color: "var(--foreground)",
           fontFamily: T.fontBody,
@@ -2353,8 +2353,8 @@ function NeverList({
             display: "flex",
             gap: "var(--space-12)",
             padding: "10px 14px",
-            background: "var(--input-bg)",
-            border: "1px solid var(--input-border)",
+            background: "var(--control-bg)",
+            border: "1px solid var(--control-border)",
             borderRadius: "var(--radius-sm)",
           }}
         >
@@ -2362,7 +2362,7 @@ function NeverList({
             style={{
               fontFamily: T.fontMono,
               fontSize: "var(--font-size-sm)",
-              color: "var(--danger)",
+              color: "var(--status-error)",
               flexShrink: 0,
             }}
           >
@@ -2407,7 +2407,7 @@ function NeverList({
           gap: "var(--space-6)",
           padding: "8px 10px",
           background: "rgba(0,0,0,0.20)",
-          border: "1px dashed var(--input-border)",
+          border: "1px dashed var(--control-border)",
           borderRadius: "var(--radius-xs)",
         }}
       >
@@ -2440,9 +2440,9 @@ function NeverList({
           style={{
             padding: "3px 8px",
             background: "transparent",
-            border: "1px solid var(--danger)",
+            border: "1px solid var(--status-error)",
             borderRadius: "var(--radius-xs)",
-            color: "var(--danger)",
+            color: "var(--status-error)",
             fontFamily: T.fontMono,
             fontSize: 9.5,
             letterSpacing: "0.08em",
@@ -2479,8 +2479,8 @@ function TextArea({
       style={{
         width: "100%",
         padding: "12px 14px",
-        background: "var(--input-bg)",
-        border: "1px solid var(--input-border)",
+        background: "var(--control-bg)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
         color: "var(--foreground)",
         fontFamily: T.fontBody,

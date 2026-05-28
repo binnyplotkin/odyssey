@@ -203,7 +203,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                 border: "1px solid",
                 borderColor: active
                   ? (style?.color ?? "var(--accent, #8fd1cb)")
-                  : "var(--card-border)",
+                  : "var(--border-subtle)",
                 background: active
                   ? (style?.bg ?? "rgba(143, 209, 203, 0.15)")
                   : "transparent",
@@ -230,9 +230,9 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
               padding: "0.35rem 0.6rem",
               borderRadius: "var(--radius-md)",
               fontSize: "0.75rem",
-              background: "var(--input-bg)",
+              background: "var(--control-bg)",
               color: "var(--text-primary)",
-              border: "1px solid var(--input-border)",
+              border: "1px solid var(--control-border)",
               cursor: "pointer",
             }}
           >
@@ -272,7 +272,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
               letterSpacing: "0.08em",
               marginBottom: "0.75rem",
               paddingBottom: "0.5rem",
-              borderBottom: "1px solid var(--divider)",
+              borderBottom: "1px solid var(--border-subtle)",
             }}
           >
             {group.date}
@@ -291,9 +291,9 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                   style={{
                     padding: "0.75rem 1rem",
                     borderRadius: "var(--radius-lg)",
-                    background: expanded ? "var(--card-hover)" : "var(--card)",
+                    background: expanded ? "var(--surface-hover)" : "var(--material-card)",
                     border: "1px solid",
-                    borderColor: expanded ? "var(--card-border)" : "var(--divider)",
+                    borderColor: expanded ? "var(--border-subtle)" : "var(--border-subtle)",
                     cursor: "pointer",
                     transition: "all 0.15s",
                   }}
@@ -336,7 +336,7 @@ export default function ChangelogClient({ entries: initialEntries, versions }: P
                       style={{
                         marginTop: "0.75rem",
                         paddingTop: "0.75rem",
-                        borderTop: "1px solid var(--divider)",
+                        borderTop: "1px solid var(--border-subtle)",
                         display: "grid",
                         gridTemplateColumns: "auto 1fr",
                         gap: "0.3rem 1rem",

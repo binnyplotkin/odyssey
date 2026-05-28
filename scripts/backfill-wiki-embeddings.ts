@@ -24,7 +24,12 @@ import * as dotenv from "dotenv";
 dotenv.config({ override: true });
 
 import { eq, isNull, or, and } from "drizzle-orm";
-import { getDb, wikiPagesTable, getCharacterStore } from "@odyssey/db";
+import {
+  getDb,
+  wikiPagesTable,
+  getCharacterStore,
+  wikiEmbeddingSource,
+} from "@odyssey/db";
 import { embedText, EMBEDDING_MODEL } from "@odyssey/engine";
 
 const APPLY = process.argv.includes("--apply");
@@ -34,13 +39,6 @@ const SCOPE_CHARACTER_SLUG =
   characterFlagIdx >= 0 && process.argv[characterFlagIdx + 1]
     ? process.argv[characterFlagIdx + 1]
     : null;
-
-function embeddingSource(row: { title: string; summary: string | null; body: string }): string {
-  return [row.title, row.summary ?? "", row.body ?? ""]
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .join("\n\n");
-}
 
 async function main() {
   if (!process.env.OPENAI_API_KEY) {
@@ -98,7 +96,7 @@ async function main() {
   let failed = 0;
   for (const row of rows) {
     try {
-      const text = embeddingSource(row);
+      const text = wikiEmbeddingSource(row);
       if (!text) {
         console.log(`  skip ${row.slug} — empty content`);
         continue;

@@ -97,11 +97,16 @@ export type IngestionInput = {
   model?: string;
   /** If true, run planner + writer but don't call savePage. */
   dryRun?: boolean;
-  /** Compute an embedding for materially-changed pages. Wired by the admin
-   * app; passed through to wiki.savePage's hooks so this package stays free
-   * of OpenAI dependencies. */
+  /** Compute a single embedding for materially-changed pages. Kept as a
+   * fallback when the caller cannot provide `embedMany`. */
   embed?: (text: string) => Promise<number[] | null>;
+  /** Batch embedding hook for materially-changed pages. Preferred over
+   * `embed` when available so ingestion can turn N embedding requests into 1. */
+  embedMany?: (texts: string[]) => Promise<Array<number[] | null>>;
   embeddingModel?: string;
+  /** Number of writer LLM calls to run at once. Defaults to the pipeline's
+   * conservative server-side setting. */
+  writerConcurrency?: number;
 };
 
 export type IngestionResult = {

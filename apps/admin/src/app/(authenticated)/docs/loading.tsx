@@ -1,15 +1,15 @@
 import { Skeleton } from "@odyssey/ui";
 
 const CARD: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--card-border)",
+  background: "var(--material-card)",
+  border: "1px solid var(--border-subtle)",
   borderRadius: "var(--radius-2xl)",
   overflow: "hidden",
 };
 
 function DocCardSkeleton({ flip }: { flip: boolean }) {
   const gradient = (
-    <div style={{ flex: 1, minHeight: 220, background: "var(--card-hover)" }} />
+    <div style={{ flex: 1, minHeight: 220, background: "var(--surface-hover)" }} />
   );
   const text = (
     <div

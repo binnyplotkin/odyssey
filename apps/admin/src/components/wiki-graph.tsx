@@ -13,17 +13,17 @@ import type {
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
-  cardHover: "var(--card-hover)",
+  cardHover: "var(--surface-hover)",
   fontHeading: "'Space Grotesk', sans-serif",
   fontBody: "'Inter', sans-serif",
   fontMono: "var(--font-mono, 'JetBrains Mono', monospace)",
 };
 
 const TYPE_COLOR: Record<WikiPageType, string> = {
-  entity:         "var(--active-teal)",
+  entity:         "var(--accent-strong)",
   event:          "var(--warning-amber)",
   concept:        "var(--event-violet)",
   relationship:   "var(--emissive-mint)",
@@ -147,7 +147,7 @@ export function WikiGraph({
   return (
     <div style={{
       display: "flex", flexDirection: "column",
-      background: "var(--surface-material, var(--panel))",
+      background: "var(--material-surface, var(--surface-1))",
       border: "1px solid var(--border-subtle, var(--border))",
       borderRadius: "var(--radius-panel, 20px)",
       boxShadow: "var(--elevation-surface)",
@@ -187,7 +187,7 @@ export function WikiGraph({
       {/* Canvas */}
       <div style={{
         position: "relative",
-        background: "var(--canvas-background)",
+        background: "var(--canvas-atmosphere)",
       }}>
         {!hasData ? (
           <div style={{

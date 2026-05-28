@@ -102,7 +102,7 @@ export function RunPreviewSection({
           gridTemplateColumns: "repeat(4, 1fr)",
           gap: 0,
           border: "1px solid color-mix(in srgb, var(--border) 58%, transparent)",
-          background: "color-mix(in srgb, var(--card) 58%, transparent)",
+          background: "color-mix(in srgb, var(--material-card) 58%, transparent)",
           opacity: 0.78,
         }}
       >
@@ -152,7 +152,7 @@ function Stat({
         flexDirection: "column",
         gap: "var(--space-4)",
         padding: "11px 14px",
-        borderRight: "1px solid color-mix(in srgb, var(--divider) 64%, transparent)",
+        borderRight: "1px solid color-mix(in srgb, var(--border-subtle) 64%, transparent)",
       }}
     >
       <span

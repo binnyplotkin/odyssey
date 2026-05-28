@@ -39,7 +39,7 @@ export function Workstream({
     <div style={{
       border: "1px solid var(--border)",
       borderRadius: "var(--radius-lg)",
-      background: "var(--panel)",
+      background: "var(--surface-1)",
       overflow: "hidden",
       marginTop: "var(--space-8)",
       marginBottom: "var(--space-16)",
@@ -108,7 +108,7 @@ export function Workstream({
               {row.weeks.match(/\(.*\)/) && (
                 <span style={{
                   fontSize: "0.6875rem",
-                  color: "var(--muted)",
+                  color: "var(--text-tertiary)",
                 }}>
                   {row.weeks.match(/\(.*\)/)?.[0]}
                 </span>

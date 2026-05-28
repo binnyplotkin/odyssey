@@ -8,6 +8,7 @@ export type WikiTabKey =
   | "pages"
   | "knowledge"
   | "sources"
+  | "runs"
   | "ingestion";
 
 const ACCENT = "var(--accent-strong)";
@@ -25,6 +26,7 @@ const TAB_DEFS: WikiTabDef[] = [
   { key: "knowledge", label: "Graph", href: (id) => `/wikis/${id}/knowledge` },
   { key: "pages", label: "Pages", href: (id) => `/wikis/${id}/pages` },
   { key: "sources", label: "Sources", href: (id) => `/wikis/${id}/sources` },
+  { key: "runs", label: "Runs", href: (id) => `/wikis/${id}/runs` },
 ];
 
 /**

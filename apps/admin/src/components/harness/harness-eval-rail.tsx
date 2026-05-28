@@ -238,9 +238,9 @@ function LaunchPanel({
         flexDirection: "column",
         gap: "var(--space-14)",
         padding: "var(--space-16)",
-        border: "1px solid var(--card-border)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-lg)",
-        background: "var(--card)",
+        background: "var(--material-card)",
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
@@ -409,7 +409,7 @@ function LaunchButton({
         justifyContent: "space-between",
         gap: "var(--space-12)",
         padding: "11px 14px",
-        border: `1px solid ${primary ? COLORS.mintBorder : "var(--card-border)"}`,
+        border: `1px solid ${primary ? COLORS.mintBorder : "var(--border-subtle)"}`,
         borderRadius: "var(--radius-sm)",
         background: primary ? COLORS.mintBg : "var(--background)",
         fontFamily: T.fontMono,
@@ -469,7 +469,7 @@ function CommandBox({ label, command }: { label: string; command: string }) {
           onClick={onCopy}
           style={{
             padding: "3px 9px",
-            border: `1px solid ${copied ? COLORS.mintBorder : "var(--card-border)"}`,
+            border: `1px solid ${copied ? COLORS.mintBorder : "var(--border-subtle)"}`,
             borderRadius: "var(--radius-xs)",
             background: copied ? COLORS.mintBg : "transparent",
             fontFamily: T.fontMono,
@@ -553,9 +553,9 @@ function LiveActivityPanel({ characterId }: { characterId: string }) {
         flexDirection: "column",
         gap: "var(--space-12)",
         padding: "var(--space-16)",
-        border: "1px solid var(--card-border)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-lg)",
-        background: "var(--card)",
+        background: "var(--material-card)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>

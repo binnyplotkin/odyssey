@@ -144,8 +144,8 @@ function FilterStrip({
         flexDirection: "column",
         gap: "var(--space-10)",
         padding: "var(--space-14)",
-        background: "var(--input-bg)",
-        border: "1px solid var(--input-border)",
+        background: "var(--control-bg)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
       }}
     >
@@ -164,7 +164,7 @@ function FilterStrip({
           <FilterChip key={l} label={l} active={latency.has(l)} onClick={() => toggleLatency(l)} />
         ))}
       </FilterRow>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "var(--space-4)", borderTop: "1px solid var(--divider)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "var(--space-4)", borderTop: "1px solid var(--border-subtle)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-14)" }}>
           <FilterChip
             label="chat-only"
@@ -206,7 +206,7 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
         textTransform: "uppercase",
         background: active ? "rgba(140,231,210,0.10)" : "transparent",
         color: active ? "var(--accent-strong)" : "var(--text-tertiary)",
-        border: `1px solid ${active ? "rgba(140,231,210,0.35)" : "var(--input-border)"}`,
+        border: `1px solid ${active ? "rgba(140,231,210,0.35)" : "var(--control-border)"}`,
         borderRadius: "var(--radius-xs)",
         cursor: "pointer",
       }}
@@ -240,9 +240,9 @@ function ModelTable({
   return (
     <div
       style={{
-        border: "1px solid var(--input-border)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         overflow: "hidden",
       }}
     >
@@ -256,13 +256,13 @@ function ModelTable({
           alignItems: "center",
           gap: "var(--space-12)",
           padding: "10px 14px",
-          background: "var(--input-bg)",
+          background: "var(--control-bg)",
           fontFamily: T.fontMono,
           fontSize: "var(--font-size-xs)",
           letterSpacing: "0.1em",
           color: "var(--text-quaternary)",
           textTransform: "uppercase",
-          borderBottom: "1px solid var(--input-border)",
+          borderBottom: "1px solid var(--control-border)",
         }}
       >
         <SortHeader label="model" k="label" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -347,7 +347,7 @@ function ModelRow({
         gap: "var(--space-12)",
         padding: "10px 14px",
         background: zebra ? "rgba(255,255,255,0.015)" : "transparent",
-        borderBottom: "1px solid var(--divider)",
+        borderBottom: "1px solid var(--border-subtle)",
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", minWidth: 0 }}>
@@ -431,8 +431,8 @@ function RowButton({
           disabled ? "var(--text-quaternary)" :
           active || primary ? "var(--accent-strong)" : "var(--text-secondary)",
         border: `1px solid ${
-          disabled ? "var(--input-border)" :
-          active || primary ? "rgba(140,231,210,0.30)" : "var(--input-border)"
+          disabled ? "var(--control-border)" :
+          active || primary ? "rgba(140,231,210,0.30)" : "var(--control-border)"
         }`,
         borderRadius: "var(--radius-xs)",
         cursor: disabled ? "default" : "pointer",
@@ -489,8 +489,8 @@ function ComparePanel({
           display: "grid",
           gridTemplateColumns: `200px repeat(${models.length}, minmax(0, 1fr))`,
           gap: "var(--space-1)",
-          background: "var(--input-border)",
-          border: "1px solid var(--input-border)",
+          background: "var(--control-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-xs)",
           overflow: "hidden",
         }}
@@ -519,7 +519,7 @@ function ComparePanel({
                     textTransform: "uppercase",
                     background: m.id === currentModel ? "transparent" : "rgba(140,231,210,0.10)",
                     color: m.id === currentModel ? "var(--text-quaternary)" : "var(--accent-strong)",
-                    border: `1px solid ${m.id === currentModel ? "var(--input-border)" : "rgba(140,231,210,0.30)"}`,
+                    border: `1px solid ${m.id === currentModel ? "var(--control-border)" : "rgba(140,231,210,0.30)"}`,
                     borderRadius: "var(--radius-xs)",
                     cursor: m.id === currentModel ? "default" : "pointer",
                   }}
@@ -529,7 +529,7 @@ function ComparePanel({
                 <button
                   type="button"
                   onClick={() => onRemove(m.id)}
-                  style={{ padding: "3px 8px", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", background: "transparent", border: "1px solid var(--input-border)", borderRadius: "var(--radius-xs)", color: "var(--text-tertiary)", cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase" }}
+                  style={{ padding: "3px 8px", fontFamily: T.fontMono, fontSize: "var(--font-size-2xs)", background: "transparent", border: "1px solid var(--control-border)", borderRadius: "var(--radius-xs)", color: "var(--text-tertiary)", cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase" }}
                 >
                   ✕
                 </button>
@@ -570,7 +570,7 @@ function CompareCell({
     <div
       style={{
         padding: header ? "12px 14px" : "8px 14px",
-        background: header ? "var(--input-bg)" : "var(--card)",
+        background: header ? "var(--control-bg)" : "var(--material-card)",
         fontFamily: T.fontMono,
         fontSize: header ? 13 : 11,
         color: "var(--text-secondary)",
@@ -584,11 +584,11 @@ function CompareCell({
 function SpecRow({ label, children }: { label: string; children: (string | number)[] }) {
   return (
     <>
-      <div style={{ padding: "8px 14px", background: "var(--input-bg)", fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", letterSpacing: "0.08em", color: "var(--text-quaternary)", textTransform: "uppercase" }}>
+      <div style={{ padding: "8px 14px", background: "var(--control-bg)", fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", letterSpacing: "0.08em", color: "var(--text-quaternary)", textTransform: "uppercase" }}>
         {label}
       </div>
       {children.map((value, i) => (
-        <div key={i} style={{ padding: "8px 14px", background: "var(--card)", fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div key={i} style={{ padding: "8px 14px", background: "var(--material-card)", fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
           {value}
         </div>
       ))}

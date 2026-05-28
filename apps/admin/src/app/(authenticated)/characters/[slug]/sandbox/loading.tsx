@@ -29,7 +29,7 @@ export default function SandboxLoading() {
           style={{
             width: 520,
             border: "1px solid var(--border)",
-            background: "var(--card)",
+            background: "var(--material-card)",
             padding: "var(--space-24)",
             display: "flex",
             flexDirection: "column",
@@ -76,7 +76,7 @@ export default function SandboxLoading() {
       <aside
         style={{
           borderLeft: "1px solid var(--border)",
-          background: "rgba(255,255,255,0.02)",
+          background: "var(--ink-wash)",
           padding: "22px 24px",
           display: "flex",
           flexDirection: "column",
@@ -95,7 +95,7 @@ export default function SandboxLoading() {
             key={i}
             style={{
               border: "1px solid var(--border)",
-              background: "var(--card)",
+              background: "var(--material-card)",
               padding: "var(--space-14)",
               display: "flex",
               flexDirection: "column",

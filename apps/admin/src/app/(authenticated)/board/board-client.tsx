@@ -297,10 +297,10 @@ function TicketCard({
         borderRadius: "var(--radius-lg)",
         padding: "var(--space-12)",
         gap: "var(--space-8)",
-        background: isSelected ? "rgba(59, 130, 246, 0.08)" : "var(--card)",
+        background: isSelected ? "rgba(59, 130, 246, 0.08)" : "var(--material-card)",
         border: isSelected
           ? "1.5px solid rgba(59, 130, 246, 0.4)"
-          : "1px solid var(--card-border)",
+          : "1px solid var(--border-subtle)",
         boxShadow: isSelected ? "0 0 12px rgba(59, 130, 246, 0.12)" : "none",
         cursor: "grab",
         opacity: isDragging ? 0.35 : isDone ? 0.6 : 1,
@@ -343,7 +343,7 @@ function TicketCard({
         <span
           style={{
             fontSize: "var(--font-size-xs)",
-            color: "var(--muted)",
+            color: "var(--text-tertiary)",
             lineHeight: "14px",
             overflow: "hidden",
             display: "-webkit-box",
@@ -362,7 +362,7 @@ function TicketCard({
           alignItems: "center",
           gap: "var(--space-6)",
           paddingTop: "var(--space-4)",
-          borderTop: "1px solid var(--divider)",
+          borderTop: "1px solid var(--border-subtle)",
         }}
       >
         {ticket.assignee && <AvatarBubble assigneeId={ticket.assignee} team={team} />}
@@ -412,8 +412,8 @@ function FilterDropdown({
         top: "calc(100% + 6px)",
         left: 0,
         minWidth: 140,
-        background: "var(--dropdown-bg)",
-        border: "1px solid var(--input-border)",
+        background: "var(--popover-bg)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-md)",
         padding: "4px 0",
         zIndex: 100,
@@ -523,8 +523,8 @@ function InlineSelect<T extends string>({
           top: "calc(100% + 4px)",
           left: 0,
           minWidth: 160,
-          background: "var(--dropdown-bg)",
-          border: "1px solid var(--input-border)",
+          background: "var(--popover-bg)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-md)",
           padding: "4px 0",
           zIndex: 100,
@@ -653,8 +653,8 @@ function ModalSelect<T extends string>({
             width: "100%",
             padding: "8px 10px",
             borderRadius: "var(--radius-sm)",
-            border: "1px solid var(--input-border)",
-            background: "var(--input-bg)",
+            border: "1px solid var(--control-border)",
+            background: "var(--control-bg)",
             color: value ? "var(--foreground)" : "var(--text-quaternary)",
             fontSize: "var(--font-size-base)",
             fontFamily: "inherit",
@@ -686,8 +686,8 @@ function ModalSelect<T extends string>({
             top: "calc(100% + 4px)",
             left: 0,
             right: 0,
-            background: "var(--dropdown-bg)",
-            border: "1px solid var(--input-border)",
+            background: "var(--popover-bg)",
+            border: "1px solid var(--control-border)",
             borderRadius: "var(--radius-md)",
             padding: "4px 0",
             zIndex: 10,
@@ -769,8 +769,8 @@ function NewTicketModal({
     width: "100%",
     padding: "8px 10px",
     borderRadius: "var(--radius-sm)",
-    border: "1px solid var(--input-border)",
-    background: "var(--input-bg)",
+    border: "1px solid var(--control-border)",
+    background: "var(--control-bg)",
     color: "var(--foreground)",
     fontSize: "var(--font-size-base)",
     fontFamily: "inherit",
@@ -828,8 +828,8 @@ function NewTicketModal({
       <div
         style={{
           width: 460,
-          background: "var(--dropdown-bg)",
-          border: "1px solid var(--input-border)",
+          background: "var(--popover-bg)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-2xl)",
           padding: "var(--space-24)",
           display: "flex",
@@ -929,7 +929,7 @@ function NewTicketModal({
             style={{
               padding: "7px 16px",
               borderRadius: "var(--radius-md)",
-              border: "1px solid var(--input-border)",
+              border: "1px solid var(--control-border)",
               background: "none",
               color: "var(--text-tertiary)",
               fontSize: "var(--font-size-base)",
@@ -1106,7 +1106,7 @@ function TicketDetailSidebar({
         display: "flex",
         flexDirection: "column",
         background: "var(--background)",
-        borderLeft: "1px solid var(--input-border)",
+        borderLeft: "1px solid var(--control-border)",
         boxShadow: "var(--elevation-side)",
         zIndex: 50,
         overflow: "hidden",
@@ -1146,7 +1146,7 @@ function TicketDetailSidebar({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "14px 20px",
-          borderBottom: "1px solid var(--divider)",
+          borderBottom: "1px solid var(--border-subtle)",
           flexShrink: 0,
         }}
       >
@@ -1172,8 +1172,8 @@ function TicketDetailSidebar({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "var(--input-bg)",
-            border: "1px solid var(--card-border)",
+            background: "var(--control-bg)",
+            border: "1px solid var(--border-subtle)",
             color: "var(--text-quaternary)",
             fontSize: "var(--font-size-xl)",
             cursor: "pointer",
@@ -1239,8 +1239,8 @@ function TicketDetailSidebar({
         <div
           style={{
             padding: "12px 20px",
-            borderTop: "1px solid var(--divider)",
-            borderBottom: "1px solid var(--divider)",
+            borderTop: "1px solid var(--border-subtle)",
+            borderBottom: "1px solid var(--border-subtle)",
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
             gap: "4px 12px",
@@ -1398,7 +1398,7 @@ function TicketDetailSidebar({
             </div>
 
             {/* Progress bar */}
-            <div style={{ width: "100%", height: 3, borderRadius: "var(--radius-2xs)", background: "var(--card-border)" }}>
+            <div style={{ width: "100%", height: 3, borderRadius: "var(--radius-2xs)", background: "var(--border-subtle)" }}>
               <div
                 style={{
                   width: `${progress}%`,
@@ -1436,8 +1436,8 @@ function TicketDetailSidebar({
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: "var(--font-size-xs)",
-                    background: st.done ? "rgba(59, 130, 246, 0.15)" : "var(--input-bg)",
-                    border: st.done ? "none" : "1px solid var(--input-border)",
+                    background: st.done ? "rgba(59, 130, 246, 0.15)" : "var(--control-bg)",
+                    border: st.done ? "none" : "1px solid var(--control-border)",
                     color: "rgba(59, 130, 246, 0.7)",
                   }}
                 >
@@ -1461,7 +1461,7 @@ function TicketDetailSidebar({
         <div
           style={{
             padding: "16px 20px",
-            borderTop: "1px solid var(--divider)",
+            borderTop: "1px solid var(--border-subtle)",
             display: "flex",
             flexDirection: "column",
             gap: "var(--space-12)",
@@ -1494,7 +1494,7 @@ function TicketDetailSidebar({
               style={{
                 padding: "8px 10px",
                 borderRadius: "var(--radius-sm)",
-                border: "1px solid var(--input-border)",
+                border: "1px solid var(--control-border)",
                 background: "var(--input-background, transparent)",
                 color: "var(--text-primary)",
                 fontSize: "var(--font-size-base)",
@@ -1515,7 +1515,7 @@ function TicketDetailSidebar({
                 style={{
                   padding: "4px 10px",
                   borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--input-border)",
+                  border: "1px solid var(--control-border)",
                   background: commentDraft.trim() ? "var(--text-tertiary)" : "transparent",
                   color: commentDraft.trim() ? "var(--background)" : "var(--text-placeholder)",
                   fontSize: "var(--font-size-sm)",
@@ -1696,13 +1696,13 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                   style={{
                     padding: "5px 12px",
                     borderRadius: "var(--radius-md)",
-                    border: `1px solid ${isActive ? "rgba(140, 231, 210, 0.3)" : "var(--card-border)"}`,
+                    border: `1px solid ${isActive ? "rgba(140, 231, 210, 0.3)" : "var(--border-subtle)"}`,
                     background: isActive
                       ? "rgba(140, 231, 210, 0.08)"
-                      : "var(--input-bg)",
+                      : "var(--control-bg)",
                     color: isActive
                       ? "#8FD1CB"
-                      : "var(--muted)",
+                      : "var(--text-tertiary)",
                     fontSize: "var(--font-size-sm)",
                     fontWeight: 500,
                     cursor: "pointer",
@@ -1743,9 +1743,9 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
               width: 30,
               height: 30,
               borderRadius: "var(--radius-md)",
-              border: "1px solid var(--card-border)",
-              background: "var(--input-bg)",
-              color: "var(--muted)",
+              border: "1px solid var(--border-subtle)",
+              background: "var(--control-bg)",
+              color: "var(--text-tertiary)",
               cursor: "pointer",
               fontSize: "var(--font-size-lg)",
             }}
@@ -1914,8 +1914,8 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                 display: "flex",
                 flexDirection: "column",
                 borderRadius: "var(--radius-2xl)",
-                background: "var(--card)",
-                border: `1px solid ${isDragTarget ? "rgba(140, 231, 210, 0.2)" : "var(--card-border)"}`,
+                background: "var(--material-card)",
+                border: `1px solid ${isDragTarget ? "rgba(140, 231, 210, 0.2)" : "var(--border-subtle)"}`,
                 transition: "border-color 0.15s ease",
                 overflow: "hidden",
               }}
@@ -1927,8 +1927,8 @@ export default function BoardClient({ initialTickets, features = [], team = [] }
                   alignItems: "center",
                   gap: "var(--space-8)",
                   padding: "12px 14px",
-                  background: "var(--card)",
-                  borderBottom: "1px solid var(--divider)",
+                  background: "var(--material-card)",
+                  borderBottom: "1px solid var(--border-subtle)",
                 }}
               >
                 <span

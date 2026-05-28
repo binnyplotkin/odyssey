@@ -9,7 +9,7 @@ import { type ReactNode } from "react";
 const FONT_MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
 const FONT_HEAD = "var(--font-body, Inter), system-ui, sans-serif";
 const ACCENT = "var(--accent-strong)";
-const DANGER = "var(--danger)";
+const DANGER = "var(--status-error)";
 
 export type FailedRecoveryProps = {
   /** Ops that completed successfully before the halt. */
@@ -66,9 +66,9 @@ export function FailedRecovery({
         alignItems: "stretch",
         gap: "var(--space-24)",
         padding: "30px 32px",
-        border: "1px solid var(--input-border)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-lg)",
-        background: "var(--input-bg)",
+        background: "var(--control-bg)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -247,7 +247,7 @@ function MetricStrip({ items }: { items: Array<[string, string]> }) {
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-        border: "1px solid var(--divider)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
         overflow: "hidden",
         maxWidth: 620,
@@ -262,7 +262,7 @@ function MetricStrip({ items }: { items: Array<[string, string]> }) {
             gap: "var(--space-4)",
             padding: "12px 14px",
             borderRight:
-              index === items.length - 1 ? "none" : "1px solid var(--divider)",
+              index === items.length - 1 ? "none" : "1px solid var(--border-subtle)",
           }}
         >
           <span

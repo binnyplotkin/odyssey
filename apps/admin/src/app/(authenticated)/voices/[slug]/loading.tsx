@@ -43,8 +43,8 @@ const panelStyle: React.CSSProperties = {
   gap: "var(--space-14)",
   padding: "var(--space-18)",
   borderRadius: "var(--radius-2xl)",
-  background: "var(--card)",
-  border: "1px solid var(--card-border)",
+  background: "var(--material-card)",
+  border: "1px solid var(--border-subtle)",
 };
 
 export default function VoiceDetailLoading() {

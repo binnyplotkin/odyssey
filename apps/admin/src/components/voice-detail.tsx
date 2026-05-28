@@ -2337,7 +2337,7 @@ function ConfigDropdown({
             gap: "var(--space-10)",
             padding: "10px 14px",
             background: "var(--ink-wash)",
-            border: "1px solid var(--card-border)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-md)",
             fontFamily: FONT_MONO,
             fontSize: "var(--font-size-md)",
@@ -4184,7 +4184,7 @@ function FieldLabel({
       >
         {children}
       </span>
-      <span style={{ flex: 1, height: 1, background: "var(--divider)" }} />
+      <span style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
       {hint && (
         <span
           style={{
@@ -4851,7 +4851,7 @@ function TakeCard({
         flexDirection: "column",
         gap: "var(--space-14)",
         padding: "var(--space-18)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         border: "1px solid var(--border)",
         borderRadius: "var(--radius-xl)",
       }}
@@ -5014,7 +5014,7 @@ function BindingsSection({
           style={{
             display: "flex",
             flexDirection: "column",
-            background: "var(--card)",
+            background: "var(--material-card)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-xl)",
             overflow: "hidden",
@@ -5038,7 +5038,7 @@ function BindingRow({
   isLast: boolean;
 }) {
   const bg = character.image
-    ? `center/cover no-repeat url("${character.image}"), var(--card-hover)`
+    ? `center/cover no-repeat url("${character.image}"), var(--surface-hover)`
     : resolveAvatarGradient(character.thumbnailColor, character.slug);
   return (
     <Link
@@ -5049,7 +5049,7 @@ function BindingRow({
         alignItems: "center",
         gap: "var(--space-18)",
         padding: "16px 22px",
-        borderBottom: isLast ? "none" : "1px solid var(--divider)",
+        borderBottom: isLast ? "none" : "1px solid var(--border-subtle)",
         textDecoration: "none",
         color: "inherit",
       }}
@@ -5143,7 +5143,7 @@ function ExtractionJournalSection({
           style={{
             display: "flex",
             flexDirection: "column",
-            background: "var(--card)",
+            background: "var(--material-card)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-xl)",
             overflow: "hidden",
@@ -5170,7 +5170,7 @@ function JournalHeadRow() {
         display: "flex",
         alignItems: "center",
         padding: "14px 22px",
-        borderBottom: "1px solid var(--divider)",
+        borderBottom: "1px solid var(--border-subtle)",
         fontFamily: FONT_MONO,
         fontSize: "var(--font-size-xs)",
         letterSpacing: "0.16em",
@@ -5217,7 +5217,7 @@ function JournalRow({
         display: "flex",
         alignItems: "center",
         padding: "14px 22px",
-        borderBottom: isLast ? "none" : "1px solid var(--divider)",
+        borderBottom: isLast ? "none" : "1px solid var(--border-subtle)",
         fontFamily: FONT_MONO,
         fontSize: "var(--font-size-base)",
         color: "var(--text-secondary)",
@@ -5836,7 +5836,7 @@ function panelShell(): React.CSSProperties {
     gap: 22,
     flex: 1,
     padding: 28,
-    background: "var(--card)",
+    background: "var(--material-card)",
     border: "1px solid var(--border)",
     borderRadius: "var(--radius-xl)",
   };

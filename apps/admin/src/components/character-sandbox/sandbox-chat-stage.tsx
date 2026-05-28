@@ -312,7 +312,7 @@ function Composer({
           alignItems: "center",
           gap: "var(--space-12)",
           padding: "14px 18px",
-          background: "var(--card)",
+          background: "var(--material-card)",
           border:
             "1px solid color-mix(in srgb, var(--accent-strong) 28%, transparent)",
         }}

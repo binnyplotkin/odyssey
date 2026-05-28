@@ -304,7 +304,7 @@ function ConfirmModalInner({
             justifyContent: "space-between",
             gap: 12,
             padding: "16px 24px",
-            borderTop: "1px solid var(--divider)",
+            borderTop: "1px solid var(--border-subtle)",
           }}
         >
           <span

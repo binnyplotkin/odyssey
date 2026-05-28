@@ -9,14 +9,18 @@
  *   1. Load character, source, existing wiki.
  *   2. Open a wiki_ingestion_log row (status=running).
  *   3. Call planner → receive ops.
- *   4. For each op: call writer → savePage → emit op-complete.
- *   5. Close the log row with final counters.
+ *   4. Run writer calls with bounded concurrency.
+ *   5. Persist each completed page and reconcile edges after all pages exist.
+ *   6. Close the log row with final counters.
  */
 
 import {
   getWikiStore,
   getWikisStore,
+  type SavePageInput,
+  type WikiStore,
   type WikiPageRecord,
+  wikiEmbeddingSource,
 } from "@odyssey/db";
 import { DEFAULT_MODEL, resolveModel, type ModelId } from "./models";
 import { plan } from "./planner";
@@ -31,6 +35,8 @@ import type {
 } from "./types";
 
 const PLANNER_CHUNK_CHAR_BUDGET = 24_000;
+const DEFAULT_WRITER_CONCURRENCY = 3;
+const MAX_WRITER_CONCURRENCY = 6;
 
 export async function* runIngestion(
   input: IngestionInput,
@@ -146,36 +152,79 @@ export async function* runIngestion(
       ops: actionableOps,
     };
 
-    // Refreshed view of pages as we write — the next writer sees prior writes
-    // when it resolves wikilinks.
-    let workingPages = [...existingPages];
+    const existingById = new Map(existingPages.map((p) => [p.id, p]));
+    const existingSlugToId = new Map(existingPages.map((p) => [p.slug, p.id]));
+    const writerContextPages = buildWriterContextPages(
+      existingPages,
+      wikiRecord.id,
+      actionableOps,
+    );
+    const writerConcurrency = resolveWriterConcurrency(input.writerConcurrency);
+    const inFlight = new Map<number, Promise<WriteTaskResult>>();
+    const savedPages: Array<{ op: PlanOp; written: WrittenPage; page: WikiPageRecord }> = [];
+    const pagesNeedingEmbedding = new Map<string, WikiPageRecord>();
+    let nextOpIndex = 0;
 
-    for (let i = 0; i < actionableOps.length; i++) {
-      const op = actionableOps[i];
-      yield { type: "op-start", op, index: i, total: actionableOps.length };
+    const startWriter = (index: number) => {
+      const op = actionableOps[index];
+      const existingPage = op.existingPageId
+        ? existingById.get(op.existingPageId) ?? null
+        : null;
+      const task = write({
+        model,
+        characterDomainPrompt: wikiRecord.ingestionPrompt,
+        op,
+        source: { title: source.title, tags: sourceTags },
+        existingPage,
+        allPages: writerContextPages,
+        slugToId: existingSlugToId,
+      })
+        .then((written): WriteTaskResult => ({ index, op, existingPage, written }))
+        .catch((error: unknown): WriteTaskResult => ({
+          index,
+          op,
+          existingPage,
+          error,
+        }));
+      inFlight.set(index, task);
+    };
+
+    while (nextOpIndex < actionableOps.length || inFlight.size > 0) {
+      while (
+        nextOpIndex < actionableOps.length &&
+        inFlight.size < writerConcurrency
+      ) {
+        const op = actionableOps[nextOpIndex];
+        yield {
+          type: "op-start",
+          op,
+          index: nextOpIndex,
+          total: actionableOps.length,
+        };
+        startWriter(nextOpIndex);
+        nextOpIndex++;
+      }
+
+      if (inFlight.size === 0) break;
+
+      const result = await Promise.race(inFlight.values());
+      inFlight.delete(result.index);
+
+      if ("error" in result) {
+        const msg =
+          result.error instanceof Error ? result.error.message : String(result.error);
+        opFailures.push(`${result.op.slug}: ${msg}`);
+        yield { type: "op-failed", op: result.op, error: msg };
+        continue;
+      }
+
+      const { op, written, existingPage } = result;
+      totalTokens += written.tokens;
+      totalInputTokens += written.inputTokens;
+      totalOutputTokens += written.outputTokens;
 
       try {
-        const existingPage = op.existingPageId
-          ? workingPages.find((p) => p.id === op.existingPageId) ?? null
-          : null;
-        const slugToId = new Map(workingPages.map((p) => [p.slug, p.id]));
-
-        const written: WrittenPage = await write({
-          model,
-          characterDomainPrompt: wikiRecord.ingestionPrompt,
-          op,
-          source: { title: source.title, tags: sourceTags },
-          existingPage,
-          allPages: workingPages,
-          slugToId,
-        });
-        totalTokens += written.tokens;
-        totalInputTokens += written.inputTokens;
-        totalOutputTokens += written.outputTokens;
-
         if (input.dryRun) {
-          // In dry-run we don't persist — just emit a synthetic op-complete
-          // with a fake WikiPageRecord stub.
           yield {
             type: "op-complete",
             op,
@@ -189,32 +238,19 @@ export async function* runIngestion(
           continue;
         }
 
-        // Write the page — this reconciles edges internally.
-        const saveResult = await wiki.savePage({
-          wikiId: wikiRecord.id,
-          type: written.type,
-          slug: written.slug,
-          title: written.title,
-          summary: written.summary,
-          body: written.body,
-          frontmatter: written.frontmatter,
-          perspective: written.perspective,
-          confidence: written.confidence,
-          timeIndex: written.timeIndex,
-          knowsFuture: written.knowsFuture,
-          contradictions: written.contradictions,
-          authorKind: "llm",
-          authorId: logRow.id,
-          note: `ingest: ${op.rationale.slice(0, 120)}`,
-        }, input.embed ? { embed: input.embed, embeddingModel: input.embeddingModel } : undefined);
+        const saveResult = await wiki.savePage(
+          buildSavePageInput(wikiRecord.id, logRow.id, op, written),
+        );
 
         if (saveResult.created) pagesCreated++;
         else if (saveResult.versionCreated) pagesUpdated++;
+        if (saveResult.created || saveResult.versionCreated) {
+          pagesNeedingEmbedding.set(saveResult.page.id, saveResult.page);
+        }
 
         totalEdgesAdded += saveResult.edgesAdded;
         totalEdgesRemoved += saveResult.edgesRemoved;
 
-        // Write source refs (after page save so pageId exists).
         if (written.sourceRefs.length > 0) {
           await wiki.addSourceRefs(
             written.sourceRefs.map((r) => ({
@@ -227,10 +263,7 @@ export async function* runIngestion(
           );
         }
 
-        // Keep workingPages fresh so subsequent writer calls see it.
-        const pageIdx = workingPages.findIndex((p) => p.id === saveResult.page.id);
-        if (pageIdx >= 0) workingPages[pageIdx] = saveResult.page;
-        else workingPages = [...workingPages, saveResult.page];
+        savedPages.push({ op, written, page: saveResult.page });
 
         yield {
           type: "op-complete",
@@ -246,8 +279,28 @@ export async function* runIngestion(
         const msg = opErr instanceof Error ? opErr.message : String(opErr);
         opFailures.push(`${op.slug}: ${msg}`);
         yield { type: "op-failed", op, error: msg };
-        // Don't abort the whole run — keep going with remaining ops.
       }
+    }
+
+    // Parallel writers can link to pages that were planned but not saved yet.
+    // Reconcile edges after all pages exist so the slug index is complete.
+    if (!input.dryRun && savedPages.length > 1) {
+      const reconcileResult = await wiki.reconcileEdgesForWikiPages(
+        wikiRecord.id,
+        savedPages.map((saved) => saved.page.id),
+      );
+      totalEdgesAdded += reconcileResult.added;
+      totalEdgesRemoved += reconcileResult.removed;
+    }
+
+    if (!input.dryRun && pagesNeedingEmbedding.size > 0) {
+      await embedChangedPages({
+        wiki,
+        pages: Array.from(pagesNeedingEmbedding.values()),
+        embed: input.embed,
+        embedMany: input.embedMany,
+        embeddingModel: input.embeddingModel,
+      });
     }
 
     // ── Finalize ───────────────────────────────────────────────
@@ -327,6 +380,128 @@ export async function* runIngestion(
 }
 
 /* ── Helpers ────────────────────────────────────────────────────── */
+
+type WriteTaskResult =
+  | {
+      index: number;
+      op: PlanOp;
+      existingPage: WikiPageRecord | null;
+      written: WrittenPage;
+    }
+  | {
+      index: number;
+      op: PlanOp;
+      existingPage: WikiPageRecord | null;
+      error: unknown;
+    };
+
+function resolveWriterConcurrency(input: number | undefined): number {
+  const raw = input ?? Number(process.env.WIKI_INGEST_WRITER_CONCURRENCY ?? "");
+  const parsed =
+    Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_WRITER_CONCURRENCY;
+  return Math.max(1, Math.min(MAX_WRITER_CONCURRENCY, parsed));
+}
+
+function buildSavePageInput(
+  wikiId: string,
+  runId: string,
+  op: PlanOp,
+  written: WrittenPage,
+): SavePageInput {
+  return {
+    wikiId,
+    type: written.type,
+    slug: written.slug,
+    title: written.title,
+    summary: written.summary,
+    body: written.body,
+    frontmatter: written.frontmatter,
+    perspective: written.perspective,
+    confidence: written.confidence,
+    timeIndex: written.timeIndex,
+    knowsFuture: written.knowsFuture,
+    contradictions: written.contradictions,
+    authorKind: "llm",
+    authorId: runId,
+    note: `ingest: ${op.rationale.slice(0, 120)}`,
+  };
+}
+
+function buildWriterContextPages(
+  existingPages: WikiPageRecord[],
+  wikiId: string,
+  ops: PlanOp[],
+): WikiPageRecord[] {
+  const bySlug = new Map(existingPages.map((page) => [page.slug, page]));
+  const out = [...existingPages];
+  const now = new Date().toISOString();
+
+  for (const op of ops) {
+    if (bySlug.has(op.slug)) continue;
+    const page: WikiPageRecord = {
+      id: `planned-${op.slug}`,
+      characterId: "",
+      wikiId,
+      type: op.type,
+      slug: op.slug,
+      title: op.title,
+      summary: op.rationale,
+      body: "",
+      frontmatter: {},
+      perspective: {},
+      confidence: 0.5,
+      timeIndex: null,
+      knowsFuture: false,
+      contradictions: [],
+      version: 0,
+      lastCompiledAt: null,
+      embedding: null,
+      embeddingModel: null,
+      embeddedAt: null,
+      layoutX: null,
+      layoutY: null,
+      layoutComputedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    bySlug.set(op.slug, page);
+    out.push(page);
+  }
+
+  return out;
+}
+
+async function embedChangedPages(args: {
+  wiki: WikiStore;
+  pages: WikiPageRecord[];
+  embed?: (text: string) => Promise<number[] | null>;
+  embedMany?: (texts: string[]) => Promise<Array<number[] | null>>;
+  embeddingModel?: string;
+}): Promise<void> {
+  const embeddingModel = args.embeddingModel ?? "unspecified";
+  const texts = args.pages.map((page) => wikiEmbeddingSource(page));
+  if (!args.embedMany && !args.embed) return;
+
+  try {
+    const vectors = args.embedMany
+      ? await args.embedMany(texts)
+      : await Promise.all(texts.map((text) => args.embed!(text)));
+
+    const updates = args.pages.flatMap((page, index) => {
+      const embedding = vectors[index];
+      return embedding ? [{ pageId: page.id, embedding, embeddingModel }] : [];
+    });
+
+    if (updates.length > 0) {
+      await args.wiki.savePageEmbeddings(updates);
+    }
+  } catch (error) {
+    console.error(
+      "[wiki-ingest] batch embedding failed; pages saved without embeddings",
+      error,
+    );
+  }
+}
 
 async function planChunked(args: {
   model: ModelId;

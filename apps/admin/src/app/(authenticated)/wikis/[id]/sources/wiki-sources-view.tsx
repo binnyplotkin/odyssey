@@ -17,23 +17,23 @@ const MONO = '"JetBrains Mono", ui-monospace, monospace';
 const DISPLAY = '"Space Grotesk", system-ui, sans-serif';
 const BODY = '"Geist", "Inter", system-ui, sans-serif';
 
-const FG = "rgba(255, 255, 255, 0.95)";
-const TEXT_PRIMARY = "rgba(255, 255, 255, 0.88)";
-const TEXT_SECONDARY = "rgba(255, 255, 255, 0.7)";
-const TEXT_MUTED = "rgba(255, 255, 255, 0.55)";
-const TEXT_FADED = "rgba(255, 255, 255, 0.4)";
-const TEXT_GHOST = "rgba(255, 255, 255, 0.32)";
-const TEXT_QUIET = "rgba(255, 255, 255, 0.2)";
+const FG = "var(--foreground)";
+const TEXT_PRIMARY = "var(--text-primary)";
+const TEXT_SECONDARY = "var(--text-secondary)";
+const TEXT_MUTED = "var(--text-tertiary)";
+const TEXT_FADED = "var(--text-placeholder)";
+const TEXT_GHOST = "var(--text-quaternary)";
+const TEXT_QUIET = "color-mix(in srgb, var(--text-primary) 14%, transparent)";
 
-const PANEL_BG = "#0A0A0A";
-const BORDER = "rgba(255, 255, 255, 0.08)";
-const BORDER_STRONG = "rgba(255, 255, 255, 0.12)";
-const DIVIDER = "rgba(255, 255, 255, 0.06)";
-const INPUT_BG = "rgba(255, 255, 255, 0.02)";
+const PANEL_BG = "var(--material-card)";
+const BORDER = "var(--border-medium)";
+const BORDER_STRONG = "var(--ink-edge)";
+const DIVIDER = "var(--border-subtle)";
+const INPUT_BG = "var(--control-bg)";
 
-const ACCENT = "#8FD1CB";
-const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
-const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
+const ACCENT = "var(--accent-strong)";
+const ACCENT_SOFT = "var(--accent-wash)";
+const DANGER = "var(--status-error)";
 
 /* ── Buckets ───────────────────────────────────────────────────── */
 
@@ -662,7 +662,7 @@ function FilterStrip({
             fontWeight: 700,
             letterSpacing: "0.16em",
             textTransform: "uppercase",
-            color: "#0A0A0A",
+            color: "var(--accent-on)",
             textDecoration: "none",
           }}
         >
@@ -1084,7 +1084,7 @@ function SourceRow({
       >
         {runs.length}
         {failedCount > 0 && (
-          <span style={{ color: "#F87171", marginLeft: "var(--space-6)" }}>· {failedCount} ✗</span>
+          <span style={{ color: DANGER, marginLeft: "var(--space-6)" }}>· {failedCount} ✗</span>
         )}
       </div>
       <div

@@ -261,8 +261,8 @@ function startSpeculation(args: {
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
   accent: "var(--accent-strong)",
   fontHeading: "'Space Grotesk', sans-serif",
@@ -722,7 +722,7 @@ function SegmentPanel({
       style={{
         border: `1px solid ${T.border}`,
         borderRadius: "var(--radius-xl)",
-        background: "color-mix(in srgb, var(--panel) 88%, transparent)",
+        background: "color-mix(in srgb, var(--surface-1) 88%, transparent)",
         padding: 0,
         minWidth: 0,
         display: "flex",
@@ -1025,7 +1025,7 @@ function VoiceReadinessPanel({
         width: "min(100%, 420px)",
         border: `1px solid ${T.border}`,
         borderRadius: "var(--radius-xl)",
-        background: "color-mix(in srgb, var(--panel) 88%, transparent)",
+        background: "color-mix(in srgb, var(--surface-1) 88%, transparent)",
         padding: "12px 14px 10px",
         boxShadow: "0 12px 34px rgba(0,0,0,0.18)",
       }}

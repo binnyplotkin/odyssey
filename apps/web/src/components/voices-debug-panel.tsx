@@ -73,7 +73,7 @@ export function VoicesDebugPanel() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 lg:px-8">
       <section className="panel rounded-[2rem] p-6 md:p-8">
-        <p className="font-mono text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
+        <p className="font-mono text-xs uppercase tracking-[0.28em] text-[var(--text-tertiary)]">
           Voice Debug
         </p>
         <h1 className="mt-3 text-3xl font-semibold text-stone-900 md:text-5xl">
@@ -95,24 +95,24 @@ export function VoicesDebugPanel() {
             {isLoading ? "Refreshing..." : "Refresh"}
           </button>
           {data?.timestamp ? (
-            <span className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <span className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
               Updated {new Date(data.timestamp).toLocaleTimeString()}
             </span>
           ) : null}
         </div>
 
         {error ? (
-          <p className="mt-4 text-sm text-[var(--danger)]">{error}</p>
+          <p className="mt-4 text-sm text-[var(--status-error)]">{error}</p>
         ) : null}
         {data?.discovery.error ? (
-          <p className="mt-4 text-sm text-[var(--danger)]">{data.discovery.error}</p>
+          <p className="mt-4 text-sm text-[var(--status-error)]">{data.discovery.error}</p>
         ) : null}
       </section>
 
       {data ? (
         <section className="grid gap-4 md:grid-cols-2">
           <article className="panel rounded-[1.5rem] p-5">
-            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
               Pricing Guard
             </p>
             <div className="mt-3 space-y-2 text-sm text-stone-700">
@@ -140,7 +140,7 @@ export function VoicesDebugPanel() {
           </article>
 
           <article className="panel rounded-[1.5rem] p-5">
-            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
               Discovery
             </p>
             <div className="mt-3 space-y-2 text-sm text-stone-700">
@@ -181,12 +181,12 @@ export function VoicesDebugPanel() {
 
       {data ? (
         <section className="panel rounded-[1.5rem] p-5">
-          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--muted)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
             Filtered Voices
           </p>
           <div className="mt-4 overflow-x-auto rounded-[1rem] border border-[var(--border)] bg-white/80">
             <table className="min-w-full text-left text-sm text-stone-700">
-              <thead className="border-b border-[var(--border)] bg-white/90 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <thead className="border-b border-[var(--border)] bg-white/90 text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
                 <tr>
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Voice ID</th>
@@ -197,7 +197,7 @@ export function VoicesDebugPanel() {
                 {data.discovery.voices.map((voice) => (
                   <tr key={voice.voiceId} className="border-b border-[var(--border)]/50">
                     <td className="px-4 py-3 text-stone-900">{voice.name}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
+                    <td className="px-4 py-3 font-mono text-xs text-[var(--text-tertiary)]">
                       {voice.voiceId}
                     </td>
                     <td className="px-4 py-3">{voice.category}</td>
