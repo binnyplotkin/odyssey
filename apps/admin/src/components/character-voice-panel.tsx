@@ -3195,7 +3195,7 @@ ref,
         mid: 0,
         high: 0,
         peak: 0,
-        active: voiceModeActiveRef.current,
+        active: allowMicWaveform ? voiceModeActiveRef.current : false,
       });
     } finally {
       clearPlaybackStartTimers();

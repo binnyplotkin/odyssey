@@ -151,7 +151,11 @@ export function CharacterVoiceWavefield(props: Props) {
     // and resolve against this. Works whether the parent is a dedicated full
     // page (e.g. /voice) or an embedded tab inside the chat workspace.
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
-      <WavefieldStage audioData={waveAudioRef.current} atmosphere={1} />
+      <WavefieldStage
+        audioData={waveAudioRef.current}
+        atmosphere={voiceState.phase === "speaking" ? 1 : 0}
+        idleMotion="static"
+      />
 
       <div
         style={{

@@ -332,7 +332,15 @@ type OceanRef = {
   floats: FloatSystem;
 };
 
-function OceanField({ audioData }: { audioData: AudioData }) {
+type IdleMotionMode = "ambient" | "static";
+
+function OceanField({
+  audioData,
+  idleMotion = "ambient",
+}: {
+  audioData: AudioData;
+  idleMotion?: IdleMotionMode;
+}) {
   const groupRef = useRef<Group>(null);
   const oceanRef = useRef<OceanRef | null>(null);
   const smoothRef = useRef({ energy: 0, bass: 0, mid: 0, high: 0, peak: 0 });
@@ -677,6 +685,7 @@ function OceanField({ audioData }: { audioData: AudioData }) {
     const m = modeRef.current;
     const liveAudio = audioData;
     const micOn = liveAudio.active;
+    const freezeWhenInactive = idleMotion === "static" && !micOn;
     m.presence += ((micOn ? 1 : 0) - m.presence) * (micOn ? 0.09 : 0.05);
 
     const gate = gateRef.current;
@@ -769,16 +778,21 @@ function OceanField({ audioData }: { audioData: AudioData }) {
     const peak = s.peak;
 
     const roll = rollRef.current;
-    const targetRollSpeed =
-      rollActivity *
-      (0.00085 + waveDrive * 0.0038 + volumeStrength * 0.015 + loudness * 0.004 + energy * 0.0032) *
-      m.motionScale;
+    const targetRollSpeed = freezeWhenInactive
+      ? 0
+      : rollActivity *
+        (0.00085 + waveDrive * 0.0038 + volumeStrength * 0.015 + loudness * 0.004 + energy * 0.0032) *
+        m.motionScale;
     roll.speed += (targetRollSpeed - roll.speed) * (audioActive ? 0.14 : 0.008);
-    if (roll.speed < 0.00002) roll.speed = 0;
-    // Keep a subtle baseline movement so calm states never feel frozen.
-    const targetDrift = !micOn ? 0.0038 : audioActive ? 0.00022 : 0.00009;
+    if (Math.abs(roll.speed) < 0.00002) roll.speed = 0;
+    // Keep baseline movement in ambient mode; hard-stop in static idle mode.
+    const targetDrift = freezeWhenInactive ? 0 : !micOn ? 0.0038 : audioActive ? 0.00022 : 0.00009;
     roll.drift += (targetDrift - roll.drift) * (!micOn ? 0.08 : 0.05);
-    roll.offset += (roll.speed + roll.drift) * (dt * 60);
+    if (freezeWhenInactive) {
+      roll.offset = 0;
+    } else {
+      roll.offset += (roll.speed + roll.drift) * (dt * 60);
+    }
 
     const globalShimmer = clamp01(
       (!micOn ? 0.7 : 0.12) +
@@ -799,7 +813,7 @@ function OceanField({ audioData }: { audioData: AudioData }) {
       const layerTime = t * (1 + li * 0.1);
       const distanceFade = 1 - li / Math.max(1, ocean.layers.length - 1);
       // Calm baseline (pre-mic + silence) stays mostly flat/subtle; audio progressively grows topology.
-      const calmScale = !micOn ? 0.26 : 0.04;
+      const calmScale = !micOn ? (freezeWhenInactive ? 0 : 0.26) : 0.04;
       const activeScale = 2.22;
       const topologyTarget =
         micOn && audioPresence > 0.05
@@ -1240,7 +1254,7 @@ function OceanField({ audioData }: { audioData: AudioData }) {
     const floats = ocean.floats;
     for (let i = 0; i < FLOAT_COUNT; i++) {
       const i3 = i * 3;
-      const driftMul = !micOn ? 1 : audioActive ? 0.9 : 0.55;
+      const driftMul = freezeWhenInactive ? 0 : !micOn ? 1 : audioActive ? 0.9 : 0.55;
       floats.positions[i3] += floats.drift[i3] * (dt * 60) * driftMul;
       floats.positions[i3 + 1] += floats.drift[i3 + 1] * (dt * 60) * driftMul;
       floats.positions[i3 + 2] += floats.drift[i3 + 2] * (dt * 60) * driftMul;
@@ -1265,7 +1279,13 @@ function OceanField({ audioData }: { audioData: AudioData }) {
   return <group ref={groupRef} />;
 }
 
-function Scene({ audioData }: { audioData: AudioData }) {
+function Scene({
+  audioData,
+  idleMotion = "ambient",
+}: {
+  audioData: AudioData;
+  idleMotion?: IdleMotionMode;
+}) {
   return (
     <>
       <fog attach="fog" args={["#081120", 8, 66]} />
@@ -1279,7 +1299,7 @@ function Scene({ audioData }: { audioData: AudioData }) {
         enableZoom={false}
         target={[0, -0.62, -24]}
       />
-      <OceanField audioData={audioData} />
+      <OceanField audioData={audioData} idleMotion={idleMotion} />
     </>
   );
 }
@@ -1287,9 +1307,11 @@ function Scene({ audioData }: { audioData: AudioData }) {
 export function WavefieldStage({
   audioData,
   atmosphere,
+  idleMotion = "ambient",
 }: {
   audioData: AudioData;
   atmosphere: number;
+  idleMotion?: IdleMotionMode;
 }) {
   return (
     <div
@@ -1404,7 +1426,7 @@ export function WavefieldStage({
         style={{ width: "100%", height: "100%", position: "relative", zIndex: 3 }}
         gl={{ antialias: false, alpha: true, powerPreference: "high-performance" }}
       >
-        <Scene audioData={audioData} />
+        <Scene audioData={audioData} idleMotion={idleMotion} />
       </Canvas>
     </div>
   );

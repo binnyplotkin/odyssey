@@ -175,7 +175,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     const tick = () => {
       pulse += 0.18;
       const shimmer = 0.5 + Math.sin(pulse) * 0.5;
-      const voiceActive = phase === "live" && (voiceState !== "idle" || micOn);
+      const voiceActive = phase === "live" && voiceState === "speaking";
       const target =
         phase !== "live"
           ? {
@@ -188,21 +188,21 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             }
           : voiceState === "listening"
             ? {
-                energy: 0.5,
-                bass: 0.18,
-                mid: 0.46,
-                high: 0.34,
-                peak: 0.3,
-                active: true,
+                energy: 0.08,
+                bass: 0.05,
+                mid: 0.07,
+                high: 0.05,
+                peak: 0.04,
+                active: false,
               }
             : voiceState === "thinking"
               ? {
-                  energy: 0.26,
-                  bass: 0.1,
-                  mid: 0.28,
-                  high: 0.22,
-                  peak: 0.14,
-                  active: true,
+                  energy: 0.08,
+                  bass: 0.05,
+                  mid: 0.07,
+                  high: 0.05,
+                  peak: 0.04,
+                  active: false,
                 }
               : voiceState === "speaking"
                 ? {
@@ -233,7 +233,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     tick();
     const id = window.setInterval(tick, 80);
     return () => window.clearInterval(id);
-  }, [micOn, phase, voiceState]);
+  }, [phase, voiceState]);
 
   async function handleStart() {
     setStartedAt(Date.now());
@@ -1048,7 +1048,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             onStart={handleStart}
             onCancel={handleCancel}
             heroBackground={
-              <SandboxWavefieldCell atmosphere={0.28} audioData={waveAudioRef.current} />
+              <SandboxWavefieldCell
+                atmosphere={0.28}
+                audioData={waveAudioRef.current}
+                idleMotion="ambient"
+              />
             }
           />
         ) : phase === "post-session" && endedSession ? (
@@ -1071,7 +1075,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
               overflow: "hidden",
             }}
           >
-            <SandboxWavefieldCell atmosphere={1} audioData={waveAudioRef.current} />
+            <SandboxWavefieldCell
+              atmosphere={mode === "voice" && voiceState === "speaking" ? 1 : 0}
+              audioData={waveAudioRef.current}
+              idleMotion={mode === "voice" ? "static" : "ambient"}
+            />
             <div
               style={{
                 position: "relative",
@@ -1135,9 +1143,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 function SandboxWavefieldCell({
   atmosphere,
   audioData,
+  idleMotion,
 }: {
   atmosphere: number;
   audioData: AudioData;
+  idleMotion?: "ambient" | "static";
 }) {
   return (
     <div
@@ -1150,7 +1160,11 @@ function SandboxWavefieldCell({
         pointerEvents: "none",
       }}
     >
-      <WavefieldStage audioData={audioData} atmosphere={atmosphere} />
+      <WavefieldStage
+        audioData={audioData}
+        atmosphere={atmosphere}
+        idleMotion={idleMotion}
+      />
     </div>
   );
 }
