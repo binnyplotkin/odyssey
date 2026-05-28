@@ -5,6 +5,7 @@ import type {
   SandboxBinding,
   SandboxCharacter,
 } from "@/app/(authenticated)/characters/[slug]/sandbox/page";
+import { resolveAvatarGradient } from "@/lib/avatar-gradients";
 import type { SandboxMode } from "../character-sandbox";
 
 /**
@@ -15,11 +16,12 @@ import type { SandboxMode } from "../character-sandbox";
 
 const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
-const ACCENT = "#8FD1CB";
-const TEXT_PRIMARY = "#E8EAEC";
-const TEXT_MUTED = "#6B7280";
-const TEXT_VALUE = "#B8BCC8";
-const DANGER = "#ef716b";
+const ACCENT = "var(--accent-strong)";
+const TEXT_PRIMARY = "var(--text-primary)";
+const TEXT_MUTED = "var(--text-tertiary)";
+const TEXT_VALUE = "var(--text-secondary)";
+const DANGER = "var(--status-error)";
+const MANIFEST_BG = "var(--surface-1)";
 
 export function SandboxPreSession({
   character,
@@ -30,6 +32,7 @@ export function SandboxPreSession({
   onModeChange,
   onStart,
   onCancel,
+  heroBackground,
 }: {
   character: SandboxCharacter;
   bindings: SandboxBinding[];
@@ -39,6 +42,7 @@ export function SandboxPreSession({
   onModeChange: (next: SandboxMode) => void;
   onStart: () => void;
   onCancel: () => void;
+  heroBackground?: ReactNode;
 }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -77,7 +81,7 @@ export function SandboxPreSession({
     !boundVoiceSlug;
   const avatarBg = character.image
     ? `center/cover no-repeat url("${character.image}")`
-    : "linear-gradient(135deg, #5f573f 0%, #3f3c32 100%)";
+    : resolveAvatarGradient(character.thumbnailColor, character.slug);
   const initial =
     (character.title.trim() || character.slug).charAt(0).toUpperCase() || "?";
 
@@ -85,11 +89,12 @@ export function SandboxPreSession({
     <div
       style={{
         position: "relative",
+        isolation: "isolate",
         flex: 1,
         minHeight: 0,
         overflow: "hidden",
         display: "flex",
-        background: "#0A0B0C",
+        background: "var(--background)",
       }}
     >
       <PaperHero
@@ -97,6 +102,7 @@ export function SandboxPreSession({
         avatarBg={avatarBg}
         initial={initial}
         essence={essence}
+        background={heroBackground}
       />
 
       <PaperManifestRail
@@ -131,16 +137,20 @@ function PaperHero({
   avatarBg,
   initial,
   essence,
+  background,
 }: {
   character: SandboxCharacter;
   avatarBg: string;
   initial: string;
   essence: string | undefined;
+  background?: ReactNode;
 }) {
   return (
     <section
       aria-label={`${character.title} pre-session identity`}
       style={{
+        position: "relative",
+        zIndex: 0,
         flex: 1,
         minWidth: 0,
         display: "flex",
@@ -150,10 +160,14 @@ function PaperHero({
         paddingBlock: 60,
         paddingInline: 48,
         gap: "var(--space-24)",
+        overflow: "hidden",
       }}
     >
+      {background}
       <div
         style={{
+          position: "relative",
+          zIndex: 1,
           width: 128,
           height: 128,
           borderRadius: "var(--radius-xl)",
@@ -167,7 +181,7 @@ function PaperHero({
           fontWeight: 600,
           lineHeight: "95%",
           letterSpacing: "-0.04em",
-          color: "rgba(231, 210, 140, 0.50)",
+          color: "rgba(12,14,20,0.75)",
           overflow: "hidden",
         }}
       >
@@ -175,6 +189,8 @@ function PaperHero({
       </div>
       <h1
         style={{
+          position: "relative",
+          zIndex: 1,
           margin: 0,
           maxWidth: 900,
           fontFamily: FONT_HEAD,
@@ -190,6 +206,8 @@ function PaperHero({
       </h1>
       <p
         style={{
+          position: "relative",
+          zIndex: 1,
           margin: 0,
           maxWidth: 440,
           fontFamily: FONT_HEAD,
@@ -257,12 +275,15 @@ function PaperManifestRail({
     <aside
       aria-label="Session manifest"
       style={{
+        position: "relative",
+        zIndex: 100,
         width: 420,
+        minHeight: 0,
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",
-        background: "#0B0C0D",
-        borderLeft: "1px solid rgba(255,255,255,0.10)",
+        backgroundColor: MANIFEST_BG,
+        borderLeft: "1px solid var(--border-medium)",
       }}
     >
       <header
@@ -271,7 +292,8 @@ function PaperManifestRail({
           display: "flex",
           flexDirection: "column",
           gap: "var(--space-8)",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          backgroundColor: MANIFEST_BG,
+          borderBottom: "1px solid var(--border-medium)",
         }}
       >
         <span
@@ -281,7 +303,7 @@ function PaperManifestRail({
             letterSpacing: "0.22em",
             lineHeight: "14px",
             textTransform: "uppercase",
-            color: "#8CE7D2",
+            color: ACCENT,
           }}
         >
           session manifest
@@ -318,6 +340,7 @@ function PaperManifestRail({
           overflow: "hidden",
           paddingBlock: "var(--space-6)",
           paddingInline: 28,
+          backgroundColor: MANIFEST_BG,
         }}
       >
         <ManifestRailRow
@@ -326,7 +349,9 @@ function PaperManifestRail({
           tone={hasIdentity ? "accent" : "muted"}
         >
           {traits.length > 0 ? (
-            <ManifestRailValue>{traits.map((trait) => trait.name).join(" · ")}</ManifestRailValue>
+            <ManifestRailValue>
+              {traits.map((trait) => trait.name).join(" · ")}
+            </ManifestRailValue>
           ) : (
             <ManifestRailHint>no traits</ManifestRailHint>
           )}
@@ -348,12 +373,17 @@ function PaperManifestRail({
           </ManifestRailHint>
           {boundVoiceSlug ? (
             <ManifestRailHint>
-              {boundVoiceName ?? boundVoiceSlug} · {boundVoiceProvider ?? "unknown"}
+              {boundVoiceName ?? boundVoiceSlug} ·{" "}
+              {boundVoiceProvider ?? "unknown"}
             </ManifestRailHint>
           ) : null}
         </ManifestRailRow>
 
-        <ManifestRailRow label="mind" status={activeModel ? "● routed" : "not set"} tone={activeModel ? "accent" : "muted"}>
+        <ManifestRailRow
+          label="mind"
+          status={activeModel ? "● routed" : "not set"}
+          tone={activeModel ? "accent" : "muted"}
+        >
           <ManifestRailValue>{activeModel || "no model set"}</ManifestRailValue>
           <ManifestRailHint>
             voice ▸ {voiceOverride ?? (activeModel || "default")}
@@ -368,9 +398,13 @@ function PaperManifestRail({
           {bindings.length === 0 ? (
             <ManifestRailHint>no wikis bound</ManifestRailHint>
           ) : (
-            bindings.slice(0, 2).map((binding) => (
-              <ManifestRailValue key={binding.slug}>{binding.slug}</ManifestRailValue>
-            ))
+            bindings
+              .slice(0, 2)
+              .map((binding) => (
+                <ManifestRailValue key={binding.slug}>
+                  {binding.slug}
+                </ManifestRailValue>
+              ))
           )}
           {bindings.length > 2 ? (
             <ManifestRailHint>+ {bindings.length - 2} more</ManifestRailHint>
@@ -409,20 +443,24 @@ function PaperManifestRail({
 
       <footer
         style={{
+          position: "relative",
+          zIndex: 101,
           padding: "20px 28px 28px",
           display: "flex",
           flexDirection: "column",
           gap: "var(--space-14)",
+          backgroundColor: MANIFEST_BG,
+          borderTop: "1px solid var(--border-medium)",
         }}
       >
         {sessionError ? (
           <div
             role="alert"
             style={{
-              border: "1px solid rgba(239,113,107,0.42)",
+              border: "1px solid var(--critical-border)",
               borderRadius: "var(--radius-md)",
               padding: "12px 14px",
-              background: "rgba(239,113,107,0.08)",
+              background: "var(--critical-wash)",
               color: DANGER,
               fontFamily: FONT_MONO,
               fontSize: "var(--font-size-xs)",
@@ -445,7 +483,7 @@ function PaperManifestRail({
             borderRadius: "var(--radius-pill)",
             border: "none",
             background: ACCENT,
-            color: "#0A0B0C",
+            color: "var(--accent-on)",
             fontFamily: FONT_MONO,
             fontSize: "var(--font-size-md)",
             fontWeight: 700,
@@ -456,7 +494,13 @@ function PaperManifestRail({
             opacity: isEmpty ? 0.82 : 1,
           }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="#0A0B0C" aria-hidden>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="var(--accent-on)"
+            aria-hidden
+          >
             <path d="M8 5v14l11-7z" />
           </svg>
           start session
@@ -500,7 +544,7 @@ function ManifestRailRow({
         justifyContent: "space-between",
         gap: "var(--space-12)",
         paddingBlock: "var(--space-14)",
-        borderBottom: "1px solid rgba(255,255,255,0.04)",
+        borderBottom: "1px solid var(--ink-soft)",
       }}
     >
       <span
@@ -607,8 +651,8 @@ function ManifestModeRow({
         marginTop: "var(--space-8)",
         paddingTop: "var(--space-24)",
         paddingBottom: "var(--space-14)",
-        borderTop: "1px solid rgba(255,255,255,0.08)",
-        borderBottom: "1px solid rgba(255,255,255,0.04)",
+        borderTop: "1px solid var(--border-medium)",
+        borderBottom: "1px solid var(--ink-soft)",
       }}
     >
       <span
@@ -624,7 +668,13 @@ function ManifestModeRow({
       >
         mode
       </span>
-      <div style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-8)" }}>
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "var(--space-8)",
+        }}
+      >
         <ModePill active={mode === "voice"} onClick={() => onChange("voice")}>
           voice
         </ModePill>
@@ -655,8 +705,10 @@ function ModePill({
         justifyContent: "center",
         padding: "6px 14px",
         borderRadius: "var(--radius-pill)",
-        border: active ? `1px solid ${ACCENT}` : "1px solid rgba(255,255,255,0.08)",
-        background: active ? "rgba(143,209,203,0.10)" : "transparent",
+        border: active
+          ? `1px solid ${ACCENT}`
+          : "1px solid var(--border-medium)",
+        background: active ? "var(--accent-wash)" : "transparent",
         color: active ? ACCENT : TEXT_MUTED,
         fontFamily: FONT_MONO,
         fontSize: "var(--font-size-xs)",

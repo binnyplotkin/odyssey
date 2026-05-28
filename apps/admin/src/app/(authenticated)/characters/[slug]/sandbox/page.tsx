@@ -39,9 +39,10 @@ export type SandboxBinding = {
 };
 
 export default async function SandboxPage({ params }: { params: Params }) {
-  const { slug } = await params;
+  const { slug: idOrSlug } = await params;
   const store = getCharacterStore();
-  const character = (await store.getBySlug(slug)) ?? (await store.getById(slug));
+  const character =
+    (await store.getById(idOrSlug)) ?? (await store.getBySlug(idOrSlug));
   if (!character) notFound();
 
   const [bindings, boundVoice] = await Promise.all([

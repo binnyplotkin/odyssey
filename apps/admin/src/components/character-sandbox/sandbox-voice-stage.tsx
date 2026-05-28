@@ -5,11 +5,8 @@ import type { SandboxCharacter } from "@/app/(authenticated)/characters/[slug]/s
 /**
  * SandboxVoiceStage — center stage when the sandbox is in voice mode.
  * Renders the state pill, big Inter character title with sub-eyebrow,
- * a wavefield placeholder (procedural SVG bars), the captured-utterance
- * caption, and the bottom mic dock.
- *
- * The wavefield is procedural for now; once we wire real STT amplitude
- * data, swap the static bars for a live AudioContext analyzer.
+ * the captured-utterance caption, and the bottom mic dock over the global
+ * Three.js wavefield mounted by CharacterSandbox.
  */
 
 const FONT_HEAD = "'Inter', system-ui, sans-serif";
@@ -62,6 +59,8 @@ export function SandboxVoiceStage({
           letterSpacing: "0.22em",
           textTransform: "uppercase",
           color: ACCENT,
+          textShadow:
+            "0 0 18px color-mix(in srgb, var(--background) 78%, transparent)",
         }}
       >
         <span
@@ -97,6 +96,8 @@ export function SandboxVoiceStage({
             color: "var(--text-primary)",
             letterSpacing: "-0.03em",
             lineHeight: 1,
+            textShadow:
+              "0 10px 40px color-mix(in srgb, var(--background) 72%, transparent)",
           }}
         >
           {character.title}
@@ -109,14 +110,14 @@ export function SandboxVoiceStage({
               letterSpacing: "0.14em",
               textTransform: "uppercase",
               color: "var(--text-tertiary)",
+              textShadow:
+                "0 8px 28px color-mix(in srgb, var(--background) 76%, transparent)",
             }}
           >
             {subEyebrow}
           </span>
         )}
       </div>
-
-      <Wavefield state={state} />
 
       {lastUserUtterance && (
         <div
@@ -128,6 +129,12 @@ export function SandboxVoiceStage({
             maxWidth: 640,
             textAlign: "center",
             lineHeight: 1.6,
+            padding: "12px 16px",
+            background:
+              "color-mix(in srgb, var(--background) 52%, transparent)",
+            backdropFilter: "blur(8px)",
+            border:
+              "1px solid color-mix(in srgb, var(--accent-strong) 18%, transparent)",
           }}
         >
           &ldquo;{lastUserUtterance}&rdquo; · captured · ready to respond
@@ -158,7 +165,7 @@ export function SandboxVoiceStage({
             color: "var(--text-tertiary)",
           }}
         >
-          {micOn ? "tap to mute" : "tap to unmute"} · space to push-to-talk
+          voice input {micOn ? "on" : "off"} · chat replies speak
         </span>
       </div>
     </div>
@@ -172,14 +179,12 @@ function MicButton({ on, onClick }: { on: boolean; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      aria-label={on ? "Mute mic" : "Unmute mic"}
+      aria-label={on ? "Turn voice input off" : "Turn voice input on"}
       style={{
         width: 72,
         height: 72,
         borderRadius: "50%",
-        border: on
-          ? "1px solid var(--accent-glow)"
-          : "1px solid var(--border)",
+        border: on ? "1px solid var(--accent-glow)" : "1px solid var(--border)",
         background: on
           ? "color-mix(in srgb, var(--accent-strong) 12%, transparent)"
           : "transparent",
@@ -188,9 +193,7 @@ function MicButton({ on, onClick }: { on: boolean; onClick: () => void }) {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: on
-          ? "0 0 24px var(--accent-border)"
-          : "none",
+        boxShadow: on ? "0 0 24px var(--accent-border)" : "none",
         transition: "box-shadow 120ms, background 120ms, border-color 120ms",
       }}
     >
@@ -212,68 +215,6 @@ function MicButton({ on, onClick }: { on: boolean; onClick: () => void }) {
   );
 }
 
-function Wavefield({ state }: { state: VoiceState }) {
-  // Procedural amplitudes. When state is idle/speaking we render a flatter
-  // shape; listening/thinking get a more energetic profile. Replace with a
-  // live FFT analyser when real audio capture is wired.
-  const samples = buildWaveSamples(state);
-  return (
-    <div
-      style={{
-        width: 720,
-        height: 240,
-        border:
-          "1px solid color-mix(in srgb, var(--accent-strong) 25%, transparent)",
-        background: "color-mix(in srgb, var(--accent-strong) 4%, transparent)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-      }}
-    >
-      <svg
-        width="640"
-        height="180"
-        viewBox="0 0 640 180"
-        fill="none"
-        aria-hidden
-      >
-        <g stroke={ACCENT} strokeWidth={2} strokeLinecap="round" opacity={0.85}>
-          {samples.map((amp, i) => {
-            const x = 20 + i * 16;
-            const cy = 90;
-            const half = amp * 80;
-            return (
-              <line
-                key={i}
-                x1={x}
-                y1={cy - half}
-                x2={x}
-                y2={cy + half}
-              />
-            );
-          })}
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-function buildWaveSamples(state: VoiceState): number[] {
-  const count = 38;
-  const energy =
-    state === "listening" ? 1 : state === "thinking" ? 0.6 : state === "speaking" ? 0.85 : 0.15;
-  const out: number[] = [];
-  for (let i = 0; i < count; i++) {
-    // Mix a couple of sines for an organic shape.
-    const base =
-      Math.sin(i * 0.42) * 0.5 + Math.sin(i * 1.1 + 0.4) * 0.35 + 0.5;
-    const jitter = Math.sin(i * 3.1) * 0.18;
-    out.push(Math.max(0.05, Math.min(1, (base + jitter) * energy)));
-  }
-  return out;
-}
-
 function composeSubEyebrow(character: SandboxCharacter): string {
   const essence = character.identity?.essence?.trim();
   if (essence) {
@@ -284,8 +225,9 @@ function composeSubEyebrow(character: SandboxCharacter): string {
       : firstClause;
   }
   const traits =
-    character.identity?.traits?.map((t) => t.name.toLowerCase()).filter(Boolean) ??
-    [];
+    character.identity?.traits
+      ?.map((t) => t.name.toLowerCase())
+      .filter(Boolean) ?? [];
   if (traits.length > 0) return traits.slice(0, 3).join(" · ");
   return character.summary ?? "";
 }

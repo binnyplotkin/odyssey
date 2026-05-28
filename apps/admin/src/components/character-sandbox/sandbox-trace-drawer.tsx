@@ -8,13 +8,20 @@ import {
   useState,
 } from "react";
 import type { TracePayload } from "@/lib/voice-trace";
-import type { SandboxMode, SandboxPhase, SandboxTraceRecord } from "../character-sandbox";
+import type {
+  SandboxMode,
+  SandboxPhase,
+  SandboxTraceRecord,
+} from "../character-sandbox";
 import { SandboxReadinessPanel } from "./sandbox-readiness-drawer";
 
 const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
-const DANGER = "var(--danger)";
+const DANGER = "var(--status-error)";
+const PANEL_BG = "var(--surface-active)";
+const PANEL_SECTION_BG = "var(--material-card)";
+const PANEL_CELL_BG = "var(--surface-1)";
 
 type Props = {
   open: boolean;
@@ -68,7 +75,9 @@ export function SandboxTraceDrawer({
     [chatModel, mode, sessionError, sessionId, voiceModel],
   );
   const rows = selected ? normalizeTraceRows(selected.trace) : preSessionRows;
-  const elapsed = selected ? traceElapsedMs(selected.trace) : rows.at(-1)?.elapsedMs ?? 0;
+  const elapsed = selected
+    ? traceElapsedMs(selected.trace)
+    : (rows.at(-1)?.elapsedMs ?? 0);
 
   if (!open) return null;
 
@@ -101,12 +110,12 @@ export function SandboxTraceDrawer({
         height,
         minHeight: 240,
         flexShrink: 0,
-        background: "#0B0C0D",
-        borderTop: "1px solid rgba(255,255,255,0.10)",
+        background: PANEL_BG,
+        borderTop: "1px solid var(--border-medium)",
         display: "flex",
         flexDirection: "row",
         overflow: "hidden",
-        boxShadow: "0 -18px 60px rgba(0,0,0,0.34)",
+        boxShadow: "var(--elevation-panel)",
       }}
     >
       <div
@@ -134,8 +143,8 @@ export function SandboxTraceDrawer({
             width: 72,
             height: 3,
             borderRadius: "var(--radius-pill)",
-            background: "rgba(255,255,255,0.18)",
-            boxShadow: "0 0 0 1px rgba(0,0,0,0.22)",
+            background: "var(--ink-edge)",
+            boxShadow: "0 0 0 1px var(--border-subtle)",
           }}
         />
       </div>
@@ -144,15 +153,29 @@ export function SandboxTraceDrawer({
           width: 300,
           flexShrink: 0,
           padding: "22px 24px",
-          borderRight: "1px solid rgba(255,255,255,0.08)",
+          borderRight: "1px solid var(--border-medium)",
+          background: PANEL_SECTION_BG,
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
           gap: "var(--space-18)",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)", minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-16)" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-12)",
+            minWidth: 0,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "var(--space-16)",
+            }}
+          >
             <div
               style={{
                 fontFamily: FONT_MONO,
@@ -191,9 +214,24 @@ export function SandboxTraceDrawer({
               : "Readiness checks"}
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
-          <div style={{ display: "inline-flex", border: "1px solid rgba(255,255,255,0.10)" }}>
-            <DiagnosticsTab active={tab === "trace"} onClick={() => setTab("trace")}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-12)",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              border: "1px solid var(--border-medium)",
+              background: PANEL_CELL_BG,
+            }}
+          >
+            <DiagnosticsTab
+              active={tab === "trace"}
+              onClick={() => setTab("trace")}
+            >
               trace
             </DiagnosticsTab>
             <DiagnosticsTab
@@ -204,7 +242,14 @@ export function SandboxTraceDrawer({
               readiness
             </DiagnosticsTab>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-8)",
+              flexWrap: "wrap",
+            }}
+          >
             <TracePill tone={sessionError ? "danger" : "accent"}>
               {sessionError ? "degraded" : phase}
             </TracePill>
@@ -215,7 +260,15 @@ export function SandboxTraceDrawer({
       </header>
 
       {tab === "readiness" ? (
-        <div style={{ minWidth: 0, flex: 1, display: "flex", overflow: "hidden" }}>
+        <div
+          style={{
+            minWidth: 0,
+            flex: 1,
+            display: "flex",
+            overflow: "hidden",
+            background: PANEL_SECTION_BG,
+          }}
+        >
           <SandboxReadinessPanel
             active={open && tab === "readiness"}
             characterId={characterId}
@@ -232,7 +285,8 @@ export function SandboxTraceDrawer({
               width: 330,
               flexShrink: 0,
               padding: "18px 18px",
-              borderRight: "1px solid rgba(255,255,255,0.06)",
+              borderRight: "1px solid var(--border-subtle)",
+              background: PANEL_SECTION_BG,
               display: "flex",
               flexDirection: "column",
               gap: "var(--space-10)",
@@ -245,8 +299,16 @@ export function SandboxTraceDrawer({
               value={sessionId ? sessionId.slice(0, 8) : "not started"}
               hint={sessionError ?? "world session"}
             />
-            <TraceCell label="chat model" value={chatModel || "unset"} hint="provider routed by registry" />
-            <TraceCell label="voice model" value={voiceModel || "unset"} hint="tts prompt path" />
+            <TraceCell
+              label="chat model"
+              value={chatModel || "unset"}
+              hint="provider routed by registry"
+            />
+            <TraceCell
+              label="voice model"
+              value={voiceModel || "unset"}
+              hint="tts prompt path"
+            />
           </div>
 
           <div
@@ -255,6 +317,7 @@ export function SandboxTraceDrawer({
               gridTemplateColumns: records.length > 0 ? "160px 1fr" : "1fr",
               minHeight: 0,
               flex: 1,
+              background: PANEL_SECTION_BG,
             }}
           >
             {records.length > 0 && (
@@ -296,8 +359,8 @@ function DiagnosticsTab({
       onClick={onClick}
       style={{
         border: "none",
-        borderLeft: leftBorder ? "1px solid rgba(255,255,255,0.10)" : "none",
-        background: active ? "rgba(143,209,203,0.12)" : "transparent",
+        borderLeft: leftBorder ? "1px solid var(--border-medium)" : "none",
+        background: active ? "var(--accent-wash)" : PANEL_CELL_BG,
         color: active ? ACCENT : "var(--text-tertiary)",
         fontFamily: FONT_MONO,
         fontSize: "var(--font-size-xs)",
@@ -324,7 +387,8 @@ function TraceRecordRail({
   return (
     <nav
       style={{
-        borderRight: "1px solid rgba(255,255,255,0.06)",
+        borderRight: "1px solid var(--border-subtle)",
+        background: PANEL_SECTION_BG,
         overflow: "auto",
         padding: "12px 10px",
         display: "flex",
@@ -345,10 +409,10 @@ function TraceRecordRail({
               style={{
                 border: active
                   ? "1px solid color-mix(in srgb, var(--accent-strong) 45%, transparent)"
-                  : "1px solid rgba(255,255,255,0.06)",
+                  : "1px solid var(--border-subtle)",
                 background: active
                   ? "color-mix(in srgb, var(--accent-strong) 10%, transparent)"
-                  : "transparent",
+                  : PANEL_CELL_BG,
                 color: active ? ACCENT : "var(--text-secondary)",
                 padding: "10px 12px",
                 textAlign: "left",
@@ -396,6 +460,7 @@ function TraceTimeline({
       <div
         style={{
           padding: 28,
+          background: PANEL_SECTION_BG,
           fontFamily: FONT_HEAD,
           fontSize: "var(--font-size-md)",
           lineHeight: "20px",
@@ -413,6 +478,7 @@ function TraceTimeline({
         minHeight: 0,
         overflow: "auto",
         padding: "18px 28px 28px",
+        background: PANEL_SECTION_BG,
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-10)",
@@ -420,7 +486,9 @@ function TraceTimeline({
     >
       {rows.map((row, index) => {
         const prev = rows[index - 1];
-        const delta = prev ? Math.max(0, row.elapsedMs - prev.elapsedMs) : row.elapsedMs;
+        const delta = prev
+          ? Math.max(0, row.elapsedMs - prev.elapsedMs)
+          : row.elapsedMs;
         return (
           <div
             key={`${row.name}-${index}`}
@@ -429,7 +497,7 @@ function TraceTimeline({
               gridTemplateColumns: "86px 1fr",
               gap: "var(--space-12)",
               padding: "10px 0",
-              borderBottom: "1px solid rgba(255,255,255,0.05)",
+              borderBottom: "1px solid var(--border-subtle)",
             }}
           >
             <div
@@ -461,7 +529,14 @@ function TraceTimeline({
                 +{Math.round(delta)}ms
               </span>
             </div>
-            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+            <div
+              style={{
+                minWidth: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--space-5)",
+              }}
+            >
               <span
                 style={{
                   fontFamily: FONT_MONO,
@@ -507,7 +582,8 @@ function TraceCell({
   return (
     <div
       style={{
-        border: "1px solid rgba(255,255,255,0.06)",
+        border: "1px solid var(--border-subtle)",
+        background: PANEL_CELL_BG,
         padding: "10px 12px",
         minWidth: 0,
       }}
@@ -564,14 +640,19 @@ function TracePill({
   children: ReactNode;
   tone?: "accent" | "danger" | "muted";
 }) {
-  const color = tone === "accent" ? ACCENT : tone === "danger" ? DANGER : "var(--text-tertiary)";
+  const color =
+    tone === "accent"
+      ? ACCENT
+      : tone === "danger"
+        ? DANGER
+        : "var(--text-tertiary)";
   return (
     <span
       style={{
-        border: `1px solid ${tone === "muted" ? "rgba(255,255,255,0.10)" : color}`,
+        border: `1px solid ${tone === "muted" ? "var(--border-medium)" : color}`,
         background:
           tone === "muted"
-            ? "rgba(255,255,255,0.03)"
+            ? "var(--ink-soft)"
             : `color-mix(in srgb, ${color} 12%, transparent)`,
         color,
         fontFamily: FONT_MONO,
@@ -621,9 +702,13 @@ function buildPreSessionRows({
       meta: sessionId ? { sessionId } : { persistence: "created on start" },
     },
     {
-      name: sessionError ? "sandbox.session.degraded" : "sandbox.ready_for_launch",
+      name: sessionError
+        ? "sandbox.session.degraded"
+        : "sandbox.ready_for_launch",
       elapsedMs: 4,
-      meta: sessionError ? { error: sessionError } : { shortcut: "Cmd/Ctrl+Enter" },
+      meta: sessionError
+        ? { error: sessionError }
+        : { shortcut: "Cmd/Ctrl+Enter" },
     },
   ];
 }
@@ -651,8 +736,8 @@ function clamp(value: number, min: number, max: number): number {
 const iconButtonStyle = {
   width: 30,
   height: 30,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "transparent",
+  border: "1px solid var(--border-medium)",
+  background: PANEL_CELL_BG,
   color: "var(--text-tertiary)",
   fontFamily: FONT_MONO,
   fontSize: "var(--font-size-lg)",
