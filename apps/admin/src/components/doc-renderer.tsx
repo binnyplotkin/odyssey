@@ -203,8 +203,8 @@ function DocStyles() {
       .doc-toc {
         width: 240px;
         flex-shrink: 0;
-        background: var(--card);
-        border: 1px solid var(--card-border);
+        background: var(--material-card);
+        border: 1px solid var(--border-subtle);
         border-radius: 14px;
         padding: 24px;
         display: flex;
@@ -319,14 +319,14 @@ function DocStyles() {
       .doc-renderer code {
         font-family: var(--font-mono, ui-monospace, monospace);
         font-size: 0.85em;
-        background: var(--input-bg);
+        background: var(--control-bg);
         padding: 0.15em 0.4em;
         border-radius: 4px;
         color: var(--text-primary);
       }
       .doc-renderer pre {
-        background: var(--card);
-        border: 1px solid var(--card-border);
+        background: var(--material-card);
+        border: 1px solid var(--border-subtle);
         border-radius: 12px;
         padding: 1.25rem;
         overflow-x: auto;
@@ -352,7 +352,7 @@ function DocStyles() {
       }
       .doc-renderer hr {
         border: none;
-        border-top: 1px solid var(--divider);
+        border-top: 1px solid var(--border-subtle);
         margin-top: 48px;
         margin-right: 0;
         margin-bottom: 48px;
@@ -380,12 +380,12 @@ function DocStyles() {
         text-align: left;
         font-weight: 600;
         padding: 0.625rem 0.875rem;
-        border-bottom: 2px solid var(--card-border);
+        border-bottom: 2px solid var(--border-subtle);
         color: var(--text-primary);
       }
       .doc-renderer td {
         padding: 0.625rem 0.875rem;
-        border-bottom: 1px solid var(--divider);
+        border-bottom: 1px solid var(--border-subtle);
       }
       .doc-renderer tr:last-child td {
         border-bottom: none;

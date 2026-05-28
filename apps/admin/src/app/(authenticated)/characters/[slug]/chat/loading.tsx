@@ -25,7 +25,7 @@ function MessageBubble({ side, lines = 2 }: { side: "left" | "right"; lines?: nu
           maxWidth: "60%",
           padding: "10px 14px",
           borderRadius: "var(--radius-2xl)",
-          background: side === "right" ? "var(--accent-soft)" : "var(--panel)",
+          background: side === "right" ? "var(--accent-soft)" : "var(--surface-1)",
           border: side === "right"
             ? "1px solid var(--accent-soft)"
             : "1px solid var(--border)",
@@ -52,7 +52,7 @@ function SceneBarChip({ label, value }: { label: number; value: number }) {
         padding: "6px 10px",
         borderRadius: "var(--radius-md)",
         border: "1px solid var(--border)",
-        background: "var(--panel)",
+        background: "var(--surface-1)",
       }}
     >
       <Skeleton width={label} height={9} />
@@ -156,7 +156,7 @@ export default function CharacterChatLoading() {
             style={{
               height: 220,
               borderRadius: "var(--radius-xl)",
-              background: "var(--panel)",
+              background: "var(--surface-1)",
               border: "1px solid var(--border)",
             }}
           />
@@ -169,7 +169,7 @@ export default function CharacterChatLoading() {
                   padding: "10px 12px",
                   borderRadius: "var(--radius-lg)",
                   border: "1px solid var(--border)",
-                  background: "var(--panel)",
+                  background: "var(--surface-1)",
                   display: "flex",
                   flexDirection: "column",
                   gap: "var(--space-6)",

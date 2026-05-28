@@ -767,7 +767,7 @@ function FieldsBlock({
           style={{
             width: "100%",
             padding: "10px 12px",
-            background: "var(--input-bg)",
+            background: "var(--control-bg)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-md)",
             color: "var(--text-primary)",
@@ -797,7 +797,7 @@ function FieldsBlock({
           style={{
             width: "100%",
             padding: "10px 12px",
-            background: "var(--input-bg)",
+            background: "var(--control-bg)",
             border: `1px solid ${
               slug && slugAvailable === true
                 ? "var(--accent-glow)"

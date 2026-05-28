@@ -82,8 +82,8 @@ function L03TabPlaceholder({ tab }: { tab: string }) {
       <div
         style={{
           padding: "var(--space-24)",
-          background: "var(--card)",
-          border: "1px dashed var(--card-border)",
+          background: "var(--material-card)",
+          border: "1px dashed var(--border-subtle)",
           borderRadius: "var(--radius-md)",
           fontFamily: "'Inter', sans-serif",
           fontSize: "var(--font-size-md)",
@@ -337,7 +337,7 @@ function L03Configure({ character }: { character: HarnessCharacter }) {
             margin: 0,
             padding: "14px 16px",
             background: "rgba(0,0,0,0.25)",
-            border: "1px solid var(--input-border)",
+            border: "1px solid var(--control-border)",
             borderRadius: "var(--radius-sm)",
             fontFamily: T.fontMono,
             fontSize: 11.5,
@@ -365,8 +365,8 @@ function L03Configure({ character }: { character: HarnessCharacter }) {
       <div
         style={{
           padding: "12px 16px",
-          background: "var(--card)",
-          border: "1px dashed var(--card-border)",
+          background: "var(--material-card)",
+          border: "1px dashed var(--border-subtle)",
           borderRadius: "var(--radius-md)",
           fontFamily: T.fontBody,
           fontSize: "var(--font-size-base)",
@@ -429,8 +429,8 @@ function SaveBar({
         alignItems: "center",
         gap: "var(--space-14)",
         padding: "12px 16px",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
       }}
     >
@@ -456,8 +456,8 @@ function SaveBar({
           fontSize: "var(--font-size-xs)",
           letterSpacing: "0.1em",
           textTransform: "uppercase",
-          background: isDirty ? "rgba(140,231,210,0.14)" : "var(--input-bg)",
-          border: `1px solid ${isDirty ? "rgba(140,231,210,0.4)" : "var(--input-border)"}`,
+          background: isDirty ? "rgba(140,231,210,0.14)" : "var(--control-bg)",
+          border: `1px solid ${isDirty ? "rgba(140,231,210,0.4)" : "var(--control-border)"}`,
           color: isDirty ? "var(--accent-strong)" : "var(--text-tertiary)",
           borderRadius: "var(--radius-xs)",
           cursor: isDirty && save.status !== "saving" ? "pointer" : "default",
@@ -473,7 +473,7 @@ function Status({ children, tone }: { children: React.ReactNode; tone: "accent" 
   const colorMap = {
     accent: "var(--accent-strong)",
     amber: "rgba(255,184,112,0.95)",
-    danger: "var(--danger)",
+    danger: "var(--status-error)",
     muted: "var(--text-tertiary)",
   };
   return <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: colorMap[tone] }}>{children}</span>;
@@ -499,7 +499,7 @@ function Card({
   const borderMap = {
     phosphor: "rgba(140,231,210,0.18)",
     violet: "rgba(179,136,255,0.20)",
-    muted: "var(--card-border)",
+    muted: "var(--border-subtle)",
   };
   const eyebrowMap = {
     phosphor: "var(--accent-strong)",
@@ -510,7 +510,7 @@ function Card({
     <section
       style={{
         padding: "var(--space-24)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         border: `1px solid ${borderMap[accent]}`,
         borderRadius: "var(--radius-md)",
         display: "flex",
@@ -590,7 +590,7 @@ function TonePalette({ selected, onChange }: { selected: string[]; onChange: (v:
               style={{
                 padding: "6px 10px",
                 background: active ? "rgba(140,231,210,0.12)" : "transparent",
-                border: `1px solid ${active ? "rgba(140,231,210,0.4)" : "var(--input-border)"}`,
+                border: `1px solid ${active ? "rgba(140,231,210,0.4)" : "var(--control-border)"}`,
                 borderRadius: "var(--radius-xs)",
                 fontFamily: T.fontMono,
                 fontSize: "var(--font-size-sm)",
@@ -613,7 +613,7 @@ function TonePalette({ selected, onChange }: { selected: string[]; onChange: (v:
           gap: "var(--space-6)",
           padding: "6px 8px",
           background: "rgba(0,0,0,0.20)",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-xs)",
         }}
       >
@@ -728,8 +728,8 @@ function BrevitySegmented({
             style={{
               flex: 1,
               padding: "12px 10px",
-              background: active ? "rgba(140,231,210,0.1)" : "var(--input-bg)",
-              border: `1px solid ${active ? "rgba(140,231,210,0.35)" : "var(--input-border)"}`,
+              background: active ? "rgba(140,231,210,0.1)" : "var(--control-bg)",
+              border: `1px solid ${active ? "rgba(140,231,210,0.35)" : "var(--control-border)"}`,
               borderRadius: "var(--radius-sm)",
               display: "flex",
               flexDirection: "column",
@@ -801,7 +801,7 @@ function RegisterPad({
           width: PAD,
           height: PAD,
           background: "rgba(0,0,0,0.2)",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-sm)",
           cursor: "crosshair",
           flexShrink: 0,
@@ -836,8 +836,8 @@ function RegisterPad({
         <div
           style={{
             padding: "var(--space-14)",
-            background: "var(--input-bg)",
-            border: "1px solid var(--input-border)",
+            background: "var(--control-bg)",
+            border: "1px solid var(--control-border)",
             borderRadius: "var(--radius-sm)",
             display: "flex",
             flexDirection: "column",
@@ -876,7 +876,7 @@ function RegisterPad({
                   alignSelf: "flex-start",
                   padding: "3px 8px",
                   background: "transparent",
-                  border: "1px solid var(--input-border)",
+                  border: "1px solid var(--control-border)",
                   color: "var(--text-tertiary)",
                   borderRadius: "var(--radius-xs)",
                   fontFamily: T.fontMono,
@@ -983,7 +983,7 @@ function ProsodyPalette({
               style={{
                 padding: "6px 10px",
                 background: active ? "rgba(179,136,255,0.12)" : "transparent",
-                border: `1px solid ${active ? "rgba(179,136,255,0.4)" : "var(--input-border)"}`,
+                border: `1px solid ${active ? "rgba(179,136,255,0.4)" : "var(--control-border)"}`,
                 borderRadius: "var(--radius-xs)",
                 fontFamily: T.fontMono,
                 fontSize: "var(--font-size-sm)",
@@ -1006,7 +1006,7 @@ function ProsodyPalette({
           gap: "var(--space-6)",
           padding: "6px 8px",
           background: "rgba(0,0,0,0.20)",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-xs)",
         }}
       >
@@ -1099,8 +1099,8 @@ function VoiceTemplatesCard({
     <section
       style={{
         padding: "12px 16px 16px",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
         display: "flex",
         flexDirection: "column",
@@ -1135,8 +1135,8 @@ function VoiceTemplatesCard({
             fontSize: "var(--font-size-xs)",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            background: open ? "rgba(140,231,210,0.1)" : "var(--input-bg)",
-            border: `1px solid ${open ? "rgba(140,231,210,0.3)" : "var(--input-border)"}`,
+            background: open ? "rgba(140,231,210,0.1)" : "var(--control-bg)",
+            border: `1px solid ${open ? "rgba(140,231,210,0.3)" : "var(--control-border)"}`,
             color: open ? "var(--accent-strong)" : "var(--text-secondary)",
             borderRadius: "var(--radius-xs)",
             cursor: "pointer",
@@ -1198,7 +1198,7 @@ function VoiceTemplateRow({
       style={{
         padding: "12px 14px",
         background: "rgba(255,255,255,0.02)",
-        border: "1px solid var(--input-border)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
         display: "flex",
         gap: "var(--space-12)",
@@ -1427,7 +1427,7 @@ function L03SpokenPreview({ character }: { character: HarnessCharacter }) {
             gap: "var(--space-14)",
             padding: "12px 16px",
             background: "transparent",
-            border: "1px dashed var(--input-border)",
+            border: "1px dashed var(--control-border)",
             borderRadius: "var(--radius-sm)",
             color: "inherit",
             cursor: "pointer",
@@ -1473,8 +1473,8 @@ function SampleRow({
     <div
       style={{
         padding: "16px 18px",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
         display: "flex",
         flexDirection: "column",
@@ -1525,7 +1525,7 @@ function SampleRow({
           style={{
             padding: "5px 10px",
             background: "transparent",
-            border: "1px solid var(--input-border)",
+            border: "1px solid var(--control-border)",
             color: "var(--text-tertiary)",
             borderRadius: "var(--radius-xs)",
             fontFamily: T.fontMono,
@@ -1871,8 +1871,8 @@ function L03History({ character }: { character: HarnessCharacter }) {
         <div
           style={{
             padding: "var(--space-24)",
-            background: "var(--card)",
-            border: "1px dashed var(--card-border)",
+            background: "var(--material-card)",
+            border: "1px dashed var(--border-subtle)",
             borderRadius: "var(--radius-md)",
             fontFamily: T.fontBody,
             fontSize: "var(--font-size-md)",
@@ -1918,8 +1918,8 @@ function L03History({ character }: { character: HarnessCharacter }) {
               key={entry.voiceStyleHash}
               style={{
                 padding: "14px 18px",
-                background: entry.isCurrent ? "rgba(140,231,210,0.04)" : "var(--card)",
-                border: `1px solid ${entry.isCurrent ? "rgba(140,231,210,0.25)" : "var(--card-border)"}`,
+                background: entry.isCurrent ? "rgba(140,231,210,0.04)" : "var(--material-card)",
+                border: `1px solid ${entry.isCurrent ? "rgba(140,231,210,0.25)" : "var(--border-subtle)"}`,
                 borderRadius: "var(--radius-md)",
                 display: "flex",
                 gap: "var(--space-16)",
@@ -1966,7 +1966,7 @@ function L03History({ character }: { character: HarnessCharacter }) {
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   background: entry.isCurrent ? "transparent" : "rgba(255,184,112,0.08)",
-                  border: `1px solid ${entry.isCurrent ? "var(--input-border)" : "rgba(255,184,112,0.3)"}`,
+                  border: `1px solid ${entry.isCurrent ? "var(--control-border)" : "rgba(255,184,112,0.3)"}`,
                   color: entry.isCurrent ? "var(--text-quaternary)" : "rgba(255,184,112,0.95)",
                   borderRadius: "var(--radius-xs)",
                   cursor: entry.isCurrent || isReverting ? "default" : "pointer",
@@ -2023,8 +2023,8 @@ function TextField({
       placeholder={placeholder}
       style={{
         padding: "10px 14px",
-        background: "var(--input-bg)",
-        border: "1px solid var(--input-border)",
+        background: "var(--control-bg)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
         color: "var(--foreground)",
         fontFamily: T.fontBody,
@@ -2055,8 +2055,8 @@ function TextArea({
       style={{
         width: "100%",
         padding: "12px 14px",
-        background: "var(--input-bg)",
-        border: "1px solid var(--input-border)",
+        background: "var(--control-bg)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
         color: "var(--foreground)",
         fontFamily: T.fontBody,
@@ -2141,7 +2141,7 @@ function SpokenPreviewCard({
     <section
       style={{
         padding: "var(--space-24)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         border: "1px solid rgba(140,231,210,0.18)",
         borderRadius: "var(--radius-md)",
         display: "flex",
@@ -2256,7 +2256,7 @@ function PlaybackStatus({
   }
   if (state.kind === "error") {
     return (
-      <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "var(--danger)" }}>
+      <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "var(--status-error)" }}>
         error: {state.message}
       </span>
     );

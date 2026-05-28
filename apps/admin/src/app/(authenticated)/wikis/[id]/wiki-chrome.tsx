@@ -18,7 +18,7 @@ const TEXT_FADED = "var(--text-placeholder)";
 const TEXT_PRIMARY = "var(--text-primary)";
 const BORDER = "var(--border)";
 const ACCENT = "var(--accent-strong)";
-const DANGER = "var(--danger)";
+const DANGER = "var(--status-error)";
 // Breadcrumb + title use the same mono face as the tab strip so the
 // header reads as one cohesive terminal-style row.
 const MONO = '"JetBrains Mono", monospace';
@@ -29,6 +29,7 @@ function activeTab(pathname: string, wikiId: string): WikiTabKey {
   if (pathname.startsWith(`${base}/wiki`)) return "pages";
   if (pathname.startsWith(`${base}/knowledge`)) return "knowledge";
   if (pathname.startsWith(`${base}/sources`)) return "sources";
+  if (pathname.startsWith(`${base}/runs`)) return "runs";
   if (pathname.startsWith(`${base}/ingestion`)) return "ingestion";
   return "overview";
 }
@@ -115,8 +116,20 @@ function WikiTopBar({
         alignSelf: "stretch",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-12)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-8)",
+          }}
+        >
           <Link
             href="/wikis"
             style={{
@@ -128,7 +141,13 @@ function WikiTopBar({
           >
             wikis
           </Link>
-          <span style={{ fontFamily: MONO, fontSize: "var(--font-size-md)", color: TEXT_FADED }}>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: "var(--font-size-md)",
+              color: TEXT_FADED,
+            }}
+          >
             /
           </span>
           <EditableTitle
@@ -273,7 +292,7 @@ function EditableTitle({
               fontSize: "var(--font-size-md)",
               fontWeight: 600,
               color: TEXT_PRIMARY,
-              background: "var(--card)",
+              background: "var(--material-card)",
               border: `1px solid ${error ? DANGER : BORDER}`,
               outline: "none",
               textTransform: "lowercase",
@@ -369,8 +388,8 @@ function IconButton({
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        border: `1px solid ${hovered ? "var(--card-border)" : BORDER}`,
-        background: hovered ? "var(--card-hover)" : "transparent",
+        border: `1px solid ${hovered ? "var(--border-subtle)" : BORDER}`,
+        background: hovered ? "var(--surface-hover)" : "transparent",
         color,
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.55 : 1,

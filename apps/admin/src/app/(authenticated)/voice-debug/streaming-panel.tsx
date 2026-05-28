@@ -31,14 +31,14 @@ const PAUSE_PREDICTION_HEAD_INDEX = 2;
 function stateColor(state: ConnState) {
   switch (state) {
     case "streaming":
-      return "var(--success, #4ade80)";
+      return "var(--status-live, #4ade80)";
     case "connecting":
     case "closing":
       return "var(--accent)";
     case "error":
-      return "var(--danger, #f87171)";
+      return "var(--status-error, #f87171)";
     default:
-      return "var(--muted, #71717a)";
+      return "var(--text-tertiary, #71717a)";
   }
 }
 
@@ -263,7 +263,7 @@ export default function StreamingPanel() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-medium">3. Streaming (Kyutai Rust)</h2>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">
+          <p className="mt-1 max-w-2xl text-sm text-[var(--text-tertiary)]">
             Live word-by-word transcripts via WebSocket to moshi-server. Browser captures PCM at
             24 kHz, streams to Modal, words appear as you speak with the model&apos;s ~0.5s delay.
           </p>
@@ -290,7 +290,7 @@ export default function StreamingPanel() {
             type="button"
             onClick={() => void stopStreaming()}
             disabled={state === "closing" || state === "connecting"}
-            className="rounded-lg border border-[var(--danger,#f87171)] bg-[var(--danger,#f87171)]/10 px-4 py-2 text-sm text-[var(--danger,#f87171)] disabled:opacity-50"
+            className="rounded-lg border border-[var(--status-error,#f87171)] bg-[var(--status-error,#f87171)]/10 px-4 py-2 text-sm text-[var(--status-error,#f87171)] disabled:opacity-50"
           >
             ■ Stop
           </button>
@@ -298,22 +298,22 @@ export default function StreamingPanel() {
       </div>
 
       {error ? (
-        <p className="mt-3 rounded-lg border border-[var(--danger,#f87171)] bg-[var(--danger,#f87171)]/10 px-3 py-2 text-sm text-[var(--danger,#f87171)]">
+        <p className="mt-3 rounded-lg border border-[var(--status-error,#f87171)] bg-[var(--status-error,#f87171)]/10 px-3 py-2 text-sm text-[var(--status-error,#f87171)]">
           {error}
         </p>
       ) : null}
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">Live transcript</p>
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Live transcript</p>
           <div className="mt-3 min-h-[120px] rounded border border-[var(--border)] bg-black/40 p-3 text-sm leading-relaxed">
             {transcript || (
-              <span className="text-[var(--muted)]">
+              <span className="text-[var(--text-tertiary)]">
                 {state === "streaming" ? "Listening… start talking." : "Idle."}
               </span>
             )}
           </div>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--muted)]">
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-tertiary)]">
             <span>Words: {words.length}</span>
             <span>Frames sent: {framesSent}</span>
             <span>
@@ -323,11 +323,11 @@ export default function StreamingPanel() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">Live signals</p>
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Live signals</p>
 
           <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-[var(--muted)]">
+            <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
               <span>Mic level (RMS)</span>
               <span>{micPercent}%</span>
             </div>
@@ -340,22 +340,22 @@ export default function StreamingPanel() {
           </div>
 
           <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-[var(--muted)]">
+            <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
               <span>Pause prediction (head 2 = 2.0 s)</span>
               <span>{vadPercent}%</span>
             </div>
             <div className="mt-1 h-2 w-full rounded-full bg-black/30">
               <div
-                className="h-2 rounded-full bg-[var(--success,#4ade80)] transition-all"
+                className="h-2 rounded-full bg-[var(--status-live,#4ade80)] transition-all"
                 style={{ width: `${vadPercent}%` }}
               />
             </div>
-            <p className="mt-1 text-[10px] text-[var(--muted)]">
+            <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">
               Server&apos;s semantic VAD probability that the user paused for ~2s. Cross 50% = end of utterance.
             </p>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] text-[var(--muted)]">
+          <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] text-[var(--text-tertiary)]">
             <div className="rounded border border-[var(--border)] bg-black/30 p-2">
               <p className="font-mono uppercase tracking-[0.08em]">Source rate</p>
               <p>{contextSampleRate ? `${contextSampleRate} Hz` : "—"}</p>

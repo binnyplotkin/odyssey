@@ -273,8 +273,8 @@ export function CharactersGrid({ characters }: Props) {
               alignItems: "center",
               gap: "var(--space-10)",
               padding: "9px 16px",
-              background: "var(--input-bg)",
-              border: "1px solid var(--input-border)",
+              background: "var(--control-bg)",
+              border: "1px solid var(--control-border)",
               borderRadius: "var(--radius-pill)",
               width: 360,
               maxWidth: "100%",
@@ -520,7 +520,7 @@ function CharacterCard({
   const [hovered, setHovered] = useState(false);
   const isLive = character.status === "live";
   const thumbnailBg = character.image
-    ? `center/cover no-repeat url("${character.image}"), var(--card-hover)`
+    ? `center/cover no-repeat url("${character.image}"), var(--surface-hover)`
     : resolveAvatarGradient(character.thumbnailColor, character.slug);
   const activeModel = character.brainModel?.model ?? DEFAULT_CHAT_MODEL;
   const essence =
@@ -626,8 +626,8 @@ function CharacterCard({
           padding: "var(--space-18)",
           gap: "var(--space-14)",
           borderRadius: "var(--radius-2xl)",
-          background: "var(--card)",
-          border: `1px solid ${hovered ? "var(--accent-glow)" : "var(--card-border)"}`,
+          background: "var(--material-card)",
+          border: `1px solid ${hovered ? "var(--accent-glow)" : "var(--border-subtle)"}`,
           textDecoration: "none",
           color: "inherit",
           cursor: "pointer",
@@ -644,7 +644,7 @@ function CharacterCard({
             flexShrink: 0,
             borderRadius: "var(--radius-lg)",
             background: thumbnailBg,
-            border: `1px solid ${isLive ? "color-mix(in srgb, var(--accent-strong) 18%, transparent)" : "var(--card-border)"}`,
+            border: `1px solid ${isLive ? "color-mix(in srgb, var(--accent-strong) 18%, transparent)" : "var(--border-subtle)"}`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

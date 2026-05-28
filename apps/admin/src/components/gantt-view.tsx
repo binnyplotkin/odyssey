@@ -476,7 +476,7 @@ export default function GanttView({
           flexShrink: 0,
           display: "flex",
           flexDirection: "column",
-          borderRight: "1px solid var(--divider)",
+          borderRight: "1px solid var(--border-subtle)",
           overflow: "hidden",
         }}
       >
@@ -487,7 +487,7 @@ export default function GanttView({
             display: "flex",
             alignItems: "center",
             paddingInline: "var(--space-16)",
-            borderBottom: "1px solid var(--divider)",
+            borderBottom: "1px solid var(--border-subtle)",
             flexShrink: 0,
           }}
         >
@@ -521,8 +521,8 @@ export default function GanttView({
                     alignItems: "center",
                     paddingInline: "var(--space-16)",
                     gap: "var(--space-10)",
-                    background: isVersionSelected ? "rgba(59, 130, 246, 0.08)" : "var(--card)",
-                    borderBottom: "1px solid var(--divider)",
+                    background: isVersionSelected ? "rgba(59, 130, 246, 0.08)" : "var(--material-card)",
+                    borderBottom: "1px solid var(--border-subtle)",
                     borderLeft: isVersionSelected ? "2px solid rgba(59, 130, 246, 0.5)" : "2px solid transparent",
                     flexShrink: 0,
                     cursor: onVersionClick ? "pointer" : undefined,
@@ -546,7 +546,7 @@ export default function GanttView({
                       borderRadius: "var(--radius-xs)",
                       transition: "background 0.15s ease",
                     }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--card-hover)"; }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)"; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "none"; }}
                   >
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s ease" }}>
@@ -590,7 +590,7 @@ export default function GanttView({
                         fontSize: "var(--font-size-2xs)",
                         fontWeight: 600,
                         color: "var(--text-quaternary)",
-                        background: "var(--card-border)",
+                        background: "var(--border-subtle)",
                         padding: "1px 6px",
                         borderRadius: "var(--radius-md)",
                         flexShrink: 0,
@@ -618,7 +618,7 @@ export default function GanttView({
                     paddingLeft: 30,
                     paddingRight: "var(--space-16)",
                     gap: "var(--space-8)",
-                    borderBottom: "1px solid var(--divider)",
+                    borderBottom: "1px solid var(--border-subtle)",
                     flexShrink: 0,
                     cursor: onFeatureClick ? "pointer" : undefined,
                     background: isSelected ? "rgba(59, 130, 246, 0.08)" : undefined,
@@ -648,7 +648,7 @@ export default function GanttView({
                         borderRadius: "var(--radius-xs)",
                         transition: "background 0.15s ease",
                       }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--card-hover)"; }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)"; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "none"; }}
                     >
                       <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor" style={{ transform: isFeatureCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s ease" }}>
@@ -685,7 +685,7 @@ export default function GanttView({
                         fontSize: "var(--font-size-2xs)",
                         fontWeight: 600,
                         color: "var(--text-placeholder)",
-                        background: "var(--input-bg)",
+                        background: "var(--control-bg)",
                         padding: "1px 5px",
                         borderRadius: "var(--radius-sm)",
                         flexShrink: 0,
@@ -718,7 +718,7 @@ export default function GanttView({
                   paddingLeft: 50,
                   paddingRight: "var(--space-16)",
                   gap: "var(--space-6)",
-                  borderBottom: "1px solid var(--divider)",
+                  borderBottom: "1px solid var(--border-subtle)",
                   flexShrink: 0,
                   background: isBeingReordered
                     ? "rgba(59, 130, 246, 0.12)"
@@ -794,7 +794,7 @@ export default function GanttView({
           style={{
             height: 44,
             display: "flex",
-            borderBottom: "1px solid var(--divider)",
+            borderBottom: "1px solid var(--border-subtle)",
             flexShrink: 0,
             position: "relative",
           }}
@@ -809,7 +809,7 @@ export default function GanttView({
                   display: "flex",
                   alignItems: "center",
                   paddingLeft: "var(--space-12)",
-                  borderLeft: i > 0 ? "1px solid var(--divider)" : "none",
+                  borderLeft: i > 0 ? "1px solid var(--border-subtle)" : "none",
                   fontSize: "var(--font-size-sm)",
                   fontWeight: isCurrent ? 600 : 400,
                   color: isCurrent
@@ -844,7 +844,7 @@ export default function GanttView({
                   top: 0,
                   bottom: 0,
                   width: 1,
-                  background: "var(--input-bg)",
+                  background: "var(--control-bg)",
                   pointerEvents: "none",
                 }}
               />
@@ -879,8 +879,8 @@ export default function GanttView({
                     onClick={() => { if (!didDragRef.current) onVersionClick?.(v.id); }}
                     style={{
                       height: ROW_VERSION, flexShrink: 0,
-                      borderBottom: "1px solid var(--divider)",
-                      background: isVersionSelected ? "rgba(59, 130, 246, 0.04)" : "var(--card)",
+                      borderBottom: "1px solid var(--border-subtle)",
+                      background: isVersionSelected ? "rgba(59, 130, 246, 0.04)" : "var(--material-card)",
                       cursor: onVersionClick ? "pointer" : undefined,
                     }}
                   />
@@ -898,8 +898,8 @@ export default function GanttView({
                   style={{
                     height: ROW_VERSION,
                     position: "relative",
-                    borderBottom: "1px solid var(--divider)",
-                    background: isVersionSelected ? "rgba(59, 130, 246, 0.04)" : "var(--card)",
+                    borderBottom: "1px solid var(--border-subtle)",
+                    background: isVersionSelected ? "rgba(59, 130, 246, 0.04)" : "var(--material-card)",
                     flexShrink: 0,
                     cursor: !isDragging && onVersionClick ? "pointer" : undefined,
                   }}
@@ -952,7 +952,7 @@ export default function GanttView({
                     style={{
                       height: ROW_TASK,
                       flexShrink: 0,
-                      borderBottom: "1px solid var(--divider)",
+                      borderBottom: "1px solid var(--border-subtle)",
                       background: barSelected ? "rgba(59, 130, 246, 0.04)" : undefined,
                       cursor: onFeatureClick ? "pointer" : undefined,
                     }}
@@ -972,7 +972,7 @@ export default function GanttView({
                   style={{
                     height: ROW_TASK,
                     position: "relative",
-                    borderBottom: "1px solid var(--divider)",
+                    borderBottom: "1px solid var(--border-subtle)",
                     background: barSelected ? "rgba(59, 130, 246, 0.04)" : undefined,
                     flexShrink: 0,
                     cursor: !isDragging && onFeatureClick ? "pointer" : undefined,
@@ -1029,7 +1029,7 @@ export default function GanttView({
                 style={{
                   height: ROW_TICKET,
                   position: "relative",
-                  borderBottom: "1px solid var(--divider)",
+                  borderBottom: "1px solid var(--border-subtle)",
                   flexShrink: 0,
                   background: ticketSelected ? "rgba(59, 130, 246, 0.04)" : undefined,
                   cursor: !isDragging && onTicketClick ? "pointer" : undefined,

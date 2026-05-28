@@ -17,7 +17,7 @@ import type {
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
+  muted: "var(--text-tertiary)",
   border: "var(--border)",
   fontBody: "'Inter', sans-serif",
   fontHeading: "'Space Grotesk', sans-serif",
@@ -31,7 +31,7 @@ const T = {
 const FG = (pct: number) => `color-mix(in srgb, var(--foreground) ${pct}%, transparent)`;
 
 const TYPE_COLOR: Record<WikiPageType, string> = {
-  entity:         "var(--active-teal)",
+  entity:         "var(--accent-strong)",
   event:          "var(--warning-amber)",
   concept:        "var(--event-violet)",
   relationship:   "var(--emissive-mint)",
@@ -119,7 +119,7 @@ export function ChatGraph({ pages, edges, eras, currentEra, curator }: Props) {
   const emptyGraph = pages.length === 0;
 
   return (
-    <div style={{ position: "relative", background: "var(--canvas-background)" }}>
+    <div style={{ position: "relative", background: "var(--canvas-atmosphere)" }}>
       {emptyGraph ? (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: H, color: T.muted, fontFamily: T.fontBody, fontSize: "var(--font-size-md)" }}>
           No wiki pages yet.
@@ -555,7 +555,7 @@ function truncateLabel(s: string, max: number): string {
 
 const EDGE_COLOR: Record<EdgeKind, string> = {
   mentions:        FG(35),
-  relates_to:      "color-mix(in srgb, var(--active-teal) 76%, transparent)",
+  relates_to:      "color-mix(in srgb, var(--accent-strong) 76%, transparent)",
   participates_in: "color-mix(in srgb, var(--warning-amber) 78%, transparent)",
   happens_at:      "color-mix(in srgb, var(--signal-blue) 76%, transparent)",
   perspective_of:  "color-mix(in srgb, var(--event-violet) 76%, transparent)",

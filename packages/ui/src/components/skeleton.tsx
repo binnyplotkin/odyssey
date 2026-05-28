@@ -102,8 +102,8 @@ export function SkeletonCard({
   return (
     <div
       style={{
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 12,
         padding,
         height: toCss(height),

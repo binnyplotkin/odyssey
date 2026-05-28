@@ -410,9 +410,9 @@ export default function VoiceTest3Page() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
       <header className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Tools</p>
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">Tools</p>
         <h1 className="mt-2 text-3xl font-semibold">Voice Test 3</h1>
-        <p className="mt-2 max-w-3xl text-sm text-[var(--muted)]">
+        <p className="mt-2 max-w-3xl text-sm text-[var(--text-tertiary)]">
           Baseline validation harness for managed audio path: health, config, STT, and TTS.
         </p>
       </header>
@@ -420,46 +420,46 @@ export default function VoiceTest3Page() {
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
           <h2 className="text-lg font-medium">1) Service Checks</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">Verify deployment and audio config routes.</p>
+          <p className="mt-1 text-sm text-[var(--text-tertiary)]">Verify deployment and audio config routes.</p>
           <button
             type="button"
             onClick={() => void runChecks()}
             disabled={busy !== null}
-            className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-4 py-2 text-sm transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy === "checks" ? "Running checks..." : "Run health + config"}
           </button>
-          <pre className="mt-4 max-h-48 overflow-auto rounded-lg border border-[var(--border)] bg-black/30 p-3 text-xs text-[var(--muted)]">
+          <pre className="mt-4 max-h-48 overflow-auto rounded-lg border border-[var(--border)] bg-black/30 p-3 text-xs text-[var(--text-tertiary)]">
             {configJson || "No config loaded yet."}
           </pre>
         </div>
 
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
           <h2 className="text-lg font-medium">2) Text-to-Speech</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">Calls POST /api/audio/speak and plays returned audio.</p>
+          <p className="mt-1 text-sm text-[var(--text-tertiary)]">Calls POST /api/audio/speak and plays returned audio.</p>
           <textarea
             value={ttsText}
             onChange={(event) => setTtsText(event.target.value)}
-            className="mt-4 min-h-28 w-full rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 text-sm"
+            className="mt-4 min-h-28 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-3 text-sm"
           />
           <div className="mt-3 flex gap-2">
             <button
               type="button"
               onClick={() => void testTts()}
               disabled={busy !== null}
-              className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-4 py-2 text-sm transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy === "tts" ? "Synthesizing..." : "Test TTS"}
             </button>
           </div>
-          <p className="mt-3 text-xs text-[var(--muted)]">{lastTtsInfo || "No TTS response yet."}</p>
+          <p className="mt-3 text-xs text-[var(--text-tertiary)]">{lastTtsInfo || "No TTS response yet."}</p>
         </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
           <h2 className="text-lg font-medium">3) Speech-to-Text</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
+          <p className="mt-1 text-sm text-[var(--text-tertiary)]">
             Record microphone audio, transcribe, then run AI reply and playback.
           </p>
           <div className="mt-4 flex gap-2">
@@ -468,7 +468,7 @@ export default function VoiceTest3Page() {
                 type="button"
                 onClick={() => void startRecording()}
                 disabled={busy !== null || preparingMic}
-                className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-4 py-2 text-sm transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {preparingMic ? "Preparing mic..." : "Start recording"}
               </button>
@@ -476,7 +476,7 @@ export default function VoiceTest3Page() {
               <button
                 type="button"
                 onClick={() => void stopRecording()}
-                className="rounded-lg border border-[var(--danger)] bg-[var(--danger)]/10 px-4 py-2 text-sm text-[var(--danger)]"
+                className="rounded-lg border border-[var(--status-error)] bg-[var(--status-error)]/10 px-4 py-2 text-sm text-[var(--status-error)]"
               >
                 Stop + transcribe
               </button>
@@ -485,7 +485,7 @@ export default function VoiceTest3Page() {
               type="button"
               onClick={() => void testTts(transcript)}
               disabled={!transcript.trim() || busy !== null}
-              className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-4 py-2 text-sm transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Speak transcript
             </button>
@@ -493,7 +493,7 @@ export default function VoiceTest3Page() {
               type="button"
               onClick={() => void testReply()}
               disabled={!transcript.trim() || busy !== null}
-              className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-4 py-2 text-sm transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy === "reply" ? "Generating..." : "Generate AI reply"}
             </button>
@@ -506,40 +506,40 @@ export default function VoiceTest3Page() {
               {busy === "loop" ? "Running loop..." : "AI reply + speak"}
             </button>
           </div>
-          <pre className="mt-4 max-h-48 overflow-auto rounded-lg border border-[var(--border)] bg-black/30 p-3 text-xs text-[var(--muted)]">
+          <pre className="mt-4 max-h-48 overflow-auto rounded-lg border border-[var(--border)] bg-black/30 p-3 text-xs text-[var(--text-tertiary)]">
             {transcript || "No transcript yet."}
           </pre>
-          <p className="mt-2 text-xs text-[var(--muted)]">
+          <p className="mt-2 text-xs text-[var(--text-tertiary)]">
             {replyText
               ? `Reply model=${replyModel || "unknown"}${
                 lastLoopLatencyMs ? ` · full loop ${lastLoopLatencyMs} ms` : ""
               }`
               : "No AI reply yet."}
           </p>
-          <pre className="mt-2 max-h-48 overflow-auto rounded-lg border border-[var(--border)] bg-black/30 p-3 text-xs text-[var(--muted)]">
+          <pre className="mt-2 max-h-48 overflow-auto rounded-lg border border-[var(--border)] bg-black/30 p-3 text-xs text-[var(--text-tertiary)]">
             {replyText || "AI reply will appear here."}
           </pre>
         </div>
 
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
           <h2 className="text-lg font-medium">Recent Probe Results</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">Most recent checks and failures.</p>
+          <p className="mt-1 text-sm text-[var(--text-tertiary)]">Most recent checks and failures.</p>
           <div className="mt-4 flex max-h-72 flex-col gap-2 overflow-auto">
             {checks.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]">No checks run yet.</p>
+              <p className="text-sm text-[var(--text-tertiary)]">No checks run yet.</p>
             ) : (
               checks.map((check) => (
                 <div
                   key={`${check.name}:${check.at}:${check.detail}`}
-                  className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 text-xs"
+                  className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-3 text-xs"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono uppercase tracking-[0.08em] text-[var(--muted)]">{check.name}</span>
-                    <span className={check.ok ? "text-[var(--success)]" : "text-[var(--danger)]"}>
+                    <span className="font-mono uppercase tracking-[0.08em] text-[var(--text-tertiary)]">{check.name}</span>
+                    <span className={check.ok ? "text-[var(--status-live)]" : "text-[var(--status-error)]"}>
                       {check.ok ? "PASS" : "FAIL"} · {check.at}
                     </span>
                   </div>
-                  <p className="mt-1 text-[var(--muted)]">{check.detail}</p>
+                  <p className="mt-1 text-[var(--text-tertiary)]">{check.detail}</p>
                 </div>
               ))
             )}
@@ -548,7 +548,7 @@ export default function VoiceTest3Page() {
       </section>
 
       {error ? (
-        <p className="rounded-lg border border-[var(--danger)] bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">
+        <p className="rounded-lg border border-[var(--status-error)] bg-[var(--status-error)]/10 px-4 py-3 text-sm text-[var(--status-error)]">
           {error}
         </p>
       ) : null}

@@ -9,7 +9,7 @@ import { type ClipboardEvent, type Ref } from "react";
  * and a multi-line textarea with a quiet empty-state caret.
  *
  * Self-contained: depends on CSS variables (`--accent-strong`, `--border`,
- * `--divider`, `--text-*`) from the admin theme, but holds no other coupling
+ * `--border-subtle`, `--text-*`) from the admin theme, but holds no other coupling
  * to the ingestion view, so it can be lifted into other paste-based flows.
  */
 
@@ -95,9 +95,9 @@ export function SourceComposer({
           position: "relative",
           display: "flex",
           flexDirection: "column",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-lg)",
-          background: "var(--input-bg)",
+          background: "var(--control-bg)",
           overflow: "hidden",
           transition: "border-color 140ms ease, box-shadow 140ms ease",
         }}

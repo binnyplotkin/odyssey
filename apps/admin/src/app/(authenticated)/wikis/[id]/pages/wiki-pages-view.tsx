@@ -18,26 +18,26 @@ const MONO = '"JetBrains Mono", ui-monospace, monospace';
 const DISPLAY = '"Space Grotesk", system-ui, sans-serif';
 const BODY = '"Geist", "Inter", system-ui, sans-serif';
 
-const FG = "rgba(255, 255, 255, 0.95)";
-const TEXT_PRIMARY = "rgba(255, 255, 255, 0.88)";
-const TEXT_SECONDARY = "rgba(255, 255, 255, 0.7)";
-const TEXT_MUTED = "rgba(255, 255, 255, 0.55)";
-const TEXT_FADED = "rgba(255, 255, 255, 0.4)";
-const TEXT_GHOST = "rgba(255, 255, 255, 0.32)";
-const TEXT_QUIET = "rgba(255, 255, 255, 0.2)";
+const FG = "var(--foreground)";
+const TEXT_PRIMARY = "var(--text-primary)";
+const TEXT_SECONDARY = "var(--text-secondary)";
+const TEXT_MUTED = "var(--text-tertiary)";
+const TEXT_FADED = "var(--text-placeholder)";
+const TEXT_GHOST = "var(--text-quaternary)";
+const TEXT_QUIET = "color-mix(in srgb, var(--text-primary) 14%, transparent)";
 
-const GROUND = "#050505";
-const PANEL_BG = "#0A0A0A";
-const BORDER = "rgba(255, 255, 255, 0.08)";
-const DIVIDER = "rgba(255, 255, 255, 0.06)";
-const INPUT_BG = "rgba(255, 255, 255, 0.02)";
+const GROUND = "var(--page-atmosphere)";
+const PANEL_BG = "var(--material-card)";
+const BORDER = "var(--border-medium)";
+const DIVIDER = "var(--border-subtle)";
+const INPUT_BG = "var(--control-bg)";
 
-const ACCENT = "#8FD1CB";
-const ACCENT_SOFT = "rgba(140, 231, 210, 0.06)";
-const ACCENT_RING = "rgba(140, 231, 210, 0.3)";
+const ACCENT = "var(--accent-strong)";
+const ACCENT_SOFT = "var(--accent-wash)";
+const ACCENT_RING = "var(--accent-border)";
 
-const SECONDARY = "#B79EFF";
-const DANGER = "#f87171";
+const SECONDARY = "var(--accent-secondary)";
+const DANGER = "var(--status-error)";
 
 /** Six-color type palette — same one used in the knowledge graph. */
 const TYPE_COLOR: Record<WikiPageType, string> = {
@@ -512,7 +512,7 @@ function FilterStrip({
           height: 28,
           padding: "0 14px",
           background: ACCENT,
-          color: "#050505",
+          color: "var(--accent-on)",
           border: "none",
           fontFamily: MONO,
           fontSize: "var(--font-size-xs)",
@@ -567,7 +567,7 @@ function SearchInput({
         height: 32,
         width: 320,
         padding: "0 12px",
-        border: `1px solid rgba(255, 255, 255, 0.12)`,
+        border: `1px solid `,
         background: INPUT_BG,
       }}
     >
@@ -974,7 +974,7 @@ function PageDetail({
               key={a}
               style={{
                 padding: "2px 8px",
-                border: `1px solid rgba(255, 255, 255, 0.12)`,
+                border: `1px solid `,
                 color: TEXT_PRIMARY,
                 fontFamily: MONO,
                 fontSize: "var(--font-size-sm)",
@@ -1075,7 +1075,7 @@ function PageDetail({
             gap: "var(--space-6)",
             height: 26,
             padding: "0 10px",
-            border: `1px solid rgba(255, 255, 255, 0.16)`,
+            border: `1px solid var(--ink-edge)`,
             color: TEXT_PRIMARY,
             fontFamily: MONO,
             fontSize: "var(--font-size-xs)",
@@ -1095,7 +1095,7 @@ function PageDetail({
             gap: "var(--space-6)",
             height: 26,
             padding: "0 10px",
-            border: `1px solid rgba(255, 255, 255, 0.16)`,
+            border: `1px solid var(--ink-edge)`,
             color: TEXT_PRIMARY,
             fontFamily: MONO,
             fontSize: "var(--font-size-xs)",
@@ -1298,7 +1298,7 @@ function PageDetail({
                   alignItems: "center",
                   gap: "var(--space-6)",
                   padding: "4px 10px",
-                  border: `1px solid rgba(255, 255, 255, 0.12)`,
+                  border: `1px solid `,
                   color: TEXT_SECONDARY,
                   textDecoration: "none",
                   textTransform: "uppercase",

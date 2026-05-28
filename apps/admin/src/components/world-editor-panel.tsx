@@ -37,7 +37,7 @@ type WorldTab = "core" | "norms" | "safety" | "narrator" | "metrics" | "categori
 const panelRoot: React.CSSProperties = {
   width: 360,
   flexShrink: 0,
-  background: "var(--panel)",
+  background: "var(--surface-1)",
   border: "1px solid var(--border)",
   borderRadius: "var(--radius-xl)",
   overflow: "auto",
@@ -68,7 +68,7 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 600,
   letterSpacing: "0.12em",
   textTransform: "uppercase",
-  color: "var(--muted)",
+  color: "var(--text-tertiary)",
   marginBottom: "0.25rem",
 };
 
@@ -112,7 +112,7 @@ function TabButton({ active, label, onClick }: { active: boolean; label: string;
         border: "none",
         borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
         background: "transparent",
-        color: active ? "var(--accent-strong)" : "var(--muted)",
+        color: active ? "var(--accent-strong)" : "var(--text-tertiary)",
         fontSize: "0.75rem",
         fontWeight: active ? 600 : 400,
         cursor: "pointer",
@@ -210,7 +210,7 @@ function StringListEditor({
               style={{
                 border: "1px solid var(--border)",
                 background: "transparent",
-                color: "var(--danger)",
+                color: "var(--status-error)",
                 cursor: "pointer",
                 borderRadius: "var(--radius-sm)",
                 padding: "0 0.5rem",
@@ -436,7 +436,7 @@ function CharacterPanel({
 
         {tab === "behavior" && (
           <>
-            <p style={{ fontSize: "0.75rem", color: "var(--muted)", marginBottom: "0.5rem" }}>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", marginBottom: "0.5rem" }}>
               Behavior triggers define conditional personality shifts evaluated each turn.
             </p>
             {(char.behaviorTriggers ?? []).map((bt, i) => (
@@ -489,7 +489,7 @@ function CharacterPanel({
             </button>
 
             <div style={{ marginTop: "1rem" }}>
-              <p style={{ fontSize: "0.75rem", color: "var(--muted)", marginBottom: "0.5rem", fontWeight: 600 }}>NPC Relationships</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", marginBottom: "0.5rem", fontWeight: 600 }}>NPC Relationships</p>
               {(char.npcRelationships ?? []).map((rel, i) => (
                 <div key={i} style={{
                   padding: "0.75rem", borderRadius: "var(--radius-md)",
@@ -563,7 +563,7 @@ function CharacterPanel({
           const relationships = world.initialState.relationships;
           const charRelation = relationships[char.id];
           if (!charRelation) {
-            return <p style={{ fontSize: "0.8125rem", color: "var(--muted)" }}>No relationship data for this character.</p>;
+            return <p style={{ fontSize: "0.8125rem", color: "var(--text-tertiary)" }}>No relationship data for this character.</p>;
           }
 
           return (
@@ -607,7 +607,7 @@ function CharacterPanel({
                       <div style={{ marginTop: "0.375rem" }}>
                         <div style={{ ...labelStyle, marginBottom: "0.25rem" }}>Recent Memory</div>
                         {otherRelation.recentMemory.map((mem, i) => (
-                          <p key={i} style={{ fontSize: "0.75rem", color: "var(--muted)", lineHeight: 1.4, paddingLeft: "0.5rem", borderLeft: "2px solid var(--border)", marginBottom: "0.25rem" }}>
+                          <p key={i} style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", lineHeight: 1.4, paddingLeft: "0.5rem", borderLeft: "2px solid var(--border)", marginBottom: "0.25rem" }}>
                             {mem}
                           </p>
                         ))}
@@ -729,7 +729,7 @@ function GroupPanel({
                   <option value="volatile">→ Volatile</option>
                 </select>
               </div>
-              <button type="button" onClick={() => onUpdate((g) => ({ ...g, dispositionTriggers: (g.dispositionTriggers ?? []).filter((_, j) => j !== i) }))} style={{ border: "none", background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>×</button>
+              <button type="button" onClick={() => onUpdate((g) => ({ ...g, dispositionTriggers: (g.dispositionTriggers ?? []).filter((_, j) => j !== i) }))} style={{ border: "none", background: "transparent", color: "var(--status-error)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>×</button>
             </div>
           ))}
           <button type="button" onClick={() => onUpdate((g) => ({ ...g, dispositionTriggers: [...(g.dispositionTriggers ?? []), { condition: "", dispositionShift: "hostile" as const }] }))} style={{ border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>+ Add Trigger</button>
@@ -760,7 +760,7 @@ function GroupPanel({
         <>
           <div style={labelStyle}>Group Relationships</div>
           {(group.groupRelationships ?? []).map((rel, i) => (
-            <div key={i} style={{ display: "flex", flexDirection: "column", gap: "0.25rem", marginBottom: "0.5rem", padding: "0.5rem", background: "var(--card)", borderRadius: "var(--radius-xs)" }}>
+            <div key={i} style={{ display: "flex", flexDirection: "column", gap: "0.25rem", marginBottom: "0.5rem", padding: "0.5rem", background: "var(--material-card)", borderRadius: "var(--radius-xs)" }}>
               <select
                 value={rel.targetGroupId}
                 onChange={(e) => onUpdate((g) => {
@@ -795,7 +795,7 @@ function GroupPanel({
                 })}
                 style={inputStyle}
               />
-              <button type="button" onClick={() => onUpdate((g) => ({ ...g, groupRelationships: (g.groupRelationships ?? []).filter((_, j) => j !== i) }))} style={{ border: "none", background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>Remove</button>
+              <button type="button" onClick={() => onUpdate((g) => ({ ...g, groupRelationships: (g.groupRelationships ?? []).filter((_, j) => j !== i) }))} style={{ border: "none", background: "transparent", color: "var(--status-error)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>Remove</button>
             </div>
           ))}
           <button type="button" onClick={() => onUpdate((g) => ({ ...g, groupRelationships: [...(g.groupRelationships ?? []), { targetGroupId: "", attitude: "" }] }))} style={{ border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>+ Add Relationship</button>
@@ -869,7 +869,7 @@ function RolePanel({
                     const current = r.authority ?? [];
                     return { ...r, authority: active ? current.filter((x) => x !== a) : [...current, a] };
                   })}
-                  style={{ border: "none", padding: "0.3rem 0.6rem", borderRadius: "var(--radius-xs)", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" as const, background: active ? "rgba(226,165,90,0.15)" : "var(--divider)", color: active ? "#F0F0F0" : "var(--muted)", fontWeight: active ? 600 : 400 }}
+                  style={{ border: "none", padding: "0.3rem 0.6rem", borderRadius: "var(--radius-xs)", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" as const, background: active ? "rgba(226,165,90,0.15)" : "var(--border-subtle)", color: active ? "#F0F0F0" : "var(--text-tertiary)", fontWeight: active ? 600 : 400 }}
                 >
                   {a}
                 </button>
@@ -901,14 +901,14 @@ function RolePanel({
                     const current = r.visibleMetrics ?? [];
                     return { ...r, visibleMetrics: active ? current.filter((x) => x !== m.id) : [...current, m.id] };
                   })}
-                  style={{ border: "none", padding: "0.3rem 0.6rem", borderRadius: "var(--radius-xs)", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" as const, background: active ? "rgba(226,165,90,0.15)" : "var(--divider)", color: active ? "#F0F0F0" : "var(--muted)", fontWeight: active ? 600 : 400 }}
+                  style={{ border: "none", padding: "0.3rem 0.6rem", borderRadius: "var(--radius-xs)", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" as const, background: active ? "rgba(226,165,90,0.15)" : "var(--border-subtle)", color: active ? "#F0F0F0" : "var(--text-tertiary)", fontWeight: active ? 600 : 400 }}
                 >
                   {m.label}
                 </button>
               );
             })}
           </div>
-          <div style={{ fontSize: "0.7rem", color: "var(--muted)" }}>Select which metrics this role can see. Leave empty for all.</div>
+          <div style={{ fontSize: "0.7rem", color: "var(--text-tertiary)" }}>Select which metrics this role can see. Leave empty for all.</div>
         </>
       )}
 
@@ -944,7 +944,7 @@ function RolePanel({
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
-              <button type="button" onClick={() => onUpdate((r) => ({ ...r, groupAlignments: (r.groupAlignments ?? []).filter((_, j) => j !== i) }))} style={{ border: "none", background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>×</button>
+              <button type="button" onClick={() => onUpdate((r) => ({ ...r, groupAlignments: (r.groupAlignments ?? []).filter((_, j) => j !== i) }))} style={{ border: "none", background: "transparent", color: "var(--status-error)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>×</button>
             </div>
           ))}
           <button type="button" onClick={() => onUpdate((r) => ({ ...r, groupAlignments: [...(r.groupAlignments ?? []), { groupId: "", stance: "neutral" as const }] }))} style={{ border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: "0.8rem", padding: "0.25rem" }}>+ Add alignment</button>
@@ -963,7 +963,7 @@ function RolePanel({
                   })}
                 />
                 <span style={{ fontSize: "0.8rem" }}>{c.name}</span>
-                <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>{c.title}</span>
+                <span style={{ fontSize: "0.7rem", color: "var(--text-tertiary)" }}>{c.title}</span>
               </div>
             );
           })}
@@ -1099,7 +1099,7 @@ function EventPanel({
                         style={{ accentColor: "var(--accent)" }}
                       />
                       {char.name}
-                      <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>{char.title}</span>
+                      <span style={{ color: "var(--text-tertiary)", fontSize: "0.7rem" }}>{char.title}</span>
                     </label>
                   );
                 })}
@@ -1183,7 +1183,7 @@ function EventPanel({
                   <button
                     type="button"
                     onClick={() => onUpdate((ev) => ({ ...ev, triggerConditions: (ev.triggerConditions ?? []).filter((_, j) => j !== i) }))}
-                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", cursor: "pointer", borderRadius: "var(--radius-sm)", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
+                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--status-error)", cursor: "pointer", borderRadius: "var(--radius-sm)", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
                   >
                     &times;
                   </button>
@@ -1275,7 +1275,7 @@ function EventPanel({
                   <button
                     type="button"
                     onClick={() => onUpdate((ev) => ({ ...ev, groupConditions: (ev.groupConditions ?? []).filter((_, j) => j !== i) }))}
-                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", cursor: "pointer", borderRadius: "var(--radius-sm)", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
+                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--status-error)", cursor: "pointer", borderRadius: "var(--radius-sm)", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
                   >
                     &times;
                   </button>
@@ -1354,7 +1354,7 @@ function EventPanel({
                     <button
                       type="button"
                       onClick={() => onUpdate((ev) => ({ ...ev, prerequisiteEventIds: (ev.prerequisiteEventIds ?? []).filter((_, j) => j !== i) }))}
-                      style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", cursor: "pointer", borderRadius: "var(--radius-sm)", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
+                      style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--status-error)", cursor: "pointer", borderRadius: "var(--radius-sm)", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
                     >
                       &times;
                     </button>
@@ -1429,7 +1429,7 @@ function EventPanel({
                   <button
                     type="button"
                     onClick={() => onUpdate((ev) => ({ ...ev, mutuallyExclusiveWith: (ev.mutuallyExclusiveWith ?? []).filter((_, j) => j !== i) }))}
-                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", cursor: "pointer", borderRadius: "var(--radius-sm)", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
+                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--status-error)", cursor: "pointer", borderRadius: "var(--radius-sm)", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
                   >
                     &times;
                   </button>
@@ -1443,7 +1443,7 @@ function EventPanel({
               value={Math.round((event.weight ?? 1) * 20)}
               onChange={(v) => onUpdate((ev) => ({ ...ev, weight: Math.max(0, v / 20) }))}
             />
-            <p style={{ fontSize: "0.7rem", color: "var(--muted)", marginTop: "-0.5rem" }}>
+            <p style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", marginTop: "-0.5rem" }}>
               Higher weight = more likely to be selected (current: {event.weight ?? 1})
             </p>
           </>
@@ -1465,7 +1465,7 @@ function EventPanel({
                       fontSize: "0.75rem",
                       fontWeight: event.tone === t ? 600 : 400,
                       background: event.tone === t ? "var(--accent)" : "var(--bg-elevated)",
-                      color: event.tone === t ? "#fff" : "var(--muted)",
+                      color: event.tone === t ? "#fff" : "var(--text-tertiary)",
                       cursor: "pointer",
                     }}
                   >
@@ -1559,7 +1559,7 @@ function EventPanel({
                   + Add
                 </button>
               </div>
-              <p style={{ fontSize: "0.7rem", color: "var(--muted)", marginBottom: "0.375rem" }}>
+              <p style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", marginBottom: "0.375rem" }}>
                 Guides the LLM on expected metric shifts
               </p>
               {(event.metricHints ?? []).map((mh, i) => (
@@ -1615,7 +1615,7 @@ function EventPanel({
                   <button
                     type="button"
                     onClick={() => onUpdate((ev) => ({ ...ev, metricHints: (ev.metricHints ?? []).filter((_, j) => j !== i) }))}
-                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", cursor: "pointer", borderRadius: "var(--radius-sm)", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
+                    style={{ border: "1px solid var(--border)", background: "transparent", color: "var(--status-error)", cursor: "pointer", borderRadius: "var(--radius-sm)", padding: "0 0.5rem", fontSize: "0.75rem", flex: "none" }}
                   >
                     &times;
                   </button>
@@ -1937,7 +1937,7 @@ function WorldCorePanel({
                     style={{
                       border: "1px solid var(--border)",
                       background: "transparent",
-                      color: "var(--danger)",
+                      color: "var(--status-error)",
                       cursor: "pointer",
                       borderRadius: "var(--radius-sm)",
                       padding: "0 0.5rem",
@@ -2069,7 +2069,7 @@ function WorldCorePanel({
                     style={{
                       border: "1px solid var(--border)",
                       background: "transparent",
-                      color: "var(--danger)",
+                      color: "var(--status-error)",
                       cursor: "pointer",
                       borderRadius: "var(--radius-sm)",
                       padding: "0 0.5rem",
@@ -2172,7 +2172,7 @@ function WorldCorePanel({
                 />
                 Adaptive Difficulty
               </label>
-              <p style={{ fontSize: "0.7rem", color: "var(--muted)", marginTop: "0.25rem" }}>
+              <p style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", marginTop: "0.25rem" }}>
                 When enabled, difficulty adjusts based on player performance.
               </p>
             </div>
@@ -2392,7 +2392,7 @@ export function WorldEditorPanel({
             style={{
               border: "1px solid var(--border)",
               background: "transparent",
-              color: "var(--danger)",
+              color: "var(--status-error)",
               cursor: "pointer",
               borderRadius: "var(--radius-sm)",
               padding: "0.25rem 0.5rem",
@@ -2410,7 +2410,7 @@ export function WorldEditorPanel({
           style={{
             border: "none",
             background: "transparent",
-            color: "var(--muted)",
+            color: "var(--text-tertiary)",
             cursor: "pointer",
             fontSize: "1.25rem",
             lineHeight: 1,

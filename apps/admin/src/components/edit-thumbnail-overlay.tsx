@@ -30,12 +30,12 @@ type Props = {
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
   accent: "var(--accent-strong)",
   accentSoft: "color-mix(in srgb, var(--accent-strong) 12%, transparent)",
-  danger: "var(--danger)",
+  danger: "var(--status-error)",
   fontHeading: "'Inter', system-ui, sans-serif",
   fontBody: "'Inter', sans-serif",
   fontMono: "'JetBrains Mono', ui-monospace, monospace",
@@ -179,12 +179,12 @@ export function EditThumbnailOverlay({
   }, [onClose, save, saving]);
 
   // Live preview background — either the chosen gradient or the uploaded
-  // image. When showing an image we layer it over var(--card-hover) (the
+  // image. When showing an image we layer it over var(--surface-hover) (the
   // same tint the model pill uses in the canvas card) so transparent
   // pixels read against a calm card-surface tone rather than the panel.
   const previewBg =
     draft.kind === "image"
-      ? `center/cover no-repeat url("${draft.previewUrl}"), var(--card-hover)`
+      ? `center/cover no-repeat url("${draft.previewUrl}"), var(--surface-hover)`
       : AVATAR_GRADIENTS[draft.key];
 
   // Whether the avatar letter should render. With an image we hide it; with
@@ -214,7 +214,7 @@ export function EditThumbnailOverlay({
         style={{
           width: "100%",
           maxWidth: 560,
-          background: "var(--card)",
+          background: "var(--material-card)",
           border: `1px solid ${T.border}`,
           boxShadow: "0 24px 60px var(--shadow, rgba(0,0,0,0.40))",
           display: "flex",
@@ -264,7 +264,7 @@ export function EditThumbnailOverlay({
         <div style={{
           margin: "0 22px",
           padding: "18px 20px",
-          background: "var(--card-hover)",
+          background: "var(--surface-hover)",
           border: `1px solid ${T.border}`,
           display: "flex",
           alignItems: "center",
@@ -607,7 +607,7 @@ function KeyChip({ children }: { children: React.ReactNode }) {
       padding: "1px 6px",
       borderRadius: "var(--radius-xs)",
       border: `1px solid ${T.border}`,
-      background: "var(--card-hover)",
+      background: "var(--surface-hover)",
       fontFamily: T.fontMono,
       fontSize: "var(--font-size-2xs)",
       color: T.fg,

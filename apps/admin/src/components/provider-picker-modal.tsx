@@ -316,7 +316,7 @@ export function ProviderPickerModal({
             alignItems: "center",
             gap: "var(--space-8)",
             padding: "12px 22px 16px 22px",
-            borderTop: "1px solid var(--divider)",
+            borderTop: "1px solid var(--border-subtle)",
             fontFamily: FONT_MONO,
             fontSize: "var(--font-size-sm)",
             color: "var(--text-quaternary)",
@@ -371,7 +371,7 @@ function ProviderTile({
   const accentBorder =
     configured && hovered && !checking
       ? "color-mix(in srgb, var(--accent-strong) 50%, transparent)"
-      : "var(--card-border)";
+      : "var(--border-subtle)";
   const accentBg =
     configured && hovered && !checking
       ? "var(--accent-wash)"
@@ -422,7 +422,7 @@ function ProviderTile({
             border: `1px solid ${
               visuallyBright
                 ? "color-mix(in srgb, var(--accent-strong) 32%, transparent)"
-                : "var(--card-border)"
+                : "var(--border-subtle)"
             }`,
           }}
         >

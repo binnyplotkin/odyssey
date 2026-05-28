@@ -7,6 +7,8 @@ import { useSession, signOut } from "next-auth/react";
 import { Sidebar, type SidebarItem, type SidebarTab } from "@odyssey/ui";
 import { HeaderProvider, useHeaderContent } from "./header-context";
 import { SettingsOverlay } from "./settings-overlay";
+import { AdminAgentSidebar } from "./admin-agent-sidebar";
+import { HalftoneIntelligenceIcon } from "./halftone-intelligence-icon";
 import {
   Grid,
   Globe,
@@ -52,10 +54,7 @@ const icons = {
 
 /* ── Brand icon ──────────────────────────────────────────────── */
 
-// Brand mark is hardcoded to #8FD1CB so it stays the same mint-teal in
-// both themes. NOT tied to --accent-strong because that token darkens to
-// #5E8E84 in light mode for CTA contrast — the brand identity stays put.
-const ODYSSEY_BRAND = "#8FD1CB";
+const ODYSSEY_BRAND = "var(--accent-strong)";
 const odysseyIcon = (
   <span
     aria-hidden="true"
@@ -94,6 +93,7 @@ const items: SidebarItem[] = [
   { href: "/engine", label: "Engine", section: "Tools", icon: icons.engine, tab: "infra" },
   { href: "/editor", label: "Editor", section: "Tools", icon: icons.editor, tab: "infra" },
   { href: "/builder", label: "Builder", section: "Tools", icon: icons.builder, tab: "infra" },
+  { href: "/ai-icon-test", label: "AI Icon", section: "Tools", icon: icons.tool, tab: "infra" },
   { href: "/loading-indicator", label: "Loading Indicator", section: "Tools", icon: icons.waveform, tab: "infra" },
   { href: "/voice-test", label: "Voice Test", section: "Tools", icon: icons.voice, tab: "infra" },
   { href: "/voice-test-2", label: "Voice Test 2", section: "Tools", icon: icons.waveform, tab: "infra" },
@@ -132,6 +132,7 @@ function AdminShellInner({ children, initialCollapsed }: { children: React.React
    * loading.tsx case where no client component has mounted yet. */
   const isFlush = flush || isFlushRoute(pathname);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
   const { data: session } = useSession();
   const [theme, setTheme] = useState<"dark" | "light" | "system">(() => {
     if (typeof window !== "undefined") {
@@ -148,9 +149,11 @@ function AdminShellInner({ children, initialCollapsed }: { children: React.React
           : "light"
         : theme;
     document.documentElement.setAttribute("data-theme", resolved);
+    document.documentElement.setAttribute("data-theme-variant", "river");
     document.documentElement.style.colorScheme = resolved;
-    document.body.style.backgroundColor = resolved === "dark" ? "#05070A" : "#F5F6F4";
+    document.body.style.backgroundColor = "var(--background)";
     localStorage.setItem("odyssey-theme", theme);
+    localStorage.setItem("odyssey-theme-variant", "river");
   }, [theme]);
 
   // Listen for OS theme changes when set to "system"
@@ -160,8 +163,9 @@ function AdminShellInner({ children, initialCollapsed }: { children: React.React
     const handler = (e: MediaQueryListEvent) => {
       const resolved = e.matches ? "dark" : "light";
       document.documentElement.setAttribute("data-theme", resolved);
+      document.documentElement.setAttribute("data-theme-variant", "river");
       document.documentElement.style.colorScheme = resolved;
-      document.body.style.backgroundColor = resolved === "dark" ? "#05070A" : "#F5F6F4";
+      document.body.style.backgroundColor = "var(--background)";
     };
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
@@ -189,12 +193,30 @@ function AdminShellInner({ children, initialCollapsed }: { children: React.React
       workspaceName="odyssey-labs"
       docsHref="/docs"
       headerContent={headerContent}
+      actions={agentOpen ? [] : [
+        {
+          label: "Open admin agent",
+          icon: ({ hovered }) => (
+            <HalftoneIntelligenceIcon
+              state="thinking"
+              preset={hovered ? "radial" : undefined}
+              size={28}
+              density="compact"
+              intensity={hovered ? 1.08 : 0.9}
+              speedScale={hovered ? 1.25 : 0.85}
+              label="AI"
+            />
+          ),
+          onClick: () => setAgentOpen(true),
+        },
+      ]}
       mainPadding={isFlush ? "0" : "2rem"}
       onSignOut={() => signOut({ callbackUrl: "/login" })}
       theme={theme}
       onThemeChange={handleThemeChange}
       onSettings={() => setSettingsOpen(true)}
       initialCollapsed={initialCollapsed}
+      rightRail={<AdminAgentSidebar open={agentOpen} onOpenChange={setAgentOpen} />}
     >
       {children}
       <SettingsOverlay

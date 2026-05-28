@@ -552,7 +552,7 @@ function L01Configure({ character }: { character: HarnessCharacter }) {
             margin: 0,
             padding: "14px 16px",
             background: "rgba(0,0,0,0.25)",
-            border: "1px solid var(--input-border)",
+            border: "1px solid var(--control-border)",
             borderRadius: "var(--radius-sm)",
             fontFamily: T.fontMono,
             fontSize: 11.5,
@@ -657,8 +657,8 @@ function L01History({ character }: { character: HarnessCharacter }) {
         <div
           style={{
             padding: "var(--space-24)",
-            background: "var(--card)",
-            border: "1px dashed var(--card-border)",
+            background: "var(--material-card)",
+            border: "1px dashed var(--border-subtle)",
             borderRadius: "var(--radius-md)",
             fontFamily: T.fontBody,
             fontSize: "var(--font-size-md)",
@@ -704,8 +704,8 @@ function L01History({ character }: { character: HarnessCharacter }) {
               key={entry.identityHash}
               style={{
                 padding: "14px 18px",
-                background: entry.isCurrent ? "rgba(140,231,210,0.04)" : "var(--card)",
-                border: `1px solid ${entry.isCurrent ? "rgba(140,231,210,0.25)" : "var(--card-border)"}`,
+                background: entry.isCurrent ? "rgba(140,231,210,0.04)" : "var(--material-card)",
+                border: `1px solid ${entry.isCurrent ? "rgba(140,231,210,0.25)" : "var(--border-subtle)"}`,
                 borderRadius: "var(--radius-md)",
                 display: "flex",
                 gap: "var(--space-16)",
@@ -752,7 +752,7 @@ function L01History({ character }: { character: HarnessCharacter }) {
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   background: entry.isCurrent ? "transparent" : "rgba(255,184,112,0.08)",
-                  border: `1px solid ${entry.isCurrent ? "var(--input-border)" : "rgba(255,184,112,0.3)"}`,
+                  border: `1px solid ${entry.isCurrent ? "var(--control-border)" : "rgba(255,184,112,0.3)"}`,
                   color: entry.isCurrent ? "var(--text-quaternary)" : "rgba(255,184,112,0.95)",
                   borderRadius: "var(--radius-xs)",
                   cursor: entry.isCurrent || isReverting ? "default" : "pointer",
@@ -845,8 +845,8 @@ function TemplatesCard({
     <section
       style={{
         padding: "12px 16px 16px",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
         display: "flex",
         flexDirection: "column",
@@ -881,8 +881,8 @@ function TemplatesCard({
             fontSize: "var(--font-size-xs)",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            background: open ? "rgba(140,231,210,0.1)" : "var(--input-bg)",
-            border: `1px solid ${open ? "rgba(140,231,210,0.3)" : "var(--input-border)"}`,
+            background: open ? "rgba(140,231,210,0.1)" : "var(--control-bg)",
+            border: `1px solid ${open ? "rgba(140,231,210,0.3)" : "var(--control-border)"}`,
             color: open ? "var(--accent-strong)" : "var(--text-secondary)",
             borderRadius: "var(--radius-xs)",
             cursor: "pointer",
@@ -939,7 +939,7 @@ function TemplateRow({
   accent: "muted" | "pink";
 }) {
   const bg = accent === "pink" ? "rgba(255,122,155,0.04)" : "rgba(255,255,255,0.02)";
-  const border = accent === "pink" ? "rgba(255,122,155,0.2)" : "var(--input-border)";
+  const border = accent === "pink" ? "rgba(255,122,155,0.2)" : "var(--control-border)";
   const accentColor = accent === "pink" ? "rgba(255,122,155,0.95)" : "var(--text-secondary)";
 
   return (
@@ -1052,8 +1052,8 @@ function SaveBar({
         alignItems: "center",
         gap: "var(--space-14)",
         padding: "12px 16px",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
       }}
     >
@@ -1079,8 +1079,8 @@ function SaveBar({
           fontSize: "var(--font-size-xs)",
           letterSpacing: "0.1em",
           textTransform: "uppercase",
-          background: isDirty ? "rgba(140,231,210,0.14)" : "var(--input-bg)",
-          border: `1px solid ${isDirty ? "rgba(140,231,210,0.4)" : "var(--input-border)"}`,
+          background: isDirty ? "rgba(140,231,210,0.14)" : "var(--control-bg)",
+          border: `1px solid ${isDirty ? "rgba(140,231,210,0.4)" : "var(--control-border)"}`,
           color: isDirty ? "var(--accent-strong)" : "var(--text-tertiary)",
           borderRadius: "var(--radius-xs)",
           cursor: isDirty && save.status !== "saving" ? "pointer" : "default",
@@ -1102,7 +1102,7 @@ function Status({
   const colorMap = {
     accent: "var(--accent-strong)",
     amber: "rgba(255,184,112,0.95)",
-    danger: "var(--danger)",
+    danger: "var(--status-error)",
     muted: "var(--text-tertiary)",
   };
   return (
@@ -1131,7 +1131,7 @@ function Card({
 }) {
   const borderMap = {
     phosphor: "rgba(140,231,210,0.18)",
-    muted: "var(--card-border)",
+    muted: "var(--border-subtle)",
   };
   const eyebrowMap = {
     phosphor: "var(--accent-strong)",
@@ -1141,7 +1141,7 @@ function Card({
     <section
       style={{
         padding: "var(--space-24)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         border: `1px solid ${borderMap[accent]}`,
         borderRadius: "var(--radius-md)",
         display: "flex",
@@ -1201,8 +1201,8 @@ function TraitSlot({
     <div
       style={{
         padding: "var(--space-16)",
-        background: "var(--input-bg)",
-        border: `1px solid ${filled ? "rgba(140,231,210,0.22)" : "var(--input-border)"}`,
+        background: "var(--control-bg)",
+        border: `1px solid ${filled ? "rgba(140,231,210,0.22)" : "var(--control-border)"}`,
         borderRadius: "var(--radius-sm)",
         display: "flex",
         flexDirection: "column",
@@ -1266,7 +1266,7 @@ function TraitSlot({
           width: "100%",
           padding: "8px 12px",
           background: "rgba(0,0,0,0.2)",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-xs)",
           color: "var(--foreground)",
           fontFamily: T.fontHeading,
@@ -1289,7 +1289,7 @@ function TraitSlot({
           width: "100%",
           padding: "8px 12px",
           background: "rgba(0,0,0,0.2)",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-xs)",
           color: "var(--foreground)",
           fontFamily: T.fontBody,
@@ -1307,7 +1307,7 @@ function TraitSlot({
             alignSelf: "flex-start",
             padding: "3px 8px",
             background: "transparent",
-            border: "1px solid var(--input-border)",
+            border: "1px solid var(--control-border)",
             color: "var(--text-tertiary)",
             borderRadius: "var(--radius-xs)",
             fontFamily: T.fontMono,
@@ -1332,8 +1332,8 @@ function TraitSlotIndicator({ filled }: { filled: number }) {
         alignItems: "center",
         gap: "var(--space-6)",
         padding: "5px 10px",
-        background: filled === 2 ? "rgba(140,231,210,0.08)" : "var(--input-bg)",
-        border: `1px solid ${filled === 2 ? "rgba(140,231,210,0.25)" : "var(--input-border)"}`,
+        background: filled === 2 ? "rgba(140,231,210,0.08)" : "var(--control-bg)",
+        border: `1px solid ${filled === 2 ? "rgba(140,231,210,0.25)" : "var(--control-border)"}`,
         borderRadius: "var(--radius-xs)",
       }}
     >
@@ -1397,7 +1397,7 @@ function TraitNounPalette({
         marginTop: "var(--space-4)",
         padding: "14px 16px",
         background: "rgba(255,255,255,0.02)",
-        border: "1px dashed var(--input-border)",
+        border: "1px dashed var(--control-border)",
         borderRadius: "var(--radius-sm)",
         display: "flex",
         flexDirection: "column",
@@ -1460,9 +1460,9 @@ function TraitNounPalette({
                       padding: "5px 10px",
                       background: used
                         ? "rgba(140,231,210,0.08)"
-                        : "var(--input-bg)",
+                        : "var(--control-bg)",
                       border: `1px solid ${
-                        used ? "rgba(140,231,210,0.3)" : "var(--input-border)"
+                        used ? "rgba(140,231,210,0.3)" : "var(--control-border)"
                       }`,
                       borderRadius: "var(--radius-xs)",
                       fontFamily: T.fontMono,
@@ -1523,7 +1523,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
         style={{
           padding: "10px 14px",
           background: "rgba(0,0,0,0.15)",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-sm)",
           fontFamily: T.fontHeading,
           fontSize: "var(--font-size-xl)",
@@ -1567,8 +1567,8 @@ function TextField({
         placeholder={placeholder}
         style={{
           padding: "10px 14px",
-          background: "var(--input-bg)",
-          border: "1px solid var(--input-border)",
+          background: "var(--control-bg)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-sm)",
           color: "var(--foreground)",
           fontFamily: T.fontBody,
@@ -1617,8 +1617,8 @@ function TextArea({
         style={{
           width: "100%",
           padding: "12px 14px",
-          background: "var(--input-bg)",
-          border: "1px solid var(--input-border)",
+          background: "var(--control-bg)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-sm)",
           color: "var(--foreground)",
           fontFamily: T.fontBody,

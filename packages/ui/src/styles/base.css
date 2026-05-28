@@ -8,7 +8,7 @@
  * the actual variable values.
  *
  * The contract intentionally keeps older aliases (`--panel`, `--card`,
- * `--accent`, etc.) so product surfaces can migrate incrementally.
+ * `--input-bg`, etc.) so product surfaces can migrate incrementally.
  */
 
 /* ── Tailwind theme mapping ─────────────────────────────────── */
@@ -27,7 +27,8 @@
   --color-surface-2: var(--surface-2);
   --color-surface-hover: var(--surface-hover);
   --color-surface-active: var(--surface-active);
-  --color-node-canvas: var(--node-canvas);
+  --color-canvas-surface: var(--canvas-surface);
+  --color-node-canvas: var(--canvas-surface);
   --color-panel: var(--panel);
   --color-panel-strong: var(--panel-strong);
   --color-border: var(--border);
@@ -86,11 +87,15 @@
   --color-card: var(--card);
   --color-card-hover: var(--card-hover);
   --color-card-border: var(--card-border);
-  --color-input-bg: var(--input-bg);
-  --color-input-border: var(--input-border);
-  --color-dropdown-bg: var(--dropdown-bg);
-  --color-dropdown-border: var(--dropdown-border);
-  --color-divider: var(--divider);
+  --color-control-bg: var(--control-bg);
+  --color-control-border: var(--control-border);
+  --color-popover-bg: var(--popover-bg);
+  --color-popover-border: var(--popover-border);
+  --color-input-bg: var(--control-bg);
+  --color-input-border: var(--control-border);
+  --color-dropdown-bg: var(--popover-bg);
+  --color-dropdown-border: var(--popover-border);
+  --color-divider: var(--border-subtle);
   --color-modal-backdrop: var(--modal-backdrop);
   --color-ring: var(--ring-color);
   --color-header-bg: var(--header-bg);
@@ -192,7 +197,7 @@ textarea {
 /* ── Shared component classes ───────────────────────────────── */
 
 .panel {
-  background: var(--surface-material, var(--panel));
+  background: var(--material-surface, var(--surface-1));
   backdrop-filter: blur(18px);
   border: 1px solid var(--border);
   box-shadow: var(--elevation-panel, 0 24px 80px var(--shadow));
@@ -208,25 +213,25 @@ textarea {
 }
 
 .odyssey-surface {
-  background: var(--surface-material, var(--panel));
+  background: var(--material-surface, var(--surface-1));
   border: 1px solid var(--border-subtle, var(--border));
   box-shadow: var(--elevation-surface, 0 8px 40px var(--shadow));
 }
 
 .odyssey-card {
-  background: var(--card-material, var(--card));
-  border: 1px solid var(--card-border);
+  background: var(--material-card, var(--surface-1));
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card, 18px);
   box-shadow: var(--elevation-card, 0 8px 40px var(--shadow));
 }
 
 .odyssey-canvas {
-  background: var(--canvas-background, var(--background));
+  background: var(--canvas-atmosphere, var(--background));
 }
 
 .odyssey-control {
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius-button, 12px);
 }
 
@@ -263,7 +268,7 @@ textarea {
 }
 
 .skeleton {
-  background-color: var(--panel);
+  background-color: var(--surface-1);
   background-image: linear-gradient(
     90deg,
     transparent 0%,

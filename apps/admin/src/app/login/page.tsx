@@ -41,7 +41,7 @@ export default async function LoginPage() {
           width: "min(100vw, 460px)",
           height: "100%",
           padding: "clamp(1.5rem, 4vw, 3rem)",
-          background: "color-mix(in srgb, var(--panel) 92%, transparent)",
+          background: "color-mix(in srgb, var(--surface-1) 92%, transparent)",
           backdropFilter: "blur(28px) saturate(1.2)",
           WebkitBackdropFilter: "blur(28px) saturate(1.2)",
           borderLeft: "1px solid rgba(223, 255, 245, 0.18)",

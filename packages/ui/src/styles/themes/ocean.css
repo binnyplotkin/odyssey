@@ -1,8 +1,14 @@
 /*
  * Odyssey — Atmospheric Theme
  *
- * A calm, spatial UI language for simulated worlds. The public import path is
- * still `ocean.css` for compatibility with existing apps.
+ * Canonical runtime tokens are the semantic names below:
+ *   --background, --sidebar, --surface-*, --canvas-*, --material-*,
+ *   --foreground, --text-*, --border-*, --accent*, --status-*,
+ *   plus type/radius/space scales.
+ *
+ * Older aliases (`--panel`, `--card`, `--passive-teal`, `--danger`,
+ * `--forest-*`, etc.) are intentionally retained as derived compatibility
+ * tokens so product surfaces can migrate incrementally.
  */
 
 :root {
@@ -11,159 +17,130 @@
   --font-display: "Space Grotesk";
   --font-mono: "JetBrains Mono";
 
-  /* Raw legacy palette aliases retained for older Tailwind mappings. */
-  --forest-950: #07090B;
-  --forest-900: #0D1013;
-  --forest-800: #111417;
-  --forest-700: #151A1E;
-  --forest-600: #1C2328;
-  --forest-500: #6F8F88;
-  --forest-400: #8AA8A1;
-  --forest-300: #BFD1CB;
-  --forest-200: #DFFFF5;
-  --forest-100: #ECFFF9;
-  --forest-50:  #F7FFFC;
-
-  /* Foundation surfaces — dark default.
-   *
-   * Elevation ladder (post "elevated soft-dark" shift, was anchored at
-   * near-black #07090B + card #111417). Whole ladder shifted up so the
-   * page reads as a confident dark mode rather than void-black, while
-   * preserving proportional spacing between rungs so card / panel /
-   * hover / active still separate cleanly:
-   *   bg       #13181D  (was #07090B)
-   *   sidebar  #161B20  (was #0B0D10)   ← sits between bg and surface-1
-   *   surface-1 #1A1F24 (was #111417)   ← --card / --panel / --dropdown
-   *   surface-2 #1E252B (was #151A1E)   ← drawer, --node-canvas tracks
-   *   hover    #20282F  (was #171D22)
-   *   active   #252E35  (was #1C2328)   ← --panel-strong
-   */
-  --app-background: #13181D;
+  /* Canonical surfaces — dark default. */
   --background: #13181D;
   --sidebar: #161B20;
   --surface-1: #1A1F24;
   --surface-2: #1E252B;
   --surface-hover: #20282F;
   --surface-active: #252E35;
-  --foreground: rgba(255, 255, 255, 0.92);
+  --canvas-surface: var(--surface-2);
 
-  /* Text */
-  --text-primary: rgba(255, 255, 255, 0.92);
+  /* Canonical text */
+  --foreground: rgba(255, 255, 255, 0.92);
+  --text-primary: var(--foreground);
   --text-secondary: rgba(255, 255, 255, 0.70);
   --text-tertiary: rgba(255, 255, 255, 0.45);
   --text-quaternary: rgba(255, 255, 255, 0.20);
   --text-placeholder: rgba(255, 255, 255, 0.28);
-  --muted: var(--text-tertiary);
-  --dim: var(--text-quaternary);
 
-  /* Borders */
+  /* Canonical borders */
   --border-subtle: rgba(255, 255, 255, 0.05);
   --border-medium: rgba(255, 255, 255, 0.08);
   --border-active: rgba(143, 209, 203, 0.12);
   --border: var(--border-subtle);
-  --divider: rgba(255, 255, 255, 0.05);
 
-  /* Ink-wash scale — neutral tints on top of any surface. Use these
-   * instead of inline color-mix(text-primary, N%) for row stripes,
-   * subtle borders, panel insets. Five rungs cover the real-world
-   * range we found in audit (2% → 18%). */
+  /* Canonical brand and semantic colors */
+  --accent: #6FBF88;
+  --accent-strong: #8FD1CB;
+  --accent-secondary: #7FE6C3;
+  --accent-on: #0A0F12;
+  --emissive-mint: #DFFFF5;
+  --signal-blue: #6E8BFF;
+  --event-violet: #8B5CF6;
+  --warning-amber: #FFB84D;
+  --critical-crimson: #FF5A5A;
+
+  --status-live: #4ADE80;
+  --status-draft: #FACC15;
+  --status-archived: #A1A1AA;
+  --status-error: #FCA5A5;
+  --status-processing: #FFB84D;
+  --status-info: var(--signal-blue);
+
+  /* Derived color scales */
   --ink-wash: color-mix(in srgb, var(--text-primary) 2%, transparent);
   --ink-soft: color-mix(in srgb, var(--text-primary) 4%, transparent);
   --ink-fill: color-mix(in srgb, var(--text-primary) 6%, transparent);
   --ink-line: color-mix(in srgb, var(--text-primary) 10%, transparent);
   --ink-edge: color-mix(in srgb, var(--text-primary) 18%, transparent);
 
-  /* Accents — aligned to Paper Brand Guidelines (NKD-0 / LAM-0).
-   * Was passive #6F8F88 / active #BFD1CB (desaturated grayed-mint);
-   * Paper specifies passive #6FBF88 (mint-sage with green chroma) and
-   * active #8FD1CB (clean bright mint teal). Every D-card pill, CTA,
-   * and accent now matches what the designs paint against. */
-  --passive-teal: #6FBF88;
-  --active-teal: #8FD1CB;
-  --accent-secondary: #7FE6C3;
-  --neural_color: #6FBF88;
-  --emissive-mint: #DFFFF5;
-  --signal-blue: #6E8BFF;
-  --event-violet: #8B5CF6;
-  --warning-amber: #FFB84D;
-  --critical-crimson: #FF5A5A;
-  --accent: var(--passive-teal);
-  --accent-strong: var(--active-teal);
-  /* Accent fill scale — translucent tints of --accent-strong for hover
-   * washes, chip fills, borders, glow rings. Use these instead of
-   * inline color-mix(accent-strong, N%) calls. Five rungs cover the
-   * 4% → 40% real-world range we found in audit. --accent-soft kept
-   * for backwards compat (alias of --accent-fill). */
   --accent-wash: color-mix(in srgb, var(--accent-strong) 6%, transparent);
   --accent-fill: color-mix(in srgb, var(--accent-strong) 14%, transparent);
   --accent-border: color-mix(in srgb, var(--accent-strong) 30%, transparent);
   --accent-glow: color-mix(in srgb, var(--accent-strong) 40%, transparent);
   --accent-soft: var(--accent-fill);
-  /* Text color when sitting on top of an --accent-strong fill (CTAs).
-   * Hardcoded dark so light-mode CTAs stay readable even though the
-   * accent darkens for contrast over there. Pairs with the brand mark
-   * decoupling in admin-shell. */
-  --accent-on: #0A0F12;
 
-  /* Status — `--status-error` softened from #FF5A5A (alarm red) to
-   * #FCA5A5 (pastel coral) per Paper's FailedBlock spec. The brand's
-   * saturated red stays on --critical-crimson for destructive flows. */
-  --status-live: #4ADE80;
-  --status-draft: #FACC15;
-  --status-archived: #A1A1AA;
-  --status-error: #FCA5A5;
-  /* Processing distinct from draft so in-flight operations aren't
-   * mis-read as "needs work". Cool amber rather than draft yellow. */
-  --status-processing: #FFB84D;
-  /* Info uses --signal-blue under a status-namespace alias so the
-   * semantic intent is explicit at the call site. */
-  --status-info: var(--signal-blue);
-  --success: var(--status-live);
-  --danger: var(--status-error);
-
-  /* Critical fill scale — translucent tints of --status-error for
-   * error chip bgs, borders, and the destructive-confirm modal accents.
-   * Parallel to --accent-* scale. */
   --critical-wash: color-mix(in srgb, var(--status-error) 6%, transparent);
   --critical-fill: color-mix(in srgb, var(--status-error) 14%, transparent);
   --critical-border: color-mix(in srgb, var(--status-error) 30%, transparent);
 
-  /* Materials */
-  --surface-material:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0)),
-    var(--surface-1);
-  --card-material:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
-    var(--surface-1);
-  --canvas-background:
-    radial-gradient(circle at center, rgba(191, 209, 203, 0.05), transparent 45%),
-    #050608;
-  /* Flat canvas surface for ReactFlow node graphs (character editor, etc).
-   * Tracks --surface-2 — the canvas reads as a raised stage above the
-   * page shell, slightly brighter than the cards on it. Card separation
-   * relies on the --card-material top-edge highlight + border. */
-  --node-canvas: #1E252B;
-  --app-atmosphere:
-    radial-gradient(circle at 20% 20%, rgba(141, 252, 203, 0.04), transparent 40%),
-    radial-gradient(circle at 80% 30%, rgba(110, 139, 255, 0.03), transparent 35%),
-    var(--app-background);
+  /* Canonical controls and overlays */
+  --control-bg: rgba(255, 255, 255, 0.035);
+  --control-border: var(--border-medium);
+  --popover-bg: var(--surface-1);
+  --popover-border: var(--border-medium);
+  --modal-backdrop: rgba(0, 0, 0, 0.55);
 
-  /* Legacy component aliases */
+  /* Canonical materials and atmospheres */
+  --material-highlight: rgba(255, 255, 255, 0.025);
+  --card-highlight: rgba(255, 255, 255, 0.02);
+  --canvas-glow-strength: 5%;
+  --canvas-base: #050608;
+  --material-surface:
+    linear-gradient(180deg, var(--material-highlight), rgba(255, 255, 255, 0)),
+    var(--surface-1);
+  --material-card:
+    linear-gradient(180deg, var(--card-highlight), rgba(255, 255, 255, 0)),
+    var(--surface-1);
+  --canvas-atmosphere:
+    radial-gradient(circle at center, color-mix(in srgb, var(--accent-strong) var(--canvas-glow-strength), transparent), transparent 45%),
+    var(--canvas-base);
+  --page-atmosphere:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent-secondary) 4%, transparent), transparent 40%),
+    radial-gradient(circle at 80% 30%, color-mix(in srgb, var(--signal-blue) 3%, transparent), transparent 35%),
+    var(--background);
+
+  /* Compatibility aliases. Prefer canonical tokens in new code. */
+  --app-background: var(--background);
+  --node-canvas: var(--canvas-surface);
+  --divider: var(--border-subtle);
   --panel: var(--surface-1);
   --panel-strong: var(--surface-active);
   --panel-strong-text: var(--emissive-mint);
-  --card: var(--surface-material);
+  --card: var(--material-surface);
   --card-hover: var(--surface-hover);
   --card-border: var(--border-subtle);
-  --input-bg: rgba(255, 255, 255, 0.035);
-  --input-border: rgba(255, 255, 255, 0.08);
-  --dropdown-bg: #1A1F24;
-  --dropdown-border: rgba(255, 255, 255, 0.08);
+  --input-bg: var(--control-bg);
+  --input-border: var(--control-border);
+  --dropdown-bg: var(--popover-bg);
+  --dropdown-border: var(--popover-border);
+  --surface-material: var(--material-surface);
+  --card-material: var(--material-card);
+  --canvas-background: var(--canvas-atmosphere);
+  --app-atmosphere: var(--page-atmosphere);
+  --muted: var(--text-tertiary);
+  --dim: var(--text-quaternary);
+  --passive-teal: var(--accent);
+  --active-teal: var(--accent-strong);
+  --neural_color: var(--accent);
+  --success: var(--status-live);
+  --danger: var(--status-error);
 
-  /* Radius scale — calibrated to actual usage (audit found 4/6/8/10/pill
-   * dominate, while old card/panel/floating values were barely used).
-   * Old aliases kept for backwards compat — new code should use the
-   * t-shirt sized tokens. */
+  /* Legacy raw palette aliases retained for older Tailwind mappings. */
+  --forest-950: var(--background);
+  --forest-900: var(--sidebar);
+  --forest-800: var(--surface-1);
+  --forest-700: var(--surface-2);
+  --forest-600: var(--surface-active);
+  --forest-500: var(--accent);
+  --forest-400: color-mix(in srgb, var(--accent-strong) 72%, var(--text-primary));
+  --forest-300: var(--accent-strong);
+  --forest-200: var(--emissive-mint);
+  --forest-100: color-mix(in srgb, var(--emissive-mint) 82%, white);
+  --forest-50: color-mix(in srgb, var(--emissive-mint) 92%, white);
+
+  /* Radius scale */
   --radius-2xs: 2px;
   --radius-xs: 4px;
   --radius-sm: 6px;
@@ -178,8 +155,7 @@
   --radius-panel: 20px;
   --radius-floating: 24px;
 
-  /* Typography scale — px-based, theme-independent (font sizes don't shift dark/light).
-   * Covers the top 11 sizes found in the admin app; odd sizes (15, 17, 20, etc.) stay inline. */
+  /* Typography scale */
   --font-size-3xs: 8px;
   --font-size-2xs: 9px;
   --font-size-xs: 10px;
@@ -192,8 +168,7 @@
   --font-size-3xl: 22px;
   --font-size-4xl: 24px;
 
-  /* Spacing scale — px values named by their pixel value.
-   * Theme-independent (spacing doesn't shift between dark/light). */
+  /* Spacing scale */
   --space-1: 1px;
   --space-2: 2px;
   --space-3: 3px;
@@ -210,46 +185,38 @@
   --space-24: 24px;
   --space-32: 32px;
 
-  /* Focus ring */
+  /* Focus and effects */
   --ring-color: var(--accent-strong);
   --ring-width: 2px;
   --ring-offset: 2px;
   --ring-shadow: 0 0 0 var(--ring-width) color-mix(in srgb, var(--ring-color) 10%, transparent);
   --ring-shadow-selected: 0 0 0 3px color-mix(in srgb, var(--ring-color) 22%, transparent);
 
-  /* Modal backdrop — replaces inline rgba(0,0,0,0.5) on dialog overlays */
-  --modal-backdrop: rgba(0, 0, 0, 0.55);
-
   --shadow: rgba(0, 0, 0, 0.45);
   --elevation-surface:
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 8px 40px rgba(0, 0, 0, 0.45);
-  --elevation-card:
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 8px 40px rgba(0, 0, 0, 0.45);
+    0 0 0 1px color-mix(in srgb, var(--text-primary) 4%, transparent),
+    0 8px 40px var(--shadow);
+  --elevation-card: var(--elevation-surface);
   --elevation-panel:
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 18px 70px rgba(0, 0, 0, 0.52);
+    0 0 0 1px color-mix(in srgb, var(--text-primary) 4%, transparent),
+    0 18px 70px color-mix(in srgb, var(--shadow) 92%, black);
   --elevation-modal:
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 32px 64px -16px rgba(0, 0, 0, 0.65);
+    0 0 0 1px color-mix(in srgb, var(--text-primary) 4%, transparent),
+    0 32px 64px -16px color-mix(in srgb, var(--shadow) 94%, black);
   --elevation-menu:
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 24px 48px -12px rgba(0, 0, 0, 0.60),
-    0 4px 12px rgba(0, 0, 0, 0.40);
+    0 0 0 1px color-mix(in srgb, var(--text-primary) 4%, transparent),
+    0 24px 48px -12px color-mix(in srgb, var(--shadow) 90%, black),
+    0 4px 12px color-mix(in srgb, var(--shadow) 84%, black);
   --elevation-side:
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    -8px 0 32px rgba(0, 0, 0, 0.45);
+    0 0 0 1px color-mix(in srgb, var(--text-primary) 4%, transparent),
+    -8px 0 32px var(--shadow);
 
-  /* Atmosphere and motion */
   --grid-color: rgba(191, 209, 203, 0.035);
   --grid-size: 32px;
   --noise-opacity: 0.22;
   --motion-drift: 18s;
   --motion-breathe: 3.8s;
 
-  --sidebar-glass: rgba(22, 27, 32, 0.82);
-  --sidebar-inset: rgba(255, 255, 255, 0.045);
   --header-bg: rgba(19, 24, 29, 0.72);
   --header-border: rgba(255, 255, 255, 0.055);
   --header-blur: 18px;
@@ -258,183 +225,117 @@
   --sidebar-hover: rgba(255, 255, 255, 0.045);
   --sidebar-active: var(--accent-soft);
   --sidebar-active-border: var(--accent-border);
+  --sidebar-glass: rgba(22, 27, 32, 0.82);
+  --sidebar-inset: rgba(255, 255, 255, 0.045);
 
   color-scheme: dark;
 }
 
 :root[data-theme="dark"] {
-  --app-background: #05070A;
   --background: #05070A;
   --sidebar: #080C11;
   --surface-1: #0B1016;
   --surface-2: #0F151D;
   --surface-hover: #111923;
   --surface-active: #15202B;
+  --canvas-surface: #080C11;
+
   --foreground: rgba(255, 255, 255, 0.94);
-
-  --accent: #6FBF88;
-  --accent-strong: #8FD1CB;
-  --accent-secondary: #7FE6C3;
-  --neural_color: #6FBF88;
-  --passive-teal: #6FBF88;
-  --active-teal: #8FD1CB;
-  --accent-wash: color-mix(in srgb, #8FD1CB 6%, transparent);
-  --accent-fill: color-mix(in srgb, #8FD1CB 14%, transparent);
-  --accent-soft: color-mix(in srgb, #8FD1CB 14%, transparent);
-  --accent-border: color-mix(in srgb, #8FD1CB 30%, transparent);
-  --accent-glow: color-mix(in srgb, #8FD1CB 40%, transparent);
-
-  --surface-material:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
-    var(--surface-1);
-  --card-material:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
-    var(--surface-1);
-  --canvas-background:
-    radial-gradient(circle at center, color-mix(in srgb, var(--accent-strong) 5%, transparent), transparent 45%),
-    var(--background);
-  --node-canvas: #080C11;
-  --app-atmosphere:
-    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent-strong) 4%, transparent), transparent 40%),
-    radial-gradient(circle at 80% 30%, rgba(110, 139, 255, 0.03), transparent 35%),
-    var(--app-background);
-
-  --panel: #0B1016;
-  --panel-strong: var(--surface-active);
-  --card:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
-    #0B1016;
-  --card-hover: #111923;
-  --card-border: rgba(255, 255, 255, 0.065);
-
-  --border-subtle: rgba(255, 255, 255, 0.065);
-  --border-medium: rgba(255, 255, 255, 0.09);
-  --border-active: color-mix(in srgb, var(--accent-strong) 18%, transparent);
-  --border: rgba(255, 255, 255, 0.065);
-  --divider: rgba(255, 255, 255, 0.055);
-
-  --input-bg: rgba(255, 255, 255, 0.04);
-  --input-border: rgba(255, 255, 255, 0.09);
-  --dropdown-bg: #0B1016;
-  --dropdown-border: rgba(255, 255, 255, 0.09);
-
-  --danger: #FCA5A5;
-
-  --muted: rgba(255, 255, 255, 0.46);
-  --text-primary: rgba(255, 255, 255, 0.94);
+  --text-primary: var(--foreground);
   --text-secondary: rgba(255, 255, 255, 0.72);
   --text-tertiary: rgba(255, 255, 255, 0.46);
   --text-quaternary: rgba(255, 255, 255, 0.22);
   --text-placeholder: rgba(255, 255, 255, 0.30);
 
-  --ink-wash: color-mix(in srgb, rgba(255, 255, 255, 0.94) 2%, transparent);
-  --ink-soft: color-mix(in srgb, rgba(255, 255, 255, 0.94) 4%, transparent);
-  --ink-fill: color-mix(in srgb, rgba(255, 255, 255, 0.94) 6%, transparent);
-  --ink-line: color-mix(in srgb, rgba(255, 255, 255, 0.94) 10%, transparent);
-  --ink-edge: color-mix(in srgb, rgba(255, 255, 255, 0.94) 18%, transparent);
+  --border-subtle: rgba(255, 255, 255, 0.065);
+  --border-medium: rgba(255, 255, 255, 0.09);
+  --border-active: color-mix(in srgb, var(--accent-strong) 18%, transparent);
+
+  --accent: #6FBF88;
+  --accent-strong: #8FD1CB;
+  --accent-secondary: #7FE6C3;
+  --emissive-mint: #DFFFF5;
+  --signal-blue: #6E8BFF;
+  --event-violet: #8B5CF6;
+  --warning-amber: #FFB84D;
+  --critical-crimson: #FF5A5A;
+
+  --control-bg: rgba(255, 255, 255, 0.04);
+  --control-border: var(--border-medium);
   --modal-backdrop: rgba(0, 0, 0, 0.62);
+  --material-highlight: rgba(255, 255, 255, 0.035);
+  --card-highlight: rgba(255, 255, 255, 0.035);
+  --canvas-base: var(--background);
 
   --elevation-panel:
     0 0 0 1px rgba(255, 255, 255, 0.045),
     0 24px 90px rgba(0, 0, 0, 0.58);
-
-  --ring-shadow-selected: 0 0 0 3px color-mix(in srgb, #8FD1CB 22%, transparent);
+  --ring-shadow-selected: 0 0 0 3px color-mix(in srgb, var(--accent-strong) 22%, transparent);
 
   --header-bg: rgba(5, 7, 10, 0.72);
   --header-border: rgba(255, 255, 255, 0.055);
-  --header-blur: 18px;
-
-  --sidebar-bg: var(--header-bg);
   --sidebar-border: rgba(255, 255, 255, 0.06);
-  --sidebar-hover: var(--card-hover);
-  --sidebar-active: var(--accent-soft);
+  --sidebar-hover: var(--surface-hover);
   --sidebar-active-border: var(--accent-strong);
   --sidebar-glass: rgba(8, 12, 17, 0.82);
   --sidebar-inset: rgba(255, 255, 255, 0.04);
+
+  color-scheme: dark;
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --app-background: #F5F6F4;
     --background: #F5F6F4;
     --sidebar: #F0F1EE;
     --surface-1: #FFFFFF;
     --surface-2: #F3F4F2;
     --surface-hover: #E8EBE7;
     --surface-active: #E1E6E1;
-    --foreground: rgba(0, 0, 0, 0.88);
+    --canvas-surface: #E8EAE6;
 
-    --text-primary: rgba(0, 0, 0, 0.88);
+    --foreground: rgba(0, 0, 0, 0.88);
+    --text-primary: var(--foreground);
     --text-secondary: rgba(0, 0, 0, 0.68);
     --text-tertiary: rgba(0, 0, 0, 0.42);
     --text-quaternary: rgba(0, 0, 0, 0.18);
     --text-placeholder: rgba(0, 0, 0, 0.28);
-    --muted: var(--text-tertiary);
-    --dim: var(--text-quaternary);
 
     --border-subtle: rgba(0, 0, 0, 0.06);
     --border-medium: rgba(0, 0, 0, 0.08);
     --border-active: rgba(111, 143, 136, 0.18);
-    --border: var(--border-subtle);
-    --divider: rgba(0, 0, 0, 0.06);
 
-    /* Accent is darker in light mode so white-on-mint CTAs (sandbox pill,
-     * + new voice, etc.) keep readable contrast. The brand mark itself
-     * uses a hardcoded #8FD1CB regardless of theme — see admin-shell. */
-    --passive-teal: #6F8F88;
-    --active-teal: #5E8E84;
+    --accent: #6F8F88;
+    --accent-strong: #5E8E84;
     --emissive-mint: #CFEDE2;
     --signal-blue: #5D74D9;
     --event-violet: #7C5BE3;
     --warning-amber: #D89A2B;
     --critical-crimson: #E04F4F;
-    --accent: var(--passive-teal);
-    --accent-strong: var(--active-teal);
-    /* ink-*, accent-*, critical-* scales cascade automatically from the
-     * underlying tokens (--text-primary, --accent-strong, --status-error)
-     * via color-mix — no need to redeclare here. */
 
     --status-live: #22A35A;
     --status-draft: #D89A2B;
     --status-archived: #71717A;
     --status-error: #E04F4F;
     --status-processing: #D89A2B;
-    --success: var(--status-live);
-    --danger: var(--status-error);
 
-    --surface-material:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0)),
-      var(--surface-1);
-    --card-material:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0)),
-      var(--surface-1);
-    --canvas-background:
-      radial-gradient(circle at center, rgba(111, 143, 136, 0.10), transparent 48%),
-      #F0F2EF;
-    --node-canvas: #E8EAE6;
-    --app-atmosphere:
-      radial-gradient(circle at 20% 20%, rgba(111, 143, 136, 0.12), transparent 40%),
-      radial-gradient(circle at 80% 30%, rgba(93, 116, 217, 0.08), transparent 35%),
-      var(--app-background);
-
-    --panel: var(--surface-1);
-    --panel-strong: var(--surface-active);
-    --panel-strong-text: var(--text-primary);
-    --card: var(--surface-material);
-    --card-hover: var(--surface-hover);
-    --card-border: var(--border-subtle);
-    --input-bg: rgba(0, 0, 0, 0.025);
-    --input-border: rgba(0, 0, 0, 0.08);
-    --dropdown-bg: #FFFFFF;
-    --dropdown-border: rgba(0, 0, 0, 0.08);
-
+    --control-bg: rgba(0, 0, 0, 0.025);
+    --control-border: var(--border-medium);
+    --popover-bg: #FFFFFF;
+    --popover-border: var(--border-medium);
     --shadow: rgba(0, 0, 0, 0.08);
+    --material-highlight: rgba(255, 255, 255, 0.62);
+    --card-highlight: rgba(255, 255, 255, 0.7);
+    --canvas-base: #F0F2EF;
+    --canvas-glow-strength: 10%;
+    --page-atmosphere:
+      radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 40%),
+      radial-gradient(circle at 80% 30%, color-mix(in srgb, var(--signal-blue) 8%, transparent), transparent 35%),
+      var(--background);
+
     --elevation-surface:
       0 0 0 1px rgba(0, 0, 0, 0.04),
       0 10px 30px rgba(0, 0, 0, 0.06);
-    --elevation-card:
-      0 0 0 1px rgba(0, 0, 0, 0.04),
-      0 10px 30px rgba(0, 0, 0, 0.06);
+    --elevation-card: var(--elevation-surface);
     --elevation-panel:
       0 0 0 1px rgba(0, 0, 0, 0.04),
       0 18px 50px rgba(0, 0, 0, 0.10);
@@ -451,99 +352,70 @@
 
     --grid-color: rgba(0, 0, 0, 0.025);
     --noise-opacity: 0.16;
-    --sidebar-glass: rgba(236, 237, 233, 0.84);
-    --sidebar-inset: rgba(255, 255, 255, 0.72);
     --header-bg: rgba(245, 246, 244, 0.78);
     --header-border: rgba(0, 0, 0, 0.06);
-    --header-blur: 18px;
-    --sidebar-bg: var(--header-bg);
     --sidebar-border: rgba(0, 0, 0, 0.06);
     --sidebar-hover: rgba(0, 0, 0, 0.045);
-    --sidebar-active: var(--accent-soft);
     --sidebar-active-border: var(--accent-border);
+    --sidebar-glass: rgba(236, 237, 233, 0.84);
+    --sidebar-inset: rgba(255, 255, 255, 0.72);
 
     color-scheme: light;
   }
 }
 
 :root[data-theme="light"] {
-  --app-background: #F5F6F4;
   --background: #F5F6F4;
   --sidebar: #F0F1EE;
   --surface-1: #FFFFFF;
   --surface-2: #F3F4F2;
   --surface-hover: #E8EBE7;
   --surface-active: #E1E6E1;
-  --foreground: rgba(0, 0, 0, 0.88);
+  --canvas-surface: #E8EAE6;
 
-  --text-primary: rgba(0, 0, 0, 0.88);
+  --foreground: rgba(0, 0, 0, 0.88);
+  --text-primary: var(--foreground);
   --text-secondary: rgba(0, 0, 0, 0.68);
   --text-tertiary: rgba(0, 0, 0, 0.42);
   --text-quaternary: rgba(0, 0, 0, 0.18);
   --text-placeholder: rgba(0, 0, 0, 0.28);
-  --muted: var(--text-tertiary);
-  --dim: var(--text-quaternary);
 
   --border-subtle: rgba(0, 0, 0, 0.06);
   --border-medium: rgba(0, 0, 0, 0.08);
   --border-active: rgba(111, 143, 136, 0.18);
-  --border: var(--border-subtle);
-  --divider: rgba(0, 0, 0, 0.06);
 
-  /* Accent darkens in light mode so white-on-mint CTAs stay readable;
-   * see the light-media block for the matching note. */
-  --passive-teal: #6F8F88;
-  --active-teal: #5E8E84;
+  --accent: #6F8F88;
+  --accent-strong: #5E8E84;
   --emissive-mint: #CFEDE2;
   --signal-blue: #5D74D9;
   --event-violet: #7C5BE3;
   --warning-amber: #D89A2B;
   --critical-crimson: #E04F4F;
-  --accent: var(--passive-teal);
-  --accent-strong: var(--active-teal);
-  /* ink-*, accent-*, critical-* scales cascade automatically — see :root. */
 
   --status-live: #22A35A;
   --status-draft: #D89A2B;
   --status-archived: #71717A;
   --status-error: #E04F4F;
   --status-processing: #D89A2B;
-  --success: var(--status-live);
-  --danger: var(--status-error);
 
-  --surface-material:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0)),
-    var(--surface-1);
-  --card-material:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0)),
-    var(--surface-1);
-  --canvas-background:
-    radial-gradient(circle at center, rgba(111, 143, 136, 0.10), transparent 48%),
-    #F0F2EF;
-  --node-canvas: #E8EAE6;
-  --app-atmosphere:
-    radial-gradient(circle at 20% 20%, rgba(111, 143, 136, 0.12), transparent 40%),
-    radial-gradient(circle at 80% 30%, rgba(93, 116, 217, 0.08), transparent 35%),
-    var(--app-background);
-
-  --panel: var(--surface-1);
-  --panel-strong: var(--surface-active);
-  --panel-strong-text: var(--text-primary);
-  --card: var(--surface-material);
-  --card-hover: var(--surface-hover);
-  --card-border: var(--border-subtle);
-  --input-bg: rgba(0, 0, 0, 0.025);
-  --input-border: rgba(0, 0, 0, 0.08);
-  --dropdown-bg: #FFFFFF;
-  --dropdown-border: rgba(0, 0, 0, 0.08);
-
+  --control-bg: rgba(0, 0, 0, 0.025);
+  --control-border: var(--border-medium);
+  --popover-bg: #FFFFFF;
+  --popover-border: var(--border-medium);
   --shadow: rgba(0, 0, 0, 0.08);
+  --material-highlight: rgba(255, 255, 255, 0.62);
+  --card-highlight: rgba(255, 255, 255, 0.7);
+  --canvas-base: #F0F2EF;
+  --canvas-glow-strength: 10%;
+  --page-atmosphere:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 40%),
+    radial-gradient(circle at 80% 30%, color-mix(in srgb, var(--signal-blue) 8%, transparent), transparent 35%),
+    var(--background);
+
   --elevation-surface:
     0 0 0 1px rgba(0, 0, 0, 0.04),
     0 10px 30px rgba(0, 0, 0, 0.06);
-  --elevation-card:
-    0 0 0 1px rgba(0, 0, 0, 0.04),
-    0 10px 30px rgba(0, 0, 0, 0.06);
+  --elevation-card: var(--elevation-surface);
   --elevation-panel:
     0 0 0 1px rgba(0, 0, 0, 0.04),
     0 18px 50px rgba(0, 0, 0, 0.10);
@@ -560,27 +432,555 @@
 
   --grid-color: rgba(0, 0, 0, 0.025);
   --noise-opacity: 0.16;
-  --sidebar-glass: rgba(236, 237, 233, 0.84);
-  --sidebar-inset: rgba(255, 255, 255, 0.72);
   --header-bg: rgba(245, 246, 244, 0.78);
   --header-border: rgba(0, 0, 0, 0.06);
-  --header-blur: 18px;
-  --sidebar-bg: var(--header-bg);
   --sidebar-border: rgba(0, 0, 0, 0.06);
   --sidebar-hover: rgba(0, 0, 0, 0.045);
-  --sidebar-active: var(--accent-soft);
   --sidebar-active-border: var(--accent-border);
+  --sidebar-glass: rgba(236, 237, 233, 0.84);
+  --sidebar-inset: rgba(255, 255, 255, 0.72);
 
   color-scheme: light;
 }
 
+/* Theme variants
+ *
+ * `data-theme` selects light/dark. `data-theme-variant` selects the palette
+ * family inside that mode. The default/empty variant is the atmospheric ocean
+ * palette above.
+ */
+
+:root[data-theme="dark"][data-theme-variant="clean"] {
+  --background: #0B1220;
+  --sidebar: #0F172A;
+  --surface-1: #121C2B;
+  --surface-2: #172437;
+  --surface-hover: #1D2D43;
+  --surface-active: #243850;
+  --canvas-surface: #0E1929;
+
+  --foreground: rgba(248, 252, 255, 0.95);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(248, 252, 255, 0.74);
+  --text-tertiary: rgba(248, 252, 255, 0.48);
+  --text-quaternary: rgba(248, 252, 255, 0.24);
+  --text-placeholder: rgba(248, 252, 255, 0.32);
+
+  --border-subtle: rgba(190, 214, 226, 0.075);
+  --border-medium: rgba(190, 214, 226, 0.12);
+  --border-active: color-mix(in srgb, var(--accent-strong) 24%, transparent);
+  --accent: #6FBF88;
+  --accent-strong: #53D6C6;
+  --accent-secondary: #6E8BFF;
+  --emissive-mint: #C8FFF3;
+  --signal-blue: #6E8BFF;
+  --control-bg: rgba(255, 255, 255, 0.045);
+  --control-border: var(--border-medium);
+  --popover-bg: #101720;
+  --popover-border: var(--border-medium);
+  --material-highlight: rgba(255, 255, 255, 0.035);
+  --card-highlight: rgba(255, 255, 255, 0.03);
+  --canvas-base: #08111E;
+  --canvas-glow-strength: 4%;
+  --page-atmosphere:
+    radial-gradient(circle at 16% 18%, color-mix(in srgb, var(--signal-blue) 7%, transparent), transparent 36%),
+    radial-gradient(circle at 82% 22%, color-mix(in srgb, var(--accent-strong) 5%, transparent), transparent 34%),
+    var(--background);
+  --grid-color: rgba(83, 214, 198, 0.025);
+  --noise-opacity: 0.08;
+  --header-bg: rgba(8, 11, 16, 0.78);
+  --sidebar-glass: rgba(11, 16, 22, 0.86);
+}
+
+:root[data-theme="light"][data-theme-variant="clean"] {
+  --background: #FAFCFF;
+  --sidebar: #F1F6FB;
+  --surface-1: #FFFFFF;
+  --surface-2: #F3F7FA;
+  --surface-hover: #EAF1F5;
+  --surface-active: #DDE9EE;
+  --canvas-surface: #EEF4F7;
+
+  --foreground: rgba(9, 18, 28, 0.92);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(9, 18, 28, 0.70);
+  --text-tertiary: rgba(9, 18, 28, 0.46);
+  --text-quaternary: rgba(9, 18, 28, 0.22);
+  --text-placeholder: rgba(9, 18, 28, 0.32);
+
+  --border-subtle: rgba(16, 34, 48, 0.07);
+  --border-medium: rgba(16, 34, 48, 0.11);
+  --border-active: color-mix(in srgb, var(--accent-strong) 24%, transparent);
+  --accent: #2F9B72;
+  --accent-strong: #0F8EA4;
+  --accent-secondary: #496DDB;
+  --emissive-mint: #D7FFF4;
+  --signal-blue: #496DDB;
+  --status-live: #1F9D59;
+  --status-error: #D94B4B;
+  --control-bg: rgba(9, 18, 28, 0.028);
+  --control-border: var(--border-medium);
+  --popover-bg: #FFFFFF;
+  --popover-border: var(--border-medium);
+  --shadow: rgba(9, 18, 28, 0.08);
+  --material-highlight: rgba(255, 255, 255, 0.72);
+  --card-highlight: rgba(255, 255, 255, 0.82);
+  --canvas-base: #EEF5F9;
+  --canvas-glow-strength: 6%;
+  --page-atmosphere:
+    radial-gradient(circle at 16% 16%, color-mix(in srgb, var(--signal-blue) 7%, transparent), transparent 34%),
+    radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--accent-strong) 5%, transparent), transparent 32%),
+    var(--background);
+  --grid-color: rgba(15, 142, 164, 0.03);
+  --noise-opacity: 0.06;
+  --header-bg: rgba(248, 250, 252, 0.82);
+  --sidebar-glass: rgba(241, 245, 249, 0.88);
+}
+
+:root[data-theme="dark"][data-theme-variant="mono-ink"] {
+  --background: #050505;
+  --sidebar: #080808;
+  --surface-1: #101010;
+  --surface-2: #151515;
+  --surface-hover: #1C1C1C;
+  --surface-active: #242424;
+  --canvas-surface: #0A0A0A;
+  --foreground: rgba(247, 248, 248, 0.94);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(247, 248, 248, 0.70);
+  --text-tertiary: rgba(247, 248, 248, 0.45);
+  --text-quaternary: rgba(247, 248, 248, 0.22);
+  --border-subtle: rgba(247, 248, 248, 0.06);
+  --border-medium: rgba(247, 248, 248, 0.09);
+  --accent: #7EA096;
+  --accent-strong: #A8C9C1;
+  --accent-secondary: #93A0B8;
+  --emissive-mint: #D8E8E3;
+  --signal-blue: #94A3C7;
+  --control-bg: rgba(255, 255, 255, 0.04);
+  --popover-bg: #0D0F12;
+  --material-highlight: rgba(255, 255, 255, 0.028);
+  --card-highlight: rgba(255, 255, 255, 0.024);
+  --canvas-base: #050505;
+  --canvas-glow-strength: 2%;
+  --page-atmosphere:
+    radial-gradient(circle at 20% 18%, color-mix(in srgb, var(--text-primary) 3%, transparent), transparent 36%),
+    var(--background);
+  --grid-color: rgba(216, 232, 227, 0.018);
+  --noise-opacity: 0.045;
+}
+
+:root[data-theme="light"][data-theme-variant="mono-ink"] {
+  --background: #F5F5F3;
+  --sidebar: #ECECE9;
+  --surface-1: #FFFFFF;
+  --surface-2: #F0F1F0;
+  --surface-hover: #E6E7E6;
+  --surface-active: #DCDDDB;
+  --canvas-surface: #EDEEEB;
+  --foreground: rgba(17, 18, 18, 0.90);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(17, 18, 18, 0.68);
+  --text-tertiary: rgba(17, 18, 18, 0.44);
+  --text-quaternary: rgba(17, 18, 18, 0.20);
+  --border-subtle: rgba(17, 18, 18, 0.06);
+  --border-medium: rgba(17, 18, 18, 0.09);
+  --accent: #607A72;
+  --accent-strong: #426C62;
+  --accent-secondary: #64748B;
+  --emissive-mint: #DCE8E4;
+  --signal-blue: #64748B;
+  --control-bg: rgba(17, 18, 18, 0.024);
+  --popover-bg: #FFFFFF;
+  --shadow: rgba(17, 18, 18, 0.08);
+  --page-atmosphere:
+    radial-gradient(circle at 20% 18%, color-mix(in srgb, var(--text-primary) 3%, transparent), transparent 34%),
+    var(--background);
+  --grid-color: rgba(17, 18, 18, 0.018);
+  --noise-opacity: 0.035;
+}
+
+:root[data-theme="dark"][data-theme-variant="mono-slate"] {
+  --background: #0A141C;
+  --sidebar: #0D1A24;
+  --surface-1: #14222C;
+  --surface-2: #1A2B36;
+  --surface-hover: #213643;
+  --surface-active: #2A4351;
+  --canvas-surface: #0F1C25;
+  --foreground: rgba(241, 247, 249, 0.94);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(241, 247, 249, 0.70);
+  --text-tertiary: rgba(241, 247, 249, 0.45);
+  --text-quaternary: rgba(241, 247, 249, 0.22);
+  --border-subtle: rgba(190, 209, 215, 0.07);
+  --border-medium: rgba(190, 209, 215, 0.10);
+  --accent: #78A494;
+  --accent-strong: #9CCBC0;
+  --accent-secondary: #8CA0BA;
+  --emissive-mint: #D7E9E4;
+  --signal-blue: #8CA0BA;
+  --control-bg: rgba(255, 255, 255, 0.038);
+  --popover-bg: #101B21;
+  --material-highlight: rgba(255, 255, 255, 0.028);
+  --card-highlight: rgba(255, 255, 255, 0.026);
+  --canvas-base: #08131A;
+  --canvas-glow-strength: 2.5%;
+  --page-atmosphere:
+    radial-gradient(circle at 16% 18%, color-mix(in srgb, var(--signal-blue) 5%, transparent), transparent 36%),
+    var(--background);
+  --grid-color: rgba(156, 203, 192, 0.02);
+  --noise-opacity: 0.05;
+}
+
+:root[data-theme="light"][data-theme-variant="mono-slate"] {
+  --background: #EFF5F7;
+  --sidebar: #E4ECEF;
+  --surface-1: #FFFFFF;
+  --surface-2: #EEF3F4;
+  --surface-hover: #E2EAED;
+  --surface-active: #D8E3E6;
+  --canvas-surface: #E7EFF1;
+  --foreground: rgba(18, 28, 33, 0.90);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(18, 28, 33, 0.68);
+  --text-tertiary: rgba(18, 28, 33, 0.44);
+  --text-quaternary: rgba(18, 28, 33, 0.20);
+  --border-subtle: rgba(18, 28, 33, 0.06);
+  --border-medium: rgba(18, 28, 33, 0.09);
+  --accent: #5E8176;
+  --accent-strong: #47746B;
+  --accent-secondary: #647C9A;
+  --emissive-mint: #D8E9E5;
+  --signal-blue: #647C9A;
+  --control-bg: rgba(18, 28, 33, 0.024);
+  --popover-bg: #FFFFFF;
+  --shadow: rgba(18, 28, 33, 0.08);
+  --page-atmosphere:
+    radial-gradient(circle at 16% 18%, color-mix(in srgb, var(--signal-blue) 4%, transparent), transparent 34%),
+    var(--background);
+  --grid-color: rgba(18, 28, 33, 0.018);
+  --noise-opacity: 0.04;
+}
+
+:root[data-theme="dark"][data-theme-variant="mono-graphite"] {
+  --background: #111111;
+  --sidebar: #151515;
+  --surface-1: #1C1C1C;
+  --surface-2: #242424;
+  --surface-hover: #2C2C2C;
+  --surface-active: #363636;
+  --canvas-surface: #181818;
+  --foreground: rgba(250, 250, 250, 0.94);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(250, 250, 250, 0.70);
+  --text-tertiary: rgba(250, 250, 250, 0.44);
+  --text-quaternary: rgba(250, 250, 250, 0.20);
+  --border-subtle: rgba(250, 250, 250, 0.065);
+  --border-medium: rgba(250, 250, 250, 0.095);
+  --accent: #879891;
+  --accent-strong: #B2C3BD;
+  --accent-secondary: #9CA3AF;
+  --emissive-mint: #E2E8E5;
+  --signal-blue: #9CA3AF;
+  --control-bg: rgba(255, 255, 255, 0.04);
+  --popover-bg: #151515;
+  --material-highlight: rgba(255, 255, 255, 0.03);
+  --card-highlight: rgba(255, 255, 255, 0.026);
+  --canvas-base: #111111;
+  --canvas-glow-strength: 1.5%;
+  --page-atmosphere:
+    radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--text-primary) 4%, transparent), transparent 34%),
+    var(--background);
+  --grid-color: rgba(226, 232, 229, 0.018);
+  --noise-opacity: 0.045;
+}
+
+:root[data-theme="light"][data-theme-variant="mono-graphite"] {
+  --background: #F2F2EF;
+  --sidebar: #E9E9E5;
+  --surface-1: #FFFFFF;
+  --surface-2: #F0F0EE;
+  --surface-hover: #E7E7E4;
+  --surface-active: #DDDDD9;
+  --canvas-surface: #EAEAE7;
+  --foreground: rgba(24, 24, 23, 0.90);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(24, 24, 23, 0.68);
+  --text-tertiary: rgba(24, 24, 23, 0.44);
+  --text-quaternary: rgba(24, 24, 23, 0.20);
+  --border-subtle: rgba(24, 24, 23, 0.06);
+  --border-medium: rgba(24, 24, 23, 0.09);
+  --accent: #6D7B76;
+  --accent-strong: #566F68;
+  --accent-secondary: #6B7280;
+  --emissive-mint: #E0E8E5;
+  --signal-blue: #6B7280;
+  --control-bg: rgba(24, 24, 23, 0.024);
+  --popover-bg: #FFFFFF;
+  --shadow: rgba(24, 24, 23, 0.08);
+  --page-atmosphere:
+    radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--text-primary) 3%, transparent), transparent 34%),
+    var(--background);
+  --grid-color: rgba(24, 24, 23, 0.018);
+  --noise-opacity: 0.035;
+}
+
+:root[data-theme="dark"][data-theme-variant="mono-mist"] {
+  --background: #0D1714;
+  --sidebar: #101E1A;
+  --surface-1: #172621;
+  --surface-2: #1E302A;
+  --surface-hover: #263B34;
+  --surface-active: #30483F;
+  --canvas-surface: #12201C;
+  --foreground: rgba(244, 249, 247, 0.94);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(244, 249, 247, 0.70);
+  --text-tertiary: rgba(244, 249, 247, 0.45);
+  --text-quaternary: rgba(244, 249, 247, 0.22);
+  --border-subtle: rgba(204, 222, 216, 0.065);
+  --border-medium: rgba(204, 222, 216, 0.095);
+  --accent: #82A99A;
+  --accent-strong: #A5CFC2;
+  --accent-secondary: #95A8B4;
+  --emissive-mint: #DCEBE6;
+  --signal-blue: #95A8B4;
+  --control-bg: rgba(255, 255, 255, 0.038);
+  --popover-bg: #141D1C;
+  --material-highlight: rgba(255, 255, 255, 0.028);
+  --card-highlight: rgba(255, 255, 255, 0.026);
+  --canvas-base: #0A1512;
+  --canvas-glow-strength: 2%;
+  --page-atmosphere:
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--accent-strong) 5%, transparent), transparent 36%),
+    var(--background);
+  --grid-color: rgba(165, 207, 194, 0.018);
+  --noise-opacity: 0.045;
+}
+
+:root[data-theme="light"][data-theme-variant="mono-mist"] {
+  --background: #EFF7F3;
+  --sidebar: #E5F0EB;
+  --surface-1: #FFFFFF;
+  --surface-2: #EFF5F2;
+  --surface-hover: #E4ECE9;
+  --surface-active: #D9E5E0;
+  --canvas-surface: #E8F0ED;
+  --foreground: rgba(18, 29, 26, 0.90);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(18, 29, 26, 0.68);
+  --text-tertiary: rgba(18, 29, 26, 0.44);
+  --text-quaternary: rgba(18, 29, 26, 0.20);
+  --border-subtle: rgba(18, 29, 26, 0.06);
+  --border-medium: rgba(18, 29, 26, 0.09);
+  --accent: #668477;
+  --accent-strong: #4F7A6C;
+  --accent-secondary: #6B8090;
+  --emissive-mint: #DCEBE6;
+  --signal-blue: #6B8090;
+  --control-bg: rgba(18, 29, 26, 0.024);
+  --popover-bg: #FFFFFF;
+  --shadow: rgba(18, 29, 26, 0.08);
+  --page-atmosphere:
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--accent-strong) 4%, transparent), transparent 34%),
+    var(--background);
+  --grid-color: rgba(18, 29, 26, 0.018);
+  --noise-opacity: 0.035;
+}
+
+:root[data-theme="dark"][data-theme-variant="mono-deep"] {
+  --background: #071611;
+  --sidebar: #0A1D16;
+  --surface-1: #10271E;
+  --surface-2: #173127;
+  --surface-hover: #1F3E32;
+  --surface-active: #284C3E;
+  --canvas-surface: #0B2119;
+  --foreground: rgba(240, 248, 245, 0.94);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(240, 248, 245, 0.70);
+  --text-tertiary: rgba(240, 248, 245, 0.44);
+  --text-quaternary: rgba(240, 248, 245, 0.21);
+  --border-subtle: rgba(188, 215, 205, 0.065);
+  --border-medium: rgba(188, 215, 205, 0.095);
+  --accent: #729F8C;
+  --accent-strong: #95C8B5;
+  --accent-secondary: #879DA8;
+  --emissive-mint: #D4E9E1;
+  --signal-blue: #879DA8;
+  --control-bg: rgba(255, 255, 255, 0.036);
+  --popover-bg: #0D1B18;
+  --material-highlight: rgba(255, 255, 255, 0.026);
+  --card-highlight: rgba(255, 255, 255, 0.024);
+  --canvas-base: #06140F;
+  --canvas-glow-strength: 2%;
+  --page-atmosphere:
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--accent-strong) 6%, transparent), transparent 36%),
+    var(--background);
+  --grid-color: rgba(149, 200, 181, 0.018);
+  --noise-opacity: 0.04;
+}
+
+:root[data-theme="light"][data-theme-variant="mono-deep"] {
+  --background: #EEF6EF;
+  --sidebar: #E4EFE6;
+  --surface-1: #FFFFFF;
+  --surface-2: #EDF4EF;
+  --surface-hover: #E2EBE5;
+  --surface-active: #D7E3DB;
+  --canvas-surface: #E5EEE8;
+  --foreground: rgba(16, 28, 23, 0.90);
+  --text-primary: var(--foreground);
+  --text-secondary: rgba(16, 28, 23, 0.68);
+  --text-tertiary: rgba(16, 28, 23, 0.44);
+  --text-quaternary: rgba(16, 28, 23, 0.20);
+  --border-subtle: rgba(16, 28, 23, 0.06);
+  --border-medium: rgba(16, 28, 23, 0.09);
+  --accent: #5B7F70;
+  --accent-strong: #416F5E;
+  --accent-secondary: #627A84;
+  --emissive-mint: #D6E8E0;
+  --signal-blue: #627A84;
+  --control-bg: rgba(16, 28, 23, 0.024);
+  --popover-bg: #FFFFFF;
+  --shadow: rgba(16, 28, 23, 0.08);
+  --page-atmosphere:
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--accent-strong) 4%, transparent), transparent 34%),
+    var(--background);
+  --grid-color: rgba(16, 28, 23, 0.018);
+  --noise-opacity: 0.035;
+}
+
+:root[data-theme="dark"][data-theme-variant="river"] {
+  --background: #1F1E1D;
+  --sidebar: #242322;
+  --surface-1: #2A2928;
+  --surface-2: #302F2E;
+  --surface-hover: #353433;
+  --surface-active: #3B3938;
+  --canvas-surface: #1F1E1D;
+
+  --foreground: #E7E3DE;
+  --text-primary: #D8D3CD;
+  --text-secondary: #A8A29C;
+  --text-tertiary: #77716B;
+  --text-quaternary: #5E5852;
+  --text-placeholder: #B8B3AD;
+
+  --border-subtle: #2F2D2C;
+  --border-medium: #3A3836;
+  --border-active: #69645F;
+
+  --accent: #6FBF88;
+  --accent-strong: #8FD1CB;
+  --accent-secondary: #6E8BFF;
+  --accent-on: #1F1E1D;
+  --emissive-mint: #DFFFF5;
+  --signal-blue: #6E8BFF;
+  --event-violet: #9C6BFF;
+  --warning-amber: #FFD85A;
+  --critical-crimson: #FCA5A5;
+
+  --status-live: #9BE870;
+  --status-draft: #FFD85A;
+  --status-archived: #77716B;
+  --status-error: #FCA5A5;
+  --status-processing: #8B6CFF;
+  --status-info: #67D8FF;
+
+  --control-bg: #2A2928;
+  --control-border: #3A3836;
+  --popover-bg: #242322;
+  --popover-border: #3A3836;
+  --modal-backdrop: rgba(0, 0, 0, 0.64);
+
+  --material-highlight: rgba(255, 255, 255, 0.06);
+  --card-highlight: rgba(255, 255, 255, 0.035);
+  --canvas-glow-strength: 0.18;
+  --canvas-base: #1F1E1D;
+  --page-atmosphere: #24211F;
+
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  --grid-color: rgba(255, 255, 255, 0.035);
+  --noise-opacity: 0.035;
+  --header-bg: rgba(31, 30, 29, 0.88);
+  --header-border: #2F2D2C;
+  --sidebar-border: #2F2D2C;
+  --sidebar-hover: #302F2E;
+  --sidebar-active-border: #8FD1CB;
+  --sidebar-glass: rgba(42, 41, 40, 0.72);
+  --sidebar-inset: rgba(255, 255, 255, 0.025);
+}
+
+:root[data-theme="light"][data-theme-variant="river"] {
+  --background: #F2F7FA;
+  --sidebar: #E8F0F4;
+  --surface-1: #FFFFFF;
+  --surface-2: #ECF4F8;
+  --surface-hover: #E0EBF1;
+  --surface-active: #D4E2EA;
+  --canvas-surface: #F2F7FA;
+
+  --foreground: #1E2B31;
+  --text-primary: #1E2B31;
+  --text-secondary: #53666F;
+  --text-tertiary: #7A8E98;
+  --text-quaternary: #A0AFB7;
+  --text-placeholder: #8C9EA7;
+
+  --border-subtle: #D5E2E8;
+  --border-medium: #BBCDD6;
+  --border-active: #5F7682;
+
+  --accent: #2F9B72;
+  --accent-strong: #0F8EA4;
+  --accent-secondary: #496DDB;
+  --accent-on: #FFFFFF;
+  --emissive-mint: #D7FFF4;
+  --signal-blue: #496DDB;
+  --event-violet: #7357D8;
+  --warning-amber: #D79B00;
+  --critical-crimson: #D94B4B;
+
+  --status-live: #36A852;
+  --status-draft: #C88A00;
+  --status-archived: #7A8E98;
+  --status-error: #D94B4B;
+  --status-processing: #7357D8;
+  --status-info: #2E8DEB;
+
+  --control-bg: #FFFFFF;
+  --control-border: #BBCDD6;
+  --popover-bg: #FFFFFF;
+  --popover-border: #BBCDD6;
+  --modal-backdrop: rgba(30, 43, 49, 0.36);
+
+  --material-highlight: rgba(255, 255, 255, 0.72);
+  --card-highlight: rgba(255, 255, 255, 0.86);
+  --canvas-glow-strength: 0.12;
+  --canvas-base: #F2F7FA;
+  --page-atmosphere: #EAF3F8;
+
+  --shadow: 0 18px 40px rgba(30, 43, 49, 0.12);
+  --grid-color: rgba(30, 43, 49, 0.055);
+  --noise-opacity: 0.025;
+  --header-bg: rgba(242, 247, 250, 0.86);
+  --header-border: #D5E2E8;
+  --sidebar-border: #D5E2E8;
+  --sidebar-hover: #E0EBF1;
+  --sidebar-active-border: #0F8EA4;
+  --sidebar-glass: rgba(255, 255, 255, 0.72);
+  --sidebar-inset: rgba(30, 43, 49, 0.035);
+}
+
 html {
-  background: var(--app-background);
+  background: var(--background);
 }
 
 body {
   font-family: var(--font-body, Inter), ui-sans-serif, system-ui, sans-serif;
-  background: var(--app-atmosphere);
+  background: var(--page-atmosphere);
 }
 
 body::before,
@@ -602,9 +1002,9 @@ body::before {
 body::after {
   opacity: var(--noise-opacity);
   background-image:
-    radial-gradient(circle at 18% 24%, rgba(223, 255, 245, 0.055), transparent 18%),
-    radial-gradient(circle at 78% 10%, rgba(110, 139, 255, 0.04), transparent 20%),
-    radial-gradient(circle at 70% 86%, rgba(139, 92, 246, 0.025), transparent 22%);
+    radial-gradient(circle at 18% 24%, color-mix(in srgb, var(--emissive-mint) 5.5%, transparent), transparent 18%),
+    radial-gradient(circle at 78% 10%, color-mix(in srgb, var(--signal-blue) 4%, transparent), transparent 20%),
+    radial-gradient(circle at 70% 86%, color-mix(in srgb, var(--event-violet) 2.5%, transparent), transparent 22%);
   animation: odyssey-atmosphere-drift var(--motion-drift) ease-in-out infinite alternate;
 }
 

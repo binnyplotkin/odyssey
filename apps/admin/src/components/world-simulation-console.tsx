@@ -102,7 +102,7 @@ export function WorldSimulationConsole({ sessionId }: { sessionId: string }) {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-8 md:px-6">
       <section className="panel rounded-[2rem] p-6 md:p-8">
-        <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">World Simulation</p>
+        <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">World Simulation</p>
         <h1 className="mt-3 text-3xl font-semibold text-stone-900 md:text-5xl">{sceneTitle}</h1>
         <p className="mt-3 text-sm leading-7 text-stone-700">{sceneSetting}</p>
       </section>
@@ -113,7 +113,7 @@ export function WorldSimulationConsole({ sessionId }: { sessionId: string }) {
 
       <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <article className="panel rounded-[2rem] p-6 md:p-8">
-          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Scene Narration</p>
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">Scene Narration</p>
           <div className="mt-3 space-y-3 text-sm leading-7 text-stone-800">
             {sceneNarration.map((line, index) => (
               <p key={`${index}-${line}`}>{line}</p>
@@ -122,7 +122,7 @@ export function WorldSimulationConsole({ sessionId }: { sessionId: string }) {
 
           {sceneDialogue.length > 0 ? (
             <div className="mt-5 rounded-xl border border-[var(--border)] bg-white/70 p-4">
-              <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Dynamic Responses</p>
+              <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">Dynamic Responses</p>
               <div className="mt-2 space-y-2 text-sm text-stone-700">
                 {sceneDialogue.map((line) => (
                   <p key={`${line.speaker}-${line.text}`}>
@@ -143,14 +143,14 @@ export function WorldSimulationConsole({ sessionId }: { sessionId: string }) {
         </article>
 
         <aside className="panel rounded-[2rem] p-6 md:p-8">
-          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Actions</p>
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">Actions</p>
           <div className="mt-3 space-y-2 text-sm text-stone-700">
             {choices.map((choice) => (
               <p key={choice}>• {choice}</p>
             ))}
           </div>
 
-          <p className="mt-5 font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Your Move</p>
+          <p className="mt-5 font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">Your Move</p>
           <textarea
             value={responseDraft}
             onChange={(event) => setResponseDraft(event.target.value)}

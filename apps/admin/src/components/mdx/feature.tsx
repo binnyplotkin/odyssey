@@ -1,7 +1,7 @@
 import { getFeatureStore, getTicketStore } from "@odyssey/db";
 
 const statusStyles: Record<string, { bg: string; text: string; dot: string }> = {
-  "planned": { bg: "rgba(255,255,255,0.06)", text: "var(--muted)", dot: "var(--muted)" },
+  "planned": { bg: "rgba(255,255,255,0.06)", text: "var(--text-tertiary)", dot: "var(--text-tertiary)" },
   "active": { bg: "rgba(96,165,250,0.12)", text: "#93bbfc", dot: "#60a5fa" },
   "done": { bg: "rgba(52,211,153,0.12)", text: "#34d399", dot: "#34d399" },
 };

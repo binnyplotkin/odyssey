@@ -4,7 +4,7 @@ const T = {
   fg: "#F1F5F9",
   muted: "#8B96A8",
   dim: "#5A6478",
-  panel: "var(--panel)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
   accent: "#8FD1CB",
   fontHeading: "'Space Grotesk', system-ui, sans-serif",

@@ -31,7 +31,7 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
   return (
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
       {docs.length === 0 ? (
-        <p style={{ color: "var(--muted)", fontSize: "0.875rem", padding: "32px" }}>
+        <p style={{ color: "var(--text-tertiary)", fontSize: "0.875rem", padding: "32px" }}>
           No documents found. Add <code>.md</code> or <code>.mdx</code> files to the <code>docs/</code> directory.
         </p>
       ) : (
@@ -58,7 +58,7 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
                 justifyContent: "space-between",
                 padding: "40px 40px",
                 gap: "var(--space-20)",
-                background: "var(--panel)",
+                background: "var(--surface-1)",
               }}
             >
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
@@ -66,7 +66,7 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
                   style={{
                     fontSize: "0.8125rem",
                     fontWeight: 700,
-                    color: "var(--muted)",
+                    color: "var(--text-tertiary)",
                     letterSpacing: "0.015em",
                   }}
                 >
@@ -99,7 +99,7 @@ export function DocsListClient({ docs }: { docs: DocEntry[] }) {
                   <p
                     style={{
                       fontSize: "0.9375rem",
-                      color: "var(--muted)",
+                      color: "var(--text-tertiary)",
                       marginTop: 0,
                       marginRight: 0,
                       marginBottom: 0,

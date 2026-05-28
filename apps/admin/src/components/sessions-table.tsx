@@ -32,13 +32,13 @@ type Props = {
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
   accent: "var(--accent)",
   accentStrong: "var(--accent-strong)",
   accentSoft: "var(--accent-soft)",
-  cardHover: "var(--card-hover)",
+  cardHover: "var(--surface-hover)",
   fontHeading: "'Space Grotesk', sans-serif",
   fontBody: "'Inter', sans-serif",
   fontMono: "var(--font-mono, 'JetBrains Mono', monospace)",
@@ -141,15 +141,15 @@ function formatRelative(iso: string | null | undefined): { label: string; dotCol
   if (hours < 24) return { label: `${hours}h ago`, dotColor: "var(--status-draft)" };
 
   const days = Math.floor(hours / 24);
-  if (days < 7) return { label: `${days}d ago`, dotColor: "var(--muted)" };
+  if (days < 7) return { label: `${days}d ago`, dotColor: "var(--text-tertiary)" };
 
   const weeks = Math.floor(days / 7);
-  if (weeks < 4) return { label: `${weeks}w ago`, dotColor: "var(--muted)" };
+  if (weeks < 4) return { label: `${weeks}w ago`, dotColor: "var(--text-tertiary)" };
 
   const months = Math.floor(days / 30);
-  if (months < 12) return { label: `${months}mo ago`, dotColor: "var(--muted)" };
+  if (months < 12) return { label: `${months}mo ago`, dotColor: "var(--text-tertiary)" };
 
-  return { label: `${Math.floor(days / 365)}y ago`, dotColor: "var(--muted)" };
+  return { label: `${Math.floor(days / 365)}y ago`, dotColor: "var(--text-tertiary)" };
 }
 
 function activityOf(session: SessionRow): ActivityValue {
@@ -344,7 +344,7 @@ export function SessionsTable({ sessions }: Props) {
                     borderRadius: "var(--radius-md)",
                     border: `1px solid ${isActive ? "var(--border-active)" : "var(--border)"}`,
                     background: isActive ? "var(--accent-soft)" : "transparent",
-                    color: isActive ? "var(--accent-strong)" : "var(--muted)",
+                    color: isActive ? "var(--accent-strong)" : "var(--text-tertiary)",
                     fontSize: "var(--font-size-sm)",
                     fontWeight: 500,
                     cursor: "pointer",
@@ -382,7 +382,7 @@ export function SessionsTable({ sessions }: Props) {
             borderRadius: "var(--radius-md)",
             border: "1px solid var(--border)",
             background: "transparent",
-            color: "var(--muted)",
+            color: "var(--text-tertiary)",
             cursor: "pointer",
           }}
           title="Reset filters"
@@ -410,8 +410,8 @@ export function SessionsTable({ sessions }: Props) {
             width: 360,
           }}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <circle cx="6" cy="6" r="4.5" stroke="var(--muted)" strokeWidth="1.5" />
-              <line x1="9.5" y1="9.5" x2="12.5" y2="12.5" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="6" cy="6" r="4.5" stroke="var(--text-tertiary)" strokeWidth="1.5" />
+              <line x1="9.5" y1="9.5" x2="12.5" y2="12.5" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
             <input
               type="text"
@@ -524,7 +524,7 @@ function FilterDropdown({
         top: "calc(100% + 6px)",
         left: 0,
         minWidth: 160,
-        background: "var(--dropdown-bg, var(--panel))",
+        background: "var(--popover-bg, var(--surface-1))",
         border: "1px solid var(--border)",
         borderRadius: "var(--radius-md)",
         padding: "4px 0",
@@ -548,7 +548,7 @@ function FilterDropdown({
             background: active === option.value ? "var(--accent-soft)" : "none",
             border: "none",
             cursor: "pointer",
-            color: active === option.value ? "var(--accent-strong)" : "var(--muted)",
+            color: active === option.value ? "var(--accent-strong)" : "var(--text-tertiary)",
             fontSize: "var(--font-size-sm)",
             fontFamily: "var(--font-mono, ui-monospace, monospace)",
             textAlign: "left",
@@ -761,7 +761,7 @@ function MobileField({ label, children }: { label: string; children: ReactNode }
 
 function SessionIcon({ mode }: { mode: string }) {
   const colors = mode === "voice"
-    ? { bg: "color-mix(in srgb, var(--active-teal) 14%, transparent)", fg: "var(--active-teal)" }
+    ? { bg: "color-mix(in srgb, var(--accent-strong) 14%, transparent)", fg: "var(--accent-strong)" }
     : mode === "chat"
       ? { bg: "color-mix(in srgb, var(--signal-blue) 14%, transparent)", fg: "var(--signal-blue)" }
       : mode === "simulation"
@@ -816,7 +816,7 @@ function ModeBadge({ mode }: { mode: string }) {
 function StatusBadge({ status }: { status: string }) {
   const normalized = statusFilterValue(status);
   const color = normalized === "active"
-    ? "var(--active-teal)"
+    ? "var(--accent-strong)"
     : normalized === "error"
       ? "var(--status-error)"
       : "var(--status-live)";

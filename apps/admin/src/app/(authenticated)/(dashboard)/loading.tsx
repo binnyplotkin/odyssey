@@ -1,8 +1,8 @@
 import { Skeleton } from "@odyssey/ui";
 
 const CARD: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--card-border)",
+  background: "var(--material-card)",
+  border: "1px solid var(--border-subtle)",
   borderRadius: "var(--radius-xl)",
 };
 
@@ -82,7 +82,7 @@ export default function DashboardLoading() {
                 flexDirection: "column",
                 gap: "var(--space-14)",
                 paddingLeft: "var(--space-18)",
-                borderLeft: "1px solid var(--card-border)",
+                borderLeft: "1px solid var(--border-subtle)",
                 paddingTop: "var(--space-14)",
                 minWidth: 100,
               }}
@@ -156,7 +156,7 @@ export default function DashboardLoading() {
                     gap: "var(--space-12)",
                     padding: "12px 14px",
                     borderBottom:
-                      i === 4 ? "none" : "1px solid var(--card-border)",
+                      i === 4 ? "none" : "1px solid var(--border-subtle)",
                   }}
                 >
                   <Skeleton width={56} height={18} radius={999} static />

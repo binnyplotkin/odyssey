@@ -1,8 +1,8 @@
 import { Skeleton } from "@odyssey/ui";
 
 const CARD: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--card-border)",
+  background: "var(--material-card)",
+  border: "1px solid var(--border-subtle)",
   borderRadius: "var(--radius-xl)",
 };
 

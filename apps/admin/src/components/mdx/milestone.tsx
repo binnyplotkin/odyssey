@@ -43,7 +43,7 @@ export async function Milestone({
     <div style={{
       border: "1px solid var(--border)",
       borderRadius: "var(--radius-lg)",
-      background: "var(--panel)",
+      background: "var(--surface-1)",
       padding: "16px 18px",
       margin: "12px 0",
     }}>
@@ -104,7 +104,7 @@ export async function Milestone({
             : "\u25CB";
           const statusColor = ticket.status === "done" ? "#34d399"
             : (ticket.status === "in-progress" || ticket.status === "review") ? "#fbbf24"
-            : "var(--muted)";
+            : "var(--text-tertiary)";
 
           return (
             <div
@@ -127,7 +127,7 @@ export async function Milestone({
                 {statusIcon}
               </span>
               <span style={{
-                color: ticket.status === "done" ? "var(--muted)" : "var(--foreground)",
+                color: ticket.status === "done" ? "var(--text-tertiary)" : "var(--foreground)",
                 textDecoration: ticket.status === "done" ? "line-through" : "none",
                 opacity: ticket.status === "done" ? 0.7 : 1,
                 flex: 1,

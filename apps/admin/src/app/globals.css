@@ -21,7 +21,7 @@
 
 .admin-table-grid {
   width: 100%;
-  background: var(--card-material, var(--panel)) !important;
+  background: var(--material-card, var(--surface-1)) !important;
   border: 1px solid var(--border-subtle, var(--border)) !important;
   border-radius: var(--radius-card, 18px) !important;
   box-shadow: var(--elevation-card, 0 8px 40px var(--shadow));
@@ -40,7 +40,7 @@
 
 .admin-table-data-row:hover {
   background:
-    radial-gradient(circle at 15% 50%, color-mix(in srgb, var(--active-teal) 7%, transparent), transparent 38%),
+    radial-gradient(circle at 15% 50%, color-mix(in srgb, var(--accent-strong) 7%, transparent), transparent 38%),
     var(--surface-hover) !important;
 }
 
@@ -57,8 +57,8 @@
 }
 
 .odyssey-search {
-  background: var(--input-bg) !important;
-  border: 1px solid var(--input-border) !important;
+  background: var(--control-bg) !important;
+  border: 1px solid var(--control-border) !important;
   border-radius: var(--radius-button, 12px) !important;
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 3%, transparent);
 }
@@ -75,13 +75,13 @@
 
 .odyssey-select-shell,
 .odyssey-ghost-button {
-  background: var(--input-bg) !important;
-  border: 1px solid var(--input-border) !important;
+  background: var(--control-bg) !important;
+  border: 1px solid var(--control-border) !important;
   color: var(--text-secondary) !important;
 }
 
 .odyssey-filter-pill {
-  border: 1px solid var(--input-border) !important;
+  border: 1px solid var(--control-border) !important;
   background: color-mix(in srgb, var(--surface-2) 72%, transparent) !important;
   color: var(--text-tertiary) !important;
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
@@ -95,8 +95,8 @@
 }
 
 .odyssey-icon-button {
-  background: var(--input-bg) !important;
-  border: 1px solid var(--input-border) !important;
+  background: var(--control-bg) !important;
+  border: 1px solid var(--control-border) !important;
   color: var(--text-tertiary) !important;
 }
 
@@ -123,8 +123,8 @@
 }
 
 .odyssey-dropdown {
-  background: var(--surface-material, var(--panel)) !important;
-  border: 1px solid var(--dropdown-border, var(--border)) !important;
+  background: var(--material-surface, var(--surface-1)) !important;
+  border: 1px solid var(--popover-border, var(--border)) !important;
   border-radius: var(--radius-button, 12px) !important;
   box-shadow: var(--elevation-panel, 0 18px 70px var(--shadow)) !important;
   backdrop-filter: blur(18px);
@@ -142,7 +142,7 @@
 
 .odyssey-compact-card,
 .odyssey-log-panel {
-  background: var(--card-material, var(--panel)) !important;
+  background: var(--material-card, var(--surface-1)) !important;
   border: 1px solid var(--border-subtle, var(--border)) !important;
   border-radius: var(--radius-card, 18px) !important;
   box-shadow: var(--elevation-card, 0 8px 40px var(--shadow));
@@ -150,8 +150,8 @@
 
 .odyssey-log-panel {
   background:
-    radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--active-teal) 8%, transparent), transparent 44%),
-    var(--card-material, var(--panel)) !important;
+    radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent-strong) 8%, transparent), transparent 44%),
+    var(--material-card, var(--surface-1)) !important;
 }
 
 .odyssey-stream-row {
@@ -203,7 +203,7 @@
     padding: 16px !important;
     border: 1px solid var(--border) !important;
     border-radius: 14px;
-    background: var(--panel) !important;
+    background: var(--surface-1) !important;
     position: relative;
   }
 
@@ -231,11 +231,11 @@
     padding: 10px;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: var(--card-hover);
+    background: var(--surface-hover);
   }
 
   .admin-table-mobile-label {
-    color: var(--muted);
+    color: var(--text-tertiary);
     font-family: var(--font-mono, ui-monospace, monospace);
     font-size: 0.625rem;
     font-weight: 600;
@@ -303,12 +303,12 @@
 
 /* Theme-aware overrides for @xyflow/react controls. Maps the library's
    --xy-controls-* tokens to our theme tokens so the zoom/fit cluster
-   flips with light/dark. Hover uses --card-hover (subtle in both themes)
-   instead of --panel-strong (which is a dark pill surface in light mode
+   flips with light/dark. Hover uses --surface-hover (subtle in both themes)
+   instead of --surface-active (which is a dark pill surface in light mode
    and would invert against the dark icon color). */
 .react-flow__controls {
-  --xy-controls-button-background-color: var(--panel);
-  --xy-controls-button-background-color-hover: var(--card-hover);
+  --xy-controls-button-background-color: var(--surface-1);
+  --xy-controls-button-background-color-hover: var(--surface-hover);
   --xy-controls-button-color: var(--foreground);
   --xy-controls-button-color-hover: var(--foreground);
   --xy-controls-button-border-color: var(--border);

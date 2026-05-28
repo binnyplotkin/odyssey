@@ -9,8 +9,8 @@ import { EraEditor } from "@/components/era-editor";
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
   accent: "var(--accent-strong)",
   accentSoft: "var(--accent-soft)",
@@ -61,7 +61,7 @@ export function NewCharacterForm() {
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 28, height: 28, borderRadius: "var(--radius-sm)",
             border: "1px solid var(--border)", background: "transparent",
-            color: "var(--muted)", textDecoration: "none", marginRight: "var(--space-12)",
+            color: "var(--text-tertiary)", textDecoration: "none", marginRight: "var(--space-12)",
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
@@ -220,7 +220,7 @@ export function NewCharacterForm() {
           disabled={!canSubmit}
           style={{
             padding: "8px 20px", borderRadius: "var(--radius-lg)", border: "none",
-            background: canSubmit ? T.accent : "var(--card-hover)",
+            background: canSubmit ? T.accent : "var(--surface-hover)",
             color: canSubmit ? "var(--background)" : T.muted,
             fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
             cursor: canSubmit ? "pointer" : "not-allowed",

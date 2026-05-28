@@ -8,7 +8,7 @@ export default function DocDetailLoading() {
         style={{
           height: 180,
           borderRadius: "var(--radius-2xl)",
-          background: "var(--card-hover)",
+          background: "var(--surface-hover)",
           position: "relative",
           overflow: "hidden",
         }}

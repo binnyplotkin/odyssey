@@ -11,9 +11,9 @@ import {
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
+  muted: "var(--text-tertiary)",
   dim: "#5A6478",
-  panel: "var(--panel)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
   accent: "#8FD1CB",
   fontHeading: "'Space Grotesk', sans-serif",
@@ -270,7 +270,7 @@ function DescribePhase({
             style={{
               display: "inline-flex", alignItems: "center", gap: "var(--space-10)",
               padding: "8px 14px", borderRadius: "var(--radius-md)", border: "none",
-              background: canDraft ? T.accent : "var(--card-hover)",
+              background: canDraft ? T.accent : "var(--surface-hover)",
               color: canDraft ? "#0C0E14" : T.muted,
               fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
               cursor: canDraft ? "pointer" : "not-allowed",
@@ -514,7 +514,7 @@ function ReviewPhase({
             style={{
               display: "inline-flex", alignItems: "center", gap: "var(--space-10)",
               padding: "10px 18px", borderRadius: "var(--radius-md)",
-              background: canCreate ? T.accent : "var(--card-hover)",
+              background: canCreate ? T.accent : "var(--surface-hover)",
               color: canCreate ? "#0C0E14" : T.muted, border: "none",
               fontFamily: T.fontBody, fontSize: "var(--font-size-md)", fontWeight: 600,
               cursor: canCreate ? "pointer" : "not-allowed",

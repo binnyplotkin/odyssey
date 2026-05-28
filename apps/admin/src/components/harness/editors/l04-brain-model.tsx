@@ -219,8 +219,8 @@ function L04Configure({ character }: { character: HarnessCharacter }) {
               fontSize: "var(--font-size-xs)",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              background: voiceModel ? "rgba(255,122,155,0.12)" : "var(--input-bg)",
-              border: `1px solid ${voiceModel ? "rgba(255,122,155,0.4)" : "var(--input-border)"}`,
+              background: voiceModel ? "rgba(255,122,155,0.12)" : "var(--control-bg)",
+              border: `1px solid ${voiceModel ? "rgba(255,122,155,0.4)" : "var(--control-border)"}`,
               color: voiceModel ? "rgba(255,122,155,0.95)" : "var(--text-secondary)",
               borderRadius: "var(--radius-xs)",
               cursor: "pointer",
@@ -569,13 +569,13 @@ function L04Presets({ character }: { character: HarnessCharacter }) {
             phosphor: "rgba(140,231,210,0.06)",
             pink: "rgba(255,122,155,0.06)",
             gray: "rgba(255,255,255,0.04)",
-            muted: "var(--input-bg)",
+            muted: "var(--control-bg)",
           }[preset.accent];
           const accentBorder = {
             phosphor: "rgba(140,231,210,0.25)",
             pink: "rgba(255,122,155,0.25)",
             gray: "rgba(255,255,255,0.12)",
-            muted: "var(--input-border)",
+            muted: "var(--control-border)",
           }[preset.accent];
           const accentEyebrow = {
             phosphor: "var(--accent-strong)",
@@ -654,7 +654,7 @@ function L04Presets({ character }: { character: HarnessCharacter }) {
                     : isApplying
                       ? "rgba(140,231,210,0.06)"
                       : "rgba(140,231,210,0.14)",
-                  border: `1px solid ${isApplied ? "var(--input-border)" : "rgba(140,231,210,0.4)"}`,
+                  border: `1px solid ${isApplied ? "var(--control-border)" : "rgba(140,231,210,0.4)"}`,
                   color: isApplied ? "var(--text-quaternary)" : "var(--accent-strong)",
                   borderRadius: "var(--radius-xs)",
                   cursor: isApplied || isApplying ? "default" : "pointer",
@@ -737,8 +737,8 @@ function L04Runs({ character }: { character: HarnessCharacter }) {
         <div
           style={{
             padding: "var(--space-24)",
-            background: "var(--card)",
-            border: "1px dashed var(--card-border)",
+            background: "var(--material-card)",
+            border: "1px dashed var(--border-subtle)",
             borderRadius: "var(--radius-md)",
             fontFamily: T.fontBody,
             fontSize: "var(--font-size-md)",
@@ -773,8 +773,8 @@ function L04Runs({ character }: { character: HarnessCharacter }) {
 
       <div
         style={{
-          background: "var(--card)",
-          border: "1px solid var(--card-border)",
+          background: "var(--material-card)",
+          border: "1px solid var(--border-subtle)",
           borderRadius: "var(--radius-md)",
           overflow: "hidden",
         }}
@@ -786,7 +786,7 @@ function L04Runs({ character }: { character: HarnessCharacter }) {
             gap: "var(--space-12)",
             padding: "10px 16px",
             background: "rgba(255,255,255,0.03)",
-            borderBottom: "1px solid var(--card-border)",
+            borderBottom: "1px solid var(--border-subtle)",
             fontFamily: T.fontMono,
             fontSize: 9.5,
             letterSpacing: "0.1em",
@@ -810,7 +810,7 @@ function L04Runs({ character }: { character: HarnessCharacter }) {
               gridTemplateColumns: "minmax(180px, 1.5fr) 80px 90px 90px 90px 90px 120px",
               gap: "var(--space-12)",
               padding: "12px 16px",
-              borderBottom: "1px solid var(--card-border)",
+              borderBottom: "1px solid var(--border-subtle)",
               alignItems: "center",
               background: g.isCurrent ? "rgba(140,231,210,0.04)" : "transparent",
             }}
@@ -955,8 +955,8 @@ function L04History({ character }: { character: HarnessCharacter }) {
         <div
           style={{
             padding: "var(--space-24)",
-            background: "var(--card)",
-            border: "1px dashed var(--card-border)",
+            background: "var(--material-card)",
+            border: "1px dashed var(--border-subtle)",
             borderRadius: "var(--radius-md)",
             fontFamily: T.fontBody,
             fontSize: "var(--font-size-md)",
@@ -997,8 +997,8 @@ function L04History({ character }: { character: HarnessCharacter }) {
               key={entry.configHash}
               style={{
                 padding: "14px 18px",
-                background: entry.isCurrent ? "rgba(140,231,210,0.04)" : "var(--card)",
-                border: `1px solid ${entry.isCurrent ? "rgba(140,231,210,0.25)" : "var(--card-border)"}`,
+                background: entry.isCurrent ? "rgba(140,231,210,0.04)" : "var(--material-card)",
+                border: `1px solid ${entry.isCurrent ? "rgba(140,231,210,0.25)" : "var(--border-subtle)"}`,
                 borderRadius: "var(--radius-md)",
                 display: "flex",
                 gap: "var(--space-16)",
@@ -1045,7 +1045,7 @@ function L04History({ character }: { character: HarnessCharacter }) {
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   background: entry.isCurrent ? "transparent" : "rgba(255,184,112,0.08)",
-                  border: `1px solid ${entry.isCurrent ? "var(--input-border)" : "rgba(255,184,112,0.3)"}`,
+                  border: `1px solid ${entry.isCurrent ? "var(--control-border)" : "rgba(255,184,112,0.3)"}`,
                   color: entry.isCurrent ? "var(--text-quaternary)" : "rgba(255,184,112,0.95)",
                   borderRadius: "var(--radius-xs)",
                   cursor: entry.isCurrent || isReverting ? "default" : "pointer",
@@ -1135,8 +1135,8 @@ function SaveBar({
         alignItems: "center",
         gap: "var(--space-14)",
         padding: "12px 16px",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
       }}
     >
@@ -1162,8 +1162,8 @@ function SaveBar({
           fontSize: "var(--font-size-xs)",
           letterSpacing: "0.1em",
           textTransform: "uppercase",
-          background: isDirty ? "rgba(140,231,210,0.14)" : "var(--input-bg)",
-          border: `1px solid ${isDirty ? "rgba(140,231,210,0.4)" : "var(--input-border)"}`,
+          background: isDirty ? "rgba(140,231,210,0.14)" : "var(--control-bg)",
+          border: `1px solid ${isDirty ? "rgba(140,231,210,0.4)" : "var(--control-border)"}`,
           color: isDirty ? "var(--accent-strong)" : "var(--text-tertiary)",
           borderRadius: "var(--radius-xs)",
           cursor: isDirty && save.status !== "saving" ? "pointer" : "default",
@@ -1179,7 +1179,7 @@ function Status({ children, tone }: { children: React.ReactNode; tone: "accent" 
   const colorMap = {
     accent: "var(--accent-strong)",
     amber: "rgba(255,184,112,0.95)",
-    danger: "var(--danger)",
+    danger: "var(--status-error)",
     muted: "var(--text-tertiary)",
   };
   return <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: colorMap[tone] }}>{children}</span>;
@@ -1206,7 +1206,7 @@ function Card({
     gray: "rgba(255,255,255,0.10)",
     phosphor: "rgba(140,231,210,0.18)",
     pink: "rgba(255,122,155,0.18)",
-    muted: "var(--card-border)",
+    muted: "var(--border-subtle)",
   };
   const eyebrowMap = {
     gray: "rgba(255,255,255,0.55)",
@@ -1218,7 +1218,7 @@ function Card({
     <section
       style={{
         padding: "var(--space-24)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         border: `1px solid ${borderMap[accent]}`,
         borderRadius: "var(--radius-md)",
         display: "flex",
@@ -1322,8 +1322,8 @@ function ModelPicker({ value, onChange }: { value: string; onChange: (v: string)
                   justifyContent: "space-between",
                   gap: "var(--space-12)",
                   padding: "14px 16px",
-                  background: active ? "rgba(140,231,210,0.08)" : "var(--input-bg)",
-                  border: `1px solid ${active ? "rgba(140,231,210,0.4)" : "var(--input-border)"}`,
+                  background: active ? "rgba(140,231,210,0.08)" : "var(--control-bg)",
+                  border: `1px solid ${active ? "rgba(140,231,210,0.4)" : "var(--control-border)"}`,
                   borderRadius: "var(--radius-sm)",
                   cursor: "pointer",
                   color: "inherit",
@@ -1478,8 +1478,8 @@ function VoiceModelPicker({
                   justifyContent: "space-between",
                   gap: "var(--space-12)",
                   padding: "10px 14px",
-                  background: active ? "rgba(255,122,155,0.08)" : "var(--input-bg)",
-                  border: `1px solid ${active ? "rgba(255,122,155,0.4)" : "var(--input-border)"}`,
+                  background: active ? "rgba(255,122,155,0.08)" : "var(--control-bg)",
+                  border: `1px solid ${active ? "rgba(255,122,155,0.4)" : "var(--control-border)"}`,
                   borderRadius: "var(--radius-sm)",
                   cursor: "pointer",
                   color: "inherit",
@@ -1596,8 +1596,8 @@ function SamplingKnob({
     <div
       style={{
         padding: "var(--space-14)",
-        background: "var(--input-bg)",
-        border: "1px solid var(--input-border)",
+        background: "var(--control-bg)",
+        border: "1px solid var(--control-border)",
         borderRadius: "var(--radius-sm)",
         display: "flex",
         flexDirection: "column",
@@ -1661,7 +1661,7 @@ function SamplingKnob({
           color: disabled ? "rgba(255,184,112,0.85)" : "var(--text-tertiary)",
           lineHeight: 1.5,
           paddingTop: "var(--space-4)",
-          borderTop: "1px solid var(--divider)",
+          borderTop: "1px solid var(--border-subtle)",
         }}
       >
         {disabled && disabledReason ? `⚠ ${disabledReason}` : tip}
@@ -1742,7 +1742,7 @@ function Toggle({
         gap: "var(--space-8)",
         padding: "5px 10px",
         background: value ? "rgba(140,231,210,0.08)" : "rgba(255,255,255,0.04)",
-        border: `1px solid ${value ? "rgba(140,231,210,0.3)" : "var(--input-border)"}`,
+        border: `1px solid ${value ? "rgba(140,231,210,0.3)" : "var(--control-border)"}`,
         borderRadius: "var(--radius-xs)",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.5 : 1,
@@ -1811,7 +1811,7 @@ function FallbackChain({
           style={{
             padding: "12px 14px",
             background: "rgba(255,255,255,0.02)",
-            border: "1px dashed var(--input-border)",
+            border: "1px dashed var(--control-border)",
             borderRadius: "var(--radius-sm)",
             fontFamily: T.fontBody,
             fontSize: "var(--font-size-base)",
@@ -1831,8 +1831,8 @@ function FallbackChain({
             alignItems: "center",
             gap: "var(--space-12)",
             padding: "10px 14px",
-            background: "var(--input-bg)",
-            border: "1px solid var(--input-border)",
+            background: "var(--control-bg)",
+            border: "1px solid var(--control-border)",
             borderRadius: "var(--radius-sm)",
           }}
         >
@@ -1862,7 +1862,7 @@ function FallbackChain({
             style={{
               padding: "3px 8px",
               background: "transparent",
-              border: "1px solid var(--input-border)",
+              border: "1px solid var(--control-border)",
               borderRadius: "var(--radius-xs)",
               color: "var(--text-tertiary)",
               fontFamily: T.fontMono,
@@ -1885,7 +1885,7 @@ function FallbackChain({
             gap: "var(--space-6)",
             padding: "10px 12px",
             background: "rgba(0,0,0,0.2)",
-            border: "1px dashed var(--input-border)",
+            border: "1px dashed var(--control-border)",
             borderRadius: "var(--radius-sm)",
           }}
         >
@@ -1912,7 +1912,7 @@ function FallbackChain({
                 style={{
                   padding: "5px 10px",
                   background: "transparent",
-                  border: "1px solid var(--input-border)",
+                  border: "1px solid var(--control-border)",
                   borderRadius: "var(--radius-xs)",
                   color: "var(--text-secondary)",
                   fontFamily: T.fontMono,

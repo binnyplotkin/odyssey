@@ -6,7 +6,7 @@ import {
   type WikiSourceKind,
 } from "@odyssey/db";
 import { runIngestion, isKnownModel } from "@odyssey/wiki-ingest";
-import { embedText, EMBEDDING_MODEL } from "@odyssey/engine";
+import { embedText, embedTexts, EMBEDDING_MODEL } from "@odyssey/engine";
 import { invalidateCharactersList } from "@/lib/characters-cache";
 import { invalidateCharacterDetail } from "@/lib/character-detail-cache";
 
@@ -105,6 +105,7 @@ export async function POST(
           sourceId: source.id,
           model: body.model,
           embed: embedText,
+          embedMany: embedTexts,
           embeddingModel: EMBEDDING_MODEL,
         })) {
           controller.enqueue(

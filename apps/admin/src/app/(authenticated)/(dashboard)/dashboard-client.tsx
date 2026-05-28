@@ -144,8 +144,8 @@ function ActivitySection({ data }: { data: ActivityData }) {
   return (
     <div
       style={{
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-xl)",
         padding: "14px 18px",
         display: "flex",
@@ -239,7 +239,7 @@ function ActivitySection({ data }: { data: ActivityData }) {
             flexDirection: "column",
             gap: "var(--space-14)",
             paddingLeft: "var(--space-18)",
-            borderLeft: "1px solid var(--card-border)",
+            borderLeft: "1px solid var(--border-subtle)",
             paddingTop: "var(--space-14)",
             flex: 1,
             minWidth: 100,
@@ -351,8 +351,8 @@ export default function DashboardClient({
                 <div
                   key={s.label}
                   style={{
-                    background: "var(--card)",
-                    border: "1px solid var(--card-border)",
+                    background: "var(--material-card)",
+                    border: "1px solid var(--border-subtle)",
                     borderRadius: "var(--radius-xl)",
                     padding: "16px 20px",
                     flex: 1,
@@ -385,8 +385,8 @@ export default function DashboardClient({
               style={{
                 padding: "14px 16px",
                 borderRadius: "var(--radius-xl)",
-                background: "var(--card)",
-                border: "1px solid var(--card-border)",
+                background: "var(--material-card)",
+                border: "1px solid var(--border-subtle)",
               }}
             >
               {/* Version header */}
@@ -413,7 +413,7 @@ export default function DashboardClient({
               </div>
 
               {/* Progress bar */}
-              <div style={{ width: "100%", height: 4, borderRadius: "var(--radius-2xs)", background: "var(--card-border)", marginBottom: "var(--space-12)" }}>
+              <div style={{ width: "100%", height: 4, borderRadius: "var(--radius-2xs)", background: "var(--border-subtle)", marginBottom: "var(--space-12)" }}>
                 <div style={{
                   width: `${pct}%`, height: 4, borderRadius: "var(--radius-2xs)",
                   background: v.color, transition: "width 0.3s ease",
@@ -432,8 +432,8 @@ export default function DashboardClient({
                         style={{
                           display: "flex", alignItems: "center", gap: "var(--space-6)",
                           padding: "4px 10px", borderRadius: "var(--radius-sm)",
-                          background: "var(--card)",
-                          border: "1px solid var(--card-border)",
+                          background: "var(--material-card)",
+                          border: "1px solid var(--border-subtle)",
                         }}
                       >
                         <span style={{ width: 6, height: 6, borderRadius: "50%", background: f.color, flexShrink: 0 }} />
@@ -477,7 +477,7 @@ export default function DashboardClient({
                   return (
                     <div key={s} style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
                       <span style={{ width: 80, fontSize: "var(--font-size-sm)", color: "var(--text-tertiary)" }}>{sc.label}</span>
-                      <div style={{ flex: 1, height: 6, borderRadius: "var(--radius-xs)", background: "var(--input-bg)" }}>
+                      <div style={{ flex: 1, height: 6, borderRadius: "var(--radius-xs)", background: "var(--control-bg)" }}>
                         <div style={{ width: `${barPct}%`, height: 6, borderRadius: "var(--radius-xs)", background: sc.color, transition: "width 0.3s" }} />
                       </div>
                       <span style={{ width: 28, textAlign: "right", fontSize: "var(--font-size-sm)", fontFamily: "var(--font-mono, monospace)", color: "var(--text-quaternary)" }}>
@@ -506,8 +506,8 @@ export default function DashboardClient({
                         style={{
                           display: "flex", alignItems: "center", gap: "var(--space-6)",
                           padding: "6px 12px", borderRadius: "var(--radius-md)",
-                          background: "var(--card)",
-                          border: "1px solid var(--card-border)",
+                          background: "var(--material-card)",
+                          border: "1px solid var(--border-subtle)",
                         }}
                       >
                         <span style={{ width: 6, height: 6, borderRadius: "50%", background: pc.color }} />
@@ -568,8 +568,8 @@ export default function DashboardClient({
                     style={{
                       padding: "8px 10px",
                       borderRadius: "var(--radius-md)",
-                      background: "var(--card)",
-                      border: "1px solid var(--card-border)",
+                      background: "var(--material-card)",
+                      border: "1px solid var(--border-subtle)",
                       display: "flex",
                       alignItems: "center",
                       gap: "var(--space-8)",
@@ -614,15 +614,15 @@ export default function DashboardClient({
                     style={{
                       padding: "8px 10px",
                       borderRadius: "var(--radius-md)",
-                      background: "var(--card)",
-                      border: "1px solid var(--card-border)",
+                      background: "var(--material-card)",
+                      border: "1px solid var(--border-subtle)",
                       display: "flex",
                       alignItems: "center",
                       gap: "var(--space-8)",
                       transition: "background 0.15s",
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--card-hover)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--card)"; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--material-card)"; }}
                   >
                     <span style={{
                       width: 28, height: 28, borderRadius: "var(--radius-sm)",

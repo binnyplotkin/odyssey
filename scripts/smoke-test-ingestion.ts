@@ -65,6 +65,12 @@ async function main() {
   const wikis = getWikisStore();
 
   // Clean slate
+  const priorWiki = await wikis.getWikiBySlug(SLUG);
+  if (priorWiki) {
+    console.log(`Cleaning prior test wiki ${priorWiki.id} …`);
+    await wikis.deleteWiki(priorWiki.id);
+  }
+
   const prior = await characters.getBySlug(SLUG);
   if (prior) {
     console.log(`Cleaning prior test character ${prior.id} …`);

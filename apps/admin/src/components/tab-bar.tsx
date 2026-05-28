@@ -12,7 +12,7 @@ const TEXT_HOVER = "var(--text-secondary)";
 const TEXT_IDLE = "var(--text-tertiary)";
 
 const BG_ACTIVE = "var(--accent-soft)";
-const BG_HOVER = "var(--card-hover)";
+const BG_HOVER = "var(--surface-hover)";
 
 /**
  * A tab item is either route-based (provides `href` — rendered as a

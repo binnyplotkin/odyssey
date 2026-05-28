@@ -10,10 +10,10 @@ import type { WorldDefinition } from "@odyssey/types";
 
 const T = {
   bg: "var(--background)",
-  panel: "var(--panel)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
   fg: "var(--foreground)",
-  muted: "var(--muted)",
+  muted: "var(--text-tertiary)",
   accent: "var(--accent)",
   accentStrong: "var(--accent-strong, var(--accent))",
   fontHeading: "'Space Grotesk', system-ui, sans-serif",
@@ -79,7 +79,7 @@ function initial(name: string): string {
 }
 
 const AVATAR_COLORS = [
-  { bg: "color-mix(in srgb, var(--active-teal) 18%, transparent)", fg: "var(--active-teal)" },
+  { bg: "color-mix(in srgb, var(--accent-strong) 18%, transparent)", fg: "var(--accent-strong)" },
   { bg: "color-mix(in srgb, var(--critical-crimson) 16%, transparent)", fg: "var(--critical-crimson)" },
   { bg: "color-mix(in srgb, var(--signal-blue) 18%, transparent)", fg: "var(--signal-blue)" },
   { bg: "color-mix(in srgb, var(--warning-amber) 18%, transparent)", fg: "var(--warning-amber)" },
@@ -180,7 +180,7 @@ export function WorldsGrid({ worlds }: Props) {
             style={{
               display: "inline-flex", alignItems: "center", gap: "var(--space-6)",
               padding: "6px 14px", borderRadius: "var(--radius-xl)", border: "none",
-              background: "var(--active-teal)", color: "var(--background)",
+              background: "var(--accent-strong)", color: "var(--background)",
               fontSize: "var(--font-size-sm)", fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit", whiteSpace: "nowrap", textDecoration: "none",
             }}
@@ -204,7 +204,7 @@ export function WorldsGrid({ worlds }: Props) {
         <div style={{
           display: "flex", alignItems: "center", gap: "var(--space-10)",
           padding: "0 12px", height: 36, width: 340, borderRadius: "var(--radius-xl)",
-          background: "var(--input-bg)",
+          background: "var(--control-bg)",
           border: `1px solid ${T.border}`,
         }}>
           <span style={{ color: T.muted, fontSize: "var(--font-size-lg)" }}>⌕</span>
@@ -280,7 +280,7 @@ export function WorldsGrid({ worlds }: Props) {
             }}
           >
             {sorts.map((s) => (
-              <option key={s.key} value={s.key} style={{ background: "var(--panel)", color: T.fg }}>
+              <option key={s.key} value={s.key} style={{ background: "var(--surface-1)", color: T.fg }}>
                 {s.label}
               </option>
             ))}
@@ -399,7 +399,7 @@ function WorldCard({ world, status }: { world: WorldDefinition; status: Status }
         display: "flex", flexDirection: "column",
         borderRadius: "var(--radius-card, 18px)",
         overflow: "hidden",
-        background: "var(--card-material, var(--panel))",
+        background: "var(--material-card, var(--surface-1))",
         border: `1px solid ${T.border}`,
         boxShadow: "var(--elevation-card)",
         textDecoration: "none", color: "inherit",

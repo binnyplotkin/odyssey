@@ -3,7 +3,7 @@ import { Skeleton } from "@odyssey/ui";
 const COLUMN: React.CSSProperties = {
   flex: 1,
   minWidth: 280,
-  background: "var(--panel)",
+  background: "var(--surface-1)",
   border: "1px solid var(--border)",
   borderRadius: "var(--radius-xl)",
   padding: "var(--space-12)",
@@ -13,8 +13,8 @@ const COLUMN: React.CSSProperties = {
 };
 
 const TICKET: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--card-border)",
+  background: "var(--material-card)",
+  border: "1px solid var(--border-subtle)",
   borderRadius: "var(--radius-lg)",
   padding: "var(--space-12)",
   display: "flex",

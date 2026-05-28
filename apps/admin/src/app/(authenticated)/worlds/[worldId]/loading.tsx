@@ -1,8 +1,8 @@
 import { Skeleton } from "@odyssey/ui";
 
 const CARD: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--card-border)",
+  background: "var(--material-card)",
+  border: "1px solid var(--border-subtle)",
   borderRadius: "var(--radius-xl)",
 };
 
@@ -33,7 +33,7 @@ function PanelCard({ rows }: { rows: number }) {
               gap: "var(--space-10)",
               padding: "10px 12px",
               borderRadius: "var(--radius-md)",
-              border: "1px solid var(--card-border)",
+              border: "1px solid var(--border-subtle)",
             }}
           >
             <Skeleton width={28} height={28} variant="circle" />

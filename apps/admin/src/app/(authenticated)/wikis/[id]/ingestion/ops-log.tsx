@@ -8,7 +8,7 @@ import type { PlanOp } from "@odyssey/wiki-ingest";
 
 const FONT_MONO = "var(--font-mono, 'JetBrains Mono'), ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
-const DANGER = "var(--danger)";
+const DANGER = "var(--status-error)";
 
 export type OpQueueRow =
   | { state: "done"; op: PlanOp; tokens: number; edgesAdded: number }
@@ -20,11 +20,23 @@ export type OpsLogProps = {
   queue: OpQueueRow[];
   opsDone: number;
   opsTotal: number;
+  opsActive?: number;
 };
 
-export function OpsLog({ queue, opsDone, opsTotal }: OpsLogProps) {
+export function OpsLog({
+  queue,
+  opsDone,
+  opsTotal,
+  opsActive = 0,
+}: OpsLogProps) {
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-12)",
+      }}
+    >
       <style>{ANIM_CSS}</style>
       <header
         style={{
@@ -54,6 +66,7 @@ export function OpsLog({ queue, opsDone, opsTotal }: OpsLogProps) {
           }}
         >
           {opsDone} / {opsTotal || "—"} ops
+          {opsActive > 0 ? ` · ${opsActive} active` : ""}
         </span>
       </header>
 
@@ -61,9 +74,9 @@ export function OpsLog({ queue, opsDone, opsTotal }: OpsLogProps) {
         style={{
           display: "flex",
           flexDirection: "column",
-          border: "1px solid var(--input-border)",
+          border: "1px solid var(--control-border)",
           borderRadius: "var(--radius-lg)",
-          background: "var(--input-bg)",
+          background: "var(--control-bg)",
           fontFamily: FONT_MONO,
           fontSize: "var(--font-size-base)",
           padding: "6px 0",
@@ -77,9 +90,9 @@ export function OpsLog({ queue, opsDone, opsTotal }: OpsLogProps) {
             style={{
               padding: "14px 18px",
               fontSize: "var(--font-size-base)",
-            color: "var(--text-tertiary)",
-          }}
-        >
+              color: "var(--text-tertiary)",
+            }}
+          >
             waiting for plan…
           </div>
         ) : (
@@ -110,15 +123,21 @@ function ColumnHeader() {
         letterSpacing: "0.18em",
         textTransform: "uppercase",
         color: "var(--text-tertiary)",
-        borderBottom: "1px solid var(--divider)",
+        borderBottom: "1px solid var(--border-subtle)",
       }}
     >
       <span style={{ width: 22, flexShrink: 0 }} />
       <span style={{ width: 30, flexShrink: 0 }}>#</span>
       <span style={{ width: 74, flexShrink: 0 }}>Action</span>
-      <span style={{ flex: 1, paddingLeft: "var(--space-8)", minWidth: 0 }}>Slug</span>
-      <span style={{ width: 80, flexShrink: 0, textAlign: "right" }}>+Edges</span>
-      <span style={{ width: 90, flexShrink: 0, textAlign: "right" }}>Tokens</span>
+      <span style={{ flex: 1, paddingLeft: "var(--space-8)", minWidth: 0 }}>
+        Slug
+      </span>
+      <span style={{ width: 80, flexShrink: 0, textAlign: "right" }}>
+        +Edges
+      </span>
+      <span style={{ width: 90, flexShrink: 0, textAlign: "right" }}>
+        Tokens
+      </span>
     </div>
   );
 }
@@ -145,7 +164,7 @@ function OpRow({
       }
     : isFailed
       ? {
-          background: "color-mix(in srgb, var(--danger) 6%, transparent)",
+          background: "color-mix(in srgb, var(--status-error) 6%, transparent)",
           borderLeft: `2px solid ${DANGER}`,
           paddingLeft: "var(--space-16)",
         }
@@ -187,7 +206,7 @@ function OpRow({
         paddingLeft: rowStyle.paddingLeft,
         background: rowStyle.background,
         borderLeft: rowStyle.borderLeft,
-        borderBottom: isLast ? "none" : "1px solid var(--divider)",
+        borderBottom: isLast ? "none" : "1px solid var(--border-subtle)",
         color: baseColor,
         opacity: isQueued ? 0.72 : 1,
       }}
@@ -204,9 +223,7 @@ function OpRow({
         {isDone && <span style={{ color: ACCENT }}>✓</span>}
         {isWriting && <PulseDot color={ACCENT} />}
         {isFailed && <span style={{ color: DANGER }}>✕</span>}
-        {isQueued && (
-          <span style={{ color: "var(--text-quaternary)" }}>○</span>
-        )}
+        {isQueued && <span style={{ color: "var(--text-quaternary)" }}>○</span>}
       </span>
 
       <span
@@ -251,8 +268,7 @@ function OpRow({
               marginLeft: "var(--space-8)",
             }}
           >
-            ·{" "}
-            {row.op.action === "create" ? "drafting body" : "revising body"}
+            · {row.op.action === "create" ? "drafting body" : "revising body"}
           </span>
         )}
         {isFailed && (

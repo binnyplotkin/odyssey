@@ -183,8 +183,8 @@ function SkeletonCard() {
         padding: "var(--space-18)",
         gap: "var(--space-14)",
         borderRadius: "var(--radius-2xl)",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
       }}
     >
       {/* Top row: mini wave + identity + status pill ghost */}

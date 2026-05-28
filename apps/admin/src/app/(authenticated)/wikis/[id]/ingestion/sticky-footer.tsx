@@ -26,16 +26,19 @@ const ACCENT_BORDER_TOP_READY =
   "color-mix(in srgb, var(--accent-strong) 35%, transparent)";
 const ACCENT_BORDER_TOP_RUN =
   "color-mix(in srgb, var(--accent-strong) 55%, transparent)";
-const DANGER = "var(--danger)";
-const DANGER_FILL = "color-mix(in srgb, var(--danger) 12%, transparent)";
+const DANGER = "var(--status-error)";
+const DANGER_FILL = "color-mix(in srgb, var(--status-error) 12%, transparent)";
 const ON_ACCENT = "var(--background)";
 
-const PROMPT_DOT = "#8FD1CB";
-const MODEL_DOT = "#A48CE7";
-const EMBED_DOT = "#E7CB8C";
-const PROMPT_DOT_FADED = "color-mix(in srgb, #8FD1CB 50%, transparent)";
-const MODEL_DOT_FADED = "color-mix(in srgb, #A48CE7 50%, transparent)";
-const EMBED_DOT_FADED = "color-mix(in srgb, #E7CB8C 50%, transparent)";
+const PROMPT_DOT = "var(--accent-strong)";
+const MODEL_DOT = "var(--signal-blue)";
+const EMBED_DOT = "var(--warning-amber)";
+const PROMPT_DOT_FADED =
+  "color-mix(in srgb, var(--accent-strong) 50%, transparent)";
+const MODEL_DOT_FADED =
+  "color-mix(in srgb, var(--signal-blue) 50%, transparent)";
+const EMBED_DOT_FADED =
+  "color-mix(in srgb, var(--warning-amber) 50%, transparent)";
 
 const ROW_HEIGHT = 50;
 const TOP_ACCENT_BASE: CSSProperties = {
@@ -132,7 +135,8 @@ export function StickyFooter(props: StickyFooterProps) {
         height: ROW_HEIGHT,
         background: "var(--header-bg, var(--sidebar))",
         backdropFilter: "blur(var(--header-blur, 18px))",
-        boxShadow: "0 -18px 46px rgba(0, 0, 0, 0.22)",
+        boxShadow:
+          "0 -18px 46px color-mix(in srgb, var(--shadow) 48%, transparent)",
         // Footer is a sibling of the grid inside <main>; it spans the full
         // content-area width naturally (left of sidebar, right to edge).
       }}
@@ -167,14 +171,18 @@ function TopAccent({
   if (state === "idle") {
     return (
       <div
-        style={{ ...TOP_ACCENT_BASE, height: 1, background: "var(--divider)" }}
+        style={{ ...TOP_ACCENT_BASE, height: 1, background: "var(--border-subtle)" }}
       />
     );
   }
   if (state === "ready") {
     return (
       <div
-        style={{ ...TOP_ACCENT_BASE, height: 1, background: ACCENT_BORDER_TOP_READY }}
+        style={{
+          ...TOP_ACCENT_BASE,
+          height: 1,
+          background: ACCENT_BORDER_TOP_READY,
+        }}
       />
     );
   }
@@ -198,7 +206,8 @@ function TopAccent({
             bottom: 0,
             width: `${fraction * 100}%`,
             background: ACCENT,
-            boxShadow: "0 0 12px rgba(140, 231, 210, 0.7)",
+            boxShadow:
+              "0 0 12px color-mix(in srgb, var(--accent-strong) 70%, transparent)",
             transition: "width 240ms linear",
           }}
         />
@@ -223,8 +232,8 @@ function TopAccent({
       style={{
         ...TOP_ACCENT_BASE,
         height: 3,
-        background: "color-mix(in srgb, var(--danger) 10%, transparent)",
-        borderTop: `1px solid rgba(248, 113, 113, 0.55)`,
+        background: "color-mix(in srgb, var(--status-error) 10%, transparent)",
+        borderTop: "1px solid var(--critical-border)",
       }}
     >
       <span
@@ -236,7 +245,8 @@ function TopAccent({
           bottom: 0,
           width: "38%",
           background: DANGER,
-          boxShadow: "0 0 10px rgba(248, 113, 113, 0.5)",
+          boxShadow:
+            "0 0 10px color-mix(in srgb, var(--status-error) 50%, transparent)",
         }}
       />
     </div>
@@ -291,8 +301,8 @@ function StatGroup(props: StickyFooterProps) {
         display: "inline-flex",
         alignItems: "center",
         padding: "0 22px",
-        borderLeft: "1px solid var(--divider)",
-        borderRight: "1px solid var(--divider)",
+        borderLeft: "1px solid var(--border-subtle)",
+        borderRight: "1px solid var(--border-subtle)",
         minWidth: 0,
       }}
     >
@@ -339,8 +349,8 @@ function CellGroup({ children }: { children: ReactNode }) {
       style={{
         display: "inline-flex",
         alignItems: "stretch",
-        borderLeft: "1px solid var(--divider)",
-        borderRight: "1px solid var(--divider)",
+        borderLeft: "1px solid var(--border-subtle)",
+        borderRight: "1px solid var(--border-subtle)",
         flexShrink: 0,
       }}
     >
@@ -463,7 +473,7 @@ function PipelineChips(props: StickyFooterProps) {
       />
       <PipelineSegment
         label="Embedding"
-        value={embeddings ?? "text-embedding-3-large"}
+        value={embeddings ?? "text-embedding-3-small"}
         valueColor={valueColor}
         labelColor={labelColor}
         dotColor={embedDotColor}
@@ -559,7 +569,7 @@ function PipelineSegment({
     padding: "0 18px",
     borderRight: isLast
       ? "none"
-      : "1px solid var(--header-border, var(--divider))",
+      : "1px solid var(--header-border, var(--border-subtle))",
     transition: "background 140ms ease, box-shadow 140ms ease",
   };
 
@@ -623,7 +633,9 @@ function LockedIndicator() {
 }
 
 function EditPromptIcon({ muted }: { muted: boolean }) {
-  const iconColor = muted ? "rgba(140, 231, 210, 0.55)" : ACCENT;
+  const iconColor = muted
+    ? "color-mix(in srgb, var(--accent-strong) 55%, transparent)"
+    : ACCENT;
   return (
     <span
       className="ingestion-pipeline-edit"
@@ -636,10 +648,15 @@ function EditPromptIcon({ muted }: { muted: boolean }) {
         height: 24,
         padding: 0,
         background: muted ? "transparent" : ACCENT_SOFT,
-        border: `1px solid ${muted ? "rgba(140, 231, 210, 0.18)" : ACCENT_LINE}`,
+        border: `1px solid ${
+          muted
+            ? "color-mix(in srgb, var(--accent-strong) 18%, transparent)"
+            : ACCENT_LINE
+        }`,
         color: iconColor,
         flexShrink: 0,
-        transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
+        transition:
+          "background 140ms ease, border-color 140ms ease, color 140ms ease",
       }}
     >
       <PencilIcon color={iconColor} />
@@ -659,7 +676,7 @@ function ActionsCell(props: StickyFooterProps) {
         alignItems: "center",
         gap: "var(--space-10)",
         padding: "0 22px",
-        borderLeft: "1px solid var(--divider)",
+        borderLeft: "1px solid var(--border-subtle)",
         flexShrink: 0,
       }}
     >
@@ -754,15 +771,23 @@ function PrimaryButton({
         gap: "var(--space-8)",
         padding: "0 18px",
         height: 36,
-        background: disabled ? "rgba(140, 231, 210, 0.10)" : ACCENT,
-        border: `1px solid ${disabled ? "rgba(140, 231, 210, 0.20)" : ACCENT}`,
+        background: disabled
+          ? "color-mix(in srgb, var(--accent-strong) 10%, transparent)"
+          : ACCENT,
+        border: `1px solid ${
+          disabled
+            ? "color-mix(in srgb, var(--accent-strong) 20%, transparent)"
+            : ACCENT
+        }`,
         borderRadius: "var(--radius-md)",
         color: disabled ? "var(--text-placeholder)" : ON_ACCENT,
         fontFamily: FONT_HEAD,
         fontSize: "var(--font-size-md)",
         fontWeight: 600,
         cursor: disabled ? "not-allowed" : "pointer",
-        boxShadow: disabled ? undefined : "0 0 14px rgba(140, 231, 210, 0.20)",
+        boxShadow: disabled
+          ? undefined
+          : "0 0 14px color-mix(in srgb, var(--accent-strong) 20%, transparent)",
       }}
     >
       {icon}
@@ -823,7 +848,7 @@ function DangerOutlineButton({
         padding: "0 14px",
         height: 36,
         background: "transparent",
-        border: `1px solid rgba(248, 113, 113, 0.40)`,
+        border: "1px solid var(--critical-border)",
         borderRadius: "var(--radius-md)",
         color: DANGER,
         fontFamily: FONT_MONO,

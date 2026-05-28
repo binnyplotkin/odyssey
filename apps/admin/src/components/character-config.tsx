@@ -47,6 +47,12 @@ import { Pathname } from "@/components/pathname";
 import { TabBar, type TabItem } from "@/components/tab-bar";
 import { Menu, type MenuItem } from "@/components/menu";
 import {
+  AdminPageShell,
+  AdminRightRail,
+  AdminStatusPill,
+  adminTokens,
+} from "@/components/admin-ui";
+import {
   VoiceLibraryPicker,
   type PickerVoice,
 } from "@/components/voice-library-picker";
@@ -54,21 +60,21 @@ import {
 /* ── Tokens ────────────────────────────────────────────────────── */
 
 const T = {
-  fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
-  panelStrong: "var(--panel-strong)",
-  border: "var(--border)",
-  borderStrong: "var(--border-strong, rgba(255,255,255,0.12))",
-  accent: "var(--accent-strong)",
-  accentSoft: "color-mix(in srgb, var(--accent-strong) 12%, transparent)",
-  warn: "#E8B87A",
-  warnSoft: "rgba(232,184,122,0.12)",
-  danger: "var(--danger)",
-  dangerSoft: "color-mix(in srgb, var(--danger) 10%, transparent)",
-  fontHeading: "'Inter', system-ui, sans-serif",
-  fontBody: "'Inter', sans-serif",
-  fontMono: "'JetBrains Mono', ui-monospace, monospace",
+  fg: adminTokens.fg,
+  muted: adminTokens.muted,
+  panel: adminTokens.panel,
+  panelStrong: adminTokens.panelStrong,
+  border: adminTokens.border,
+  borderStrong: adminTokens.borderMedium,
+  accent: adminTokens.accent,
+  accentSoft: adminTokens.accentSoft,
+  warn: adminTokens.warning,
+  warnSoft: "color-mix(in srgb, var(--warning-amber) 12%, transparent)",
+  danger: adminTokens.danger,
+  dangerSoft: adminTokens.dangerFill,
+  fontHeading: adminTokens.fontBody,
+  fontBody: adminTokens.fontBody,
+  fontMono: adminTokens.fontMono,
 } as const;
 
 function relative(iso: string | null): string {
@@ -308,14 +314,12 @@ export function CharacterConfig({
   ]);
 
   return (
-    <div
+    <AdminPageShell
       style={{
         display: "flex",
         flexDirection: "row",
         gap: 0,
         minHeight: "calc(100vh - 48px)",
-        background: "var(--background)",
-        color: T.fg,
       }}
     >
       {/* Main column — infinite canvas with the character node */}
@@ -417,7 +421,7 @@ export function CharacterConfig({
           }}
         />
       )}
-    </div>
+    </AdminPageShell>
   );
 }
 
@@ -641,7 +645,7 @@ function VersionDropdown({
             right: 0,
             width: 280,
             zIndex: 30,
-            background: "var(--card)",
+            background: "var(--material-card)",
             border: `1px solid ${T.border}`,
             padding: "6px 0",
             boxShadow: "0 16px 40px var(--shadow, rgba(0,0,0,0.40))",
@@ -679,7 +683,7 @@ function VersionDropdown({
               opacity: saving ? 0.6 : 1,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--card-hover)";
+              e.currentTarget.style.background = "var(--surface-hover)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = "transparent";
@@ -752,13 +756,18 @@ function VersionDropdown({
                   textAlign: "left",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--card-hover)";
+                  e.currentTarget.style.background = "var(--surface-hover)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = "transparent";
                 }}
               >
-                <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)" }}>
+                <span
+                  style={{
+                    fontFamily: T.fontMono,
+                    fontSize: "var(--font-size-sm)",
+                  }}
+                >
                   v{v.versionNumber}
                 </span>
                 <span
@@ -905,7 +914,7 @@ function CanvasArea({
         flex: "1 1 0",
         minWidth: 0,
         position: "relative",
-        background: "var(--node-canvas)",
+        background: "var(--canvas-surface)",
       }}
     >
       <ReactFlowProvider>
@@ -923,7 +932,7 @@ function CanvasArea({
           proOptions={{ hideAttribution: true }}
           panOnScroll
           selectionOnDrag={false}
-          style={{ background: "var(--node-canvas)" }}
+          style={{ background: "var(--canvas-surface)" }}
         >
           <Background
             variant={BackgroundVariant.Lines}
@@ -944,7 +953,6 @@ function CanvasArea({
           />
         </ReactFlow>
       </ReactFlowProvider>
-
     </div>
   );
 }
@@ -959,7 +967,7 @@ function CharacterNode({
    * reading "+ connect" while we're still loading voiceOptions. */
   const activeModel = data.brainModel?.model ?? DEFAULT_CHAT_MODEL;
   const boundVoice = data.voiceId
-    ? data.voiceOptions.find((v) => v.id === data.voiceId) ?? null
+    ? (data.voiceOptions.find((v) => v.id === data.voiceId) ?? null)
     : null;
   const voiceSlug = boundVoice?.slug ?? null;
   const voiceProvider = boundVoice?.provider ?? null;
@@ -972,15 +980,14 @@ function CharacterNode({
    * a brand-new character. */
   const hasIdentity = Boolean(
     data.identity?.essence?.trim() ||
-      (data.identity?.traits ?? []).some((t) => t.name?.trim()),
+    (data.identity?.traits ?? []).some((t) => t.name?.trim()),
   );
   const isEmpty =
-    !hasIdentity && !data.brainModel && data.bindings.length === 0 && !voiceSlug;
-  const state = selected
-    ? "selected"
-    : isEmpty
-      ? "empty"
-      : "ready";
+    !hasIdentity &&
+    !data.brainModel &&
+    data.bindings.length === 0 &&
+    !voiceSlug;
+  const state = selected ? "selected" : isEmpty ? "empty" : "ready";
 
   return (
     <CharacterNodeCard
@@ -1003,8 +1010,7 @@ function CornerStat({ label, value }: { label: string; value: string }) {
         alignSelf: "flex-start",
         padding: "12px 16px",
         border: `1px solid ${T.border}`,
-        background:
-          "color-mix(in srgb, var(--background) 70%, transparent)",
+        background: "color-mix(in srgb, var(--background) 70%, transparent)",
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-4)",
@@ -1068,14 +1074,16 @@ function CharacterCard({
   // Voice slot render order: library binding wins (it's the real audio
   // identity), tones fall back when no binding (style without sound), and
   // when neither is configured the slot dims to signal unconfigured.
-  const boundVoice = voiceId ? voiceOptions.find((v) => v.id === voiceId) : null;
+  const boundVoice = voiceId
+    ? voiceOptions.find((v) => v.id === voiceId)
+    : null;
 
   return (
     <div
       style={{
         alignSelf: "center",
         width: "100%",
-        background: "var(--card)",
+        background: "var(--material-card)",
         border: `1px solid ${T.border}`,
         padding: "22px 22px",
         display: "flex",
@@ -1094,7 +1102,12 @@ function CharacterCard({
         }}
       >
         <div
-          style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", minWidth: 0 }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-8)",
+            minWidth: 0,
+          }}
         >
           <span
             style={{
@@ -1124,20 +1137,26 @@ function CharacterCard({
       </div>
 
       {/* thumbnail column + identity stack (name, traits, essence) */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-18)" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "var(--space-18)",
+        }}
+      >
         <div
           style={{
             width: 128,
             height: 128,
             border:
               "1px solid color-mix(in srgb, var(--accent-strong) 18%, transparent)",
-            // When an image is set we layer it over var(--card-hover)
+            // When an image is set we layer it over var(--surface-hover)
             // (the same tint the model pill uses) so transparent pixels
             // — e.g. after the "Remove black background" pass — read
             // against a calm card-surface tone instead of the panel
             // bleeding through.
             background: image
-              ? `center/cover no-repeat url("${image}"), var(--card-hover)`
+              ? `center/cover no-repeat url("${image}"), var(--surface-hover)`
               : gradient,
             display: "flex",
             alignItems: "center",
@@ -1181,7 +1200,13 @@ function CharacterCard({
             {character.title}
           </h2>
           {identity?.traits && identity.traits.some((t) => t.name.trim()) && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-10)" }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "var(--space-10)",
+              }}
+            >
               {identity.traits
                 .filter((t) => t.name.trim())
                 .map((t) => (
@@ -1330,8 +1355,8 @@ function CharacterSlot({
         padding: "8px 10px",
         border: `1px solid ${hovered ? "color-mix(in srgb, var(--accent-strong) 35%, var(--border))" : T.border}`,
         background: hovered
-          ? "color-mix(in srgb, var(--accent-strong) 6%, var(--card-hover))"
-          : "var(--card-hover)",
+          ? "color-mix(in srgb, var(--accent-strong) 6%, var(--surface-hover))"
+          : "var(--surface-hover)",
         cursor: "pointer",
         transition: "background 120ms ease, border-color 120ms ease",
         textAlign: "left",
@@ -1399,7 +1424,7 @@ function EditableThumbnail({
 }) {
   const [hovered, setHovered] = useState(false);
   const background = image
-    ? `center/cover no-repeat url("${image}"), var(--card-hover)`
+    ? `center/cover no-repeat url("${image}"), var(--surface-hover)`
     : gradient;
   return (
     <button
@@ -1541,7 +1566,9 @@ function ConfigSidebar(props: {
       if (saved) {
         const n = Number.parseInt(saved, 10);
         if (Number.isFinite(n)) {
-          setSidebarWidth(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, n)));
+          setSidebarWidth(
+            Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, n)),
+          );
         }
       }
     } catch {
@@ -1553,67 +1580,50 @@ function ConfigSidebar(props: {
    * cursor leaving the 6px handle. Computes new width from the
    * sidebar's *right* edge minus the pointer's clientX — the handle
    * is on the *left* edge, so dragging left grows the sidebar. */
-  const onResizeStart = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const aside = sidebarRef.current;
-      if (!aside) return;
-      const rect = aside.getBoundingClientRect();
-      const rightEdge = rect.right;
-      const target = e.currentTarget;
-      target.setPointerCapture(e.pointerId);
-      setIsResizing(true);
+  const onResizeStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const aside = sidebarRef.current;
+    if (!aside) return;
+    const rect = aside.getBoundingClientRect();
+    const rightEdge = rect.right;
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    setIsResizing(true);
 
-      const onMove = (ev: PointerEvent) => {
-        const next = Math.min(
-          SIDEBAR_MAX_WIDTH,
-          Math.max(SIDEBAR_MIN_WIDTH, rightEdge - ev.clientX),
-        );
-        setSidebarWidth(next);
-      };
-      const onUp = (ev: PointerEvent) => {
-        target.releasePointerCapture?.(ev.pointerId);
-        target.removeEventListener("pointermove", onMove);
-        target.removeEventListener("pointerup", onUp);
-        target.removeEventListener("pointercancel", onUp);
-        setIsResizing(false);
-        try {
-          /* Persist the final width — not every intermediate value, so
-           * localStorage doesn't churn during the drag. */
-          setSidebarWidth((w) => {
-            window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(Math.round(w)));
-            return w;
-          });
-        } catch {
-          /* non-fatal */
-        }
-      };
-      target.addEventListener("pointermove", onMove);
-      target.addEventListener("pointerup", onUp);
-      target.addEventListener("pointercancel", onUp);
-    },
-    [],
-  );
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.min(
+        SIDEBAR_MAX_WIDTH,
+        Math.max(SIDEBAR_MIN_WIDTH, rightEdge - ev.clientX),
+      );
+      setSidebarWidth(next);
+    };
+    const onUp = (ev: PointerEvent) => {
+      target.releasePointerCapture?.(ev.pointerId);
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", onUp);
+      setIsResizing(false);
+      try {
+        /* Persist the final width — not every intermediate value, so
+         * localStorage doesn't churn during the drag. */
+        setSidebarWidth((w) => {
+          window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(Math.round(w)));
+          return w;
+        });
+      } catch {
+        /* non-fatal */
+      }
+    };
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp);
+    target.addEventListener("pointercancel", onUp);
+  }, []);
 
   return (
-    <aside
+    <AdminRightRail
       ref={sidebarRef}
+      width={sidebarWidth}
       style={{
-        width: sidebarWidth,
-        flexShrink: 0,
-        position: "sticky",
-        top: 0,
-        alignSelf: "flex-start",
-        // Admin shell's top header is 48px — sticky sidebar fits below it.
-        height: "calc(100vh - 48px)",
-        background: "rgba(255,255,255,0.02)",
-        /* Softer subtle border that flips with the theme, matching the
-         * card chrome on /voices and /characters. */
-        borderLeft:
-          "1px solid var(--ink-fill)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
         /* Disable width transitions during the drag so the bar follows
          * the cursor 1:1 — re-enable when idle so collapse/expand from
          * other code paths animates smoothly. */
@@ -1738,10 +1748,8 @@ function ConfigSidebar(props: {
           height: 34,
           marginTop: "var(--space-20)",
           paddingLeft: "var(--space-24)",
-          borderTop:
-            "1px solid var(--ink-fill)",
-          borderBottom:
-            "1px solid var(--ink-fill)",
+          borderTop: "1px solid var(--ink-fill)",
+          borderBottom: "1px solid var(--ink-fill)",
         }}
       >
         <TabBar
@@ -1823,7 +1831,7 @@ function ConfigSidebar(props: {
         directive={props.directive}
         onOpenPreview={props.onOpenPreview}
       />
-    </aside>
+    </AdminRightRail>
   );
 }
 
@@ -1858,9 +1866,21 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-12)",
+      }}
+    >
       <SectionHeader title={title} hint={hint} status={status} info={info} />
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-10)",
+        }}
+      >
         {children}
       </div>
     </section>
@@ -2054,14 +2074,24 @@ function InfoCard({
         </div>
         {info.tokens && (
           <span
-            style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              color: T.muted,
+            }}
           >
             {info.tokens}
           </span>
         )}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-6)",
+        }}
+      >
         <span
           style={{
             fontFamily: T.fontMono,
@@ -2087,7 +2117,13 @@ function InfoCard({
       </div>
 
       {info.promptShape && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-6)",
+          }}
+        >
           <span
             style={{
               fontFamily: T.fontMono,
@@ -2232,29 +2268,17 @@ const SECTION_INFO: Record<string, SectionInfo> = {
 function StatusDot({ status }: { status: "set" | "tuned" | "empty" }) {
   const isOn = status === "set" || status === "tuned";
   return (
-    <span
+    <AdminStatusPill
+      tone={isOn ? "accent" : "muted"}
+      dot
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "var(--space-6)",
-        fontFamily: T.fontMono,
+        minHeight: 18,
+        padding: "1px 7px",
         fontSize: "var(--font-size-2xs)",
-        color: isOn ? T.accent : "var(--text-tertiary)",
-        letterSpacing: "0.18em",
-        textTransform: "uppercase",
       }}
     >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: isOn ? T.accent : "var(--text-quaternary)",
-          boxShadow: isOn ? `0 0 8px ${T.accent}` : undefined,
-        }}
-      />
       {status}
-    </span>
+    </AdminStatusPill>
   );
 }
 
@@ -2370,7 +2394,13 @@ function IdentitySection({
       />
 
       <FieldLabel>defining traits</FieldLabel>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-8)",
+        }}
+      >
         {traits.map((t, i) => (
           <TraitCard
             key={i}
@@ -2565,7 +2595,13 @@ function AddTraitOverlay({
             gap: "var(--space-12)",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-6)",
+            }}
+          >
             <span
               style={{
                 fontFamily: T.fontMono,
@@ -2647,7 +2683,9 @@ function AddTraitOverlay({
               curated · generic
             </span>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
+          <div
+            style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}
+          >
             {SUGGESTED_TRAITS.map((s) => {
               const taken = existingNames.has(s.name.toLowerCase());
               const selected =
@@ -2708,7 +2746,13 @@ function AddTraitOverlay({
             </span>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-4)",
+            }}
+          >
             <FieldLabel>name</FieldLabel>
             <input
               ref={nameRef}
@@ -2737,7 +2781,13 @@ function AddTraitOverlay({
             )}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-4)",
+            }}
+          >
             <FieldLabel>describe</FieldLabel>
             <textarea
               value={description}
@@ -2803,7 +2853,7 @@ function AddTraitOverlay({
                 padding: "7px 18px",
                 border: `1px solid ${canSave ? T.accent : "var(--border)"}`,
                 borderRadius: "var(--radius-pill)",
-                background: canSave ? T.accent : "var(--card-hover)",
+                background: canSave ? T.accent : "var(--surface-hover)",
                 color: canSave ? "var(--background)" : "var(--text-tertiary)",
                 fontFamily: T.fontHeading,
                 fontSize: "var(--font-size-base)",
@@ -2857,7 +2907,13 @@ function TraitCard({
           maxLength={280}
           style={{ ...textareaStyle, fontSize: "var(--font-size-base)" }}
         />
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-8)" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "var(--space-8)",
+          }}
+        >
           <button type="button" onClick={onRemove} style={ghostButtonStyle}>
             remove
           </button>
@@ -3011,7 +3067,13 @@ function ExamplesSection({
         {atCap ? ` · cap ${EXEMPLAR_CAP}` : ""}
       </FieldLabel>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-8)",
+        }}
+      >
         {exemplars.map((ex, i) => (
           <ExemplarCard
             key={i}
@@ -3135,7 +3197,12 @@ function ExemplarCard({
       </span>
       {(exemplar.tags?.length ?? 0) > 0 && (
         <div
-          style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", marginTop: "var(--space-2)" }}
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "var(--space-4)",
+            marginTop: "var(--space-2)",
+          }}
         >
           {exemplar.tags!.map((t) => (
             <span
@@ -3143,8 +3210,7 @@ function ExemplarCard({
               style={{
                 padding: "3px 8px",
                 background: T.accentSoft,
-                border:
-                  "1px solid var(--accent-border)",
+                border: "1px solid var(--accent-border)",
                 fontFamily: T.fontMono,
                 fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.10em",
@@ -3271,7 +3337,13 @@ function ExampleOverlay({
             gap: "var(--space-12)",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-6)",
+            }}
+          >
             <span
               style={{
                 fontFamily: T.fontMono,
@@ -3324,7 +3396,13 @@ function ExampleOverlay({
             gap: "var(--space-14)",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-6)",
+            }}
+          >
             <div
               style={{
                 display: "flex",
@@ -3364,7 +3442,13 @@ function ExampleOverlay({
             />
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-6)",
+            }}
+          >
             <div
               style={{
                 display: "flex",
@@ -3405,7 +3489,13 @@ function ExampleOverlay({
             />
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-6)",
+            }}
+          >
             <span
               style={{
                 fontFamily: T.fontMono,
@@ -3429,7 +3519,13 @@ function ExampleOverlay({
             />
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-6)",
+            }}
+          >
             <span
               style={{
                 fontFamily: T.fontMono,
@@ -3442,7 +3538,13 @@ function ExampleOverlay({
               &nbsp;topics this example covers · feeds the character&rsquo;s
               scope at runtime
             </span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "var(--space-6)",
+              }}
+            >
               {tags.map((t) => (
                 <span
                   key={t}
@@ -3452,8 +3554,7 @@ function ExampleOverlay({
                     gap: "var(--space-6)",
                     padding: "3px 10px",
                     background: T.accentSoft,
-                    border:
-                      "1px solid var(--accent-border)",
+                    border: "1px solid var(--accent-border)",
                     fontFamily: T.fontMono,
                     fontSize: "var(--font-size-xs)",
                     letterSpacing: "0.10em",
@@ -3578,7 +3679,7 @@ function ExampleOverlay({
                 padding: "7px 18px",
                 border: `1px solid ${canSave ? T.accent : "var(--border)"}`,
                 borderRadius: "var(--radius-pill)",
-                background: canSave ? T.accent : "var(--card-hover)",
+                background: canSave ? T.accent : "var(--surface-hover)",
                 color: canSave ? "var(--background)" : "var(--text-tertiary)",
                 fontFamily: T.fontHeading,
                 fontSize: "var(--font-size-base)",
@@ -3631,9 +3732,8 @@ function VoiceStyleSection({
 }) {
   const [draftTone, setDraftTone] = useState("");
   const [draftProsody, setDraftProsody] = useState("");
-  const [voiceSettings, setVoiceSettings] = useState<VoiceSettingsOverride | null>(
-    initialVoiceSettings,
-  );
+  const [voiceSettings, setVoiceSettings] =
+    useState<VoiceSettingsOverride | null>(initialVoiceSettings);
 
   const saveVoiceSettings = useCallback(
     async (next: VoiceSettingsOverride | null) => {
@@ -3689,7 +3789,7 @@ function VoiceStyleSection({
   const referenceClipUrl = voiceStyle?.referenceClipUrl ?? "";
 
   const bound = voiceId
-    ? voiceOptions.find((v) => v.id === voiceId) ?? null
+    ? (voiceOptions.find((v) => v.id === voiceId) ?? null)
     : null;
 
   const ttsStatus: SegmentStatus = bound
@@ -3709,7 +3809,13 @@ function VoiceStyleSection({
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 22 }}>
       {/* ── Segment B · TTS ────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-12)",
+        }}
+      >
         <SegmentHeader
           label="tts"
           hint="what comes out of the speaker"
@@ -3725,10 +3831,8 @@ function VoiceStyleSection({
           <div
             style={{
               padding: "8px 10px",
-              background:
-                "var(--critical-wash)",
-              border:
-                "1px solid var(--critical-border)",
+              background: "var(--critical-wash)",
+              border: "1px solid var(--critical-border)",
               color: "var(--status-error)",
               fontFamily: T.fontMono,
               fontSize: "var(--font-size-sm)",
@@ -3761,12 +3865,11 @@ function VoiceStyleSection({
         />
 
         <FieldLabel>prosody · {prosody.length} chips</FieldLabel>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
+        <div
+          style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}
+        >
           {prosody.map((p) => (
-            <span
-              key={p}
-              style={prosodyChipStyle}
-            >
+            <span key={p} style={prosodyChipStyle}>
               {p}
               <button
                 type="button"
@@ -3819,7 +3922,13 @@ function VoiceStyleSection({
       <SegmentDivider />
 
       {/* ── Segment A · Prompt-driven ─────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-12)",
+        }}
+      >
         <SegmentHeader
           label="prompt-driven"
           hint="what the model reads"
@@ -3827,7 +3936,9 @@ function VoiceStyleSection({
         />
 
         <FieldLabel>how they sound · {tones.length} chips</FieldLabel>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
+        <div
+          style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}
+        >
           {tones.map((t) => (
             <span
               key={t}
@@ -3835,8 +3946,7 @@ function VoiceStyleSection({
                 padding: "4px 10px",
                 borderRadius: "var(--radius-pill)",
                 background: T.accentSoft,
-                border:
-                  "1px solid var(--accent-border)",
+                border: "1px solid var(--accent-border)",
                 fontFamily: T.fontMono,
                 fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.10em",
@@ -3920,7 +4030,8 @@ function VoiceStyleSection({
         </div>
 
         <FieldLabel>
-          register · formality {fmtSigned(formality)} · warmth {fmtSigned(warmth)}
+          register · formality {fmtSigned(formality)} · warmth{" "}
+          {fmtSigned(warmth)}
         </FieldLabel>
         <Slider
           label="formality"
@@ -4064,7 +4175,7 @@ function InheritsNote({ provider }: { provider: string }) {
         gap: "var(--space-10)",
         padding: "10px 14px",
         borderRadius: "var(--radius-lg)",
-        background: "rgba(255,255,255,0.02)",
+        background: "var(--ink-wash)",
         border: `1px solid ${T.border}`,
       }}
     >
@@ -4115,7 +4226,7 @@ const addChipInputStyle: React.CSSProperties = {
 const prosodyChipStyle: React.CSSProperties = {
   padding: "4px 10px",
   borderRadius: "var(--radius-pill)",
-  background: "rgba(255,255,255,0.02)",
+  background: "var(--ink-wash)",
   border: `1px solid ${T.border}`,
   fontFamily: T.fontMono,
   fontSize: "var(--font-size-xs)",
@@ -4187,7 +4298,8 @@ function ElevenLabsOverridePanel({
 
   const baseModelId =
     typeof base.modelId === "string" ? base.modelId : "eleven_multilingual_v2";
-  const baseStability = typeof base.stability === "number" ? base.stability : 0.5;
+  const baseStability =
+    typeof base.stability === "number" ? base.stability : 0.5;
   const baseSimilarity =
     typeof base.similarityBoost === "number" ? base.similarityBoost : 0.75;
   const baseStyle = typeof base.style === "number" ? base.style : 0;
@@ -4342,7 +4454,14 @@ function OverrideRowToggle({
         paddingTop: "var(--space-4)",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", minWidth: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-2)",
+          minWidth: 0,
+        }}
+      >
         <span
           style={{
             fontFamily: T.fontMono,
@@ -4365,7 +4484,13 @@ function OverrideRowToggle({
           </span>
         )}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-10)",
+        }}
+      >
         {customized ? (
           <button
             type="button"
@@ -4461,10 +4586,14 @@ function OverrideRowSlider({
         >
           <span
             style={{
-              color: customized ? "var(--accent-strong)" : "var(--text-tertiary)",
+              color: customized
+                ? "var(--accent-strong)"
+                : "var(--text-tertiary)",
             }}
           >
-            {customized ? `customized · ${effective.toFixed(2)}` : `inherits · ${baseValue.toFixed(2)}`}
+            {customized
+              ? `customized · ${effective.toFixed(2)}`
+              : `inherits · ${baseValue.toFixed(2)}`}
           </span>
           {customized ? (
             <button
@@ -4602,8 +4731,8 @@ function OverrideRowDropdown({
             width: "100%",
             justifyContent: "space-between",
             padding: "8px 10px",
-            background: "var(--input-bg)",
-            border: "1px solid var(--input-border)",
+            background: "var(--control-bg)",
+            border: "1px solid var(--control-border)",
             borderRadius: "var(--radius-sm)",
             color: "var(--text-primary)",
             fontFamily: T.fontMono,
@@ -4661,7 +4790,13 @@ function Slider({
         >
           {label}
         </span>
-        <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}>
+        <span
+          style={{
+            fontFamily: T.fontMono,
+            fontSize: "var(--font-size-xs)",
+            color: T.muted,
+          }}
+        >
           {rightLabel}
         </span>
       </div>
@@ -4858,8 +4993,7 @@ function ModelCard({ model }: { model: ModelOption }) {
             padding: "4px 10px",
             borderRadius: "var(--radius-pill)",
             background: T.accentSoft,
-            border:
-              "1px solid var(--accent-border)",
+            border: "1px solid var(--accent-border)",
             fontFamily: T.fontMono,
             fontSize: "var(--font-size-2xs)",
             letterSpacing: "0.18em",
@@ -4947,7 +5081,8 @@ function ModelPicker({
               whiteSpace: "nowrap",
             }}
           >
-            {current?.label ?? (allowEmpty ? "— inherit chat model —" : "Select model")}
+            {current?.label ??
+              (allowEmpty ? "— inherit chat model —" : "Select model")}
           </span>
           {current?.meta && (
             <span
@@ -4969,7 +5104,7 @@ function ModelPicker({
       triggerStyle={{
         width: "100%",
         padding: "9px 12px",
-        background: "var(--card)",
+        background: "var(--material-card)",
         fontFamily: T.fontMono,
         fontSize: "var(--font-size-base)",
       }}
@@ -5012,7 +5147,13 @@ function BudgetCard({
           alignItems: "baseline",
         }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-8)" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: "var(--space-8)",
+          }}
+        >
           <span
             style={{
               fontFamily: T.fontHeading,
@@ -5042,7 +5183,7 @@ function BudgetCard({
         style={{
           height: 4,
           borderRadius: "var(--radius-pill)",
-          background: "var(--card-hover)",
+          background: "var(--surface-hover)",
           overflow: "hidden",
         }}
       >
@@ -5086,7 +5227,7 @@ function MetaChip({ children }: { children: React.ReactNode }) {
     <span
       style={{
         padding: "3px 8px",
-        background: "var(--card-hover)",
+        background: "var(--surface-hover)",
         border: `1px solid ${T.border}`,
         borderRadius: "var(--radius-pill)",
         fontFamily: T.fontMono,
@@ -5184,7 +5325,11 @@ function KnowledgeTab({
         >
           <span>+ Bind another graph</span>
           <span
-            style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              color: T.muted,
+            }}
           >
             browse library ↗
           </span>
@@ -5215,13 +5360,13 @@ const PRIORITY_COLORS: Record<
   BindingPriority,
   { fg: string; bg: string; border: string }
 > = {
-  primary: { fg: T.accent, bg: T.accentSoft, border: "rgba(140,231,210,0.30)" },
+  primary: { fg: T.accent, bg: T.accentSoft, border: "var(--accent-border)" },
   secondary: {
-    fg: "#A8C4E8",
-    bg: "rgba(168,196,232,0.10)",
-    border: "rgba(168,196,232,0.30)",
+    fg: "var(--signal-blue)",
+    bg: "color-mix(in srgb, var(--signal-blue) 10%, transparent)",
+    border: "color-mix(in srgb, var(--signal-blue) 30%, transparent)",
   },
-  reference: { fg: T.muted, bg: "rgba(255,255,255,0.04)", border: T.border },
+  reference: { fg: T.muted, bg: "var(--ink-soft)", border: T.border },
 };
 
 function BindingCard({
@@ -5370,7 +5515,7 @@ function Toggle({
         width: 30,
         height: 16,
         borderRadius: "var(--radius-pill)",
-        border: `1px solid ${on ? "rgba(140,231,210,0.40)" : T.border}`,
+        border: `1px solid ${on ? "var(--accent-glow)" : T.border}`,
         background: on ? T.accentSoft : "transparent",
         position: "relative",
         cursor: "pointer",
@@ -5435,7 +5580,9 @@ function LimitsTab({
         info={SECTION_INFO.topicRefusals}
       >
         <FieldLabel>topics · soft-decline at runtime</FieldLabel>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}>
+        <div
+          style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-6)" }}
+        >
           {refusals.map((r) => (
             <span
               key={r}
@@ -5444,7 +5591,7 @@ function LimitsTab({
                 borderRadius: "var(--radius-pill)",
                 background: T.dangerSoft,
                 border:
-                  "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
+                  "1px solid color-mix(in srgb, var(--status-error) 30%, transparent)",
                 fontFamily: T.fontMono,
                 fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.10em",
@@ -5616,8 +5763,8 @@ function AddRule({ onAdd }: { onAdd: (text: string) => void }) {
         padding: "9px 12px",
         fontFamily: T.fontBody,
         fontSize: "var(--font-size-base)",
-        background: "rgba(140,231,210,0.04)",
-        borderColor: "rgba(140,231,210,0.20)",
+        background: "var(--accent-wash)",
+        borderColor: "var(--accent-border)",
       }}
     />
   );
@@ -5659,7 +5806,12 @@ function SystemPromptFooter({
       }}
     >
       <div
-        style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-6)" }}
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-6)",
+        }}
       >
         <span
           style={{
@@ -5676,7 +5828,7 @@ function SystemPromptFooter({
         <div
           style={{
             height: 3,
-            background: "var(--card-hover)",
+            background: "var(--surface-hover)",
             overflow: "hidden",
           }}
         >
@@ -5908,7 +6060,13 @@ function PromptPreviewOverlay({
                 : "abstract template · slot markers + conditionals"}
             </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-16)" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-16)",
+            }}
+          >
             <span
               style={{
                 fontFamily: T.fontMono,
@@ -5989,7 +6147,11 @@ function PromptPreviewOverlay({
             })}
           </div>
           <span
-            style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              color: T.muted,
+            }}
           >
             {view === "rendered"
               ? "click a section to jump back to its source ↗"
@@ -6087,7 +6249,12 @@ function PromptPreviewOverlay({
                 gap: "var(--space-6)",
               }}
             >
-              <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)" }}>
+              <span
+                style={{
+                  fontFamily: T.fontMono,
+                  fontSize: "var(--font-size-sm)",
+                }}
+              >
                 {copied ? "✓" : "⧉"}
               </span>
               {copied ? "Copied" : "Copy prompt"}
@@ -6155,7 +6322,11 @@ function PreviewSectionCard({
           }}
         >
           <span
-            style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.muted }}
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-sm)",
+              color: T.muted,
+            }}
           >
             —
           </span>
@@ -6189,7 +6360,11 @@ function PreviewSectionCard({
           }}
         >
           <span
-            style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted }}
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              color: T.muted,
+            }}
           >
             {section.tokens} tokens
           </span>
@@ -6232,7 +6407,7 @@ function NotInPromptChip({ children }: { children: React.ReactNode }) {
       style={{
         padding: "3px 10px",
         borderRadius: "var(--radius-pill)",
-        background: "var(--card-hover)",
+        background: "var(--surface-hover)",
         border: `1px solid ${T.border}`,
         fontFamily: T.fontMono,
         fontSize: "var(--font-size-xs)",
@@ -6252,7 +6427,7 @@ function KeyChip({ children }: { children: React.ReactNode }) {
         padding: "1px 6px",
         borderRadius: "var(--radius-xs)",
         border: `1px solid ${T.border}`,
-        background: "var(--card-hover)",
+        background: "var(--surface-hover)",
         fontFamily: T.fontMono,
         fontSize: "var(--font-size-2xs)",
         color: T.fg,
@@ -6628,7 +6803,7 @@ const inputStyle: React.CSSProperties = {
   padding: "9px 12px",
   border: `1px solid ${T.border}`,
   borderRadius: "var(--radius-md)",
-  background: "var(--card)",
+  background: "var(--material-card)",
   color: T.fg,
   fontFamily: T.fontBody,
   fontSize: "var(--font-size-md)",

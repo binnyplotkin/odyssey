@@ -265,14 +265,14 @@ export function WorldBuilderConsole() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-8 md:px-6 lg:px-8">
       <section className="panel rounded-[2rem] p-6 md:p-8">
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--muted)]">World Builder</p>
+        <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--text-tertiary)]">World Builder</p>
         <h1 className="mt-4 text-3xl font-semibold text-[var(--foreground)] md:text-5xl">Generate Simulation World</h1>
-        <p className="mt-4 max-w-4xl text-sm leading-7 text-[var(--muted)] md:text-base">
+        <p className="mt-4 max-w-4xl text-sm leading-7 text-[var(--text-tertiary)] md:text-base">
           Describe the world you want to inhabit. The builder compiles a full world definition, auto-publishes it,
           and lets you edit JSON before launching a session.
         </p>
-        <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 text-xs leading-6 text-[var(--muted)]">
-          <p className="font-mono uppercase tracking-[0.2em] text-[var(--muted)]">Audio Simulation MVP</p>
+        <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4 text-xs leading-6 text-[var(--text-tertiary)]">
+          <p className="font-mono uppercase tracking-[0.2em] text-[var(--text-tertiary)]">Audio Simulation MVP</p>
           <p className="mt-2">
             The new high-stakes communication simulator is currently exposed through web API routes.
             You can test iterative progress using:
@@ -287,7 +287,7 @@ export function WorldBuilderConsole() {
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             placeholder="Describe your world intent..."
-            className="min-h-32 rounded-[1.25rem] border border-[var(--border)] bg-[var(--panel)] px-4 py-4 text-sm leading-6 text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]"
+            className="min-h-32 rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface-1)] px-4 py-4 text-sm leading-6 text-[var(--foreground)] outline-none placeholder:text-[var(--text-tertiary)]"
           />
 
           <div className="flex flex-wrap gap-3">
@@ -304,22 +304,22 @@ export function WorldBuilderConsole() {
               type="button"
               onClick={saveWorldJson}
               disabled={!buildResult || !worldJson || isSaving}
-              className="rounded-full border border-[var(--border)] bg-[var(--panel)] px-6 py-3 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--panel-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full border border-[var(--border)] bg-[var(--surface-1)] px-6 py-3 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--surface-active)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? "Saving..." : "Save JSON"}
             </button>
           </div>
 
-          {status ? <p className="text-sm text-[var(--success)]">{status}</p> : null}
-          {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
+          {status ? <p className="text-sm text-[var(--status-live)]">{status}</p> : null}
+          {error ? <p className="text-sm text-[var(--status-error)]">{error}</p> : null}
         </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <aside className="panel rounded-[2rem] p-6 md:p-8">
-          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Generated World</p>
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">Generated World</p>
           {buildResult ? (
-            <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--muted)]">
+            <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--text-tertiary)]">
               <p><span className="font-medium text-[var(--foreground)]">Title:</span> {buildResult.world.title}</p>
               <p><span className="font-medium text-[var(--foreground)]">Setting:</span> {buildResult.world.setting}</p>
               <p><span className="font-medium text-[var(--foreground)]">Premise:</span> {buildResult.world.premise}</p>
@@ -327,29 +327,29 @@ export function WorldBuilderConsole() {
               <p><span className="font-medium text-[var(--foreground)]">Start Role:</span> {buildResult.roleId}</p>
             </div>
           ) : (
-            <p className="mt-4 text-sm text-[var(--muted)]">Build a world to view summary metadata.</p>
+            <p className="mt-4 text-sm text-[var(--text-tertiary)]">Build a world to view summary metadata.</p>
           )}
         </aside>
 
         <section className="panel rounded-[2rem] p-6 md:p-8">
-          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">World JSON Editor</p>
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">World JSON Editor</p>
           <textarea
             value={worldJson}
             onChange={(event) => setWorldJson(event.target.value)}
             placeholder="Generated world JSON appears here after build."
-            className="mt-4 min-h-[28rem] w-full rounded-[1.2rem] border border-[var(--border)] bg-[var(--panel)] px-4 py-4 font-mono text-xs leading-6 text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]"
+            className="mt-4 min-h-[28rem] w-full rounded-[1.2rem] border border-[var(--border)] bg-[var(--surface-1)] px-4 py-4 font-mono text-xs leading-6 text-[var(--foreground)] outline-none placeholder:text-[var(--text-tertiary)]"
           />
         </section>
       </section>
 
       {worldDetail ? (
         <section className="panel rounded-[2rem] p-6 md:p-8">
-          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">World Breakdown</p>
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">World Breakdown</p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <article className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--panel)] p-4">
-              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--muted)]">Role</p>
-              <div className="mt-3 space-y-2 text-sm text-[var(--muted)]">
+            <article className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--surface-1)] p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-tertiary)]">Role</p>
+              <div className="mt-3 space-y-2 text-sm text-[var(--text-tertiary)]">
                 {worldDetail.roles.map((role) => (
                   <div key={role.id}>
                     <p className="font-medium text-[var(--foreground)]">{role.title}</p>
@@ -359,9 +359,9 @@ export function WorldBuilderConsole() {
               </div>
             </article>
 
-            <article className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--panel)] p-4">
-              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--muted)]">Environment</p>
-              <div className="mt-3 space-y-2 text-sm text-[var(--muted)]">
+            <article className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--surface-1)] p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-tertiary)]">Environment</p>
+              <div className="mt-3 space-y-2 text-sm text-[var(--text-tertiary)]">
                 <p><span className="font-medium text-[var(--foreground)]">Setting:</span> {worldDetail.setting}</p>
                 <p><span className="font-medium text-[var(--foreground)]">Premise:</span> {worldDetail.premise}</p>
                 <p><span className="font-medium text-[var(--foreground)]">Intro Scene:</span> {worldDetail.introNarration}</p>
@@ -374,9 +374,9 @@ export function WorldBuilderConsole() {
               </div>
             </article>
 
-            <article className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--panel)] p-4">
-              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--muted)]">Cultural + Period Energy</p>
-              <div className="mt-3 space-y-2 text-sm text-[var(--muted)]">
+            <article className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--surface-1)] p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-tertiary)]">Cultural + Period Energy</p>
+              <div className="mt-3 space-y-2 text-sm text-[var(--text-tertiary)]">
                 <p className="font-medium text-[var(--foreground)]">Norms</p>
                 {worldDetail.norms.map((item) => (
                   <p key={`norm-${item}`}>• {item}</p>
@@ -388,14 +388,14 @@ export function WorldBuilderConsole() {
               </div>
             </article>
 
-            <article className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--panel)] p-4">
-              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--muted)]">People In Scene</p>
-              <div className="mt-3 space-y-3 text-sm text-[var(--muted)]">
+            <article className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--surface-1)] p-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-tertiary)]">People In Scene</p>
+              <div className="mt-3 space-y-3 text-sm text-[var(--text-tertiary)]">
                 {worldDetail.characters.map((character) => (
                   <div key={character.id}>
                     <p className="font-medium text-[var(--foreground)]">{character.name} · {character.title}</p>
-                    <p className="text-[var(--muted)]">{character.speakingStyle}</p>
-                    <p className="text-[var(--muted)]">
+                    <p className="text-[var(--text-tertiary)]">{character.speakingStyle}</p>
+                    <p className="text-[var(--text-tertiary)]">
                       Voice: {character.voice
                         ? `${character.voice.label ?? character.voice.voiceId} (${character.voice.provider})`
                         : "Not assigned"}
@@ -407,17 +407,17 @@ export function WorldBuilderConsole() {
             </article>
           </div>
 
-          <article className="mt-4 rounded-[1.2rem] border border-[var(--border)] bg-[var(--panel)] p-4">
-            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--muted)]">Events In Play</p>
+          <article className="mt-4 rounded-[1.2rem] border border-[var(--border)] bg-[var(--surface-1)] p-4">
+            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-tertiary)]">Events In Play</p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {worldDetail.eventTemplates.map((event) => (
-                <div key={event.id} className="rounded-[1rem] border border-[var(--border)] bg-[var(--panel)] p-3">
+                <div key={event.id} className="rounded-[1rem] border border-[var(--border)] bg-[var(--surface-1)] p-3">
                   <p className="font-medium text-[var(--foreground)]">{event.title}</p>
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
                     {event.category} · urgency {event.urgency}
                   </p>
-                  <p className="mt-2 text-sm text-[var(--muted)]">{event.summary}</p>
-                  <p className="mt-2 text-sm text-[var(--muted)]">
+                  <p className="mt-2 text-sm text-[var(--text-tertiary)]">{event.summary}</p>
+                  <p className="mt-2 text-sm text-[var(--text-tertiary)]">
                     Scene prompt: {event.narratorPrompt}
                   </p>
                 </div>

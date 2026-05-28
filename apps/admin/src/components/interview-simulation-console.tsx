@@ -459,7 +459,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-8 md:px-6">
       <section className="panel rounded-[2rem] p-6 md:p-8">
-        <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+        <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
           {simulationLabel}
         </p>
         <h1 className="mt-3 text-3xl font-semibold text-stone-900 md:text-5xl">
@@ -529,12 +529,12 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
       {interviewStarted && !feedback ? (
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <article className="panel rounded-[2rem] p-6 md:p-8">
-            <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+            <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
               Active Prompt
             </p>
             <p className="mt-3 text-base leading-7 text-stone-900">{prompt}</p>
 
-            <p className="mt-5 font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+            <p className="mt-5 font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
               Your Response
             </p>
             <textarea
@@ -559,7 +559,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
           </article>
 
           <aside className="panel rounded-[2rem] p-6 md:p-8">
-            <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+            <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
               Live Progress
             </p>
             <div className="mt-3 space-y-2 text-sm text-stone-700">
@@ -613,7 +613,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
               </p>
             </div>
 
-            <p className="mt-5 font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+            <p className="mt-5 font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
               Panel Reactions
             </p>
             <div className="mt-2 space-y-2 text-sm text-stone-700">
@@ -634,7 +634,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
               )}
             </div>
 
-            <p className="mt-5 font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+            <p className="mt-5 font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
               Live Coaching
             </p>
             <div className="mt-2 space-y-2 text-sm text-stone-700">
@@ -646,7 +646,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
 
             {isInterviewMode ? (
               <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white/65 p-4">
-                <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+                <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
                   Interview Difficulty
                 </p>
                 <div className="mt-3 flex items-center gap-4">
@@ -681,7 +681,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
 
             {domainProgress ? (
               <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white/65 p-4">
-                <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+                <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
                   Remembered Progress
                 </p>
                 <div className="mt-2 space-y-1 text-xs text-stone-700">
@@ -699,7 +699,7 @@ export function InterviewSimulationConsole({ sessionId }: { sessionId: string })
 
       {feedback ? (
         <section className="panel rounded-[2rem] p-6 md:p-8">
-          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Final Feedback</p>
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">Final Feedback</p>
           <h2 className="mt-3 text-2xl font-semibold text-stone-900">Overall Score: {feedback.overallScore}/100</h2>
           <div className="mt-2 grid gap-2 text-sm text-stone-700 md:grid-cols-2">
             <p>

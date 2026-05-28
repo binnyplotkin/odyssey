@@ -33,7 +33,7 @@ const ACCENT_LINE =
   "color-mix(in srgb, var(--accent-strong) 30%, transparent)";
 const ACCENT_FILL = "var(--accent-soft)";
 const ACCENT_TOP = "color-mix(in srgb, var(--accent-strong) 20%, transparent)";
-const HOVER_BG = "var(--card-hover)";
+const HOVER_BG = "var(--surface-hover)";
 const ACTIVE_RING =
   "0 0 0 3px color-mix(in srgb, var(--accent-strong) 22%, transparent)";
 
@@ -248,14 +248,14 @@ function triggerStyle(
     padding: "8px 12px",
     borderWidth: 1,
     borderStyle: "solid",
-    borderTopColor: accent ? ACCENT_LINE : "var(--input-border)",
-    borderRightColor: accent ? ACCENT_LINE : "var(--input-border)",
-    borderBottomColor: accent ? ACCENT_LINE : "var(--input-border)",
-    borderLeftColor: accent ? ACCENT_LINE : "var(--input-border)",
+    borderTopColor: accent ? ACCENT_LINE : "var(--control-border)",
+    borderRightColor: accent ? ACCENT_LINE : "var(--control-border)",
+    borderBottomColor: accent ? ACCENT_LINE : "var(--control-border)",
+    borderLeftColor: accent ? ACCENT_LINE : "var(--control-border)",
     borderRadius: open
       ? "var(--radius-md) var(--radius-md) 0 0"
       : "var(--radius-md)",
-    background: accent ? ACCENT_FILL : "var(--input-bg)",
+    background: accent ? ACCENT_FILL : "var(--control-bg)",
     color: accent ? "var(--text-primary)" : "var(--text-secondary)",
     fontFamily: FONT_BODY,
     fontSize: "var(--font-size-base)",

@@ -20,10 +20,10 @@ type ChatView = "chat" | "voice" | "context";
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
-  cardHover: "var(--card-hover)",
+  cardHover: "var(--surface-hover)",
   accent: "var(--accent-strong)",
   fontHeading: "'Space Grotesk', sans-serif",
   fontBody: "'Inter', sans-serif",
@@ -397,7 +397,7 @@ export function CharacterChat({ character, pages, edges }: Props) {
   /* ── Render ────────────────────────────────────────────────────── */
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--app-atmosphere, var(--background))" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--page-atmosphere, var(--background))" }}>
       {/* Voice tab takes over the workspace — wavefield is self-contained. */}
       {view === "voice" ? (
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
@@ -799,7 +799,7 @@ function AssistantBubble({ turn }: { turn: Turn }) {
       <div style={{ position: "relative" }}>
         <div style={{
           width: 32, height: 32, borderRadius: "50%",
-          background: "linear-gradient(135deg, var(--emissive-mint) 0%, var(--active-teal) 100%)",
+          background: "linear-gradient(135deg, var(--emissive-mint) 0%, var(--accent-strong) 100%)",
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         }}>
           <span style={{ fontFamily: T.fontHeading, fontSize: "var(--font-size-lg)", fontWeight: 600, color: "#0C0E14", lineHeight: "16px" }}>
@@ -949,7 +949,7 @@ function Composer({
             <button onClick={onSend} disabled={!input.trim()} style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 32, height: 32, borderRadius: "var(--radius-md)",
-              background: input.trim() ? "var(--active-teal)" : "var(--card-hover)",
+              background: input.trim() ? "var(--accent-strong)" : "var(--surface-hover)",
               border: "none", cursor: input.trim() ? "pointer" : "not-allowed",
             }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0C0E14" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
@@ -1354,7 +1354,7 @@ function TracePanel({
         ) : tab === "prompt" ? (
           <pre style={{
             margin: 0, padding: "12px 14px", borderRadius: "var(--radius-lg)",
-            background: "var(--panel)", border: `1px solid ${T.border}`,
+            background: "var(--surface-1)", border: `1px solid ${T.border}`,
             fontFamily: T.fontMono, fontSize: "var(--font-size-sm)", color: T.fg, lineHeight: "18px",
             whiteSpace: "pre-wrap", wordBreak: "break-word",
           }}>
@@ -1505,7 +1505,7 @@ function TraceContent({ curator, pageBySlug }: { curator: CuratorEvent; pageBySl
               <div key={`${event.name}-${event.elapsedMs}`} style={{
                 padding: "8px 10px",
                 borderRadius: "var(--radius-md)",
-                background: "var(--panel)",
+                background: "var(--surface-1)",
                 border: `1px solid ${T.border}`,
                 minWidth: 0,
               }}>
@@ -1555,7 +1555,7 @@ function TraceContent({ curator, pageBySlug }: { curator: CuratorEvent; pageBySl
       {/* Rendered breakdown */}
       <section>
         <SectionHeader label={`Rendered · ${curator.pages.length}`} hint="full → summary → title" />
-        <div style={{ display: "flex", height: 8, borderRadius: "var(--radius-xs)", overflow: "hidden", background: "var(--card-hover)", marginBottom: "var(--space-8)" }}>
+        <div style={{ display: "flex", height: 8, borderRadius: "var(--radius-xs)", overflow: "hidden", background: "var(--surface-hover)", marginBottom: "var(--space-8)" }}>
           <div style={{ width: `${Math.round(fullTokens / Math.max(1, curator.tokensUsed) * 100)}%`, background: "var(--accent-strong)" }}/>
           <div style={{ width: `${Math.round(summaryTokens / Math.max(1, curator.tokensUsed) * 100)}%`, background: "var(--status-draft)" }}/>
           <div style={{ width: `${Math.round(titleTokens / Math.max(1, curator.tokensUsed) * 100)}%`, background: "#8B5CF6" }}/>
@@ -1664,7 +1664,7 @@ function CharacterAvatar({ character, size }: { character: CharacterProp; size: 
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%",
-      background: "linear-gradient(135deg, var(--emissive-mint) 0%, var(--active-teal) 100%)",
+      background: "linear-gradient(135deg, var(--emissive-mint) 0%, var(--accent-strong) 100%)",
       display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
     }}>
       <span style={{ fontFamily: T.fontHeading, fontSize: Math.round(size * 0.45), fontWeight: 600, color: "#0C0E14" }}>
@@ -1699,7 +1699,7 @@ function EmptyState({ character }: { character: CharacterProp }) {
 /* ── Type-color map (shared w/ wiki-graph palette) ─────────────── */
 
 const TYPE_COLOR: Record<string, string> = {
-  entity:         "var(--active-teal)",
+  entity:         "var(--accent-strong)",
   event:          "var(--status-draft)",
   concept:        "var(--event-violet)",
   relationship:   "var(--emissive-mint)",
@@ -1711,7 +1711,7 @@ function seedColor(reason: string): string {
   switch (reason) {
     case "voice-identity": return "var(--critical-crimson)";
     case "scene-entity":
-    case "scene-location": return "var(--active-teal)";
+    case "scene-location": return "var(--accent-strong)";
     case "query-title":
     case "query-alias":
     case "query-summary":  return "var(--accent-strong)";

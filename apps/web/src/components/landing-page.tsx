@@ -506,13 +506,13 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
               </span>
             </div>
 
-            <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[var(--muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.26em] text-[var(--text-tertiary)]">
               World Generation
             </p>
             <h2 className="mt-3 text-2xl font-semibold text-[var(--foreground)] md:text-3xl">
               Building your reality
             </h2>
-            <p className="mt-2 text-sm text-[var(--muted)]">
+            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
               Please keep this tab open while we prepare your live simulation.
             </p>
 
@@ -533,22 +533,22 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
                           }
                         : complete
                           ? {
-                              borderColor: "color-mix(in srgb, var(--success) 62%, white)",
-                              background: "color-mix(in srgb, var(--success) 14%, white)",
+                              borderColor: "color-mix(in srgb, var(--status-live) 62%, white)",
+                              background: "color-mix(in srgb, var(--status-live) 14%, white)",
                             }
                           : {
                               borderColor: "var(--border)",
-                              background: "var(--panel)",
+                              background: "var(--surface-1)",
                             }
                     }
                   >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-medium text-[var(--foreground)]">{stage.label}</p>
-                      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--muted)]">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
                         {complete ? "Done" : current ? "In progress" : "Pending"}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-[var(--muted)]">{stage.detail}</p>
+                    <p className="mt-1 text-xs text-[var(--text-tertiary)]">{stage.detail}</p>
                   </div>
                 );
               })}
@@ -743,7 +743,7 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
                         {world.title.replace(" World", "")}
                       </span>
                       {!world.available ? (
-                        <span className="absolute -bottom-20 rounded-full border border-white/40 bg-white/72 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.24em] text-[var(--muted)] md:-bottom-24 md:text-[9px]">
+                        <span className="absolute -bottom-20 rounded-full border border-white/40 bg-white/72 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.24em] text-[var(--text-tertiary)] md:-bottom-24 md:text-[9px]">
                           Incoming
                         </span>
                       ) : null}
@@ -770,7 +770,7 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
             </div>
 
             <div className="mt-5 md:mt-0 md:text-left">
-              <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-[var(--muted)]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-[var(--text-tertiary)]">
                 {activeWorld.eyebrow}
               </p>
               <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-[var(--foreground)] md:text-5xl">
@@ -779,7 +779,7 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
               <p className="mt-4 text-sm leading-7 text-[var(--foreground)] md:text-base">
                 {activeWorld.description}
               </p>
-              <p className="mt-3 text-sm italic tracking-[-0.01em] text-[var(--muted)]">
+              <p className="mt-3 text-sm italic tracking-[-0.01em] text-[var(--text-tertiary)]">
                 {activeWorld.atmosphere}
               </p>
             </div>
@@ -801,7 +801,7 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
             </button>
 
             <div className="rounded-[1.2rem] border border-[var(--border)] bg-white/46 px-5 py-4 text-left backdrop-blur-xl">
-              <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-[var(--muted)]">
+              <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-[var(--text-tertiary)]">
                 Current status
               </p>
               <p className="mt-2 text-sm text-[var(--foreground)]">
@@ -822,10 +822,10 @@ export function LandingPage({ worlds }: { worlds: VisibleWorld[] }) {
             </Link>
           </div>
 
-          <p className="mt-8 text-lg italic tracking-[-0.01em] text-[var(--muted)]">
+          <p className="mt-8 text-lg italic tracking-[-0.01em] text-[var(--text-tertiary)]">
             &ldquo;What is it like to become someone else and have the world answer honestly?&rdquo;
           </p>
-          {error ? <p className="mt-4 text-sm text-[var(--danger)]">{error}</p> : null}
+          {error ? <p className="mt-4 text-sm text-[var(--status-error)]">{error}</p> : null}
         </div>
       </section>
     </main>

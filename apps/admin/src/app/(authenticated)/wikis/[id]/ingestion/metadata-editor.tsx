@@ -21,7 +21,7 @@ const ACCENT = "var(--accent-strong)";
 const ACCENT_SOFT = "var(--accent-soft)";
 const ACCENT_LINE =
   "color-mix(in srgb, var(--accent-strong) 30%, transparent)";
-const DANGER = "var(--danger)";
+const DANGER = "var(--status-error)";
 const ACTIVE_RING =
   "0 0 0 3px color-mix(in srgb, var(--accent-strong) 22%, transparent)";
 
@@ -477,9 +477,9 @@ function inputStyle(focused = false): CSSProperties {
     padding: "0 11px",
     borderWidth: 1,
     borderStyle: "solid",
-    borderColor: focused ? ACCENT_LINE : "var(--input-border)",
+    borderColor: focused ? ACCENT_LINE : "var(--control-border)",
     borderRadius: "var(--radius-md)",
-    background: "var(--input-bg)",
+    background: "var(--control-bg)",
     boxShadow: focused ? ACTIVE_RING : undefined,
     color: "var(--text-primary)",
     fontFamily: FONT_BODY,
@@ -521,9 +521,9 @@ function TagsField({
         padding: "5px 10px",
         borderWidth: 1,
         borderStyle: "solid",
-        borderColor: focused ? ACCENT_LINE : "var(--input-border)",
+        borderColor: focused ? ACCENT_LINE : "var(--control-border)",
         borderRadius: "var(--radius-md)",
-        background: "var(--input-bg)",
+        background: "var(--control-bg)",
         boxShadow: focused ? ACTIVE_RING : undefined,
         minHeight: 34,
         transition: "border-color 140ms ease, box-shadow 140ms ease",

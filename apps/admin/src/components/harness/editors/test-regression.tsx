@@ -320,9 +320,9 @@ function KpiStrip({ runs, trend }: { runs: EvalRunRecord[]; trend: PassRatePoint
     <section
       style={{
         display: "flex",
-        border: "1px solid var(--card-border)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-lg)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         overflow: "hidden",
       }}
     >
@@ -372,7 +372,7 @@ function KpiCell({
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-4)",
-        borderRight: "1px solid var(--card-border)",
+        borderRight: "1px solid var(--border-subtle)",
         minWidth: 0,
       }}
     >
@@ -539,8 +539,8 @@ function RunRow({
         gap: "var(--space-14)",
         padding: "13px 14px",
         borderRadius: "var(--radius-sm)",
-        background: selected ? COLORS.mintBg : "var(--card)",
-        border: `1px solid ${selected ? COLORS.mintBorder : "var(--card-border)"}`,
+        background: selected ? COLORS.mintBg : "var(--material-card)",
+        border: `1px solid ${selected ? COLORS.mintBorder : "var(--border-subtle)"}`,
         fontFamily: T.fontMono,
         fontSize: "var(--font-size-base)",
         cursor: "pointer",
@@ -559,7 +559,7 @@ function RunRow({
           <span
             style={{
               padding: "2px 7px",
-              border: "1px solid var(--card-border)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: "var(--radius-xs)",
               fontSize: "var(--font-size-2xs)",
               color: COLORS.textMuted,
@@ -697,7 +697,7 @@ export function SelectedRunCard({
           onClick={onCollapse}
           style={{
             padding: "7px 12px",
-            border: "1px solid var(--card-border)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-sm)",
             background: "transparent",
             fontFamily: T.fontMono,
@@ -913,7 +913,7 @@ function ProbeRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const cat = CATEGORY_COLORS[probe.probeCategory] ?? { fg: COLORS.textMuted, border: "var(--card-border)" };
+  const cat = CATEGORY_COLORS[probe.probeCategory] ?? { fg: COLORS.textMuted, border: "var(--border-subtle)" };
   const dimsText = (() => {
     const scores = probe.scores as Record<string, { score: number }>;
     return ["voice", "scope", "frame", "brevity", "factual"]
@@ -927,7 +927,7 @@ function ProbeRow({
         flexDirection: "column",
         border: expanded ? `1px solid ${COLORS.textFaint}` : "1px solid transparent",
         borderRadius: "var(--radius-md)",
-        background: expanded ? "var(--card)" : "transparent",
+        background: expanded ? "var(--material-card)" : "transparent",
         overflow: "hidden",
       }}
     >
@@ -1477,8 +1477,8 @@ function SweepRow({ sweep, onSelect }: { sweep: EvalSweepRecord; onSelect: () =>
         gap: "var(--space-18)",
         padding: "16px 18px",
         borderRadius: "var(--radius-md)",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
         fontFamily: T.fontMono,
         fontSize: "var(--font-size-base)",
         cursor: "pointer",
@@ -1582,7 +1582,7 @@ function SweepDetail({
           onClick={onClose}
           style={{
             padding: "7px 12px",
-            border: "1px solid var(--card-border)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-sm)",
             background: "transparent",
             fontFamily: T.fontMono,
@@ -1604,7 +1604,7 @@ function SweepDetail({
         <h3 style={{ margin: 0, fontFamily: T.fontHeading, fontSize: "var(--font-size-xl)", fontWeight: 500, color: "var(--foreground)" }}>
           Ranked configs
         </h3>
-        <div style={{ border: "1px solid var(--card-border)", borderRadius: "var(--radius-md)", background: "var(--card)", overflow: "hidden" }}>
+        <div style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", background: "var(--material-card)", overflow: "hidden" }}>
           <div
             style={{
               display: "flex",
@@ -1741,9 +1741,9 @@ function ParetoChart({
   return (
     <section
       style={{
-        border: "1px solid var(--card-border)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-lg)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         overflow: "hidden",
       }}
     >
@@ -2005,9 +2005,9 @@ function SuiteRow({ suite, onClick }: { suite: SuiteListItem; onClick: () => voi
         alignItems: "center",
         gap: "var(--space-14)",
         padding: "14px 16px",
-        border: isDraft ? `1px solid ${COLORS.amberBorder}` : "1px solid var(--card-border)",
+        border: isDraft ? `1px solid ${COLORS.amberBorder}` : "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
-        background: isDraft ? "#13100E" : "var(--card)",
+        background: isDraft ? "#13100E" : "var(--material-card)",
         fontFamily: T.fontMono,
         fontSize: "var(--font-size-base)",
         cursor: "pointer",
@@ -2157,7 +2157,7 @@ function SuiteExplorer({
             onClick={onClose}
             style={{
               padding: "7px 12px",
-              border: "1px solid var(--card-border)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: "var(--radius-sm)",
               background: "transparent",
               fontFamily: T.fontMono,
@@ -2242,9 +2242,9 @@ function SuiteExplorer({
       <div
         style={{
           padding: "14px 16px",
-          border: "1px solid var(--card-border)",
+          border: "1px solid var(--border-subtle)",
           borderRadius: "var(--radius-md)",
-          background: "var(--card)",
+          background: "var(--material-card)",
           fontFamily: T.fontBody,
           fontSize: "var(--font-size-md)",
           color: COLORS.textMuted,
@@ -2284,9 +2284,9 @@ function ProbeDefCard({ probe }: { probe: ProbeDef }) {
         flexDirection: "column",
         gap: "var(--space-12)",
         padding: "var(--space-16)",
-        border: "1px solid var(--card-border)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
-        background: "var(--card)",
+        background: "var(--material-card)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
@@ -2295,7 +2295,7 @@ function ProbeDefCard({ probe }: { probe: ProbeDef }) {
           <span
             style={{
               padding: "2px 7px",
-              border: "1px solid var(--card-border)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: "var(--radius-xs)",
               fontFamily: T.fontMono,
               fontSize: "var(--font-size-2xs)",
@@ -2425,9 +2425,9 @@ function EmptyState({ title, body, cli }: { title: string; body: string; cli?: s
     <div
       style={{
         padding: "var(--space-32)",
-        border: "1px dashed var(--card-border)",
+        border: "1px dashed var(--border-subtle)",
         borderRadius: "var(--radius-lg)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-14)",

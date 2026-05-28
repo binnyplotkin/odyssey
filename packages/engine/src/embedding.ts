@@ -21,21 +21,46 @@ const MAX_INPUT_CHARS = 24000;
  * miss out on semantic seed).
  */
 export async function embedText(text: string): Promise<number[] | null> {
+  const [vector] = await embedTexts([text]);
+  return vector ?? null;
+}
+
+/**
+ * Embed multiple strings with a single OpenAI request. The returned array
+ * matches the input order; empty inputs or missing client entries become null.
+ */
+export async function embedTexts(texts: string[]): Promise<Array<number[] | null>> {
+  const out: Array<number[] | null> = new Array(texts.length).fill(null);
   const client = getOpenAIClient();
-  if (!client) return null;
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  const input = trimmed.length > MAX_INPUT_CHARS ? trimmed.slice(0, MAX_INPUT_CHARS) : trimmed;
+  if (!client || texts.length === 0) return out;
+
+  const inputs: string[] = [];
+  const indexes: number[] = [];
+  for (let i = 0; i < texts.length; i++) {
+    const trimmed = texts[i].trim();
+    if (!trimmed) continue;
+    inputs.push(
+      trimmed.length > MAX_INPUT_CHARS ? trimmed.slice(0, MAX_INPUT_CHARS) : trimmed,
+    );
+    indexes.push(i);
+  }
+  if (inputs.length === 0) return out;
+
   const resp = await client.embeddings.create({
     model: EMBEDDING_MODEL,
-    input,
+    input: inputs,
     encoding_format: "float",
   });
-  const vector = resp.data[0]?.embedding;
-  if (!vector || vector.length !== EMBEDDING_DIMENSIONS) {
-    throw new Error(
-      `embedText: expected ${EMBEDDING_DIMENSIONS} dims, got ${vector?.length ?? 0}`,
-    );
+
+  const ordered = [...resp.data].sort((a, b) => a.index - b.index);
+  for (let i = 0; i < ordered.length; i++) {
+    const vector = ordered[i]?.embedding;
+    if (!vector || vector.length !== EMBEDDING_DIMENSIONS) {
+      throw new Error(
+        `embedTexts: expected ${EMBEDDING_DIMENSIONS} dims, got ${vector?.length ?? 0}`,
+      );
+    }
+    out[indexes[i]] = vector;
   }
-  return vector;
+  return out;
 }

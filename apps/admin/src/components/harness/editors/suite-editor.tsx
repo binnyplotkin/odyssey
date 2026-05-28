@@ -301,7 +301,7 @@ export function SuiteEditor({
                   onClick={() => addProbe(c)}
                   style={{
                     padding: "5px 11px",
-                    border: "1px dashed var(--card-border)",
+                    border: "1px dashed var(--border-subtle)",
                     borderRadius: "var(--radius-sm)",
                     background: "transparent",
                     fontFamily: T.fontMono,
@@ -415,7 +415,7 @@ function SuiteHeader({
             onClick={onClose}
             style={{
               padding: "7px 14px",
-              border: "1px solid var(--card-border)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: "var(--radius-sm)",
               background: "transparent",
               fontFamily: T.fontMono,
@@ -508,7 +508,7 @@ function CategorySection({
           onClick={onAddProbe}
           style={{
             padding: "5px 11px",
-            border: "1px solid var(--card-border)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-sm)",
             background: "transparent",
             fontFamily: T.fontMono,
@@ -562,8 +562,8 @@ function ProbeCard({
   onDelete: () => void;
 }) {
   const statusBorder =
-    status === "added" ? `1px dashed ${COLORS.mintBorder}` : status === "modified" ? `1px solid ${COLORS.amberBorder}` : "1px solid var(--card-border)";
-  const statusBg = status === "added" ? "#0B130F" : status === "modified" ? "#0E1114" : "var(--card)";
+    status === "added" ? `1px dashed ${COLORS.mintBorder}` : status === "modified" ? `1px solid ${COLORS.amberBorder}` : "1px solid var(--border-subtle)";
+  const statusBg = status === "added" ? "#0B130F" : status === "modified" ? "#0E1114" : "var(--material-card)";
 
   return (
     <div
@@ -618,7 +618,7 @@ function ProbeCard({
         <span
           style={{
             padding: "2px 7px",
-            border: "1px solid var(--card-border)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-xs)",
             fontFamily: T.fontMono,
             fontSize: "var(--font-size-2xs)",
@@ -874,7 +874,7 @@ function TextInput({ value, onChange, mono }: { value: string; onChange: (v: str
       onChange={(e) => onChange(e.target.value)}
       style={{
         padding: "10px 12px",
-        border: "1px solid var(--card-border)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-sm)",
         background: "var(--background)",
         fontFamily: mono ? T.fontMono : T.fontBody,
@@ -895,7 +895,7 @@ function Textarea({ value, onChange, minHeight, italic }: { value: string; onCha
       onChange={(e) => onChange(e.target.value)}
       style={{
         padding: "10px 12px",
-        border: "1px solid var(--card-border)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-sm)",
         background: "var(--background)",
         fontFamily: T.fontBody,
@@ -920,7 +920,7 @@ function Select({ value, options, onChange }: { value: string; options: string[]
       onChange={(e) => onChange(e.target.value)}
       style={{
         padding: "10px 12px",
-        border: "1px solid var(--card-border)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-sm)",
         background: "var(--background)",
         fontFamily: T.fontMono,
@@ -942,7 +942,7 @@ function Select({ value, options, onChange }: { value: string; options: string[]
 
 function NumberSlider({ value, min, max, step, onChange }: { value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", padding: "10px 12px", border: "1px solid var(--card-border)", borderRadius: "var(--radius-sm)", background: "var(--background)" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", padding: "10px 12px", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", background: "var(--background)" }}>
       <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-md)", color: "var(--foreground)", width: 40, textAlign: "right" }}>{value}</span>
       <input
         type="range"
@@ -1097,7 +1097,7 @@ function PublishPanel({
         alignSelf: "flex-start",
       }}
     >
-      <section style={{ padding: "var(--space-16)", border: "1px solid var(--card-border)", borderRadius: "var(--radius-lg)", background: "var(--card)", display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
+      <section style={{ padding: "var(--space-16)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", background: "var(--material-card)", display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
         <span style={{ ...mutedLabel, color: COLORS.amber }}>▾ draft · v{draft.version}</span>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <button
@@ -1106,7 +1106,7 @@ function PublishPanel({
             disabled={!hasUnsavedChanges || saving}
             style={{
               padding: "10px 14px",
-              border: `1px solid ${hasUnsavedChanges ? COLORS.mintBorder : "var(--card-border)"}`,
+              border: `1px solid ${hasUnsavedChanges ? COLORS.mintBorder : "var(--border-subtle)"}`,
               borderRadius: "var(--radius-sm)",
               background: hasUnsavedChanges ? COLORS.mintBg : "transparent",
               fontFamily: T.fontMono,
@@ -1144,7 +1144,7 @@ function PublishPanel({
         </div>
       </section>
 
-      <section style={{ padding: "var(--space-16)", border: "1px solid var(--card-border)", borderRadius: "var(--radius-lg)", background: "var(--card)", display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
+      <section style={{ padding: "var(--space-16)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", background: "var(--material-card)", display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
         <span style={mutedLabel}>changes in this draft</span>
         <DiffSummaryRow diff={diff} />
         {baseline ? (
@@ -1154,7 +1154,7 @@ function PublishPanel({
         ) : null}
       </section>
 
-      <section style={{ padding: "var(--space-16)", border: "1px solid var(--card-border)", borderRadius: "var(--radius-lg)", background: "var(--card)", display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+      <section style={{ padding: "var(--space-16)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", background: "var(--material-card)", display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
         <span style={mutedLabel}>release notes</span>
         <textarea
           value={localNotes}
@@ -1163,7 +1163,7 @@ function PublishPanel({
           style={{
             minHeight: 90,
             padding: "10px 12px",
-            border: "1px solid var(--card-border)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-sm)",
             background: "var(--background)",
             fontFamily: T.fontBody,
@@ -1315,7 +1315,7 @@ function PublishModal({
         <div style={{ padding: "20px 28px", display: "flex", flexDirection: "column", gap: "var(--space-18)" }}>
           <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
             <span style={mutedLabel}>about to publish</span>
-            <div style={{ padding: "12px 14px", border: "1px solid var(--card-border)", borderRadius: "var(--radius-sm)", background: "var(--background)", display: "flex", alignItems: "center", gap: "var(--space-14)", fontFamily: T.fontMono, fontSize: "var(--font-size-base)" }}>
+            <div style={{ padding: "12px 14px", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", background: "var(--background)", display: "flex", alignItems: "center", gap: "var(--space-14)", fontFamily: T.fontMono, fontSize: "var(--font-size-base)" }}>
               <span style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", color: COLORS.mint, fontWeight: 500 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 50, background: COLORS.mint }} />
                 v{draft.version}
@@ -1330,7 +1330,7 @@ function PublishModal({
           {localNotes ? (
             <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
               <span style={mutedLabel}>release notes</span>
-              <div style={{ padding: "10px 12px", border: "1px solid var(--card-border)", borderRadius: "var(--radius-sm)", background: "var(--background)", fontFamily: T.fontBody, fontSize: 12.5, color: "var(--foreground)", lineHeight: 1.55 }}>
+              <div style={{ padding: "10px 12px", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", background: "var(--background)", fontFamily: T.fontBody, fontSize: 12.5, color: "var(--foreground)", lineHeight: 1.55 }}>
                 {localNotes}
               </div>
             </section>
@@ -1353,7 +1353,7 @@ function PublishModal({
             onChange={(e) => setTyped(e.target.value)}
             style={{
               padding: "11px 14px",
-              border: `1px solid ${confirmed ? COLORS.mintBorder : "var(--card-border)"}`,
+              border: `1px solid ${confirmed ? COLORS.mintBorder : "var(--border-subtle)"}`,
               borderRadius: "var(--radius-sm)",
               background: confirmed ? COLORS.mintBg : "var(--background)",
               fontFamily: T.fontMono,
@@ -1381,7 +1381,7 @@ function PublishModal({
             onClick={onClose}
             style={{
               padding: "10px 16px",
-              border: "1px solid var(--card-border)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: "var(--radius-sm)",
               background: "transparent",
               fontFamily: T.fontMono,

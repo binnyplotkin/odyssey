@@ -491,7 +491,7 @@ function Tabs({ presetCount }: { presetCount: number }) {
         display: "flex",
         alignItems: "center",
         padding: "0 22px",
-        borderBottom: "1px solid var(--divider)",
+        borderBottom: "1px solid var(--border-subtle)",
       }}
     >
       <div
@@ -668,8 +668,8 @@ function SearchInput({
         padding: "0 14px",
         height: 36,
         borderRadius: "var(--radius-md)",
-        background: "var(--input-bg)",
-        border: "1px solid var(--input-border)",
+        background: "var(--control-bg)",
+        border: "1px solid var(--control-border)",
       }}
     >
       <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -1034,7 +1034,7 @@ function InlineForm({
         flexDirection: "column",
         gap: "var(--space-14)",
         padding: "16px 22px",
-        borderTop: "1px solid var(--divider)",
+        borderTop: "1px solid var(--border-subtle)",
       }}
     >
       <div
@@ -1143,7 +1143,7 @@ function TextInput({
         height: 36,
         borderRadius: "var(--radius-md)",
         border: `1px solid ${invalid ? "color-mix(in srgb, var(--status-error) 40%, transparent)" : "var(--border)"}`,
-        background: "var(--input-bg)",
+        background: "var(--control-bg)",
         color: "var(--text-primary)",
         fontFamily: mono ? FONT_MONO : FONT_HEAD,
         fontSize: mono ? 12 : 13,
@@ -1236,7 +1236,7 @@ function TagsInput({
         padding: "var(--space-8)",
         borderRadius: "var(--radius-md)",
         border: "1px solid var(--border)",
-        background: "var(--input-bg)",
+        background: "var(--control-bg)",
         minHeight: 36,
       }}
     >
@@ -1400,7 +1400,7 @@ function Footer({
         justifyContent: "space-between",
         gap: "var(--space-12)",
         padding: "12px 22px",
-        borderTop: "1px solid var(--divider)",
+        borderTop: "1px solid var(--border-subtle)",
       }}
     >
       <span

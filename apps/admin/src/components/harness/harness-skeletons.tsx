@@ -60,7 +60,7 @@ export function LayerRouteSkeleton() {
             display: "flex",
             gap: "var(--space-4)",
             padding: "var(--space-3)",
-            border: "1px solid var(--card-border)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-sm)",
           }}
         >
@@ -540,9 +540,9 @@ function KpiSkeleton() {
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-        border: "1px solid var(--card-border)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-lg)",
-        background: "var(--card)",
+        background: "var(--material-card)",
         overflow: "hidden",
       }}
     >
@@ -551,7 +551,7 @@ function KpiSkeleton() {
           key={i}
           style={{
             padding: "18px 20px",
-            borderRight: i < 4 ? "1px solid var(--card-border)" : undefined,
+            borderRight: i < 4 ? "1px solid var(--border-subtle)" : undefined,
           }}
         >
           <MetricSkeleton spark={i === 4} />
@@ -634,8 +634,8 @@ function RowSkeleton() {
         gap: "var(--space-18)",
         padding: "16px 18px",
         borderRadius: "var(--radius-md)",
-        background: "var(--card)",
-        border: "1px solid var(--card-border)",
+        background: "var(--material-card)",
+        border: "1px solid var(--border-subtle)",
       }}
     >
       <div

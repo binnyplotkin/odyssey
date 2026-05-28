@@ -6,7 +6,10 @@ export async function register(input: { name: string; email: string; password: s
   try {
     await registerUser(input);
     return { success: true, error: null };
-  } catch (e: any) {
-    return { success: false, error: e.message ?? "Registration failed" };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Registration failed",
+    };
   }
 }

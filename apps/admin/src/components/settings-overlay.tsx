@@ -147,7 +147,7 @@ export function SettingsOverlay({
               height: 28,
               border: "none",
               background:
-                hoveredId === "close" ? "var(--panel)" : "transparent",
+                hoveredId === "close" ? "var(--surface-1)" : "transparent",
               color:
                 hoveredId === "close"
                   ? "var(--foreground)"
@@ -204,7 +204,7 @@ export function SettingsOverlay({
                     background: active
                       ? "var(--accent-soft)"
                       : hovered
-                        ? "var(--panel)"
+                        ? "var(--surface-1)"
                         : "transparent",
                     cursor: "pointer",
                     textAlign: "left",
@@ -231,7 +231,7 @@ export function SettingsOverlay({
             <div
               style={{
                 padding: "14px 16px",
-                borderTop: "1px solid var(--divider)",
+                borderTop: "1px solid var(--border-subtle)",
                 fontFamily: MONO,
                 fontSize: "var(--font-size-xs)",
                 letterSpacing: "0.12em",
@@ -314,7 +314,7 @@ function PaneHeader({
         }}
       >
         <span>{eyebrow}</span>
-        <span style={{ flex: 1, height: 1, background: "var(--divider)" }} />
+        <span style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
         {trailing && (
           <span style={{ color: "var(--text-quaternary)" }}>{trailing}</span>
         )}
@@ -359,7 +359,7 @@ function SectionEyebrow({
       }}
     >
       <span>{label}</span>
-      <span style={{ flex: 1, height: 1, background: "var(--divider)" }} />
+      <span style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
       {trailing && (
         <span style={{ color: trailingColor ?? "var(--text-quaternary)" }}>
           {trailing}
@@ -373,7 +373,7 @@ const fieldShellStyle: React.CSSProperties = {
   height: 40,
   padding: "0 14px",
   background: "var(--ink-wash)",
-  border: "1px solid var(--input-border)",
+  border: "1px solid var(--control-border)",
   borderRadius: "var(--radius-md)",
   display: "flex",
   alignItems: "center",
@@ -386,8 +386,8 @@ const fieldShellStyle: React.CSSProperties = {
 const readOnlyShellStyle: React.CSSProperties = {
   height: 40,
   padding: "0 14px",
-  background: "var(--panel)",
-  border: "1px solid var(--card-border)",
+  background: "var(--surface-1)",
+  border: "1px solid var(--border-subtle)",
   borderRadius: "var(--radius-md)",
   display: "flex",
   alignItems: "center",
@@ -529,8 +529,8 @@ function ProfilePane({
           alignItems: "center",
           gap: "var(--space-16)",
           padding: "24px 0",
-          borderTop: "1px solid var(--divider)",
-          borderBottom: "1px solid var(--divider)",
+          borderTop: "1px solid var(--border-subtle)",
+          borderBottom: "1px solid var(--border-subtle)",
         }}
       >
         <div
@@ -633,7 +633,7 @@ function ProfilePane({
         {saveState === "error" && (
           <span
             style={{
-              color: "var(--danger)",
+              color: "var(--status-error)",
               fontFamily: MONO,
               fontSize: "var(--font-size-sm)",
               letterSpacing: "0.04em",
@@ -801,7 +801,7 @@ function PasswordSection({
             style={{
               fontFamily: MONO,
               fontSize: "var(--font-size-sm)",
-              color: "var(--danger)",
+              color: "var(--status-error)",
               paddingLeft: 104,
             }}
           >
@@ -820,10 +820,10 @@ function PasswordSection({
             ...ghostButtonStyle,
             background:
               canSubmit && hoveredId === "pw-save"
-                ? "var(--panel)"
+                ? "var(--surface-1)"
                 : "transparent",
             color: canSubmit ? "var(--foreground)" : "var(--text-quaternary)",
-            borderColor: canSubmit ? "var(--border)" : "var(--divider)",
+            borderColor: canSubmit ? "var(--border)" : "var(--border-subtle)",
             cursor: canSubmit ? "pointer" : "default",
             opacity: status === "loading" ? 0.6 : 1,
           }}
@@ -845,7 +845,7 @@ function PasswordSection({
         {status === "error" && (
           <span
             style={{
-              color: "var(--danger)",
+              color: "var(--status-error)",
               fontFamily: MONO,
               fontSize: "var(--font-size-sm)",
               letterSpacing: "0.04em",
@@ -906,8 +906,8 @@ function AppearancePane({
     {
       label: "Danger",
       value: "#FF5A5A",
-      bg: "color-mix(in srgb, var(--danger) 10%, transparent)",
-      text: "var(--danger)",
+      bg: "color-mix(in srgb, var(--status-error) 10%, transparent)",
+      text: "var(--status-error)",
     },
   ];
 
@@ -922,7 +922,7 @@ function AppearancePane({
           flexDirection: "column",
           gap: "var(--space-14)",
           paddingTop: "var(--space-24)",
-          borderTop: "1px solid var(--divider)",
+          borderTop: "1px solid var(--border-subtle)",
         }}
       >
         <SectionEyebrow label="Theme" trailing="applies instantly" />
@@ -945,7 +945,7 @@ function AppearancePane({
                   background: selected
                     ? "var(--accent-soft)"
                     : hovered
-                      ? "var(--panel)"
+                      ? "var(--surface-1)"
                       : "transparent",
                   color: selected
                     ? "var(--accent-strong)"
@@ -1056,7 +1056,7 @@ function AppearancePane({
               alignItems: "center",
               gap: "var(--space-12)",
               padding: "12px 16px",
-              borderBottom: "1px solid var(--divider)",
+              borderBottom: "1px solid var(--border-subtle)",
             }}
           >
             <span
@@ -1217,7 +1217,7 @@ function TeamPane({
             height: 38,
             padding: "0 14px",
             background: "var(--ink-wash)",
-            border: "1px solid var(--input-border)",
+            border: "1px solid var(--control-border)",
             borderRadius: "var(--radius-pill)",
           }}
         >
@@ -1294,7 +1294,7 @@ function TeamPane({
             gap: "var(--space-10)",
             padding: "10px 14px",
             border: "1px solid var(--border)",
-            background: "var(--panel)",
+            background: "var(--surface-1)",
             fontFamily: MONO,
             fontSize: "var(--font-size-sm)",
             letterSpacing: "0.04em",
@@ -1323,7 +1323,7 @@ function TeamPane({
             alignItems: "center",
             gap: "var(--space-10)",
             paddingBottom: "var(--space-8)",
-            borderBottom: "1px solid var(--divider)",
+            borderBottom: "1px solid var(--border-subtle)",
             fontFamily: MONO,
             fontSize: "var(--font-size-xs)",
             fontWeight: 500,
@@ -1386,7 +1386,7 @@ function TeamPane({
                   height: 52,
                   borderBottom:
                     i < filtered.length - 1
-                      ? "1px solid var(--divider)"
+                      ? "1px solid var(--border-subtle)"
                       : "none",
                   paddingLeft: "var(--space-14)",
                   paddingRight: "var(--space-14)",
@@ -1396,7 +1396,7 @@ function TeamPane({
                   background: isMe
                     ? "var(--accent-soft)"
                     : hovered
-                      ? "var(--panel)"
+                      ? "var(--surface-1)"
                       : "transparent",
                   transition: "background 150ms",
                 }}

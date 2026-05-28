@@ -34,13 +34,13 @@ type Props = {
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
-  panel: "var(--panel)",
+  muted: "var(--text-tertiary)",
+  panel: "var(--surface-1)",
   border: "var(--border)",
   accent: "var(--accent)",
   accentStrong: "var(--accent-strong)",
   accentSoft: "var(--accent-soft)",
-  cardHover: "var(--card-hover)",
+  cardHover: "var(--surface-hover)",
   fontHeading: "'Space Grotesk', sans-serif",
   fontBody: "'Inter', sans-serif",
   fontMono: "var(--font-mono, 'JetBrains Mono', monospace)",
@@ -54,7 +54,7 @@ const AVATAR_PALETTE: Array<{ bg: string; fg: string }> = [
   { bg: "color-mix(in srgb, var(--event-violet) 16%, transparent)", fg: "var(--event-violet)" },
   { bg: "color-mix(in srgb, var(--signal-blue) 15%, transparent)", fg: "var(--signal-blue)" },
   { bg: "color-mix(in srgb, var(--status-live) 14%, transparent)", fg: "var(--status-live)" },
-  { bg: "color-mix(in srgb, var(--active-teal) 14%, transparent)", fg: "var(--active-teal)" },
+  { bg: "color-mix(in srgb, var(--accent-strong) 14%, transparent)", fg: "var(--accent-strong)" },
   { bg: "color-mix(in srgb, var(--emissive-mint) 12%, transparent)", fg: "var(--emissive-mint)" },
   { bg: "color-mix(in srgb, var(--status-archived) 14%, transparent)", fg: "var(--status-archived)" },
 ];
@@ -91,15 +91,15 @@ function formatRelative(iso: string | null): { label: string; dotColor: string |
   if (hours < 24) return { label: `${hours}h ago`, dotColor: "var(--status-draft)" };
 
   const days = Math.floor(hours / 24);
-  if (days < 7) return { label: `${days}d ago`, dotColor: "var(--muted)" };
+  if (days < 7) return { label: `${days}d ago`, dotColor: "var(--text-tertiary)" };
 
   const weeks = Math.floor(days / 7);
-  if (weeks < 4) return { label: `${weeks}w ago`, dotColor: "var(--muted)" };
+  if (weeks < 4) return { label: `${weeks}w ago`, dotColor: "var(--text-tertiary)" };
 
   const months = Math.floor(days / 30);
-  if (months < 12) return { label: `${months}mo ago`, dotColor: "var(--muted)" };
+  if (months < 12) return { label: `${months}mo ago`, dotColor: "var(--text-tertiary)" };
 
-  return { label: `${Math.floor(days / 365)}y ago`, dotColor: "var(--muted)" };
+  return { label: `${Math.floor(days / 365)}y ago`, dotColor: "var(--text-tertiary)" };
 }
 
 function formatJoinDate(iso: string): string {
@@ -365,7 +365,7 @@ export function UsersTable({ users, currentUserId }: Props) {
                     borderRadius: "var(--radius-md)",
                     border: `1px solid ${isActive ? "var(--border-active)" : "var(--border)"}`,
                     background: isActive ? "var(--accent-soft)" : "transparent",
-                    color: isActive ? "var(--accent-strong)" : "var(--muted)",
+                    color: isActive ? "var(--accent-strong)" : "var(--text-tertiary)",
                     fontSize: "var(--font-size-sm)",
                     fontWeight: 500,
                     cursor: "pointer",
@@ -404,7 +404,7 @@ export function UsersTable({ users, currentUserId }: Props) {
               borderRadius: "var(--radius-md)",
               border: "1px solid var(--border)",
               background: "transparent",
-              color: "var(--muted)",
+              color: "var(--text-tertiary)",
               cursor: "pointer",
               fontSize: "var(--font-size-lg)",
             }}
@@ -454,8 +454,8 @@ export function UsersTable({ users, currentUserId }: Props) {
             width: 320,
           }}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <circle cx="6" cy="6" r="4.5" stroke="var(--muted)" strokeWidth="1.5" />
-              <line x1="9.5" y1="9.5" x2="12.5" y2="12.5" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="6" cy="6" r="4.5" stroke="var(--text-tertiary)" strokeWidth="1.5" />
+              <line x1="9.5" y1="9.5" x2="12.5" y2="12.5" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
             <input
               type="text"
@@ -649,7 +649,7 @@ function FilterDropdown({
         top: "calc(100% + 6px)",
         left: 0,
         minWidth: 160,
-        background: "var(--dropdown-bg, var(--panel))",
+        background: "var(--popover-bg, var(--surface-1))",
         border: "1px solid var(--border)",
         borderRadius: "var(--radius-md)",
         padding: "4px 0",
@@ -673,7 +673,7 @@ function FilterDropdown({
             background: active === opt.value ? "var(--accent-soft)" : "none",
             border: "none",
             cursor: "pointer",
-            color: active === opt.value ? "var(--accent-strong)" : "var(--muted)",
+            color: active === opt.value ? "var(--accent-strong)" : "var(--text-tertiary)",
             fontSize: "var(--font-size-sm)",
             fontFamily: "var(--font-mono, ui-monospace, monospace)",
             textAlign: "left",
@@ -951,7 +951,7 @@ function Avatar({ user, isCurrent }: { user: UserRow; isCurrent: boolean }) {
     return (
       <div style={{
         width: 36, height: 36, flexShrink: 0, borderRadius: "50%",
-        background: "linear-gradient(135deg, var(--emissive-mint) 0%, var(--active-teal) 100%)",
+        background: "linear-gradient(135deg, var(--emissive-mint) 0%, var(--accent-strong) 100%)",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         <span style={{ fontFamily: T.fontHeading, fontSize: "0.875rem", fontWeight: 600, color: "#0C0E14", lineHeight: "16px" }}>
@@ -1005,7 +1005,7 @@ function authLabel(method: AuthMethod): string {
 }
 
 function AuthIcons({ methods }: { methods: AuthMethod[] }) {
-  const stroke = "var(--muted)";
+  const stroke = "var(--text-tertiary)";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
       {methods.includes("password") && (

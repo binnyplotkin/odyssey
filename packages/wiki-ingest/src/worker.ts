@@ -2,7 +2,7 @@ import * as dotenv from "dotenv";
 dotenv.config({ override: true });
 
 import { getWikiStore } from "@odyssey/db";
-import { embedText, EMBEDDING_MODEL } from "@odyssey/engine";
+import { embedText, embedTexts, EMBEDDING_MODEL } from "@odyssey/engine";
 import { runIngestion } from "./pipeline";
 
 const workerId = process.env.WIKI_INGEST_WORKER_ID ?? `wiki-ingest-${process.pid}`;
@@ -55,6 +55,7 @@ async function workOne(): Promise<boolean> {
       runId: run.id,
       model: run.model ?? undefined,
       embed: embedText,
+      embedMany: embedTexts,
       embeddingModel: EMBEDDING_MODEL,
     })) {
       await wiki.appendIngestionEvent(run.id, ev);

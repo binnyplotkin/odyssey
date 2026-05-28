@@ -6,7 +6,7 @@ export default function CharacterVoiceLoading() {
       style={{
         position: "relative",
         height: "100%",
-        background: "var(--panel)",
+        background: "var(--surface-1)",
         borderRadius: "var(--radius-xl)",
         overflow: "hidden",
       }}
@@ -40,8 +40,8 @@ export default function CharacterVoiceLoading() {
           alignItems: "center",
           gap: "var(--space-12)",
           padding: "12px 16px",
-          background: "var(--card)",
-          border: "1px solid var(--card-border)",
+          background: "var(--material-card)",
+          border: "1px solid var(--border-subtle)",
           borderRadius: "var(--radius-pill)",
         }}
       >

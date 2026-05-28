@@ -23,7 +23,7 @@ export default function EngineLoading() {
         style={{
           flex: 1,
           minHeight: 0,
-          background: "var(--panel)",
+          background: "var(--surface-1)",
           position: "relative",
           overflow: "hidden",
         }}
@@ -50,8 +50,8 @@ export default function EngineLoading() {
             top: 16,
             right: 16,
             width: 260,
-            background: "var(--card)",
-            border: "1px solid var(--card-border)",
+            background: "var(--material-card)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-xl)",
             padding: "var(--space-14)",
             display: "flex",

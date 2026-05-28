@@ -28,8 +28,8 @@ export function LayerPlaceholder({ layer }: { layer: LayerDef }) {
       <div
         style={{
           padding: "var(--space-24)",
-          background: "var(--card)",
-          border: "1px dashed var(--card-border)",
+          background: "var(--material-card)",
+          border: "1px dashed var(--border-subtle)",
           borderRadius: "var(--radius-md)",
           display: "flex",
           flexDirection: "column",
@@ -73,8 +73,8 @@ export function LayerPlaceholder({ layer }: { layer: LayerDef }) {
             fontSize: "var(--font-size-sm)",
             color: "var(--text-tertiary)",
             padding: "10px 12px",
-            background: "var(--input-bg)",
-            border: "1px solid var(--input-border)",
+            background: "var(--control-bg)",
+            border: "1px solid var(--control-border)",
             borderRadius: "var(--radius-xs)",
           }}
         >

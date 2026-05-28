@@ -21,7 +21,7 @@ import type { SandboxTurn } from "../character-sandbox";
 const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
-const DANGER = "var(--danger)";
+const DANGER = "var(--status-error)";
 
 export function SandboxConfigSidebar({
   character,
@@ -439,7 +439,7 @@ function NeutralChip({ children }: { children: ReactNode }) {
     <span
       style={{
         padding: "3px 10px",
-        background: "var(--card-hover)",
+        background: "var(--surface-hover)",
         border: "1px solid var(--border)",
         fontFamily: FONT_MONO,
         fontSize: "var(--font-size-xs)",

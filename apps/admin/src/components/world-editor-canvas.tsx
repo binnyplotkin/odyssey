@@ -27,11 +27,11 @@ import type { EntityType, EditorNode } from "./world-editor";
 /* ── Design Tokens (matching Paper designs) ────────────────── */
 
 const T = {
-  canvasBg: "var(--canvas-background, var(--background))",
+  canvasBg: "var(--canvas-atmosphere, var(--background))",
   chrome: "color-mix(in srgb, var(--background) 84%, transparent)",
-  nodeBg: "var(--card-material, var(--card))",
-  borderSubtle: "var(--divider)",
-  borderInput: "var(--input-border)",
+  nodeBg: "var(--material-card, var(--material-card))",
+  borderSubtle: "var(--border-subtle)",
+  borderInput: "var(--control-border)",
   textPrimary: "var(--text-primary)",
   textSecondary: "var(--text-secondary)",
   textTertiary: "var(--text-tertiary)",
@@ -280,7 +280,7 @@ function validateWorld(world: WorldDefinition): ValidationError[] {
 function MiniBar({ value, max = 100, color }: { value: number; max?: number; color: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", width: "100%" }}>
-      <div style={{ flex: 1, height: 3, borderRadius: "var(--radius-2xs)", background: "var(--card-hover)" }}>
+      <div style={{ flex: 1, height: 3, borderRadius: "var(--radius-2xs)", background: "var(--surface-hover)" }}>
         <div style={{ width: `${(value / max) * 100}%`, height: "100%", borderRadius: "var(--radius-2xs)", background: color }} />
       </div>
       <span style={{ fontSize: "var(--font-size-xs)", color: T.textSecondary, fontFamily: T.fontMono, minWidth: 18, textAlign: "right" }}>
@@ -295,7 +295,7 @@ function Badge({ text, color }: { text: string; color?: string }) {
     <span style={{
       display: "inline-block", padding: "1px 6px", borderRadius: "var(--radius-xs)",
       fontSize: "var(--font-size-3xs)", fontWeight: 600, fontFamily: T.fontMono,
-      background: color ? `${color}22` : "var(--card-hover)",
+      background: color ? `${color}22` : "var(--surface-hover)",
       color: color ?? T.textSecondary, letterSpacing: "0.04em",
     }}>
       {text}
@@ -350,7 +350,7 @@ function CharacterChipNode({
     : hover
     ? "1px solid var(--border-active)"
     : "1px solid var(--border-subtle)";
-  const background = hover && !isSelected ? "var(--surface-hover)" : "var(--card-material)";
+  const background = hover && !isSelected ? "var(--surface-hover)" : "var(--material-card)";
   const boxShadow = hasErrors
     ? "0 0 0 4px var(--critical-fill), var(--elevation-card)"
     : isSelected
@@ -1098,7 +1098,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
             <button type="button" onClick={saveWorld} disabled={!dirty || isSaving}
               style={{
                 padding: "6px 14px", borderRadius: "var(--radius-sm)", border: "none",
-                background: dirty ? "var(--active-teal)" : T.borderSubtle,
+                background: dirty ? "var(--accent-strong)" : T.borderSubtle,
                 fontFamily: T.fontHeading, fontSize: "var(--font-size-base)", fontWeight: 600,
                 color: dirty ? T.canvasBg : T.textTertiary,
                 cursor: dirty ? "pointer" : "not-allowed", opacity: isSaving ? 0.6 : 1,
@@ -1229,7 +1229,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                               cursor: canCreate ? "pointer" : "default",
                               opacity: canCreate ? 1 : 0.5, textAlign: "left",
                             }}
-                            onMouseEnter={(e) => { if (canCreate) e.currentTarget.style.background = "var(--card)"; }}
+                            onMouseEnter={(e) => { if (canCreate) e.currentTarget.style.background = "var(--material-card)"; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                           >
                             <div style={{
@@ -1260,7 +1260,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                           display: "flex", alignItems: "center", gap: "var(--space-10)", padding: "var(--space-10)", borderRadius: "var(--radius-md)",
                           width: "100%", border: "none", background: "transparent", cursor: "pointer", textAlign: "left",
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--card)"; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--material-card)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                       >
                         <div style={{
@@ -1346,7 +1346,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                       const isKnows = edge.kind === "knows";
                       const stroke = isKnows
                         ? (edge.attitude && ATTITUDE_COLORS[edge.attitude]) ?? "var(--critical-crimson)"
-                        : "var(--card-border)";
+                        : "var(--border-subtle)";
                       return (
                         <g key={edge.id}>
                           <path
@@ -1572,7 +1572,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                         title="Publish flow coming soon"
                         style={{
                           padding: "5px 14px", borderRadius: "var(--radius-md)", border: "none",
-                          background: "color-mix(in srgb, var(--active-teal) 30%, transparent)", color: "var(--background)",
+                          background: "color-mix(in srgb, var(--accent-strong) 30%, transparent)", color: "var(--background)",
                           fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", fontWeight: 600,
                           cursor: "not-allowed",
                         }}
@@ -1591,7 +1591,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                   onClick={(e) => e.stopPropagation()}
                   style={{
                     position: "absolute", left: contextMenu.x, top: contextMenu.y, zIndex: 40,
-                    width: 200, background: "var(--surface-material)", border: `1px solid ${T.borderSubtle}`,
+                    width: 200, background: "var(--material-surface)", border: `1px solid ${T.borderSubtle}`,
                     borderRadius: "var(--radius-xl)", padding: "var(--space-4)", boxShadow: "var(--elevation-panel)",
                   }}
                 >
@@ -1631,7 +1631,7 @@ export function WorldEditorCanvas({ worlds, fixedWorldId }: Props) {
                           fontFamily: T.fontBody, fontSize: "var(--font-size-md)", color: menuItem.color ?? T.textPrimary,
                           cursor: "pointer", textAlign: "left",
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--divider)"; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--border-subtle)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                       >
                         <span>{menuItem.label}</span>

@@ -126,7 +126,7 @@ export function LoadingIndicatorTest() {
           font-weight: 650;
           letter-spacing: 0.12em;
           text-transform: uppercase;
-          color: var(--muted);
+          color: var(--text-tertiary);
         }
 
         .loading-lab h1 {
@@ -152,7 +152,7 @@ export function LoadingIndicatorTest() {
           justify-content: center;
           border: 1px solid var(--border);
           border-radius: 8px;
-          background: var(--panel);
+          background: var(--surface-1);
           overflow: hidden;
         }
 
@@ -163,7 +163,7 @@ export function LoadingIndicatorTest() {
           padding: 18px;
           border: 1px solid var(--border);
           border-radius: 8px;
-          background: var(--panel);
+          background: var(--surface-1);
         }
 
         .loading-lab-control {
@@ -240,11 +240,11 @@ export function LoadingIndicatorTest() {
           padding: 16px;
           border: 1px solid var(--border);
           border-radius: 8px;
-          background: var(--panel);
+          background: var(--surface-1);
         }
 
         .loading-lab-preview-title {
-          color: var(--muted);
+          color: var(--text-tertiary);
           font-size: 12px;
           font-weight: 650;
         }

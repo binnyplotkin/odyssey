@@ -7,7 +7,7 @@ import { useHeaderContent } from "@/components/header-context";
 
 const T = {
   fg: "var(--foreground)",
-  muted: "var(--muted)",
+  muted: "var(--text-tertiary)",
   border: "var(--border)",
   accent: "#8FD1CB",
   fontHeading: "'Space Grotesk', system-ui, sans-serif",

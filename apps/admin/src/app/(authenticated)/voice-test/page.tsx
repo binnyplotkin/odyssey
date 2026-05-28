@@ -518,9 +518,9 @@ export default function VoiceTestPage() {
           : "Resting";
 
   const confidenceColor =
-    metrics.confidence > 0.7 ? "var(--success, #8FD1CB)"
+    metrics.confidence > 0.7 ? "var(--status-live, #8FD1CB)"
       : metrics.confidence > 0.4 ? "var(--accent, #8fd1cb)"
-        : "var(--muted)";
+        : "var(--text-tertiary)";
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
@@ -536,7 +536,7 @@ export default function VoiceTestPage() {
         >
           Voice Test
         </h1>
-        <p style={{ fontSize: "0.9rem", color: "var(--muted)", lineHeight: 1.6 }}>
+        <p style={{ fontSize: "0.9rem", color: "var(--text-tertiary)", lineHeight: 1.6 }}>
           Audio-reactive mesh with live spectrum and waveform overlay. Speak to
           see the visualization respond to your voice.
         </p>
@@ -658,7 +658,7 @@ export default function VoiceTestPage() {
           onClick={audio.isRecording ? audio.stop : audio.start}
           style={{
             padding: "0.5rem 1.5rem", borderRadius: "var(--radius-pill)", border: "none",
-            background: audio.isRecording ? "var(--danger, #f87171)" : "var(--accent, #8fd1cb)",
+            background: audio.isRecording ? "var(--status-error, #f87171)" : "var(--accent, #8fd1cb)",
             color: audio.isRecording ? "white" : "#0C0E14",
             fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
             transition: "opacity 0.15s",
@@ -667,7 +667,7 @@ export default function VoiceTestPage() {
           {audio.isRecording ? "Stop" : "Start Microphone"}
         </button>
         {audio.error && (
-          <span style={{ fontSize: "0.8rem", color: "var(--danger, #f87171)" }}>{audio.error}</span>
+          <span style={{ fontSize: "0.8rem", color: "var(--status-error, #f87171)" }}>{audio.error}</span>
         )}
       </div>
 
@@ -691,7 +691,7 @@ export default function VoiceTestPage() {
               <div
                 key={stat.label}
                 style={{
-                  background: "var(--panel)",
+                  background: "var(--surface-1)",
                   border: `1px solid ${stat.accent ? "var(--accent, #8fd1cb)" + "33" : "var(--border)"}`,
                   borderRadius: "var(--radius-md)",
                   padding: "0.6rem 0.75rem",
@@ -701,7 +701,7 @@ export default function VoiceTestPage() {
                   style={{
                     fontSize: "0.6rem", fontWeight: 600, letterSpacing: "0.1em",
                     textTransform: "uppercase", marginBottom: "0.25rem",
-                    color: stat.accent ? "var(--accent, #8fd1cb)" : "var(--muted)",
+                    color: stat.accent ? "var(--accent, #8fd1cb)" : "var(--text-tertiary)",
                   }}
                 >
                   {stat.label}
@@ -724,7 +724,7 @@ export default function VoiceTestPage() {
                     style={{
                       width: `${clamp(stat.value) * 100}%`, height: "100%",
                       borderRadius: "var(--radius-2xs)", transition: "width 0.15s ease-out",
-                      background: stat.accent ? "var(--accent, #8fd1cb)" : "var(--muted)",
+                      background: stat.accent ? "var(--accent, #8fd1cb)" : "var(--text-tertiary)",
                     }}
                   />
                 </div>
@@ -751,7 +751,7 @@ export default function VoiceTestPage() {
               <div
                 key={stat.label}
                 style={{
-                  background: "var(--panel)",
+                  background: "var(--surface-1)",
                   border: "1px solid var(--border)",
                   borderRadius: "var(--radius-md)",
                   padding: "0.5rem 0.6rem",
@@ -760,7 +760,7 @@ export default function VoiceTestPage() {
                 <div
                   style={{
                     fontSize: "0.55rem", fontWeight: 600, letterSpacing: "0.1em",
-                    textTransform: "uppercase", color: "var(--muted)", marginBottom: "0.15rem",
+                    textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: "0.15rem",
                   }}
                 >
                   {stat.label}
