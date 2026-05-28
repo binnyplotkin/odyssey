@@ -225,6 +225,40 @@ type RunEventsResponse = {
   latestSeq: number;
 };
 
+function succeededEventFromRun(
+  run: WikiIngestionLogRecord,
+  fallbackModel: ModelId,
+): Extract<IngestionEvent, { type: "succeeded" }> {
+  return {
+    type: "succeeded",
+    result: {
+      runId: run.id,
+      status: "succeeded",
+      pagesCreated: run.pagesCreated,
+      pagesUpdated: run.pagesUpdated,
+      edgesAdded: run.edgesAdded,
+      edgesRemoved: 0,
+      contradictionsFound: run.contradictionsFound,
+      tokensUsed: run.tokensUsed,
+      inputTokens: 0,
+      outputTokens: 0,
+      model: run.model ?? fallbackModel,
+    },
+  };
+}
+
+function failedEventFromRun(
+  run: WikiIngestionLogRecord,
+): Extract<IngestionEvent, { type: "failed" }> {
+  return {
+    type: "failed",
+    error: run.errorMessage ?? "Ingestion failed.",
+    tokensUsed: run.tokensUsed,
+    inputTokens: 0,
+    outputTokens: 0,
+  };
+}
+
 type BrainState = {
   pageCount: number;
   edgeCount: number;
@@ -329,9 +363,13 @@ export function WikiIngestionView({
           finalEvent?.type === "succeeded" ||
           body.run.status === "succeeded"
         ) {
+          const resolvedEvents =
+            finalEvent?.type === "succeeded"
+              ? events
+              : [...events, succeededEventFromRun(body.run, model)];
           setRun({
             phase: "resolved",
-            events,
+            events: resolvedEvents,
             startedAt,
             finishedAt: body.run.finishedAt
               ? new Date(body.run.finishedAt).getTime()
@@ -341,13 +379,17 @@ export function WikiIngestionView({
           return;
         }
         if (finalEvent?.type === "failed" || body.run.status === "failed") {
+          const resolvedEvents =
+            finalEvent?.type === "failed"
+              ? events
+              : [...events, failedEventFromRun(body.run)];
           const error =
             finalEvent?.type === "failed"
               ? finalEvent.error
               : (body.run.errorMessage ?? "Ingestion failed.");
           setRun({
             phase: "failed",
-            events,
+            events: resolvedEvents,
             error,
             startedAt,
             finishedAt: body.run.finishedAt
@@ -368,7 +410,7 @@ export function WikiIngestionView({
         await new Promise((resolve) => window.setTimeout(resolve, 1000));
       }
     },
-    [router, wikiId],
+    [model, router, wikiId],
   );
 
   const activePersistedRun = useMemo(
@@ -526,7 +568,7 @@ export function WikiIngestionView({
               tokens={tokens}
             />
           ) : run.phase === "live" ? (
-            <LiveProgress run={run} />
+            <LiveProgress run={run} nowMs={nowMs} />
           ) : run.phase === "resolved" ? (
             <ResolvedFromRun
               run={run}
@@ -841,7 +883,13 @@ function deriveOpQueue(events: IngestionEvent[]): OpQueueRow[] {
   });
 }
 
-function LiveProgress({ run }: { run: Extract<RunPhase, { phase: "live" }> }) {
+function LiveProgress({
+  run,
+  nowMs,
+}: {
+  run: Extract<RunPhase, { phase: "live" }>;
+  nowMs: number;
+}) {
   const planEv = run.events.find((e) => e.type === "plan-complete");
   const loadedIndexEv = run.events.find(
     (e): e is Extract<IngestionEvent, { type: "loaded-index" }> =>
@@ -866,7 +914,7 @@ function LiveProgress({ run }: { run: Extract<RunPhase, { phase: "live" }> }) {
     (acc, ev) => acc + (ev.type === "op-complete" ? ev.tokens : 0),
     0,
   );
-  const elapsedMs = Date.now() - run.startedAt;
+  const elapsedMs = nowMs - run.startedAt;
   // Naive ETA: if N/M done in T seconds, remaining = (M-N) * (T/N).
   const effectiveDone = opsDone + activeWriterCount * 0.5;
   const etaSec =
