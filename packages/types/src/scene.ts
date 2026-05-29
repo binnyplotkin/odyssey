@@ -48,6 +48,57 @@ export const sceneSchema = z.object({
 export type SceneCharacter = z.infer<typeof sceneCharacterSchema>;
 export type Scene = z.infer<typeof sceneSchema>;
 
+// ── Scene DB record (the `scenes` table) ─────────────────────────────
+//
+// The `definition` JSONB holds the canvas-editable shape — nodes/edges
+// plus opening beat, default ambience, and the narrator voice binding.
+// `nodes` and `edges` here are denormalized snapshots that mirror the
+// scene_nodes / scene_edges tables; the tables are the source of truth
+// for indexed lookup, the JSON snapshot is for fast reads.
+
+export const sceneDefinitionNodeSchema = z.object({
+  id: z.string().min(1),
+  kind: z.string().min(1),
+  refId: z.string().nullable().optional(),
+  label: z.string().min(1),
+  summary: z.string().nullable().optional(),
+  data: z.record(z.string(), z.unknown()).default({}),
+  position: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
+});
+
+export const sceneDefinitionEdgeSchema = z.object({
+  id: z.string().min(1),
+  fromNodeId: z.string().min(1),
+  toNodeId: z.string().min(1),
+  kind: z.string().min(1),
+  data: z.record(z.string(), z.unknown()).default({}),
+});
+
+export const sceneDefinitionSchema = z.object({
+  nodes: z.array(sceneDefinitionNodeSchema).default([]),
+  edges: z.array(sceneDefinitionEdgeSchema).default([]),
+  openingBeat: z.string().default(""),
+  defaultAmbience: z.string().nullable().default(null),
+  narratorVoiceId: z.string().nullable().default(null),
+});
+
+export const sceneRecordSchema = z.object({
+  id: z.string().min(1),
+  userId: z.string().nullable(),
+  title: z.string().min(1),
+  prompt: z.string().default(""),
+  status: z.enum(["draft", "active", "archived"]).default("draft"),
+  definition: sceneDefinitionSchema,
+  version: z.number().int().positive(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type SceneDefinitionNode = z.infer<typeof sceneDefinitionNodeSchema>;
+export type SceneDefinitionEdge = z.infer<typeof sceneDefinitionEdgeSchema>;
+export type SceneDefinition = z.infer<typeof sceneDefinitionSchema>;
+export type SceneRecord = z.infer<typeof sceneRecordSchema>;
+
 // ── Scene runtime state (mutable, lives on the WorldSession) ─────────
 //
 // Persisted on `worldSessions.currentScene` (jsonb). The orchestrator

@@ -1358,7 +1358,7 @@ ref,
       activeEntities: scene.activeEntities,
       location: scene.location ?? null,
     };
-    const promise = fetch("/api/world-sessions", {
+    const promise = fetch("/api/scene-sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1406,7 +1406,7 @@ ref,
 
     const events = worldEventQueueRef.current.splice(0, WORLD_EVENT_MAX_BATCH);
     const post = () =>
-      fetch(`/api/world-sessions/${sessionId}/events`, {
+      fetch(`/api/scene-sessions/${sessionId}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ events }),
@@ -1485,7 +1485,7 @@ ref,
     form.set("turnId", args.turnId);
     if (args.durationMs !== null) form.set("durationMs", String(Math.round(args.durationMs)));
     if (args.sampleRate) form.set("sampleRate", String(args.sampleRate));
-    void fetch(`/api/world-sessions/${sessionId}/audio`, {
+    void fetch(`/api/scene-sessions/${sessionId}/audio`, {
       method: "POST",
       body: form,
     }).catch((err) => {
@@ -1607,7 +1607,7 @@ ref,
     worldSessionReadyRef.current = null;
     currentInputTurnIdRef.current = null;
     if (!sessionId) return;
-    void fetch(`/api/world-sessions/${sessionId}`, {
+    void fetch(`/api/scene-sessions/${sessionId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
@@ -1633,7 +1633,7 @@ ref,
     if (!sessionId) return;
     const traceJson = args.trace?.toJSON() ?? {};
     const latencySummary = args.trace?.summary() ?? {};
-    void fetch(`/api/world-sessions/${sessionId}/turns/${args.turnId}`, {
+    void fetch(`/api/scene-sessions/${sessionId}/turns/${args.turnId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

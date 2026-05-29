@@ -242,7 +242,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     setComposerValue("");
     setSessionError(null);
     setEndedSession(null);
-    const sessionId = await createSandboxWorldSession({
+    const sessionId = await createSandboxSceneSession({
       characterId: character.id,
       characterSlug: character.slug,
       mode,
@@ -2057,7 +2057,7 @@ function TelemetryStrip({
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 
-async function createSandboxWorldSession(input: {
+async function createSandboxSceneSession(input: {
   characterId: string;
   characterSlug: string;
   mode: SandboxMode;
@@ -2069,7 +2069,7 @@ async function createSandboxWorldSession(input: {
     sceneId,
     input.characterSlug,
   );
-  const res = await fetch("/api/world-sessions", {
+  const res = await fetch("/api/scene-sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2088,7 +2088,7 @@ async function createSandboxWorldSession(input: {
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => `${res.status}`);
-    throw new Error(`world-session create failed: ${detail.slice(0, 200)}`);
+    throw new Error(`scene-session create failed: ${detail.slice(0, 200)}`);
   }
   const payload = (await res.json()) as { session?: { id?: string } };
   return payload.session?.id ?? id;
@@ -2112,7 +2112,7 @@ async function fetchSandboxOrchestratorDecision(input: {
   lastUserMessage: string;
 }): Promise<SandboxOrchestratorResult> {
   const res = await fetch(
-    `/api/world-sessions/${encodeURIComponent(input.sessionId)}/orchestrate`,
+    `/api/scene-sessions/${encodeURIComponent(input.sessionId)}/orchestrate`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2214,7 +2214,7 @@ async function endSandboxWorldSession(
   sessionId: string,
   metadata: Record<string, unknown>,
 ): Promise<void> {
-  const res = await fetch(`/api/world-sessions/${sessionId}`, {
+  const res = await fetch(`/api/scene-sessions/${sessionId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2248,7 +2248,7 @@ async function uploadSandboxAudioArtifact(input: {
   if (input.durationMs !== null)
     form.set("durationMs", String(input.durationMs));
   if (input.sampleRate) form.set("sampleRate", String(input.sampleRate));
-  await fetch(`/api/world-sessions/${input.sessionId}/audio`, {
+  await fetch(`/api/scene-sessions/${input.sessionId}/audio`, {
     method: "POST",
     body: form,
   }).catch((err) => {

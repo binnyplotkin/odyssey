@@ -3,7 +3,6 @@ import { neon } from "@neondatabase/serverless";
 
 const EXPECTED = [
   "characters",
-  "world_characters",
   "wiki_pages",
   "wiki_page_versions",
   "wiki_edges",

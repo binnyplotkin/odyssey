@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getWorldSessionStore } from "@odyssey/db";
+import { getSceneSessionStore } from "@odyssey/db";
 import { SessionDetailWorkbench } from "@/components/session-detail-workbench";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +10,9 @@ export default async function SessionDetailPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  const worldDetail = await getWorldSessionStore().getSessionDetail(sessionId);
+  const sceneDetail = await getSceneSessionStore().getSessionDetail(sessionId);
 
-  if (!worldDetail) notFound();
+  if (!sceneDetail) notFound();
 
-  return <SessionDetailWorkbench detail={worldDetail} />;
+  return <SessionDetailWorkbench detail={sceneDetail} />;
 }

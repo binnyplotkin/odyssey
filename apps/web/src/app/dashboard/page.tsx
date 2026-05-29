@@ -1,26 +1,17 @@
 import { auth } from "@/lib/auth";
-import { getDashboardWorlds, getDashboardStats, getDashboardActivity } from "@/lib/dashboard-data";
-import { DashboardContent } from "@/components/dashboard-content";
 
 export default async function DashboardPage() {
   const session = await auth();
-  const userId = session?.user?.id;
   const firstName = session?.user?.name?.split(" ")[0] ?? "Explorer";
 
-  const [worlds, stats, activity] = userId
-    ? await Promise.all([
-        getDashboardWorlds(userId),
-        getDashboardStats(userId),
-        getDashboardActivity(userId),
-      ])
-    : [[], { totalWorlds: 0, sessionsPlayed: 0, totalTurns: 0 }, []];
-
   return (
-    <DashboardContent
-      firstName={firstName}
-      worlds={worlds}
-      stats={stats}
-      activity={activity}
-    />
+    <div className="px-6 py-10 md:px-10">
+      <h1 className="text-2xl font-semibold" style={{ fontFamily: "var(--font-heading)" }}>
+        Welcome back, {firstName}
+      </h1>
+      <p className="mt-2 text-sm text-white/50">
+        The experience is being rebuilt around scenes. Check back soon.
+      </p>
+    </div>
   );
 }

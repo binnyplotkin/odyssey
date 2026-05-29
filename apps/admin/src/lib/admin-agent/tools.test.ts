@@ -109,8 +109,6 @@ describe("admin agent mutation tools", () => {
       "create_character",
       "update_character",
       "delete_character",
-      "create_world",
-      "update_world",
       "create_wiki",
       "update_wiki",
       "delete_wiki",
@@ -118,21 +116,9 @@ describe("admin agent mutation tools", () => {
       "purge_wiki_source",
       "create_voice",
       "archive_voice",
-      "create_world_node",
-      "create_world_session",
       "create_eval_suite",
       "mark_eval_run_errored",
     ]));
-  });
-
-  it("validates full-world mutations before proposal", async () => {
-    await expect(
-      dryRunMutationTool(
-        "create_world",
-        { prompt: "bad world", definition: { id: "not-enough" } },
-        context("conv-bad-world"),
-      ),
-    ).rejects.toThrow();
   });
 
   it("dry-runs a Codex Web code task as an approved external side effect", async () => {

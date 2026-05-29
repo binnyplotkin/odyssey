@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSceneRunner } from "@/lib/scene-runner";
+import { useScenePlayer } from "@odyssey/scene-player";
 import { useSceneMicCapture } from "@/lib/scene-mic";
 import { getScene } from "@odyssey/orchestration/client";
 
@@ -19,7 +19,7 @@ export default function SceneTestPage() {
   const sessionId = useMemo(() => crypto.randomUUID(), []);
   const [userInput, setUserInput] = useState("");
 
-  const runner = useSceneRunner({ scene: ABRAHAMS_TENT, sessionId });
+  const runner = useScenePlayer({ scene: ABRAHAMS_TENT, sessionId });
 
   // Mic capture feeds completed utterances directly to the runner. The
   // hook handles word accumulation + VAD-driven utterance segmentation;

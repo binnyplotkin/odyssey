@@ -69,160 +69,6 @@ export const verificationTokensTable = pgTable(
   ],
 );
 
-// ── Game tables ───────────────────────────────────────────────────────
-
-export const sessionsTable = pgTable("sessions", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
-  worldId: text("world_id").notNull(),
-  roleId: text("role_id").notNull(),
-  status: text("status").notNull(),
-  currentStateVersion: integer("current_state_version").notNull(),
-  state: jsonb("state").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-  lastActiveAt: timestamp("last_active_at", { withTimezone: true }).notNull(),
-});
-
-export const turnsTable = pgTable("turns", {
-  id: text("id").primaryKey(),
-  sessionId: text("session_id").notNull(),
-  stateVersion: integer("state_version").notNull(),
-  input: jsonb("input").notNull(),
-  result: jsonb("result").notNull(),
-  stateDeltaSummary: text("state_delta_summary").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-});
-
-// ── Global live world sessions ─────────────────────────────────────────
-//
-// These tables are intentionally broader than "voice sessions". Voice, chat,
-// and future narrator/world-simulation runs should all land here so one
-// session can explain context routing, turns, trace timings, and eventual
-// world-state changes.
-
-export const worldSessionsTable = pgTable(
-  "world_sessions",
-  {
-    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    userId: text("user_id").references(() => usersTable.id, { onDelete: "set null" }),
-    worldId: text("world_id").references(() => worldsTable.id, { onDelete: "set null" }),
-    characterId: text("character_id").references(() => charactersTable.id, { onDelete: "set null" }),
-    mode: text("mode").notNull(), // chat | voice | mixed | simulation
-    status: text("status").notNull().default("active"),
-    initialMoment: jsonb("initial_moment"),
-    initialScene: jsonb("initial_scene"),
-    currentMoment: jsonb("current_moment"),
-    currentScene: jsonb("current_scene"),
-    metadata: jsonb("metadata").notNull().default({}),
-    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-    endedAt: timestamp("ended_at", { withTimezone: true }),
-    lastActiveAt: timestamp("last_active_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("world_sessions_user_idx").on(table.userId),
-    index("world_sessions_character_idx").on(table.characterId),
-    index("world_sessions_world_idx").on(table.worldId),
-    index("world_sessions_last_active_idx").on(table.lastActiveAt),
-  ],
-);
-
-export const worldSessionContextBuildsTable = pgTable(
-  "world_session_context_builds",
-  {
-    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    sessionId: text("session_id").notNull().references(() => worldSessionsTable.id, { onDelete: "cascade" }),
-    turnId: text("turn_id"),
-    mode: text("mode").notNull(),
-    promptKind: text("prompt_kind").notNull(),
-    query: text("query"),
-    moment: jsonb("moment"),
-    scene: jsonb("scene"),
-    tokenBudget: integer("token_budget"),
-    tokensUsed: integer("tokens_used"),
-    tokensBudget: integer("tokens_budget"),
-    selectedPages: jsonb("selected_pages").notNull().default([]),
-    curatorTrace: jsonb("curator_trace").notNull().default({}),
-    timingTrace: jsonb("timing_trace").notNull().default({}),
-    promptChunk: text("prompt_chunk"),
-    systemPrompt: text("system_prompt"),
-    metadata: jsonb("metadata").notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("world_session_context_session_idx").on(table.sessionId),
-    index("world_session_context_turn_idx").on(table.turnId),
-  ],
-);
-
-export const worldSessionTurnsTable = pgTable(
-  "world_session_turns",
-  {
-    id: text("id").primaryKey(),
-    sessionId: text("session_id").notNull().references(() => worldSessionsTable.id, { onDelete: "cascade" }),
-    turnIndex: integer("turn_index"),
-    inputMode: text("input_mode").notNull(),
-    userText: text("user_text"),
-    assistantText: text("assistant_text"),
-    provider: text("provider"),
-    model: text("model"),
-    status: text("status").notNull(),
-    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-    tokenUsage: jsonb("token_usage").notNull().default({}),
-    audioMetrics: jsonb("audio_metrics").notNull().default({}),
-    latencySummary: jsonb("latency_summary").notNull().default({}),
-    trace: jsonb("trace").notNull().default({}),
-    metadata: jsonb("metadata").notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("world_session_turns_session_idx").on(table.sessionId),
-    index("world_session_turns_status_idx").on(table.status),
-  ],
-);
-
-export const worldSessionEventsTable = pgTable(
-  "world_session_events",
-  {
-    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    sessionId: text("session_id").notNull().references(() => worldSessionsTable.id, { onDelete: "cascade" }),
-    turnId: text("turn_id"),
-    type: text("type").notNull(),
-    source: text("source").notNull(), // user | assistant | system | stt | llm | tts | world
-    payload: jsonb("payload").notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("world_session_events_session_idx").on(table.sessionId),
-    index("world_session_events_turn_idx").on(table.turnId),
-    index("world_session_events_type_idx").on(table.type),
-  ],
-);
-
-export const worldSessionAudioArtifactsTable = pgTable(
-  "world_session_audio_artifacts",
-  {
-    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    sessionId: text("session_id").notNull().references(() => worldSessionsTable.id, { onDelete: "cascade" }),
-    turnId: text("turn_id"),
-    direction: text("direction").notNull(), // input | output
-    mimeType: text("mime_type").notNull(),
-    durationMs: integer("duration_ms"),
-    sampleRate: integer("sample_rate"),
-    byteSize: integer("byte_size").notNull(),
-    storageKey: text("storage_key").notNull(),
-    waveformSummary: jsonb("waveform_summary").notNull().default({}),
-    metadata: jsonb("metadata").notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("world_session_audio_session_idx").on(table.sessionId),
-    index("world_session_audio_turn_idx").on(table.turnId),
-    index("world_session_audio_direction_idx").on(table.direction),
-  ],
-);
-
 // ── Roadmap ─────────────────────────────────────────────────────────
 
 export const versionsTable = pgTable("versions", {
@@ -424,22 +270,10 @@ export const adminAgentContextSummariesTable = pgTable(
   ],
 );
 
-export const worldsTable = pgTable("worlds", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  prompt: text("prompt").notNull(),
-  status: text("status").notNull(),
-  definition: jsonb("definition").notNull(),
-  version: integer("version").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
-});
-
 // ── Characters + Knowledge Graph ──────────────────────────────────────
 //
-// A character is global — one row, reused across any number of worlds via
-// the world graph (`world_nodes` with kind='character', refId=character.id).
+// A character is global — one row, reused across any number of scenes via
+// the scene graph (`scene_nodes` with kind='character', refId=character.id).
 // Each character has its own knowledge-graph wiki (pages + edges + sources),
 // because the wiki encodes that character's perspective on source material
 // and travels with them.
@@ -887,57 +721,187 @@ export const characterKnowledgeBindingsTable = pgTable(
   ],
 );
 
-// ── World Graph ───────────────────────────────────────────────────────
+// ── Scenes (new stack, replacing worlds) ──────────────────────────────
 //
-// A world is a graph. Nodes are typed entities inside a world; edges are
-// typed directed relationships between them. `kind` is a discriminator
-// validated in the app (character | place | event to start). Character
-// nodes reference the global `characters` library via `refId`; other
-// kinds are native to the world. Kind-specific fields live in `data`.
+// A scene is the unit of multi-character interaction the orchestrator
+// drives. The `definition` JSONB carries forward-compatible config:
+//   { nodes, edges, openingBeat, defaultAmbience, narratorVoiceId }
+// `nodes` and `edges` mirror the canvas the user will edit; the graph
+// tables below denormalize them for indexed lookup. Sessions ride on
+// `scene_sessions` and capture turns, events, context builds, and audio.
 
-/** Typed entity inside a world (character | place | event | …). */
-export const worldNodesTable = pgTable(
-  "world_nodes",
+export const scenesTable = pgTable("scenes", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  prompt: text("prompt").notNull().default(""),
+  status: text("status").notNull().default("draft"), // draft | active | archived
+  definition: jsonb("definition").notNull().default({}),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sceneNodesTable = pgTable(
+  "scene_nodes",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    worldId: text("world_id").notNull().references(() => worldsTable.id, { onDelete: "cascade" }),
-    kind: text("kind").notNull(),                        // character | place | event (extend later)
-    refId: text("ref_id"),                                // characters.id when kind='character'; else null
-    label: text("label").notNull(),                       // display name in this world
+    sceneId: text("scene_id").notNull().references(() => scenesTable.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),           // character | place | event | narrator | …
+    refId: text("ref_id"),                   // characters.id when kind='character'
+    label: text("label").notNull(),
     summary: text("summary"),
-    data: jsonb("data").notNull().default({}),            // kind-specific fields, validated app-side
-    position: jsonb("position"),                          // { x, y } for canvas editor
+    data: jsonb("data").notNull().default({}),
+    position: jsonb("position"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index("world_nodes_world_idx").on(t.worldId),
-    index("world_nodes_world_kind_idx").on(t.worldId, t.kind),
-    index("world_nodes_ref_idx").on(t.refId),
-    // Prevent the same library entity from being imported twice into one world.
-    // Partial — only enforced when refId is set.
-    uniqueIndex("world_nodes_world_ref_uniq")
-      .on(t.worldId, t.kind, t.refId)
+    index("scene_nodes_scene_idx").on(t.sceneId),
+    index("scene_nodes_scene_kind_idx").on(t.sceneId, t.kind),
+    index("scene_nodes_ref_idx").on(t.refId),
+    uniqueIndex("scene_nodes_scene_ref_uniq")
+      .on(t.sceneId, t.kind, t.refId)
       .where(sql`${t.refId} IS NOT NULL`),
   ],
 );
 
-/** Typed directed edge between two nodes in the same world. */
-export const worldEdgesTable = pgTable(
-  "world_edges",
+export const sceneEdgesTable = pgTable(
+  "scene_edges",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    worldId: text("world_id").notNull().references(() => worldsTable.id, { onDelete: "cascade" }),
-    fromNodeId: text("from_node_id").notNull().references(() => worldNodesTable.id, { onDelete: "cascade" }),
-    toNodeId: text("to_node_id").notNull().references(() => worldNodesTable.id, { onDelete: "cascade" }),
-    kind: text("kind").notNull(),                         // knows | happens_at | involves | member_of | plays | …
+    sceneId: text("scene_id").notNull().references(() => scenesTable.id, { onDelete: "cascade" }),
+    fromNodeId: text("from_node_id").notNull().references(() => sceneNodesTable.id, { onDelete: "cascade" }),
+    toNodeId: text("to_node_id").notNull().references(() => sceneNodesTable.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
     data: jsonb("data").notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("world_edges_unique_idx").on(t.fromNodeId, t.toNodeId, t.kind),
-    index("world_edges_world_idx").on(t.worldId),
-    index("world_edges_to_node_idx").on(t.toNodeId),
+    uniqueIndex("scene_edges_unique_idx").on(t.fromNodeId, t.toNodeId, t.kind),
+    index("scene_edges_scene_idx").on(t.sceneId),
+    index("scene_edges_to_node_idx").on(t.toNodeId),
+  ],
+);
+
+export const sceneSessionsTable = pgTable(
+  "scene_sessions",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id").references(() => usersTable.id, { onDelete: "set null" }),
+    sceneId: text("scene_id").references(() => scenesTable.id, { onDelete: "set null" }),
+    characterId: text("character_id").references(() => charactersTable.id, { onDelete: "set null" }),
+    mode: text("mode").notNull(),                 // chat | voice | mixed
+    status: text("status").notNull().default("active"),
+    initialScene: jsonb("initial_scene"),
+    currentScene: jsonb("current_scene"),
+    metadata: jsonb("metadata").notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    lastActiveAt: timestamp("last_active_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("scene_sessions_user_idx").on(table.userId),
+    index("scene_sessions_character_idx").on(table.characterId),
+    index("scene_sessions_scene_idx").on(table.sceneId),
+    index("scene_sessions_last_active_idx").on(table.lastActiveAt),
+  ],
+);
+
+export const sceneSessionContextBuildsTable = pgTable(
+  "scene_session_context_builds",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id").notNull().references(() => sceneSessionsTable.id, { onDelete: "cascade" }),
+    turnId: text("turn_id"),
+    mode: text("mode").notNull(),
+    promptKind: text("prompt_kind").notNull(),
+    query: text("query"),
+    scene: jsonb("scene"),
+    tokenBudget: integer("token_budget"),
+    tokensUsed: integer("tokens_used"),
+    tokensBudget: integer("tokens_budget"),
+    selectedPages: jsonb("selected_pages").notNull().default([]),
+    curatorTrace: jsonb("curator_trace").notNull().default({}),
+    timingTrace: jsonb("timing_trace").notNull().default({}),
+    promptChunk: text("prompt_chunk"),
+    systemPrompt: text("system_prompt"),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("scene_session_context_session_idx").on(table.sessionId),
+    index("scene_session_context_turn_idx").on(table.turnId),
+  ],
+);
+
+export const sceneSessionTurnsTable = pgTable(
+  "scene_session_turns",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id").notNull().references(() => sceneSessionsTable.id, { onDelete: "cascade" }),
+    turnIndex: integer("turn_index"),
+    inputMode: text("input_mode").notNull(),
+    speakerSlug: text("speaker_slug"),            // character slug or "narrator" or "user"
+    userText: text("user_text"),
+    assistantText: text("assistant_text"),
+    provider: text("provider"),
+    model: text("model"),
+    status: text("status").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    tokenUsage: jsonb("token_usage").notNull().default({}),
+    audioMetrics: jsonb("audio_metrics").notNull().default({}),
+    latencySummary: jsonb("latency_summary").notNull().default({}),
+    trace: jsonb("trace").notNull().default({}),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("scene_session_turns_session_idx").on(table.sessionId),
+    index("scene_session_turns_status_idx").on(table.status),
+  ],
+);
+
+export const sceneSessionEventsTable = pgTable(
+  "scene_session_events",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id").notNull().references(() => sceneSessionsTable.id, { onDelete: "cascade" }),
+    turnId: text("turn_id"),
+    type: text("type").notNull(),
+    source: text("source").notNull(),     // user | assistant | system | stt | llm | tts | orchestrator
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("scene_session_events_session_idx").on(table.sessionId),
+    index("scene_session_events_turn_idx").on(table.turnId),
+    index("scene_session_events_type_idx").on(table.type),
+  ],
+);
+
+export const sceneSessionAudioArtifactsTable = pgTable(
+  "scene_session_audio_artifacts",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id").notNull().references(() => sceneSessionsTable.id, { onDelete: "cascade" }),
+    turnId: text("turn_id"),
+    direction: text("direction").notNull(),
+    mimeType: text("mime_type").notNull(),
+    durationMs: integer("duration_ms"),
+    sampleRate: integer("sample_rate"),
+    byteSize: integer("byte_size").notNull(),
+    storageKey: text("storage_key").notNull(),
+    waveformSummary: jsonb("waveform_summary").notNull().default({}),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("scene_session_audio_session_idx").on(table.sessionId),
+    index("scene_session_audio_turn_idx").on(table.turnId),
+    index("scene_session_audio_direction_idx").on(table.direction),
   ],
 );
 

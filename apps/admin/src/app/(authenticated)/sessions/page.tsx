@@ -1,15 +1,15 @@
-import { getWorldSessionStore } from "@odyssey/db";
+import { getSceneSessionStore } from "@odyssey/db";
 import { SessionsTable, type SessionRow } from "@/components/sessions-table";
 
 export const dynamic = "force-dynamic";
 
 export default async function SessionsPage() {
-  const worldSessions = await getWorldSessionStore().listSessionSummaries(50);
-  const sessions: SessionRow[] = worldSessions.map((session) => ({
+  const sceneSessions = await getSceneSessionStore().listSessionSummaries(50);
+  const sessions: SessionRow[] = sceneSessions.map((session) => ({
     id: session.id,
     userId: session.userId,
     user: session.user,
-    worldId: session.worldId,
+    sceneId: session.sceneId,
     characterId: session.characterId,
     mode: session.mode,
     status: session.status,

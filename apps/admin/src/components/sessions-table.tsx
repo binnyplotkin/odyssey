@@ -14,7 +14,7 @@ export type SessionRow = {
     email: string;
     image?: string | null;
   } | null;
-  worldId?: string | null;
+  sceneId?: string | null;
   characterId?: string | null;
   mode: string;
   status: string;
@@ -233,7 +233,7 @@ export function SessionsTable({ sessions }: Props) {
         (session.user?.name ?? "").toLowerCase().includes(q) ||
         (session.user?.email ?? "").toLowerCase().includes(q) ||
         (session.characterId ?? "").toLowerCase().includes(q) ||
-        (session.worldId ?? "").toLowerCase().includes(q) ||
+        (session.sceneId ?? "").toLowerCase().includes(q) ||
         session.mode.toLowerCase().includes(q) ||
         session.status.toLowerCase().includes(q),
       );
@@ -270,7 +270,7 @@ export function SessionsTable({ sessions }: Props) {
         session.mode,
         session.status,
         session.characterId ?? "",
-        session.worldId ?? "",
+        session.sceneId ?? "",
         session.contextBuildCount,
         session.turnCount,
         session.eventCount,
@@ -655,7 +655,7 @@ function SessionDataRow({ session }: { session: SessionRow }) {
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
           }}>
-            world {shortId(session.worldId)} - user {shortId(session.userId)}
+            scene {shortId(session.sceneId)} - user {shortId(session.userId)}
           </span>
         </div>
       </div>

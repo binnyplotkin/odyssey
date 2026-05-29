@@ -16,25 +16,21 @@ const ADMIN_ROUTES = [
   "/board",
   "/docs",
   "/changelog",
-  "/worlds",
   "/characters",
   "/wikis",
   "/voices",
   "/users",
   "/sessions",
-  "/engine",
-  "/editor",
-  "/builder",
   "/voice-debug",
 ].join(", ");
 
 const DB_SCHEMA_SUMMARY = [
   "Auth: users, accounts, auth_sessions, verification_tokens.",
-  "Simulation: sessions, turns, world_sessions, world_session_turns, context_builds, events, audio_artifacts.",
+  "Scenes: scenes, scene_nodes, scene_edges, scene_sessions, scene_session_turns, scene_session_context_builds, scene_session_events, scene_session_audio_artifacts.",
   "Roadmap: versions, features, tickets, platform_versions, changelog_entries.",
-  "Studio: worlds, characters, voices, voice_previews, voice_extraction_attempts.",
+  "Studio: characters, voices, voice_previews, voice_extraction_attempts.",
   "Knowledge: wikis, wiki_pages, wiki_page_versions, wiki_edges, wiki_sources, wiki_source_refs, character_knowledge_bindings, wiki_ingestion_log/events.",
-  "Graph/evals: world_nodes, world_edges, eval_suites, eval_runs, eval_probe_results, eval_sweeps.",
+  "Evals: eval_suites, eval_runs, eval_probe_results, eval_sweeps.",
   "Agent audit: admin_agent_conversations, messages, tool_calls, operations.",
 ].join("\n");
 

@@ -24,15 +24,6 @@ const DDL = [
     updated_at  timestamptz NOT NULL DEFAULT now()
   )`,
 
-  /* ── world_characters (bridge) ──────────────────────────────── */
-  `CREATE TABLE IF NOT EXISTS world_characters (
-    world_id      text NOT NULL REFERENCES worlds(id)     ON DELETE CASCADE,
-    character_id  text NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
-    role_in_world text,
-    created_at    timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (world_id, character_id)
-  )`,
-
   /* ── wiki_pages ─────────────────────────────────────────────── */
   `CREATE TABLE IF NOT EXISTS wiki_pages (
     id               text PRIMARY KEY,
