@@ -128,6 +128,7 @@ function startSpeculation(args: {
   let doneBuffered: DoneInfo | null = null;
   let errorBuffered: string | null = null;
   let latestServerTrace: TracePayload | null = null;
+  let streamClosed = false;
 
   void (async () => {
     try {
@@ -209,8 +210,9 @@ function startSpeculation(args: {
             if (!d.serverTrace && latestServerTrace) {
               d.serverTrace = latestServerTrace;
             }
-            if (state.mode === "playing" && callbacksHolder.value) callbacksHolder.value.onDone(d);
-            else doneBuffered = d;
+            // Hold `done` until stream close so we never resolve the turn
+            // before all trailing audio frames are processed.
+            doneBuffered = d;
           } else if (eventName === "error") {
             const d = payload as { message?: string };
             const msg = d.message ?? "voice-stream error";
@@ -218,6 +220,13 @@ function startSpeculation(args: {
             else errorBuffered = msg;
             state.mode = "errored";
           }
+        }
+      }
+
+      streamClosed = true;
+      if (doneBuffered) {
+        if (state.mode === "playing" && callbacksHolder.value) {
+          callbacksHolder.value.onDone(doneBuffered);
         }
       }
     } catch (err) {
@@ -254,7 +263,7 @@ function startSpeculation(args: {
       for (const samples of audioBuffer) callbacks.onAudioFrame(samples);
       audioBuffer.length = 0;
       if (errorBuffered) callbacks.onError(errorBuffered);
-      else if (doneBuffered) callbacks.onDone(doneBuffered);
+      else if (doneBuffered && streamClosed) callbacks.onDone(doneBuffered);
     },
   };
 }
@@ -2468,23 +2477,38 @@ ref,
       if (endedSourceCount >= scheduledSourceCount) return;
 
       await new Promise<void>((resolve) => {
-        let fallbackTimer = 0;
+        let pollingTimer = 0;
         const finish = () => {
-          if (fallbackTimer !== 0) {
-            window.clearTimeout(fallbackTimer);
-            fallbackTimer = 0;
+          if (pollingTimer !== 0) {
+            window.clearTimeout(pollingTimer);
+            pollingTimer = 0;
           }
           if (playbackDrainResolve === finish) playbackDrainResolve = null;
           resolve();
         };
 
+        const pollDrain = () => {
+          if (playbackAborted) {
+            finish();
+            return;
+          }
+          const remainingMs = Math.max(
+            0,
+            Math.ceil((nextStartTime - audioContext.currentTime) * 1000),
+          );
+          const sourcesDrained = endedSourceCount >= scheduledSourceCount;
+          if (sourcesDrained && remainingMs <= 8) {
+            finish();
+            return;
+          }
+          pollingTimer = window.setTimeout(pollDrain, 33);
+        };
+
         playbackDrainResolve = finish;
-        const remainingMs = Math.max(
-          0,
-          Math.ceil((nextStartTime - audioContext.currentTime) * 1000),
-        );
-        fallbackTimer = window.setTimeout(finish, remainingMs + 300);
         resolvePlaybackDrainIfReady();
+        if (playbackDrainResolve === finish) {
+          pollDrain();
+        }
       });
     };
 

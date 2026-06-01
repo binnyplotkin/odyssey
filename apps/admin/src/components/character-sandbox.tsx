@@ -175,7 +175,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     const tick = () => {
       pulse += 0.18;
       const shimmer = 0.5 + Math.sin(pulse) * 0.5;
-      const voiceActive = phase === "live" && voiceState === "speaking";
+      const playbackDriven =
+        phase === "live" && mode === "voice" && voiceState === "speaking";
+      if (playbackDriven) return;
       const target =
         phase !== "live"
           ? {
@@ -204,15 +206,6 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                   peak: 0.04,
                   active: false,
                 }
-              : voiceState === "speaking"
-                ? {
-                    energy: 0.72,
-                    bass: 0.34,
-                    mid: 0.62,
-                    high: 0.48,
-                    peak: 0.5,
-                    active: true,
-                  }
                 : {
                     energy: 0.08,
                     bass: 0.04,
@@ -227,13 +220,13 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       audio.mid += (target.mid + shimmer * 0.05 - audio.mid) * 0.12;
       audio.high += (target.high + shimmer * 0.04 - audio.high) * 0.12;
       audio.peak = Math.max(audio.peak * 0.82, target.peak + shimmer * 0.08);
-      audio.active = voiceActive;
+      audio.active = false;
     };
 
     tick();
     const id = window.setInterval(tick, 80);
     return () => window.clearInterval(id);
-  }, [phase, voiceState]);
+  }, [phase, mode, voiceState]);
 
   async function handleStart() {
     setStartedAt(Date.now());
@@ -535,7 +528,36 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 
         // Always use the voice stream so typed chat and mic input share the
         // same orchestrated character response, TTS playback, and trace path.
-          if (!pcmPlayerRef.current) pcmPlayerRef.current = new PcmPlayer();
+          const syncPlaybackState = (playing: boolean) => {
+            const nextVoiceState = playing
+              ? "speaking"
+              : micOnRef.current
+                ? "listening"
+                : "idle";
+            if (voiceStateRef.current === nextVoiceState) return;
+            voiceStateRef.current = nextVoiceState;
+            setVoiceState(nextVoiceState);
+          };
+          const syncWaveformAudio = (audio: AudioData) => {
+            const wave = waveAudioRef.current;
+            wave.energy = audio.energy;
+            wave.bass = audio.bass;
+            wave.mid = audio.mid;
+            wave.high = audio.high;
+            wave.peak = audio.peak;
+            wave.active = audio.active;
+          };
+          if (!pcmPlayerRef.current) {
+            pcmPlayerRef.current = new PcmPlayer({
+              onPlaybackStateChange: syncPlaybackState,
+              onAudioMetrics: syncWaveformAudio,
+            });
+          } else {
+            pcmPlayerRef.current.setCallbacks({
+              onPlaybackStateChange: syncPlaybackState,
+              onAudioMetrics: syncWaveformAudio,
+            });
+          }
           if (voiceContextWarmRef.current) {
             await Promise.race([
               voiceContextWarmRef.current,
@@ -656,9 +678,13 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                   estimatedCostUsd: done.estimatedCostUsd ?? t.estimatedCostUsd,
                   trace: done.serverTrace ?? t.trace,
                 }));
-                const nextVoiceState = micOnRef.current ? "listening" : "idle";
-                voiceStateRef.current = nextVoiceState;
-                setVoiceState(nextVoiceState);
+                if (outputFrames.length === 0) {
+                  const nextVoiceState = micOnRef.current
+                    ? "listening"
+                    : "idle";
+                  voiceStateRef.current = nextVoiceState;
+                  setVoiceState(nextVoiceState);
+                }
               },
               onError: (msg) => {
                 finalize((t) => ({
@@ -666,8 +692,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                   inFlight: false,
                   text: t.text || `[error: ${msg}]`,
                 }));
-                voiceStateRef.current = "idle";
-                setVoiceState("idle");
+                const nextVoiceState = micOnRef.current ? "listening" : "idle";
+                voiceStateRef.current = nextVoiceState;
+                setVoiceState(nextVoiceState);
               },
             },
           });
