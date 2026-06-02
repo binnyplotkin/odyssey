@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "dotenv -e ../../.env -- next dev --webpack --port 3001",
     "dev:preview": "NEXT_DIST_DIR=.next-preview dotenv -e ../../.env -- next dev --webpack",
-    "prebuild": "node ./scripts/ensure-lightningcss-native.cjs",
     "build": "next build",
     "start": "next start"
   },
