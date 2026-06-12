@@ -108,9 +108,20 @@ async function runCommand() {
   console.log("\n" + renderRunSummary(record));
   const recordFile = writeRunRecord(record, REPO_ROOT);
   console.log(`\nrun record → ${recordFile}`);
-  if (!hasFlag("--no-ledger")) {
+  // Only commit a ledger row for a CLEAN run (zero errors). A partial run
+  // (dead model id, rate limits) has biased percentiles — its survivors
+  // skew toward whichever turns happened to succeed — so it stays in the
+  // per-run record for inspection but never pollutes the progression table.
+  const clean = Boolean(record.aggregates["voice-to-voice"]) && record.errors === 0;
+  if (hasFlag("--no-ledger")) {
+    // skip
+  } else if (clean) {
     const ledgerFile = appendLedger(record, REPO_ROOT);
     console.log(`ledger     → ${ledgerFile} (commit this to track progression)`);
+  } else {
+    console.log(
+      `ledger     → skipped (${record.errors} error(s); only clean runs are recorded)`,
+    );
   }
   if (record.errors > 0) {
     console.error(`\n${record.errors} turn(s) errored — see the run record for details.`);
