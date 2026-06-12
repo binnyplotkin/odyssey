@@ -70,6 +70,11 @@ export const SONAR_SPANS = [
   "stt.handshake", // ws connect → Ready frame
   "stt.endpoint-to-word", // user speech end → first word (≈800ms VAD + whisper + net)
   "stt.word-span", // first word → last word
+  // Client commit hold: the post-STT debounce the sandbox waits before
+  // firing the turn (STREAMING_COMMIT_HOLD_MS). Modeled here so v2v reflects
+  // TRUE felt latency; 0 (default) = pipeline-intrinsic, comparable to runs
+  // that don't model it.
+  "commit.hold",
   // Scene-loop overhead (scene mode only):
   "orchestrate.total", // POST /orchestrate → JSON response (client)
   "orchestrate.llm", // orchestrate.llm.start → orchestrate.llm.done (server)
@@ -164,6 +169,8 @@ export type SonarRunRecord = {
     model: string | null;
     /** TTS voice slug override passed to the route, if any. */
     ttsVoice: string | null;
+    /** Modeled client commit-hold (ms) folded into voice-to-voice; 0 = intrinsic. */
+    commitHoldMs: number;
     sessions: number;
     turnsPerSession: number;
   };

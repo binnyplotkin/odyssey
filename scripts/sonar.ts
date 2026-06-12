@@ -21,6 +21,8 @@
  *   --model <id>        override the character's voice model
  *   --tts-voice <slug>  route TTS through a voices-table slug (A/B providers),
  *                       e.g. --tts-voice liam (elevenlabs) vs the default pocket binding
+ *   --commit-hold-ms <n> model the sandbox commit hold so v2v = TRUE felt latency
+ *                       (0 = pipeline-intrinsic; production is 1500)
  *   --sessions <n>      override the suite's session count
  *   --label "<text>"    name the change under test (shows in the ledger)
  *   --cookie <cookie>   or ODYSSEY_ADMIN_COOKIE env
@@ -94,6 +96,7 @@ async function runCommand() {
     character: readFlag("--character") ?? undefined,
     model: readFlag("--model") ?? undefined,
     ttsVoice: readFlag("--tts-voice") ?? undefined,
+    commitHoldMs: readNumberFlag("--commit-hold-ms"),
     sessions: readNumberFlag("--sessions"),
     turbo: hasFlag("--turbo"),
     audioRtWsUrl: readFlag("--audio-rt-ws") ?? undefined,
