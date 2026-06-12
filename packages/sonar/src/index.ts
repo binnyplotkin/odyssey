@@ -14,7 +14,7 @@ export {
   renderProgression,
   renderRunSummary,
 } from "./record";
-export { SUITES, VOICE_BASELINE, SCENE_BASELINE } from "./suites";
+export { SUITES, VOICE_BASELINE, SCENE_BASELINE, ENDPOINTING } from "./suites";
 export { TTS_USD_PER_1K_CHARS, estimateTtsCostUsd } from "./tts-pricing";
 
 // Voice I/O primitives (audio-rt STT client, fixture synthesis, WAV/codec).

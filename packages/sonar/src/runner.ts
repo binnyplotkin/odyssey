@@ -15,9 +15,8 @@
  * providers (STT, LLM, TTS, and TTS for input synthesis) and incurs cost.
  */
 
-import { ensureFixture } from "./audio/synth";
+import { resolveUtteranceSamples } from "./audio/synth";
 import { streamUtterance } from "./audio/stt-client";
-import { loadUtterance24k } from "./audio/wav";
 import { SONAR_VERSION } from "./version";
 import { aggregate } from "./stats";
 import { extractVoiceStreamSpans } from "./spans";
@@ -31,6 +30,9 @@ import {
   type SonarSpanName,
   type SonarSuite,
   type SonarTurnRecord,
+  type SonarTurnUsage,
+  type SonarUtterance,
+  type SonarUtteranceInfo,
   type TimedSseFrame,
   type TraceContract,
 } from "./types";
@@ -84,7 +86,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
 
   log(
     `sonar v${SONAR_VERSION} · suite=${suite.name}@${suite.version} · character=${character} · ` +
-      `${sessions} session(s) × ${suite.turns.length} turn(s) · voice-to-voice` +
+      `${sessions} session(s) × ${suite.turns.length} turn(s) · ${suite.sttOnly ? "endpointing (STT-only)" : "voice-to-voice"}` +
       (opts.ttsVoice ? ` · tts→${opts.ttsVoice}` : "") +
       (commitHoldMs > 0 ? ` · commit-hold=${commitHoldMs}ms (felt)` : "") +
       (opts.prewarm ? " · prewarm" : "") +
@@ -92,19 +94,27 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
   );
 
   // Synthesize/load every fixture up front so the first session isn't
-  // skewed by synthesis time mid-run.
+  // skewed by synthesis time mid-run. A paused fixture's parts are each
+  // synthesized and rejoined with a silence gap.
   log("preparing spoken-input fixtures…");
-  const fixtures: Array<{ samples: Float32Array; synthesized: boolean }> = [];
+  const fixtures: Array<{
+    samples: Float32Array;
+    synthesized: boolean;
+    kind: "complete" | "paused";
+    displayText: string;
+  }> = [];
   for (let i = 0; i < suite.turns.length; i += 1) {
-    const { wav, synthesized } = await ensureFixture({
+    const norm = normalizeUtterance(suite.turns[i]);
+    const { samples, synthesized } = await resolveUtteranceSamples({
       repoRoot: opts.repoRoot,
       suite: suite.name,
       turnIndex: i,
-      text: suite.turns[i],
+      parts: norm.parts,
+      gapMs: norm.gapMs,
       opts: { voice: suite.userVoice },
       log,
     });
-    fixtures.push({ samples: loadUtterance24k(wav), synthesized });
+    fixtures.push({ samples, synthesized, kind: norm.kind, displayText: norm.displayText });
   }
 
   const turns: SonarTurnRecord[] = [];
@@ -112,42 +122,80 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
   for (let sessionIndex = 0; sessionIndex < sessions; sessionIndex++) {
     const sessionId = crypto.randomUUID();
     const sceneId = `character-sandbox:${character}`;
-    await http.postJson("/api/scene-sessions", {
-      id: sessionId,
-      characterId: null,
-      mode: "voice",
-      initialScene: initialSceneSnapshot(sceneId, character),
-      currentScene: initialSceneSnapshot(sceneId, character),
-      metadata: { source: "sonar", sonarVersion: SONAR_VERSION, runId, characterSlug: character, sceneId },
-    });
-
-    // Warm the session context cache at open, like the real client does, so
-    // turn-1 skips the curator/retrieval pass. Token budget matches what the
-    // voice-stream route uses for its cache lookup (2500).
-    if (opts.prewarm) {
-      const w0 = performance.now();
-      await http
-        .postJson(`/api/characters/${character}/voice-context`, { sessionId, tokenBudget: 2500 })
-        .then(() => log(`session ${sessionIndex + 1}/${sessions} · ${sessionId} · prewarmed in ${Math.round(performance.now() - w0)}ms`))
-        .catch((err: unknown) => log(`  (prewarm failed: ${String(err)})`));
+    // STT-only (endpointing) suites talk only to audio-rt — no admin session,
+    // no prewarm, no cookie needed. Keeps the Smart Turn spike independent of
+    // the web app.
+    if (suite.sttOnly) {
+      log(`session ${sessionIndex + 1}/${sessions} · STT-only`);
     } else {
-      log(`session ${sessionIndex + 1}/${sessions} · ${sessionId}`);
+      await http.postJson("/api/scene-sessions", {
+        id: sessionId,
+        characterId: null,
+        mode: "voice",
+        initialScene: initialSceneSnapshot(sceneId, character),
+        currentScene: initialSceneSnapshot(sceneId, character),
+        metadata: { source: "sonar", sonarVersion: SONAR_VERSION, runId, characterSlug: character, sceneId },
+      });
+
+      // Warm the session context cache at open, like the real client does, so
+      // turn-1 skips the curator/retrieval pass. Token budget matches what the
+      // voice-stream route uses for its cache lookup (2500).
+      if (opts.prewarm) {
+        const w0 = performance.now();
+        await http
+          .postJson(`/api/characters/${character}/voice-context`, { sessionId, tokenBudget: 2500 })
+          .then(() => log(`session ${sessionIndex + 1}/${sessions} · ${sessionId} · prewarmed in ${Math.round(performance.now() - w0)}ms`))
+          .catch((err: unknown) => log(`  (prewarm failed: ${String(err)})`));
+      } else {
+        log(`session ${sessionIndex + 1}/${sessions} · ${sessionId}`);
+      }
     }
 
     const history: Array<{ role: "user" | "assistant"; content: string }> = [];
     const sceneTurns: SceneTurn[] = [];
 
     for (let turnIndex = 0; turnIndex < suite.turns.length; turnIndex++) {
-      const scripted = suite.turns[turnIndex];
       const fixture = fixtures[turnIndex];
+      const scripted = fixture.displayText;
 
       // 1+2. Spoken input → STT.
       const stt = await streamUtterance({
         samples: fixture.samples,
         wsUrl: opts.audioRtWsUrl,
         turbo: opts.turbo,
+        captureAllBursts: suite.sttOnly,
       });
+      const utterance: SonarUtteranceInfo = {
+        kind: fixture.kind,
+        finals: stt.finals,
+        cutoff: fixture.kind === "paused" && stt.finals >= 2,
+      };
       const transcript = stt.transcript || scripted; // fall back so the turn still exercises the LLM/TTS legs
+
+      // Endpointing suite: record STT-only metrics (endpoint latency + cutoff)
+      // and skip orchestrate + voice-stream entirely — no LLM/TTS cost.
+      if (suite.sttOnly) {
+        turns.push(
+          makeSttOnlyTurn({
+            sessionIndex,
+            turnIndex,
+            scripted,
+            utterance,
+            stt,
+            fixtureSynthesized: fixture.synthesized,
+          }),
+        );
+        log(
+          `  turn ${turnIndex + 1}/${suite.turns.length} · ` +
+            (sttHardError(stt.error)
+              ? `ERROR ${sttHardError(stt.error)}`
+              : (fixture.kind === "paused" ? (utterance.cutoff ? "CUT ✂  " : "whole ✓  ") : "complete  ") +
+                `finals=${stt.finals} endpoint=${fmt(stt.marks.endpointToWordMs)} · "${truncate(stt.transcript || "(empty)")}"`),
+        );
+        if (settleMs > 0) await sleep(settleMs);
+        continue;
+      }
+
       sceneTurns.push({ speakerSlug: "user", speakerName: "User", text: transcript });
 
       // Model the client's post-STT commit hold: dead time after the user is
@@ -229,6 +277,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
         sessionIndex,
         turnIndex,
         message: scripted,
+        utterance,
         stt: {
           transcript: stt.transcript,
           scripted,
@@ -267,12 +316,14 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
       if (settleMs > 0) await sleep(settleMs);
     }
 
-    await http
-      .patch(`/api/scene-sessions/${sessionId}`, {
-        status: "ended",
-        metadata: { source: "sonar", runId, endedBy: "sonar-runner" },
-      })
-      .catch((err: unknown) => log(`  (session end failed: ${String(err)})`));
+    if (!suite.sttOnly) {
+      await http
+        .patch(`/api/scene-sessions/${sessionId}`, {
+          status: "ended",
+          metadata: { source: "sonar", runId, endedBy: "sonar-runner" },
+        })
+        .catch((err: unknown) => log(`  (session end failed: ${String(err)})`));
+    }
   }
 
   const aggregates: Partial<Record<SonarSpanName, SonarAggregate>> = {};
@@ -281,6 +332,19 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
     const agg = aggregate(values);
     if (agg) aggregates[span] = agg;
   }
+
+  // Endpointing summary over pause-aware fixtures (skip errored turns).
+  const pausedOk = turns.filter((t) => t.utterance.kind === "paused" && !t.flags.error);
+  const endpointing =
+    pausedOk.length > 0
+      ? {
+          pausedTurns: pausedOk.length,
+          cutoffTurns: pausedOk.filter((t) => t.utterance.cutoff).length,
+          cutoffRate:
+            Math.round((pausedOk.filter((t) => t.utterance.cutoff).length / pausedOk.length) * 1000) /
+            1000,
+        }
+      : null;
 
   return {
     runId,
@@ -308,6 +372,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
     },
     turns,
     aggregates,
+    endpointing,
     errors: turns.filter((t) => t.flags.error && t.flags.error !== "stt-empty").length,
     totalCostUsd: round6(
       turns.reduce((acc, t) => acc + (t.usage.estimatedCostUsd ?? 0) + (t.usage.ttsCostUsd ?? 0), 0),
@@ -318,6 +383,76 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
 /** stt-empty is a soft signal (we fell back); other STT errors are hard. */
 function sttHardError(error: string | null): string | null {
   return error && error !== "stt-empty" ? `stt: ${error}` : null;
+}
+
+/** A string is one complete clip; { parts, gapMs } is a paused utterance. */
+function normalizeUtterance(u: SonarUtterance): {
+  parts: string[];
+  gapMs: number;
+  kind: "complete" | "paused";
+  displayText: string;
+} {
+  if (typeof u === "string") return { parts: [u], gapMs: 0, kind: "complete", displayText: u };
+  return {
+    parts: u.parts,
+    gapMs: u.gapMs ?? 1000,
+    kind: "paused",
+    displayText: u.parts.join(" … "),
+  };
+}
+
+function emptyUsage(): SonarTurnUsage {
+  return {
+    inputTokens: null,
+    outputTokens: null,
+    estimatedCostUsd: null,
+    provider: null,
+    model: null,
+    ttsProvider: null,
+    ttsVoice: null,
+    ttsChars: null,
+    ttsCostUsd: null,
+  };
+}
+
+/** Build a turn record for an STT-only (endpointing) suite — no LLM/TTS legs. */
+function makeSttOnlyTurn(input: {
+  sessionIndex: number;
+  turnIndex: number;
+  scripted: string;
+  utterance: SonarUtteranceInfo;
+  stt: Awaited<ReturnType<typeof streamUtterance>>;
+  fixtureSynthesized: boolean;
+}): SonarTurnRecord {
+  const { stt } = input;
+  return {
+    sessionIndex: input.sessionIndex,
+    turnIndex: input.turnIndex,
+    message: input.scripted,
+    utterance: input.utterance,
+    stt: {
+      transcript: stt.transcript,
+      scripted: input.scripted,
+      wordCount: stt.words.length,
+      fixtureSynthesized: input.fixtureSynthesized,
+    },
+    spans: {
+      "stt.handshake": stt.marks.wsHandshakeMs,
+      "stt.endpoint-to-word": stt.marks.endpointToWordMs,
+      "stt.word-span": stt.marks.wordSpanMs,
+    },
+    flags: {
+      contextCacheHit: false,
+      retrievalSkipped: false,
+      ackDelivered: false,
+      ttsFallback: false,
+      sttEmpty: stt.error === "stt-empty",
+      error: sttHardError(stt.error),
+    },
+    usage: emptyUsage(),
+    serverTrace: null,
+    orchestrateTrace: null,
+  };
 }
 
 function makeHttp(baseUrl: string, cookie: string) {

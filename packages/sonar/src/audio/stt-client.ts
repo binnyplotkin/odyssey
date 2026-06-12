@@ -27,6 +27,12 @@ const FRAME_MS = (AUDIO_RT_FRAME_SAMPLES / AUDIO_RT_SAMPLE_RATE) * 1000; // 80ms
 const LEADING_SILENCE_FRAMES = 4; // ~320ms to let VAD settle before speech
 const MAX_TRAILING_SILENCE_MS = 6_000; // safety cap waiting for end-of-speech + STT
 const WORD_GRACE_MS = 350; // after the last word, wait this long for stragglers
+// captureAllBursts mode: a fixed listen window after speech so a SECOND
+// burst (a premature cutoff re-firing after a mid-sentence pause) is caught.
+const TRAILING_CAPTURE_MS = 1_800;
+// Words from one transcribe() arrive in a tight burst (<10ms apart); a gap
+// larger than this means a new burst — i.e. the endpointer fired again.
+const BURST_GAP_MS = 400;
 
 export type SttSttMark = {
   /** connect → Ready frame. */
@@ -47,6 +53,12 @@ export type SttResult = {
   marks: SttSttMark;
   /** performance.now() at the instant user speech ended — the voice-to-voice origin. */
   speechEndPerf: number;
+  /**
+   * Number of distinct word-bursts (transcribe finals) for this utterance.
+   * 1 = the utterance was kept whole; ≥2 = the endpointer fired mid-utterance
+   * (a premature cutoff). The endpointing cutoff metric.
+   */
+  finals: number;
   error: string | null;
 };
 
@@ -55,6 +67,12 @@ export type StreamUtteranceOptions = {
   wsUrl?: string;
   /** Send frames as fast as possible instead of real-time. Non-representative. */
   turbo?: boolean;
+  /**
+   * Listen for a fixed window after speech (instead of stopping at the first
+   * word) so a second burst from a premature cutoff is captured. Required for
+   * pause-aware endpointing fixtures; adds ~1.8s/turn so it's off by default.
+   */
+  captureAllBursts?: boolean;
 };
 
 export async function streamUtterance(opts: StreamUtteranceOptions): Promise<SttResult> {
@@ -67,6 +85,7 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
   ws.binaryType = "arraybuffer";
 
   const words: Array<{ text: string; startTime: number }> = [];
+  const wordPerfTimes: number[] = []; // arrival times, for burst counting
   let wsHandshakeMs: number | null = null;
   let firstWordMs: number | null = null;
   let firstWordPerf: number | null = null;
@@ -97,6 +116,7 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
           firstWordPerf = performance.now();
         }
         lastWordPerf = performance.now();
+        wordPerfTimes.push(lastWordPerf);
         words.push({ text: msg.text, startTime: msg.start_time });
       } else if (msg.type === "Error") {
         error = msg.message ?? "streaming STT error";
@@ -142,14 +162,23 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
     }
   }
 
-  // Trailing silence drives the server's end-of-speech detection. Keep
-  // sending until words arrive (plus a grace window) or the cap trips.
+  // Trailing silence drives the server's end-of-speech detection.
   const silenceStart = performance.now();
   const oneSilence = new Float32Array(AUDIO_RT_FRAME_SAMPLES);
-  while (performance.now() - silenceStart < MAX_TRAILING_SILENCE_MS) {
-    await paced(oneSilence);
-    if (error) break;
-    if (lastWordPerf !== null && performance.now() - lastWordPerf > WORD_GRACE_MS) break;
+  if (opts.captureAllBursts) {
+    // Listen a fixed window so a second burst (premature cutoff re-firing)
+    // is captured — don't stop at the first word.
+    while (performance.now() - silenceStart < TRAILING_CAPTURE_MS) {
+      await paced(oneSilence);
+      if (error) break;
+    }
+  } else {
+    // Stop once words arrive (plus a grace window) or the cap trips.
+    while (performance.now() - silenceStart < MAX_TRAILING_SILENCE_MS) {
+      await paced(oneSilence);
+      if (error) break;
+      if (lastWordPerf !== null && performance.now() - lastWordPerf > WORD_GRACE_MS) break;
+    }
   }
 
   try {
@@ -169,6 +198,7 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
     transcript,
     words,
     speechEndPerf,
+    finals: countBursts(wordPerfTimes),
     error: error ?? (transcript.length === 0 ? "stt-empty" : null),
     marks: {
       wsHandshakeMs: round1(wsHandshakeMs),
@@ -184,11 +214,22 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
   };
 }
 
+/** Count word-bursts: 1 + the number of inter-word gaps wider than BURST_GAP_MS. */
+function countBursts(times: number[]): number {
+  if (times.length === 0) return 0;
+  let bursts = 1;
+  for (let i = 1; i < times.length; i += 1) {
+    if (times[i] - times[i - 1] > BURST_GAP_MS) bursts += 1;
+  }
+  return bursts;
+}
+
 function emptyResult(error: string, sinceMs: number): SttResult {
   return {
     transcript: "",
     words: [],
     speechEndPerf: performance.now(),
+    finals: 0,
     error,
     marks: {
       wsHandshakeMs: null,

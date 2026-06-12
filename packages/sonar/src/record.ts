@@ -44,6 +44,7 @@ export function toLedgerEntry(record: SonarRunRecord): SonarLedgerEntry {
     vsTtfaP50: agg["vs.ttfa"]?.p50 ?? null,
     llmTtftP50: agg["server.llm.ttft"]?.p50 ?? null,
     orchestrateP50: agg["orchestrate.total"]?.p50 ?? null,
+    cutoffRate: record.endpointing?.cutoffRate ?? null,
   };
 }
 
@@ -99,6 +100,7 @@ export function renderProgression(entries: SonarLedgerEntry[], opts?: { suite?: 
     "vs.ttfa p50",
     "llm p50",
     "orch p50",
+    "cutoff",
     "err",
     "cost",
   ];
@@ -123,6 +125,7 @@ export function renderProgression(entries: SonarLedgerEntry[], opts?: { suite?: 
       ms(e.vsTtfaP50),
       ms(e.llmTtftP50),
       ms(e.orchestrateP50),
+      e.cutoffRate === null || e.cutoffRate === undefined ? "–" : `${Math.round(e.cutoffRate * 100)}%`,
       String(e.errors),
       e.costUsd ? `$${e.costUsd.toFixed(4)}` : "–",
     ]);
@@ -164,6 +167,12 @@ export function renderRunSummary(record: SonarRunRecord): string {
       `cost=$${record.totalCostUsd.toFixed(4)} (llm $${sumUsage(record, "estimatedCostUsd").toFixed(4)} + tts $${sumUsage(record, "ttsCostUsd").toFixed(4)} est)` +
       (record.config.prewarm ? " · prewarmed" : ""),
     `voice-to-voice · cold (turn-1) p50 ${ms(coldP50)} · warm p50 ${ms(warmP50)}`,
+    ...(record.endpointing
+      ? [
+          `endpointing · cutoff ${Math.round(record.endpointing.cutoffRate * 100)}% ` +
+            `(${record.endpointing.cutoffTurns}/${record.endpointing.pausedTurns} paused utterances cut mid-sentence)`,
+        ]
+      : []),
     "",
     `${"span".padEnd(20)} ${"n".padStart(3)} ${"p50".padStart(8)} ${"p90".padStart(8)} ${"p95".padStart(8)} ${"mean".padStart(8)} ${"max".padStart(8)}`,
   ];

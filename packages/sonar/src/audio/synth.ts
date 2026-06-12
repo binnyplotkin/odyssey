@@ -16,6 +16,8 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { concatWithSilenceGaps, loadUtterance24k } from "./wav";
+
 export const FIXTURES_DIR = "evals/sonar/fixtures";
 const OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech";
 
@@ -83,6 +85,41 @@ export async function ensureFixture(input: {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, wav);
   return { wav, file, synthesized: true };
+}
+
+/**
+ * Resolve an utterance to 24kHz samples. A single-part utterance is one
+ * synthesized clip; a multi-part utterance is each part synthesized
+ * separately and rejoined with `gapMs` of silence — a pause-aware fixture
+ * for endpointing tests. Parts are cached individually (by content hash),
+ * so a paused utterance reuses the same clips as its plain counterpart.
+ */
+export async function resolveUtteranceSamples(input: {
+  repoRoot: string;
+  suite: string;
+  turnIndex: number;
+  parts: string[];
+  gapMs: number;
+  opts?: SynthOptions;
+  log?: (line: string) => void;
+}): Promise<{ samples: Float32Array; synthesized: boolean }> {
+  let synthesized = false;
+  const segments: Float32Array[] = [];
+  for (const text of input.parts) {
+    const { wav, synthesized: s } = await ensureFixture({
+      repoRoot: input.repoRoot,
+      suite: input.suite,
+      turnIndex: input.turnIndex,
+      text,
+      opts: input.opts,
+      log: input.log,
+    });
+    if (s) synthesized = true;
+    segments.push(loadUtterance24k(wav));
+  }
+  const samples =
+    segments.length === 1 ? segments[0] : concatWithSilenceGaps(segments, input.gapMs);
+  return { samples, synthesized };
 }
 
 function truncate(text: string, max = 48): string {

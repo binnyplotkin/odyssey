@@ -49,7 +49,40 @@ export const SCENE_BASELINE: SonarSuite = {
   ],
 };
 
+/**
+ * Endpointing suite — STT-only, no LLM/TTS. Mixes complete utterances
+ * (measure endpoint latency) with pause-aware ones (measure premature
+ * cutoff). A good endpointer is fast on complete AND keeps paused
+ * utterances whole — the two axes the semantic-endpointing work must move
+ * together. Against the current fixed-silence audio-rt, the paused
+ * fixtures should cut (~100% cutoff) — that's the baseline the spike beats.
+ *
+ * Paused fixtures use a >800ms gap so the current 800ms VAD window actually
+ * fires mid-utterance; the second half completes the thought.
+ */
+export const ENDPOINTING: SonarSuite = {
+  name: "endpointing",
+  version: "1.0.0",
+  description:
+    "STT-only: endpoint latency on complete utterances + premature-cutoff rate on mid-sentence pauses.",
+  character: "abraham",
+  mode: "voice-stream",
+  sttOnly: true,
+  userVoice: "ash",
+  sessions: 2,
+  turns: [
+    // Complete — should stay whole (finals=1), measure endpoint latency.
+    "Tell me about the visitors at Mamre.",
+    "What did Sarah make of their promise?",
+    // Paused — a fixed-silence endpointer cuts these at the gap (finals=2).
+    { parts: ["Tell me about", "the visitors who came to your tent at Mamre."], gapMs: 1000 },
+    { parts: ["I was wondering", "what you remember of your journey from Ur."], gapMs: 1100 },
+    { parts: ["And Sarah —", "did she ever doubt the promise would come to pass?"], gapMs: 1000 },
+  ],
+};
+
 export const SUITES: Record<string, SonarSuite> = {
   [VOICE_BASELINE.name]: VOICE_BASELINE,
   [SCENE_BASELINE.name]: SCENE_BASELINE,
+  [ENDPOINTING.name]: ENDPOINTING,
 };
