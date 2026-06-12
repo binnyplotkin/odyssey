@@ -59,13 +59,16 @@ Per-turn flags record context-cache hits, retrieval skips, ack delivery,
 TTS fallbacks, and STT-empty so percentiles can be segmented. Each turn also
 stores the STT transcript next to the scripted line, so you can eyeball WER.
 
-**One deliberate exclusion:** `voice-to-voice` is *pipeline-intrinsic* — it
-omits the 1500ms client commit hold (`STREAMING_COMMIT_HOLD_MS`) that the
-production sandbox currently waits after STT finalizes before sending the
-turn. That hold is a knob we plan to cut; excluding it keeps Sonar measuring
-the pipeline we're optimizing, and once the hold is gone the production
-number converges to Sonar's. (Add it back mentally: real felt latency today
-≈ `voice-to-voice` + ~1500ms.)
+**Commit hold — intrinsic vs felt.** By default `voice-to-voice` is
+*pipeline-intrinsic*: it omits the client commit hold
+(`STREAMING_COMMIT_HOLD_MS`, 1500ms in prod) the sandbox waits after STT
+finalizes before firing the turn. Pass `--commit-hold-ms <n>` to model it and
+get **TRUE felt latency** — the number a user feels entering a world. Run
+both: intrinsic (default, comparable across stack changes) and felt
+(`--commit-hold-ms 1500`, the real experience). Caveat: the hold guards
+against cutting users off on natural pauses; Sonar's single-utterance
+fixtures can't see that quality cost, so a latency win from shrinking it is
+necessary-but-not-sufficient evidence to change the production constant.
 
 ## Input audio: synthesis vs recordings
 

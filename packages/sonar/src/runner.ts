@@ -45,6 +45,12 @@ export type RunSonarSuiteOptions = {
   model?: string;
   /** Route TTS through this voices-table slug instead of the character's binding (A/B). */
   ttsVoice?: string;
+  /**
+   * Model the sandbox's post-STT commit hold (STREAMING_COMMIT_HOLD_MS): wait
+   * this long after the transcript finalizes before firing the turn, so
+   * voice-to-voice reflects TRUE felt latency. 0 (default) = pipeline-intrinsic.
+   */
+  commitHoldMs?: number;
   /** Override the suite's session count. */
   sessions?: number;
   /** Stream STT frames as fast as possible — non-representative endpointing. */
@@ -63,6 +69,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
   const log = opts.log ?? (() => {});
   const character = opts.character ?? suite.character;
   const sessions = opts.sessions ?? suite.sessions;
+  const commitHoldMs = Math.max(0, opts.commitHoldMs ?? 0);
   const settleMs = suite.settleMs ?? 250;
   const startedAt = new Date().toISOString();
   const runId = crypto.randomUUID();
@@ -72,6 +79,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
     `sonar v${SONAR_VERSION} · suite=${suite.name}@${suite.version} · character=${character} · ` +
       `${sessions} session(s) × ${suite.turns.length} turn(s) · voice-to-voice` +
       (opts.ttsVoice ? ` · tts→${opts.ttsVoice}` : "") +
+      (commitHoldMs > 0 ? ` · commit-hold=${commitHoldMs}ms (felt)` : "") +
       (opts.turbo ? " · TURBO (endpointing not representative)" : ""),
   );
 
@@ -121,6 +129,11 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
       });
       const transcript = stt.transcript || scripted; // fall back so the turn still exercises the LLM/TTS legs
       sceneTurns.push({ speakerSlug: "user", speakerName: "User", text: transcript });
+
+      // Model the client's post-STT commit hold: dead time after the user is
+      // deemed done, before the turn fires. Sits inside the voice-to-voice
+      // window (speechEnd → first agent audio), so the sleep is captured.
+      if (commitHoldMs > 0) await sleep(commitHoldMs);
 
       // 3. Scene mode: orchestrator decision.
       let orchestrate: { totalMs: number; trace: TraceContract | null } | null = null;
@@ -176,6 +189,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
         "stt.handshake": stt.marks.wsHandshakeMs,
         "stt.endpoint-to-word": stt.marks.endpointToWordMs,
         "stt.word-span": stt.marks.wordSpanMs,
+        "commit.hold": commitHoldMs > 0 ? commitHoldMs : null,
       };
 
       const turn: SonarTurnRecord = {
@@ -252,6 +266,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
       character,
       model: opts.model ?? null,
       ttsVoice: opts.ttsVoice ?? null,
+      commitHoldMs,
       sessions,
       turnsPerSession: suite.turns.length,
     },
