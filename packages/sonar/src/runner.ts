@@ -21,6 +21,7 @@ import { loadUtterance24k } from "./audio/wav";
 import { SONAR_VERSION } from "./version";
 import { aggregate } from "./stats";
 import { extractVoiceStreamSpans } from "./spans";
+import { estimateTtsCostUsd } from "./tts-pricing";
 import { readTimedSseFrames } from "./sse";
 import {
   SONAR_SPANS,
@@ -211,6 +212,19 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
         "commit.hold": commitHoldMs > 0 ? commitHoldMs : null,
       };
 
+      const assistantText = frames
+        .filter((f) => f.event === "token")
+        .map((f) => String(f.data.delta ?? ""))
+        .join("");
+      // Estimate TTS cost from the reply length — the route only prices LLM
+      // tokens, so without this a hosted-TTS run looks as cheap as Pocket.
+      const ttsChars = assistantText.length;
+      const usage = {
+        ...extracted.usage,
+        ttsChars,
+        ttsCostUsd: estimateTtsCostUsd(extracted.usage.ttsProvider, ttsChars),
+      };
+
       const turn: SonarTurnRecord = {
         sessionIndex,
         turnIndex,
@@ -227,16 +241,12 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
           sttEmpty: stt.error === "stt-empty",
           error: transportError ?? extracted.flags.error ?? sttHardError(stt.error),
         },
-        usage: extracted.usage,
+        usage,
         serverTrace: extracted.serverTrace,
         orchestrateTrace: orchestrate?.trace ?? null,
       };
       turns.push(turn);
 
-      const assistantText = frames
-        .filter((f) => f.event === "token")
-        .map((f) => String(f.data.delta ?? ""))
-        .join("");
       history.push({ role: "user", content: transcript });
       if (assistantText) {
         history.push({ role: "assistant", content: assistantText });
@@ -299,7 +309,9 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
     turns,
     aggregates,
     errors: turns.filter((t) => t.flags.error && t.flags.error !== "stt-empty").length,
-    totalCostUsd: round6(turns.reduce((acc, t) => acc + (t.usage.estimatedCostUsd ?? 0), 0)),
+    totalCostUsd: round6(
+      turns.reduce((acc, t) => acc + (t.usage.estimatedCostUsd ?? 0) + (t.usage.ttsCostUsd ?? 0), 0),
+    ),
   };
 }
 

@@ -117,11 +117,16 @@ export type SonarSttInfo = {
 export type SonarTurnUsage = {
   inputTokens: number | null;
   outputTokens: number | null;
+  /** LLM cost only — what the route's estimateSessionTurnCost reports. */
   estimatedCostUsd: number | null;
   provider: string | null;
   model: string | null;
   ttsProvider: string | null;
   ttsVoice: string | null;
+  /** Characters synthesized (reply text) — basis for the TTS cost estimate. */
+  ttsChars: number | null;
+  /** Estimated TTS cost (Sonar-side, from tts-pricing); null if provider unknown. */
+  ttsCostUsd: number | null;
 };
 
 export type SonarTurnRecord = {
