@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getCharacterStore, getWorldSessionStore } from "@odyssey/db";
+import { getCharacterStore, getSceneSessionStore } from "@odyssey/db";
 import { getChatProviderForModel, type ChatSystemBlock } from "@odyssey/engine";
 import { buildCharacterContext } from "@/lib/character-context";
 import { estimateSessionTurnCost } from "@/lib/session-cost";
@@ -156,7 +156,7 @@ export async function POST(
         selectedModel = modelId;
 
         if (body.sessionId && body.turnId) {
-          const sessionStore = getWorldSessionStore();
+          const sessionStore = getSceneSessionStore();
           try {
             await sessionStore.upsertTurn({
               id: body.turnId,
@@ -179,7 +179,6 @@ export async function POST(
               mode: context.routingMode,
               promptKind: context.promptKind,
               query: message,
-              moment: body.moment,
               scene: body.scene,
               tokenBudget: context.tokensBudget,
               tokensUsed: context.tokensUsed,
@@ -261,7 +260,7 @@ export async function POST(
             cacheCreationTokens,
           });
           try {
-            await getWorldSessionStore().upsertTurn({
+            await getSceneSessionStore().upsertTurn({
               id: body.turnId,
               sessionId: body.sessionId,
               inputMode: "chat",
@@ -291,7 +290,7 @@ export async function POST(
               },
               trace: context.timingTrace,
             });
-            await getWorldSessionStore().appendEvent({
+            await getSceneSessionStore().appendEvent({
               sessionId: body.sessionId,
               turnId: body.turnId,
               type: "chat_stream.done",
@@ -315,7 +314,7 @@ export async function POST(
         const msg = err instanceof Error ? err.message : String(err);
         if (body.sessionId && body.turnId) {
           try {
-            await getWorldSessionStore().upsertTurn({
+            await getSceneSessionStore().upsertTurn({
               id: body.turnId,
               sessionId: body.sessionId,
               inputMode: "chat",

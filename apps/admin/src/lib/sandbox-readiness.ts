@@ -2,7 +2,7 @@ import {
   getCharacterStore,
   getVoiceStore,
   getWikisStore,
-  getWorldSessionStore,
+  getSceneSessionStore,
   type CharacterRecord,
   type VoiceRecord,
 } from "@odyssey/db";
@@ -554,8 +554,8 @@ async function contextChecks(
 function persistenceCheck(): SandboxReadinessCheck {
   const configured = Boolean((process.env.DATABASE_URL ?? "").trim());
   return {
-    id: "world-session-persistence",
-    label: "World-session persistence",
+    id: "scene-session-persistence",
+    label: "Scene-session persistence",
     group: "persistence",
     status: configured ? "not_checked" : "degraded",
     summary: configured
@@ -753,7 +753,7 @@ async function checkPersistence(
 ): Promise<SandboxReadinessCheck> {
   const started = performance.now();
   try {
-    const session = await getWorldSessionStore().createSession({
+    const session = await getSceneSessionStore().createSession({
       userId: null,
       characterId: loaded.character.id,
       mode: "sandbox-preflight",
@@ -770,13 +770,13 @@ async function checkPersistence(
         mode: loaded.mode,
       },
     });
-    await getWorldSessionStore().appendEvent({
+    await getSceneSessionStore().appendEvent({
       sessionId: session.id,
       type: "sandbox.preflight",
       source: "system",
       payload: { mode: loaded.mode },
     });
-    await getWorldSessionStore().endSession(session.id, "ended", {
+    await getSceneSessionStore().endSession(session.id, "ended", {
       source: "character-sandbox-readiness",
       probe: true,
     });

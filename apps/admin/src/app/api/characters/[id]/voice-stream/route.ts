@@ -4,7 +4,7 @@ import {
   getVoiceStore,
   getWikiStore,
   getWikisStore,
-  getWorldSessionStore,
+  getSceneSessionStore,
 } from "@odyssey/db";
 import {
   createStreamingTtsAdapterForVoice,
@@ -335,6 +335,7 @@ export async function POST(
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const startedAt = performance.now();
+      const startedAtWall = Date.now();
       const serverTrace = new TraceEnvelope();
       serverTrace.mark("server.request.received", {
         requestedProvider,
@@ -704,15 +705,16 @@ export async function POST(
         // place to attach the records. Failures here are non-fatal: the
         // turn still proceeds, the workbench just won't have data for it.
         if (body.sessionId && body.turnId) {
-          const sessionStore = getWorldSessionStore();
+          const sessionStore = getSceneSessionStore();
           try {
             await sessionStore.upsertTurn({
               id: body.turnId,
               sessionId: body.sessionId,
               inputMode: "voice",
+              speakerSlug: character.slug,
               userText: message,
               status: "in_progress",
-              startedAt: new Date(startedAt).toISOString(),
+              startedAt: new Date(startedAtWall).toISOString(),
             });
           } catch (turnErr) {
             console.error("[voice-stream] upsertTurn (start) failed", turnErr);
@@ -730,6 +732,7 @@ export async function POST(
               tokensBudget: curatorTokensBudget,
               selectedPages: curatorSelectedPages,
               curatorTrace,
+              timingTrace: serverTrace.toJSON(),
               promptChunk: composedPromptChunk,
               systemPrompt,
               metadata: {
@@ -854,7 +857,7 @@ export async function POST(
               reason: message,
             });
             if (body.sessionId) {
-              await getWorldSessionStore().appendEvent({
+              await getSceneSessionStore().appendEvent({
                 sessionId: body.sessionId,
                 turnId: body.turnId ?? null,
                 type: "tts.provider_fallback",
@@ -1045,7 +1048,7 @@ export async function POST(
             inputTokens,
             outputTokens,
           });
-          await getWorldSessionStore().appendEvent({
+          await getSceneSessionStore().appendEvent({
             sessionId: body.sessionId,
             turnId: body.turnId ?? null,
             type: "voice_stream.done",
@@ -1074,16 +1077,17 @@ export async function POST(
           // metrics. This is what the workbench's turn timeline reads.
           if (body.turnId) {
             try {
-              await getWorldSessionStore().upsertTurn({
+              await getSceneSessionStore().upsertTurn({
                 id: body.turnId,
                 sessionId: body.sessionId,
                 inputMode: "voice",
+                speakerSlug: character.slug,
                 userText: message,
                 assistantText,
                 provider: chosenProvider,
                 model: modelId,
                 status: "completed",
-                startedAt: new Date(startedAt).toISOString(),
+                startedAt: new Date(startedAtWall).toISOString(),
                 completedAt: new Date().toISOString(),
                 tokenUsage: {
                   input: inputTokens,
@@ -1181,7 +1185,7 @@ export async function POST(
         const msg = err instanceof Error ? err.message : String(err);
         serverTrace.mark("server.error", { message: msg });
         if (body.sessionId) {
-          await getWorldSessionStore().appendEvent({
+          await getSceneSessionStore().appendEvent({
             sessionId: body.sessionId,
             turnId: body.turnId ?? null,
             type: "voice_stream.error",
@@ -1231,7 +1235,7 @@ function refreshSandboxVoiceContextCacheInBackground(args: {
       scene: args.scene,
       tokenBudget: args.tokenBudget,
     });
-    await getWorldSessionStore().appendEvent({
+    await getSceneSessionStore().appendEvent({
       sessionId: args.sessionId,
       turnId: args.turnId,
       type: "context.cache_refreshed",

@@ -12,14 +12,11 @@ import {
   getVoiceStore,
   getWikiStore,
   getWikisStore,
-  getWorldGraphStore,
-  getWorldRepository,
-  getWorldSessionStore,
+  getSceneSessionStore,
   characterKnowledgeBindingsTable,
   usersTable,
   type AdminAgentOperationRecord,
 } from "@odyssey/db";
-import { worldDefinitionSchema, type WorldDefinition } from "@odyssey/types";
 import type {
   AdminAgentContext,
   AdminAgentDryRunResult,
@@ -1061,41 +1058,6 @@ const readTools: AdminAgentReadTool[] = [
   },
   {
     kind: "read",
-    name: "list_worlds",
-    description: "List world definitions and status.",
-    inputSchema: limitSchema,
-    async run(rawArgs) {
-      const { limit = 40 } = validate(limitSchema, rawArgs);
-      const worlds = (await getWorldRepository([]).listWorlds())
-        .slice(0, limit)
-        .map((world) => ({
-          id: world.id,
-          title: world.title,
-          premise: world.premise,
-          roleCount: world.roles?.length ?? 0,
-          characterCount: world.characters?.length ?? 0,
-        }));
-      return { summary: summaryForList("Worlds", worlds), data: worlds };
-    },
-  },
-  {
-    kind: "read",
-    name: "get_world",
-    description: "Get a world detail by id.",
-    inputSchema: worldIdSchema,
-    async run(rawArgs) {
-      const { worldId } = validate(worldIdSchema, rawArgs);
-      const detail = await getWorldRepository([]).getWorldDetail(worldId);
-      return {
-        summary: detail
-          ? `World ${worldId} loaded.`
-          : `World ${worldId} not found.`,
-        data: compact(detail),
-      };
-    },
-  },
-  {
-    kind: "read",
     name: "list_characters",
     description: "List characters.",
     inputSchema: limitSchema,
@@ -1202,13 +1164,13 @@ const readTools: AdminAgentReadTool[] = [
   {
     kind: "read",
     name: "list_sessions",
-    description: "List world/session summaries.",
+    description: "List scene session summaries.",
     inputSchema: limitSchema,
     async run(rawArgs) {
       const { limit = 50 } = validate(limitSchema, rawArgs);
-      const sessions = await getWorldSessionStore().listSessionSummaries(limit);
+      const sessions = await getSceneSessionStore().listSessionSummaries(limit);
       return {
-        summary: summaryForList("World sessions", sessions),
+        summary: summaryForList("Scene sessions", sessions),
         data: sessions,
       };
     },
@@ -1216,11 +1178,11 @@ const readTools: AdminAgentReadTool[] = [
   {
     kind: "read",
     name: "get_session_detail",
-    description: "Get full world session detail.",
+    description: "Get full scene session detail.",
     inputSchema: sessionDetailSchema,
     async run(rawArgs) {
       const { sessionId } = validate(sessionDetailSchema, rawArgs);
-      const detail = await getWorldSessionStore().getSessionDetail(sessionId);
+      const detail = await getSceneSessionStore().getSessionDetail(sessionId);
       return {
         summary: detail
           ? `Session ${sessionId} loaded.`
@@ -1245,20 +1207,6 @@ const readTools: AdminAgentReadTool[] = [
       return {
         summary: `Eval data for ${characterId}: ${suites.length} suites, ${runs.length} runs, ${sweeps.length} sweeps.`,
         data: { suites, runs, sweeps },
-      };
-    },
-  },
-  {
-    kind: "read",
-    name: "get_world_graph",
-    description: "Get nodes and edges for a world graph.",
-    inputSchema: worldIdSchema,
-    async run(rawArgs) {
-      const { worldId } = validate(worldIdSchema, rawArgs);
-      const graph = await getWorldGraphStore().getGraph(worldId);
-      return {
-        summary: `World graph ${worldId}: ${graph.nodes.length} nodes, ${graph.edges.length} edges.`,
-        data: graph,
       };
     },
   },
@@ -2048,87 +1996,6 @@ const mutationTools = [
   },
   {
     kind: "mutation",
-    name: "create_world",
-    description:
-      "Create a dynamic world from a full world definition. Requires approval.",
-    inputSchema: createWorldSchema,
-    async dryRun(rawArgs) {
-      const args = validate(createWorldSchema, rawArgs);
-      const definition = parseWorldDefinition(args.definition);
-      return {
-        intent: `Create world "${definition.title}"`,
-        riskLevel: "high",
-        affectedRecords: [],
-        previewDiff: {
-          create: {
-            table: "worlds",
-            prompt: args.prompt,
-            status: args.status ?? "published",
-            definition,
-          },
-        },
-        resultSummary: {
-          action: "create",
-          table: "worlds",
-          worldId: definition.id,
-        },
-      };
-    },
-    async execute(rawArgs) {
-      const args = validate(createWorldSchema, rawArgs);
-      const record = await getWorldRepository([]).createWorldFromDefinition({
-        prompt: args.prompt,
-        status: args.status,
-        definition: parseWorldDefinition(args.definition),
-      });
-      return {
-        afterSnapshot: record,
-        resultSummary: { createdId: record.id, title: record.title },
-      };
-    },
-  },
-  {
-    kind: "mutation",
-    name: "update_world",
-    description: "Update a dynamic world's full definition. Requires approval.",
-    inputSchema: updateWorldSchema,
-    async dryRun(rawArgs) {
-      const args = validate(updateWorldSchema, rawArgs);
-      const existing = await getWorldRepository([]).getWorldDetail(
-        args.worldId,
-      );
-      if (!existing) throw new Error(`World ${args.worldId} not found.`);
-      if (!existing.editable)
-        throw new Error(
-          `World ${args.worldId} is static and cannot be edited.`,
-        );
-      const definition = parseWorldDefinition(args.definition);
-      return {
-        intent: `Update world "${existing.world.title}"`,
-        riskLevel: "high",
-        affectedRecords: [
-          { table: "worlds", id: args.worldId, label: existing.world.title },
-        ],
-        previewDiff: { before: existing.record, update: { definition } },
-        beforeSnapshot: existing.record,
-        resultSummary: { action: "update", table: "worlds", id: args.worldId },
-      };
-    },
-    async execute(rawArgs) {
-      const args = validate(updateWorldSchema, rawArgs);
-      const record = await getWorldRepository([]).updateWorld({
-        worldId: args.worldId,
-        definition: parseWorldDefinition(args.definition),
-      });
-      if (!record) throw new Error(`World ${args.worldId} not found.`);
-      return {
-        afterSnapshot: record,
-        resultSummary: { updatedId: record.id, version: record.version },
-      };
-    },
-  },
-  {
-    kind: "mutation",
     name: "create_wiki",
     description: "Create a top-level wiki. Requires approval.",
     inputSchema: createWikiSchema,
@@ -2824,203 +2691,6 @@ const mutationTools = [
       return { resultSummary: { deletedId: id } };
     },
   },
-  makeWorldGraphTool(
-    "create_world_node",
-    createWorldNodeSchema,
-    "world_nodes",
-    "create",
-  ),
-  makeWorldGraphTool(
-    "update_world_node",
-    updateWorldNodeSchema,
-    "world_nodes",
-    "update",
-  ),
-  makeWorldGraphTool("delete_world_node", idSchema, "world_nodes", "delete"),
-  {
-    kind: "mutation",
-    name: "ingest_character_world_node",
-    description:
-      "Add or merge a character node into a world graph. Requires approval.",
-    inputSchema: ingestCharacterNodeSchema,
-    async dryRun(rawArgs) {
-      const args = validate(ingestCharacterNodeSchema, rawArgs);
-      const character = await getCharacterStore().getById(args.characterId);
-      if (!character)
-        throw new Error(`Character ${args.characterId} not found.`);
-      return {
-        intent: `Add "${character.title}" to world graph ${args.worldId}`,
-        riskLevel: "medium",
-        affectedRecords: [
-          { table: "worlds", id: args.worldId },
-          { table: "characters", id: args.characterId, label: character.title },
-        ],
-        previewDiff: { upsert: { table: "world_nodes", values: args } },
-        resultSummary: {
-          action: "upsert",
-          table: "world_nodes",
-          worldId: args.worldId,
-          characterId: args.characterId,
-        },
-      };
-    },
-    async execute(rawArgs) {
-      const args = validate(ingestCharacterNodeSchema, rawArgs);
-      const record = await getWorldGraphStore().ingestCharacter(
-        args.worldId,
-        args.characterId,
-        args as never,
-      );
-      return {
-        afterSnapshot: record,
-        resultSummary: { nodeId: record.id, label: record.label },
-      };
-    },
-  },
-  makeWorldGraphTool(
-    "create_world_edge",
-    createWorldEdgeSchema,
-    "world_edges",
-    "create",
-  ),
-  makeWorldGraphTool("delete_world_edge", idSchema, "world_edges", "delete"),
-  {
-    kind: "mutation",
-    name: "create_world_session",
-    description: "Create or upsert a world session record. Requires approval.",
-    inputSchema: createWorldSessionSchema,
-    async dryRun(rawArgs) {
-      const args = validate(createWorldSessionSchema, rawArgs);
-      return {
-        intent: `Create world session${args.worldId ? ` for world ${args.worldId}` : ""}`,
-        riskLevel: "medium",
-        affectedRecords: [],
-        previewDiff: { create: { table: "world_sessions", values: args } },
-        resultSummary: { action: "create", table: "world_sessions" },
-      };
-    },
-    async execute(rawArgs) {
-      const args = validate(createWorldSessionSchema, rawArgs);
-      const record = await getWorldSessionStore().createSession(
-        cleanNulls(args) as never,
-      );
-      return {
-        afterSnapshot: record,
-        resultSummary: { sessionId: record.id, status: record.status },
-      };
-    },
-  },
-  {
-    kind: "mutation",
-    name: "end_world_session",
-    description: "End a world session. Requires approval.",
-    inputSchema: endWorldSessionSchema,
-    async dryRun(rawArgs) {
-      const args = validate(endWorldSessionSchema, rawArgs);
-      const existing = await getWorldSessionStore().getSession(args.id);
-      if (!existing) throw new Error(`World session ${args.id} not found.`);
-      return {
-        intent: `End world session ${args.id}`,
-        riskLevel: "high",
-        affectedRecords: [
-          { table: "world_sessions", id: args.id, label: existing.status },
-        ],
-        previewDiff: {
-          before: existing,
-          update: {
-            status: args.status ?? "ended",
-            metadata: args.metadata ?? {},
-          },
-        },
-        beforeSnapshot: existing,
-        resultSummary: { action: "end", table: "world_sessions", id: args.id },
-      };
-    },
-    async execute(rawArgs) {
-      const args = validate(endWorldSessionSchema, rawArgs);
-      await getWorldSessionStore().endSession(
-        args.id,
-        args.status,
-        args.metadata,
-      );
-      const record = await getWorldSessionStore().getSession(args.id);
-      return {
-        afterSnapshot: record,
-        resultSummary: { endedId: args.id, status: args.status ?? "ended" },
-      };
-    },
-  },
-  {
-    kind: "mutation",
-    name: "update_world_session_scene",
-    description:
-      "Update the current scene on a world session. Requires approval.",
-    inputSchema: updateWorldSessionSceneSchema,
-    async dryRun(rawArgs) {
-      const args = validate(updateWorldSessionSceneSchema, rawArgs);
-      const existing = await getWorldSessionStore().getSession(args.sessionId);
-      if (!existing)
-        throw new Error(`World session ${args.sessionId} not found.`);
-      return {
-        intent: `Update scene for world session ${args.sessionId}`,
-        riskLevel: "medium",
-        affectedRecords: [{ table: "world_sessions", id: args.sessionId }],
-        previewDiff: {
-          before: { currentScene: existing.currentScene },
-          update: { currentScene: args.currentScene },
-        },
-        beforeSnapshot: existing,
-        resultSummary: {
-          action: "update",
-          table: "world_sessions",
-          id: args.sessionId,
-        },
-      };
-    },
-    async execute(rawArgs) {
-      const args = validate(updateWorldSessionSceneSchema, rawArgs);
-      await getWorldSessionStore().updateCurrentScene(args);
-      const record = await getWorldSessionStore().getSession(args.sessionId);
-      return {
-        afterSnapshot: record,
-        resultSummary: { updatedId: args.sessionId },
-      };
-    },
-  },
-  {
-    kind: "mutation",
-    name: "append_world_session_event",
-    description:
-      "Append an operational event to a world session. Requires approval.",
-    inputSchema: appendWorldSessionEventSchema,
-    async dryRun(rawArgs) {
-      const args = validate(appendWorldSessionEventSchema, rawArgs);
-      return {
-        intent: `Append ${args.type} event to session ${args.sessionId}`,
-        riskLevel: "low",
-        affectedRecords: [{ table: "world_sessions", id: args.sessionId }],
-        previewDiff: {
-          create: { table: "world_session_events", values: args },
-        },
-        resultSummary: {
-          action: "create",
-          table: "world_session_events",
-          sessionId: args.sessionId,
-        },
-      };
-    },
-    async execute(rawArgs) {
-      const args = validate(appendWorldSessionEventSchema, rawArgs);
-      await getWorldSessionStore().appendEvent(cleanNulls(args) as never);
-      return {
-        resultSummary: {
-          appended: true,
-          sessionId: args.sessionId,
-          type: args.type,
-        },
-      };
-    },
-  },
   {
     kind: "mutation",
     name: "create_eval_suite",
@@ -3366,109 +3036,6 @@ function makeSimpleVoiceIdTool(
   };
 }
 
-function makeWorldGraphTool(
-  name:
-    | "create_world_node"
-    | "update_world_node"
-    | "delete_world_node"
-    | "create_world_edge"
-    | "delete_world_edge",
-  inputSchema: z.ZodTypeAny,
-  tableName: "world_nodes" | "world_edges",
-  action: "create" | "update" | "delete",
-): AdminAgentMutationTool {
-  return {
-    kind: "mutation",
-    name,
-    description: `${action[0].toUpperCase()}${action.slice(1)} ${tableName.replace("_", " ")}. Requires approval.`,
-    inputSchema,
-    async dryRun(rawArgs) {
-      const args = validate(inputSchema, rawArgs) as Record<string, unknown> & {
-        id?: string;
-        label?: string;
-        worldId?: string;
-      };
-      const existing =
-        tableName === "world_nodes" && args.id
-          ? await getWorldGraphStore().getNode(args.id)
-          : null;
-      if (
-        (name === "update_world_node" || name === "delete_world_node") &&
-        !existing
-      ) {
-        throw new Error(`World node ${args.id} not found.`);
-      }
-      return {
-        intent:
-          `${action} ${tableName} ${args.id ?? args.label ?? args.worldId ?? ""}`.trim(),
-        riskLevel:
-          action === "delete"
-            ? "destructive"
-            : action === "create"
-              ? "medium"
-              : "medium",
-        affectedRecords: [
-          {
-            table: tableName,
-            id: args.id ?? null,
-            worldId: args.worldId ?? existing?.worldId ?? null,
-          },
-        ],
-        previewDiff:
-          action === "delete"
-            ? { delete: existing ?? { id: args.id, table: tableName } }
-            : existing
-              ? { before: existing, update: args }
-              : { create: { table: tableName, values: args } },
-        beforeSnapshot: existing,
-        resultSummary: { action, table: tableName, id: args.id ?? null },
-      };
-    },
-    async execute(rawArgs) {
-      const args = validate(inputSchema, rawArgs) as Record<string, unknown> & {
-        id?: string;
-      };
-      if (name === "create_world_node") {
-        const record = await getWorldGraphStore().createNode(args as never);
-        return {
-          afterSnapshot: record,
-          resultSummary: { createdId: record.id, label: record.label },
-        };
-      }
-      if (name === "update_world_node") {
-        const { id, ...updates } = args;
-        if (!id) throw new Error("id is required.");
-        const record = await getWorldGraphStore().updateNode(
-          id,
-          cleanNulls(updates) as never,
-        );
-        if (!record) throw new Error(`World node ${id} not found.`);
-        return {
-          afterSnapshot: record,
-          resultSummary: { updatedId: record.id, label: record.label },
-        };
-      }
-      if (name === "delete_world_node") {
-        if (!args.id) throw new Error("id is required.");
-        const removed = await getWorldGraphStore().removeNode(args.id);
-        if (!removed) throw new Error(`World node ${args.id} not found.`);
-        return { resultSummary: { deletedId: args.id } };
-      }
-      if (name === "create_world_edge") {
-        const record = await getWorldGraphStore().createEdge(args as never);
-        return {
-          afterSnapshot: record,
-          resultSummary: { createdId: record.id, kind: record.kind },
-        };
-      }
-      if (!args.id) throw new Error("id is required.");
-      const removed = await getWorldGraphStore().removeEdge(args.id);
-      if (!removed) throw new Error(`World edge ${args.id} not found.`);
-      return { resultSummary: { deletedId: args.id } };
-    },
-  };
-}
-
 function makeEvalLifecycleTool(
   name: string,
   inputSchema: z.ZodTypeAny,
@@ -3629,9 +3196,6 @@ async function findWikiBindingById(id: string) {
     : null;
 }
 
-function parseWorldDefinition(value: unknown): WorldDefinition {
-  return worldDefinitionSchema.parse(value);
-}
 
 type EntityType = z.infer<typeof entityTypeSchema>;
 type PatchableEntityType = z.infer<typeof patchableEntityTypeSchema>;
@@ -3761,10 +3325,10 @@ async function listEntityRecords(
         limit,
       );
     case "worlds":
-      return (await getWorldRepository([]).listWorlds()).slice(0, limit);
+      return [];
     case "world_sessions":
       return (
-        await getWorldSessionStore().listSessionSummaries(Math.max(limit, 100))
+        await getSceneSessionStore().listSessionSummaries(Math.max(limit, 100))
       ).slice(0, limit);
     case "eval_suites": {
       const characterId = stringFilterValue(filters, "characterId");
@@ -3816,9 +3380,9 @@ async function getEntityRecord(
     case "voices":
       return getVoiceStore().getById(id);
     case "worlds":
-      return getWorldRepository([]).getWorldDetail(id);
+      return null;
     case "world_sessions":
-      return getWorldSessionStore().getSessionDetail(id);
+      return getSceneSessionStore().getSessionDetail(id);
     case "eval_suites":
       return getEvalStore().getSuite(id);
     case "eval_runs":
@@ -4050,7 +3614,7 @@ async function collectSessionCandidates(
   const details = args.sessionIds?.length
     ? await Promise.all(
         args.sessionIds.map((id) =>
-          getWorldSessionStore().getSessionDetail(id),
+          getSceneSessionStore().getSessionDetail(id),
         ),
       )
     : await Promise.all(
@@ -4062,7 +3626,7 @@ async function collectSessionCandidates(
         )
           .slice(0, 25)
           .map((session) =>
-            getWorldSessionStore().getSessionDetail(
+            getSceneSessionStore().getSessionDetail(
               String((session as { id: string }).id),
             ),
           ),
@@ -4075,7 +3639,6 @@ async function collectSessionCandidates(
     label: `${detail!.session.mode} session ${detail!.session.id}`,
     text: [
       JSON.stringify(detail!.session.metadata ?? ""),
-      JSON.stringify(detail!.session.currentMoment ?? ""),
       JSON.stringify(detail!.session.currentScene ?? ""),
       ...detail!.turns.flatMap((turn) => [
         turn.userText ?? "",
@@ -4088,7 +3651,7 @@ async function collectSessionCandidates(
       .join("\n"),
     metadata: {
       characterId: detail!.session.characterId,
-      worldId: detail!.session.worldId,
+      sceneId: detail!.session.sceneId,
       status: detail!.session.status,
       turnCount: detail!.turns.length,
     },
@@ -4322,7 +3885,7 @@ async function traceEntityContext(
 
   if (args.entityType === "world_sessions") {
     const detail = primary as {
-      session?: { characterId?: string | null; worldId?: string | null };
+      session?: { characterId?: string | null; sceneId?: string | null };
     } | null;
     if (include.has("character") && detail?.session?.characterId) {
       related.character = await getCharacterStore().getById(
@@ -4332,11 +3895,6 @@ async function traceEntityContext(
     if (include.has("wikis") && detail?.session?.characterId) {
       related.wikis = await getWikisStore().listWikisForCharacter(
         detail.session.characterId,
-      );
-    }
-    if (include.has("worlds") && detail?.session?.worldId) {
-      related.world = await getWorldRepository([]).getWorldDetail(
-        detail.session.worldId,
       );
     }
   }
@@ -4352,10 +3910,6 @@ async function traceEntityContext(
     if (include.has("tickets")) {
       related.tickets = await getTicketStore().listByFeature(args.id);
     }
-  }
-
-  if (args.entityType === "worlds" && include.has("worldGraph")) {
-    related.graph = await getWorldGraphStore().getGraph(args.id);
   }
 
   if (args.entityType === "voices" && include.has("character")) {
@@ -4380,7 +3934,7 @@ async function analyzeWorldSessions(
   const details = args.sessionIds?.length
     ? await Promise.all(
         args.sessionIds.map((id) =>
-          getWorldSessionStore().getSessionDetail(id),
+          getSceneSessionStore().getSessionDetail(id),
         ),
       )
     : await Promise.all(
@@ -4392,7 +3946,7 @@ async function analyzeWorldSessions(
         )
           .slice(0, limit)
           .map((session) =>
-            getWorldSessionStore().getSessionDetail(
+            getSceneSessionStore().getSessionDetail(
               String((session as { id: string }).id),
             ),
           ),
@@ -4455,7 +4009,7 @@ async function analyzeWorldSessions(
     sessions: sessions.map((detail) => ({
       id: detail?.session.id,
       characterId: detail?.session.characterId,
-      worldId: detail?.session.worldId,
+      sceneId: detail?.session.sceneId,
       mode: detail?.session.mode,
       status: detail?.session.status,
       startedAt: detail?.session.startedAt,

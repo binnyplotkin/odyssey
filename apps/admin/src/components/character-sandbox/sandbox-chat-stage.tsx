@@ -21,6 +21,9 @@ export function SandboxChatStage({
   composerValue,
   onComposerChange,
   onSend,
+  micOn,
+  voiceState,
+  onMicToggle,
   savedTurnIds,
   onSaveExample,
 }: {
@@ -29,6 +32,9 @@ export function SandboxChatStage({
   composerValue: string;
   onComposerChange: (next: string) => void;
   onSend: () => void;
+  micOn: boolean;
+  voiceState: "idle" | "listening" | "thinking" | "speaking";
+  onMicToggle: () => void;
   savedTurnIds: Set<string>;
   onSaveExample: (characterTurnId: string) => void;
 }) {
@@ -86,6 +92,9 @@ export function SandboxChatStage({
         onChange={onComposerChange}
         onSend={onSend}
         characterTitle={character.title}
+        micOn={micOn}
+        voiceState={voiceState}
+        onMicToggle={onMicToggle}
       />
     </div>
   );
@@ -289,11 +298,17 @@ function Composer({
   onChange,
   onSend,
   characterTitle,
+  micOn,
+  voiceState,
+  onMicToggle,
 }: {
   value: string;
   onChange: (next: string) => void;
   onSend: () => void;
   characterTitle: string;
+  micOn: boolean;
+  voiceState: "idle" | "listening" | "thinking" | "speaking";
+  onMicToggle: () => void;
 }) {
   return (
     <div
@@ -342,6 +357,44 @@ function Composer({
           placeholder={`ask ${characterTitle.toLowerCase()} something…`}
           style={inputStyle}
         />
+        <button
+          type="button"
+          onClick={onMicToggle}
+          aria-label={micOn ? "Turn voice input off" : "Turn voice input on"}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "var(--space-6)",
+            minHeight: 30,
+            padding: "0 10px",
+            border: micOn
+              ? "1px solid color-mix(in srgb, var(--accent-strong) 55%, transparent)"
+              : "1px solid var(--border)",
+            background: micOn
+              ? "color-mix(in srgb, var(--accent-strong) 12%, transparent)"
+              : "transparent",
+            color: micOn ? ACCENT : "var(--text-tertiary)",
+            fontFamily: FONT_MONO,
+            fontSize: "var(--font-size-xs)",
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: micOn ? ACCENT : "var(--text-quaternary)",
+              boxShadow: micOn ? `0 0 10px ${ACCENT}` : "none",
+            }}
+          />
+          {micOn ? voiceState : "mic"}
+        </button>
         <span
           style={{
             fontFamily: FONT_MONO,

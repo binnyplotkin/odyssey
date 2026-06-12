@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getCharacterStore, getWorldSessionStore } from "@odyssey/db";
+import { getCharacterStore, getSceneSessionStore } from "@odyssey/db";
 import {
   buildVoicePromptPlan,
   OrchestrationContextError,
@@ -107,13 +107,12 @@ export async function POST(
     const promptKind = "voice";
 
     if (body.sessionId) {
-      await getWorldSessionStore().recordContextBuild({
+      await getSceneSessionStore().recordContextBuild({
         sessionId: body.sessionId,
         turnId: body.turnId ?? null,
         mode: routingMode,
         promptKind,
         query: body.query?.trim() || null,
-        moment: body.moment,
         scene: body.scene,
         tokenBudget,
         tokensUsed: context.tokensUsed,
@@ -130,7 +129,7 @@ export async function POST(
           sourceQuery: cachedCurated.sourceQuery,
         },
       });
-      await getWorldSessionStore().appendEvent({
+      await getSceneSessionStore().appendEvent({
         sessionId: body.sessionId,
         type: "context.built",
         source: "system",

@@ -13,7 +13,7 @@
  *   session at turn start.
  */
 
-import { getDb, worldSessionEventsTable } from "@odyssey/db";
+import { getDb, sceneSessionEventsTable } from "@odyssey/db";
 import { and, desc, eq } from "drizzle-orm";
 
 const VOICE_SUMMARY_EVENT_TYPE = "voice.summary";
@@ -84,15 +84,15 @@ export async function getRecentTurnSummaries(
     const db = getDb();
     if (!db) return [];
     const rows = await db
-      .select({ payload: worldSessionEventsTable.payload, createdAt: worldSessionEventsTable.createdAt })
-      .from(worldSessionEventsTable)
+      .select({ payload: sceneSessionEventsTable.payload, createdAt: sceneSessionEventsTable.createdAt })
+      .from(sceneSessionEventsTable)
       .where(
         and(
-          eq(worldSessionEventsTable.sessionId, sessionId),
-          eq(worldSessionEventsTable.type, VOICE_SUMMARY_EVENT_TYPE),
+          eq(sceneSessionEventsTable.sessionId, sessionId),
+          eq(sceneSessionEventsTable.type, VOICE_SUMMARY_EVENT_TYPE),
         ),
       )
-      .orderBy(desc(worldSessionEventsTable.createdAt))
+      .orderBy(desc(sceneSessionEventsTable.createdAt))
       .limit(limit);
     return rows
       .reverse()  // oldest → newest, so the LLM reads them chronologically
@@ -152,8 +152,8 @@ export function summarizeTurnInBackground(args: {
       if (!summary) return;
       // Lazy-import the store to avoid pulling drizzle into the request hot
       // path; this background task can afford the cost.
-      const { getWorldSessionStore } = await import("@odyssey/db");
-      await getWorldSessionStore().appendEvent({
+      const { getSceneSessionStore } = await import("@odyssey/db");
+      await getSceneSessionStore().appendEvent({
         sessionId,
         turnId: turnId ?? null,
         type: VOICE_SUMMARY_EVENT_TYPE,

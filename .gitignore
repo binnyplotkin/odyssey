@@ -68,3 +68,6 @@ services/audio-rt/.venv/
 
 # Sonar real recordings — user voice; keep WAVs local (README + suite scripts are committed)
 evals/sonar/recordings/*.wav
+
+# Next.js preview build output (build cache; regenerated on build — should not be tracked)
+apps/admin/.next-preview/

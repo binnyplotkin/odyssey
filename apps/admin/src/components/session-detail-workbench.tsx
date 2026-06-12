@@ -4,16 +4,16 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import type {
-  WorldSessionAudioArtifactRecord,
-  WorldSessionContextBuildRecord,
-  WorldSessionDetailRecord,
-  WorldSessionEventRecord,
-  WorldSessionTurnRecord,
+  SceneSessionAudioArtifactRecord,
+  SceneSessionContextBuildRecord,
+  SceneSessionDetailRecord,
+  SceneSessionEventRecord,
+  SceneSessionTurnRecord,
 } from "@odyssey/db";
 import { useHeaderContent } from "@/components/header-context";
 
 type Props = {
-  detail: WorldSessionDetailRecord;
+  detail: SceneSessionDetailRecord;
 };
 
 const FONT_DISPLAY = '"Space Grotesk", system-ui, sans-serif';
@@ -69,7 +69,7 @@ export function SessionDetailWorkbench({ detail }: Props) {
   const [activeTurnId, setActiveTurnId] = useState<string | null>(() => {
     const interrupted = turns.find((t) => t.status === "interrupted" || t.status === "error");
     if (interrupted) return interrupted.id;
-    let slowest: WorldSessionTurnRecord | null = null;
+    let slowest: SceneSessionTurnRecord | null = null;
     let slowestMs = -1;
     for (const t of turns) {
       const ms = firstAudioMs(t);
@@ -183,14 +183,14 @@ function HeaderRail({
   contextBuilds,
   stats,
 }: {
-  session: WorldSessionDetailRecord["session"];
+  session: SceneSessionDetailRecord["session"];
   userLabel: string;
   characterDisplay: string;
   characterCrumb: string;
   characterSlug: string;
   sessionDate: string;
   sessionTime: string;
-  contextBuilds: WorldSessionContextBuildRecord[];
+  contextBuilds: SceneSessionContextBuildRecord[];
   stats: ReturnType<typeof computeStats>;
 }) {
   const statusColor =
@@ -671,17 +671,17 @@ function ConversationColumn({
   contextBuilds,
   audioArtifacts,
 }: {
-  session: WorldSessionDetailRecord["session"];
+  session: SceneSessionDetailRecord["session"];
   userName: string;
   characterName: string;
-  turns: WorldSessionTurnRecord[];
+  turns: SceneSessionTurnRecord[];
   activeTurnId: string | null;
   onSelectTurn: (id: string) => void;
   filter: ConvFilter;
   onFilterChange: (filter: ConvFilter) => void;
-  events: WorldSessionEventRecord[];
-  contextBuilds: WorldSessionContextBuildRecord[];
-  audioArtifacts: WorldSessionAudioArtifactRecord[];
+  events: SceneSessionEventRecord[];
+  contextBuilds: SceneSessionContextBuildRecord[];
+  audioArtifacts: SceneSessionAudioArtifactRecord[];
 }) {
   const totalDuration = computeDuration(session);
   return (
@@ -810,13 +810,13 @@ function TurnEntry({
   userName,
   characterName,
 }: {
-  turn: WorldSessionTurnRecord;
+  turn: SceneSessionTurnRecord;
   index: number;
   focused: boolean;
   onSelect: () => void;
-  events: WorldSessionEventRecord[];
-  contextBuilds: WorldSessionContextBuildRecord[];
-  audioArtifacts: WorldSessionAudioArtifactRecord[];
+  events: SceneSessionEventRecord[];
+  contextBuilds: SceneSessionContextBuildRecord[];
+  audioArtifacts: SceneSessionAudioArtifactRecord[];
   sessionId: string;
   userName: string;
   characterName: string;
@@ -954,7 +954,7 @@ function TurnEntry({
         avatarLabel={userInitials(userName)}
         line={`${(userName ?? "USER").toUpperCase()} · USER · ${(userAudio?.durationMs ?? 0) / 1000 ? `${((userAudio?.durationMs ?? 0) / 1000).toFixed(1)}s · ` : ""}${userWords} wd`}
         text={turn.userText ?? ""}
-        audioSrc={userAudio ? `/api/world-sessions/${sessionId}/audio/${userAudio.id}` : null}
+        audioSrc={userAudio ? `/api/scene-sessions/${sessionId}/audio/${userAudio.id}` : null}
       />
 
       <Speaker
@@ -963,7 +963,7 @@ function TurnEntry({
         line={`${(characterName ?? "ASSISTANT").toUpperCase()} · ASSISTANT · ${turn.provider ?? "provider?"} · ${turn.model ?? "model?"}`}
         text={turn.assistantText ?? ""}
         italic
-        audioSrc={assistantAudio ? `/api/world-sessions/${sessionId}/audio/${assistantAudio.id}` : null}
+        audioSrc={assistantAudio ? `/api/scene-sessions/${sessionId}/audio/${assistantAudio.id}` : null}
       />
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-8)" }}>
@@ -1073,15 +1073,15 @@ function InspectorRail({
   audioArtifacts,
   contextBuilds,
 }: {
-  session: WorldSessionDetailRecord["session"];
-  activeTurn: WorldSessionTurnRecord | null;
-  activeContext: WorldSessionContextBuildRecord | null;
+  session: SceneSessionDetailRecord["session"];
+  activeTurn: SceneSessionTurnRecord | null;
+  activeContext: SceneSessionContextBuildRecord | null;
   activeTab: TabKey;
   onTabChange: (tab: TabKey) => void;
-  turns: WorldSessionTurnRecord[];
-  events: WorldSessionEventRecord[];
-  audioArtifacts: WorldSessionAudioArtifactRecord[];
-  contextBuilds: WorldSessionContextBuildRecord[];
+  turns: SceneSessionTurnRecord[];
+  events: SceneSessionEventRecord[];
+  audioArtifacts: SceneSessionAudioArtifactRecord[];
+  contextBuilds: SceneSessionContextBuildRecord[];
 }) {
   const turnIndex = activeTurn ? turns.findIndex((t) => t.id === activeTurn.id) : -1;
   const turnLabel = turnIndex >= 0 ? `Turn ${String(turnIndex + 1).padStart(2, "0")}` : "No turn";
@@ -1268,9 +1268,9 @@ function PipelinePanel({
   context,
   events,
 }: {
-  turn: WorldSessionTurnRecord | null;
-  context: WorldSessionContextBuildRecord | null;
-  events: WorldSessionEventRecord[];
+  turn: SceneSessionTurnRecord | null;
+  context: SceneSessionContextBuildRecord | null;
+  events: SceneSessionEventRecord[];
 }) {
   if (!turn) return <Panel>No turn selected.</Panel>;
 
@@ -1509,7 +1509,7 @@ function HeadlineMetrics({ metrics }: { metrics: { label: string; value: string;
 
 // ── Trace marks list ──
 
-function TraceMarksPanel({ turn, events }: { turn: WorldSessionTurnRecord; events: WorldSessionEventRecord[] }) {
+function TraceMarksPanel({ turn, events }: { turn: SceneSessionTurnRecord; events: SceneSessionEventRecord[] }) {
   const marks = mergeTraceMarks(turn, events);
   const total = marks.length;
 
@@ -1595,7 +1595,7 @@ function KnowledgeGraphViz({
   dropped,
   seedSlugs,
 }: {
-  context: WorldSessionContextBuildRecord;
+  context: SceneSessionContextBuildRecord;
   pages: unknown[];
   timeGated: unknown[];
   dropped: unknown[];
@@ -1981,7 +1981,7 @@ function truncateLabel(value: string, limit: number) {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
 
-function GraphPanel({ context }: { context: WorldSessionContextBuildRecord | null }) {
+function GraphPanel({ context }: { context: SceneSessionContextBuildRecord | null }) {
   if (!context) return <Panel>No context build recorded.</Panel>;
   const trace = asRecord(context.curatorTrace);
   const seeds = asArray(trace?.seeds);
@@ -2093,7 +2093,7 @@ function GraphPanel({ context }: { context: WorldSessionContextBuildRecord | nul
   );
 }
 
-function PromptInspectorPanel({ context }: { context: WorldSessionContextBuildRecord | null }) {
+function PromptInspectorPanel({ context }: { context: SceneSessionContextBuildRecord | null }) {
   if (!context) return <Panel>No context build recorded.</Panel>;
   const promptChunk = context.promptChunk ?? "";
   const systemPrompt = context.systemPrompt ?? "";
@@ -2151,9 +2151,9 @@ function VoicePanel({
   audioArtifacts,
   sessionId,
 }: {
-  turn: WorldSessionTurnRecord | null;
-  events: WorldSessionEventRecord[];
-  audioArtifacts: WorldSessionAudioArtifactRecord[];
+  turn: SceneSessionTurnRecord | null;
+  events: SceneSessionEventRecord[];
+  audioArtifacts: SceneSessionAudioArtifactRecord[];
   sessionId: string;
 }) {
   if (!turn) return <Panel>No turn selected.</Panel>;
@@ -2260,7 +2260,7 @@ function VoicePanel({
           <audio
             controls
             preload="metadata"
-            src={`/api/world-sessions/${sessionId}/audio/${userClip.id}`}
+            src={`/api/scene-sessions/${sessionId}/audio/${userClip.id}`}
             style={{ width: "100%", marginTop: "var(--space-10)", height: 36, filter: "invert(1) hue-rotate(180deg) saturate(0.6)" }}
           />
         </Panel>
@@ -2278,13 +2278,13 @@ function RawPanel({
   turns,
   events,
 }: {
-  session: WorldSessionDetailRecord["session"];
-  activeTurn: WorldSessionTurnRecord | null;
-  activeContext: WorldSessionContextBuildRecord | null;
-  audioArtifacts: WorldSessionAudioArtifactRecord[];
-  contextBuilds: WorldSessionContextBuildRecord[];
-  turns: WorldSessionTurnRecord[];
-  events: WorldSessionEventRecord[];
+  session: SceneSessionDetailRecord["session"];
+  activeTurn: SceneSessionTurnRecord | null;
+  activeContext: SceneSessionContextBuildRecord | null;
+  audioArtifacts: SceneSessionAudioArtifactRecord[];
+  contextBuilds: SceneSessionContextBuildRecord[];
+  turns: SceneSessionTurnRecord[];
+  events: SceneSessionEventRecord[];
 }) {
   return (
     <>
@@ -2397,7 +2397,7 @@ function CopyButton({ text }: { text: string }) {
 
 // ───────────── Computations ─────────────
 
-function computeStats(detail: WorldSessionDetailRecord) {
+function computeStats(detail: SceneSessionDetailRecord) {
   const { session, turns, events, audioArtifacts, contextBuilds } = detail;
   const duration = computeDuration(session);
   const turnCount = turns.length;
@@ -2471,9 +2471,9 @@ function computeStats(detail: WorldSessionDetailRecord) {
 }
 
 function pickActiveContext(
-  contextBuilds: WorldSessionContextBuildRecord[],
-  activeTurn: WorldSessionTurnRecord | null,
-): WorldSessionContextBuildRecord | null {
+  contextBuilds: SceneSessionContextBuildRecord[],
+  activeTurn: SceneSessionTurnRecord | null,
+): SceneSessionContextBuildRecord | null {
   if (!activeTurn) return contextBuilds.at(-1) ?? null;
 
   const matchingForTurn = contextBuilds.filter((c) => c.turnId === activeTurn.id);
@@ -2482,7 +2482,7 @@ function pickActiveContext(
   }
 
   const turnStartMs = new Date(activeTurn.startedAt).getTime();
-  let best: WorldSessionContextBuildRecord | null = null;
+  let best: SceneSessionContextBuildRecord | null = null;
   let bestMs = -Infinity;
   for (const c of contextBuilds) {
     const createdMs = new Date(c.createdAt).getTime();
@@ -2494,7 +2494,7 @@ function pickActiveContext(
   return best;
 }
 
-function computeDuration(session: WorldSessionDetailRecord["session"]) {
+function computeDuration(session: SceneSessionDetailRecord["session"]) {
   const start = new Date(session.startedAt).getTime();
   const end = session.endedAt ? new Date(session.endedAt).getTime() : new Date(session.lastActiveAt).getTime();
   const diff = Math.max(0, end - start);
@@ -2505,10 +2505,10 @@ function computeDuration(session: WorldSessionDetailRecord["session"]) {
 }
 
 function filterTurns(
-  turns: WorldSessionTurnRecord[],
+  turns: SceneSessionTurnRecord[],
   filter: ConvFilter,
-  events: WorldSessionEventRecord[],
-): WorldSessionTurnRecord[] {
+  events: SceneSessionEventRecord[],
+): SceneSessionTurnRecord[] {
   if (filter === "all") return turns;
   if (filter === "issues") {
     return turns.filter((t) => {
@@ -2527,7 +2527,7 @@ function filterTurns(
   return turns;
 }
 
-function firstAudioMs(turn: WorldSessionTurnRecord): number | null {
+function firstAudioMs(turn: SceneSessionTurnRecord): number | null {
   const metrics = asRecord(turn.audioMetrics);
   const firstAudio =
     numberField(metrics, "firstAudioMs") ??
@@ -2557,9 +2557,9 @@ function pipelineHeadlineMetrics(items: LaneItem[], totalMs: number) {
 }
 
 function pipelineTraceItems(
-  turn: WorldSessionTurnRecord,
-  context: WorldSessionContextBuildRecord | null,
-  events: WorldSessionEventRecord[],
+  turn: SceneSessionTurnRecord,
+  context: SceneSessionContextBuildRecord | null,
+  events: SceneSessionEventRecord[],
 ): LaneItem[] {
   const turnTrace = traceEvents(turn.trace);
   const ctxTrace = traceEvents(context?.timingTrace);
@@ -2636,7 +2636,7 @@ function makeTicks(totalMs: number): number[] {
   return ticks;
 }
 
-function mergeTraceMarks(turn: WorldSessionTurnRecord, events: WorldSessionEventRecord[]) {
+function mergeTraceMarks(turn: SceneSessionTurnRecord, events: SceneSessionEventRecord[]) {
   const turnStart = new Date(turn.startedAt).getTime();
   const fromTrace = traceEvents(turn.trace).map((evt) => ({
     ms: evt.ms ?? 0,
@@ -2658,22 +2658,22 @@ function mergeTraceMarks(turn: WorldSessionTurnRecord, events: WorldSessionEvent
   return [...fromTrace, ...fromEvents].sort((a, b) => a.ms - b.ms);
 }
 
-function bargeInEvents(events: WorldSessionEventRecord[], turn: WorldSessionTurnRecord) {
+function bargeInEvents(events: SceneSessionEventRecord[], turn: SceneSessionTurnRecord) {
   return events.filter(
     (e) => e.turnId === turn.id && (e.type.includes("barge") || e.type.includes("interrupt")),
   );
 }
 
-function msFromTurnStart(turn: WorldSessionTurnRecord, isoTime: string) {
+function msFromTurnStart(turn: SceneSessionTurnRecord, isoTime: string) {
   return new Date(isoTime).getTime() - new Date(turn.startedAt).getTime();
 }
 
-function countTimeGated(context: WorldSessionContextBuildRecord | null) {
+function countTimeGated(context: SceneSessionContextBuildRecord | null) {
   if (!context) return 0;
   return asArray(asRecord(context.curatorTrace)?.timelineFiltered).length;
 }
 
-function countDropped(context: WorldSessionContextBuildRecord | null) {
+function countDropped(context: SceneSessionContextBuildRecord | null) {
   if (!context) return 0;
   const r = asRecord(context.curatorTrace);
   return asArray(r?.scoreDropped).length + asArray(r?.budgetDropped).length;

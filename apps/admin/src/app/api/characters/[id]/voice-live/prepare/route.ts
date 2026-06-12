@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getCharacterStore, getVoiceStore, getWorldSessionStore } from "@odyssey/db";
+import { getCharacterStore, getVoiceStore, getSceneSessionStore } from "@odyssey/db";
 import {
   createStreamingTtsAdapterForVoice,
   type StreamingTtsProvider,
@@ -77,7 +77,7 @@ export async function POST(
   if (body.sessionId) {
     void warmPromise
       .then(async (entry) => {
-        await getWorldSessionStore().appendEvent({
+        await getSceneSessionStore().appendEvent({
           sessionId: body.sessionId!,
           turnId: body.turnId ?? null,
           type: "context.prepare.ready",
@@ -115,7 +115,7 @@ export async function POST(
             ackText,
             synthesize: () => synthesizeAckAudio(routing, ackText),
           });
-          await getWorldSessionStore().appendEvent({
+          await getSceneSessionStore().appendEvent({
             sessionId: body.sessionId!,
             turnId: body.turnId ?? null,
             type: "context.prepare.ack_audio.ready",
@@ -131,7 +131,7 @@ export async function POST(
           });
         } catch (ackErr) {
           console.error("[voice-live.prepare] ack audio warm failed", ackErr);
-          await getWorldSessionStore().appendEvent({
+          await getSceneSessionStore().appendEvent({
             sessionId: body.sessionId!,
             turnId: body.turnId ?? null,
             type: "context.prepare.ack_audio.failed",

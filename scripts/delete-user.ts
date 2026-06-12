@@ -14,8 +14,7 @@ import {
   usersTable,
   accountsTable,
   authSessionsTable,
-  sessionsTable,
-  worldsTable,
+  sceneSessionsTable,
 } from "@odyssey/db";
 
 async function main() {
@@ -39,19 +38,17 @@ async function main() {
     process.exit(1);
   }
 
-  const [accounts, authSessions, sessions, worlds] = await Promise.all([
+  const [accounts, authSessions, sceneSessions] = await Promise.all([
     db.select({ n: sql<number>`count(*)::int` }).from(accountsTable).where(eq(accountsTable.userId, id)),
     db.select({ n: sql<number>`count(*)::int` }).from(authSessionsTable).where(eq(authSessionsTable.userId, id)),
-    db.select({ n: sql<number>`count(*)::int` }).from(sessionsTable).where(eq(sessionsTable.userId, id)),
-    db.select({ n: sql<number>`count(*)::int` }).from(worldsTable).where(eq(worldsTable.userId, id)),
+    db.select({ n: sql<number>`count(*)::int` }).from(sceneSessionsTable).where(eq(sceneSessionsTable.userId, id)),
   ]);
 
   console.log(`User: ${user.name ?? "(no name)"} <${user.email}> [${user.role}] id=${user.id}`);
   console.log(`Cascade impact:`);
-  console.log(`  accounts:      ${accounts[0].n}`);
-  console.log(`  auth_sessions: ${authSessions[0].n}`);
-  console.log(`  sessions:      ${sessions[0].n}`);
-  console.log(`  worlds:        ${worlds[0].n}`);
+  console.log(`  accounts:       ${accounts[0].n}`);
+  console.log(`  auth_sessions:  ${authSessions[0].n}`);
+  console.log(`  scene_sessions: ${sceneSessions[0].n}`);
 
   if (!confirm) {
     console.log(`\nDry-run. Re-run with --confirm to actually delete.`);

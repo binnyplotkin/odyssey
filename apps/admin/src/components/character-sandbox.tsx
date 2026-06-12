@@ -8,13 +8,16 @@ import { useHeaderContent } from "@/components/header-context";
 import { Pathname } from "@/components/pathname";
 import {
   PcmPlayer,
+  blobToBase64,
   captureMic,
   prepareSandboxVoiceTurn,
   streamVoice,
+  transcribeAudio,
   warmSandboxVoiceContext,
   type ChatHistoryTurn,
 } from "@/lib/sandbox-streams";
 import { AudioRtStreamingSttSession } from "@/lib/audio-rt-streaming-stt";
+import { ElevenLabsScribeStreamingSttSession } from "@/lib/elevenlabs-scribe-streaming-stt";
 import type { TracePayload } from "@/lib/voice-trace";
 import type {
   SandboxBinding,
@@ -48,7 +51,9 @@ const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
 const DANGER = "var(--status-error)";
 const CHARACTER_SANDBOX_SCENE_PREFIX = "character-sandbox:";
-const STREAMING_COMMIT_HOLD_MS = 900;
+const STREAMING_COMMIT_HOLD_MS = 1500;
+const STT_FALLBACK_MIN_AUDIO_MS = 1200;
+const STT_SUSPICIOUS_MAX_CHARS = 8;
 
 export type SandboxMode = "voice" | "chat";
 export type SandboxPhase = "pre-session" | "live" | "post-session";
@@ -108,6 +113,35 @@ type EndedSandboxSession = {
   error?: string | null;
 };
 
+type SandboxAudioInput = {
+  blob: Blob;
+  mimeType: string;
+  durationMs: number | null;
+  chunkCount: number;
+  sizeBytes: number;
+};
+
+type SttStartReason = "session_start" | "manual_toggle";
+type StreamingSttProvider = "audio-rt" | "elevenlabs-scribe";
+
+type MicConnectionStatus = {
+  capture: "idle" | "requesting" | "active" | "muted" | "ended" | "error";
+  stt: "idle" | "connecting" | "open" | "closed" | "error";
+  provider: StreamingSttProvider;
+  deviceLabel: string | null;
+  mimeType: string | null;
+  error: string | null;
+};
+
+const INITIAL_MIC_CONNECTION: MicConnectionStatus = {
+  capture: "idle",
+  stt: "idle",
+  provider: "audio-rt",
+  deviceLabel: null,
+  mimeType: null,
+  error: null,
+};
+
 export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<SandboxMode>("voice");
@@ -129,6 +163,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   const [traceRecords, setTraceRecords] = useState<SandboxTraceRecord[]>([]);
   const [composerValue, setComposerValue] = useState("");
   const [micOn, setMicOn] = useState(false);
+  const [sttProvider, setSttProvider] =
+    useState<StreamingSttProvider>("audio-rt");
+  const [micConnection, setMicConnection] = useState<MicConnectionStatus>(
+    INITIAL_MIC_CONNECTION,
+  );
 
   // Streaming machinery — abort controller for the in-flight LLM call,
   // PcmPlayer for serial audio playback (voice mode), MediaRecorder
@@ -141,7 +180,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   const recorderMimeRef = useRef<string>("");
   const recorderStartedAtRef = useRef<number | null>(null);
   const voiceContextWarmRef = useRef<Promise<unknown> | null>(null);
-  const streamingSttRef = useRef<AudioRtStreamingSttSession | null>(null);
+  const streamingSttRef = useRef<{ stop: () => Promise<void> } | null>(null);
   const streamingTranscriptRef = useRef("");
   const streamingTurnIdRef = useRef<string | null>(null);
   const lastPrepareRef = useRef<{ transcript: string; at: number } | null>(
@@ -175,9 +214,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     const tick = () => {
       pulse += 0.18;
       const shimmer = 0.5 + Math.sin(pulse) * 0.5;
-      const playbackDriven =
-        phase === "live" && mode === "voice" && voiceState === "speaking";
-      if (playbackDriven) return;
+      const voiceActive = phase === "live" && (voiceState !== "idle" || micOn);
       const target =
         phase !== "live"
           ? {
@@ -190,22 +227,31 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             }
           : voiceState === "listening"
             ? {
-                energy: 0.08,
-                bass: 0.05,
-                mid: 0.07,
-                high: 0.05,
-                peak: 0.04,
-                active: false,
+                energy: 0.5,
+                bass: 0.18,
+                mid: 0.46,
+                high: 0.34,
+                peak: 0.3,
+                active: true,
               }
             : voiceState === "thinking"
               ? {
-                  energy: 0.08,
-                  bass: 0.05,
-                  mid: 0.07,
-                  high: 0.05,
-                  peak: 0.04,
-                  active: false,
+                  energy: 0.26,
+                  bass: 0.1,
+                  mid: 0.28,
+                  high: 0.22,
+                  peak: 0.14,
+                  active: true,
                 }
+              : voiceState === "speaking"
+                ? {
+                    energy: 0.72,
+                    bass: 0.34,
+                    mid: 0.62,
+                    high: 0.48,
+                    peak: 0.5,
+                    active: true,
+                  }
                 : {
                     energy: 0.08,
                     bass: 0.04,
@@ -220,13 +266,13 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       audio.mid += (target.mid + shimmer * 0.05 - audio.mid) * 0.12;
       audio.high += (target.high + shimmer * 0.04 - audio.high) * 0.12;
       audio.peak = Math.max(audio.peak * 0.82, target.peak + shimmer * 0.08);
-      audio.active = false;
+      audio.active = voiceActive;
     };
 
     tick();
     const id = window.setInterval(tick, 80);
     return () => window.clearInterval(id);
-  }, [phase, mode, voiceState]);
+  }, [micOn, phase, voiceState]);
 
   async function handleStart() {
     setStartedAt(Date.now());
@@ -235,7 +281,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     setComposerValue("");
     setSessionError(null);
     setEndedSession(null);
-    const sessionId = await createSandboxWorldSession({
+    const sessionId = await createSandboxSceneSession({
       characterId: character.id,
       characterSlug: character.slug,
       mode,
@@ -296,10 +342,10 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           console.warn("[sandbox] voice context warm failed", err);
           return null;
         });
-      void startVoiceInput();
     } else {
       voiceContextWarmRef.current = null;
     }
+    void startVoiceInput("session_start");
   }
 
   function handleEnd() {
@@ -404,6 +450,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     setComposerValue("");
     setVoiceState("idle");
     setMicOn(false);
+  }
+
+  function handleModeChange(nextMode: SandboxMode) {
+    if (nextMode === mode) return;
+    setMode(nextMode);
   }
 
   /* ── Unified text/voice send ───────────────────────────────── */
@@ -523,181 +574,154 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           orchestration && !orchestration.degraded
             ? orchestration.decision
             : null;
-        const promptChunk = buildSandboxPromptChunk(decision);
+        const promptChunk = buildSandboxPromptChunk(decision, character);
         const executionScene = buildSandboxExecutionScene(character, decision);
 
         // Always use the voice stream so typed chat and mic input share the
         // same orchestrated character response, TTS playback, and trace path.
-          const syncPlaybackState = (playing: boolean) => {
-            const nextVoiceState = playing
-              ? "speaking"
-              : micOnRef.current
-                ? "listening"
-                : "idle";
-            if (voiceStateRef.current === nextVoiceState) return;
-            voiceStateRef.current = nextVoiceState;
-            setVoiceState(nextVoiceState);
-          };
-          const syncWaveformAudio = (audio: AudioData) => {
-            const wave = waveAudioRef.current;
-            wave.energy = audio.energy;
-            wave.bass = audio.bass;
-            wave.mid = audio.mid;
-            wave.high = audio.high;
-            wave.peak = audio.peak;
-            wave.active = audio.active;
-          };
-          if (!pcmPlayerRef.current) {
-            pcmPlayerRef.current = new PcmPlayer({
-              onPlaybackStateChange: syncPlaybackState,
-              onAudioMetrics: syncWaveformAudio,
-            });
-          } else {
-            pcmPlayerRef.current.setCallbacks({
-              onPlaybackStateChange: syncPlaybackState,
-              onAudioMetrics: syncWaveformAudio,
-            });
-          }
-          if (voiceContextWarmRef.current) {
-            await Promise.race([
-              voiceContextWarmRef.current,
-              new Promise((resolve) => window.setTimeout(resolve, 150)),
-            ]);
-          }
-          let firstAudioAt: number | null = null;
-          const outputFrames: Array<{
-            pcmBase64: string;
-            samples: number;
-            sampleRate: number;
-          }> = [];
-          await streamVoice({
-            characterId: character.id,
-            sessionId,
-            turnId: characterTurnId,
-            promptChunk,
-            message: trimmed,
-            history,
-            scene: executionScene,
-            model: activeVoiceModel,
-            signal: controller.signal,
-            callbacks: {
-              onTrace: (trace) => {
-                const record: SandboxTraceRecord = {
-                  id: `trace-${characterTurnId}`,
-                  turnId: characterTurnId,
-                  kind: "voice",
-                  at: new Date().toISOString(),
-                  trace: trace as TracePayload,
-                  meta: {
-                    model: activeVoiceModel,
-                  },
-                };
-                setTraceRecords((prev) => [...prev.slice(-49), record]);
-                finalize((t) => ({ ...t, trace: trace as TracePayload }));
-              },
-              onToken: (delta) => {
-                finalize((t) => ({
-                  ...t,
-                  text: t.text + delta,
-                }));
-              },
-              onFirstAudio: (latencyMs) => {
-                firstAudioAt = performance.now();
-                voiceStateRef.current = "speaking";
-                setVoiceState("speaking");
-                finalize((t) => ({
-                  ...t,
-                  ttftMs: t.ttftMs ?? latencyMs,
-                }));
-              },
-              onAudio: (pcm, samples, rate) => {
-                outputFrames.push({
-                  pcmBase64: pcm,
-                  samples,
-                  sampleRate: rate,
-                });
-                pcmPlayerRef.current?.enqueue(pcm, samples, rate);
-              },
-              onDone: (totals) => {
-                const done = totals as {
-                  inputTokens?: number;
-                  outputTokens?: number;
-                  provider?: string;
-                  model?: string;
-                  firstAudioMs?: number;
-                  totalMs?: number;
-                  serverTrace?: TracePayload;
-                  estimatedCostUsd?: number;
-                };
-                const ttft = firstAudioAt
-                  ? Math.round(firstAudioAt - sentAt)
-                  : Math.round(performance.now() - sentAt);
-                if (done.serverTrace) {
-                  setTraceRecords((prev) => [
-                    ...prev.slice(-49),
-                    {
-                      id: `done-${characterTurnId}`,
-                      turnId: characterTurnId,
-                      kind: "voice",
-                      at: new Date().toISOString(),
-                      trace: done.serverTrace!,
-                      meta: {
-                        provider: done.provider ?? null,
-                        model: done.model ?? null,
-                        firstAudioMs: done.firstAudioMs ?? null,
-                        totalMs: done.totalMs ?? null,
-                      },
-                    },
-                  ]);
-                }
-                if (sessionId && outputFrames.length > 0) {
-                  const output = buildWavBlob(outputFrames);
-                  if (output) {
-                    void uploadSandboxAudioArtifact({
-                      sessionId,
-                      turnId: characterTurnId,
-                      direction: "output",
-                      blob: output.blob,
-                      filename: `output-${characterTurnId}.wav`,
-                      durationMs: output.durationMs,
-                      sampleRate: output.sampleRate,
-                    });
-                  }
-                }
-                finalize((t) => ({
-                  ...t,
-                  inFlight: false,
-                  ttftMs: t.ttftMs ?? ttft,
-                  tokens:
-                    typeof done.inputTokens === "number" ||
-                    typeof done.outputTokens === "number"
-                      ? (done.inputTokens ?? 0) + (done.outputTokens ?? 0)
-                      : Math.ceil(t.text.length / 4),
-                  provider: done.provider ?? t.provider ?? null,
-                  model: done.model ?? t.model ?? null,
-                  estimatedCostUsd: done.estimatedCostUsd ?? t.estimatedCostUsd,
-                  trace: done.serverTrace ?? t.trace,
-                }));
-                if (outputFrames.length === 0) {
-                  const nextVoiceState = micOnRef.current
-                    ? "listening"
-                    : "idle";
-                  voiceStateRef.current = nextVoiceState;
-                  setVoiceState(nextVoiceState);
-                }
-              },
-              onError: (msg) => {
-                finalize((t) => ({
-                  ...t,
-                  inFlight: false,
-                  text: t.text || `[error: ${msg}]`,
-                }));
-                const nextVoiceState = micOnRef.current ? "listening" : "idle";
-                voiceStateRef.current = nextVoiceState;
-                setVoiceState(nextVoiceState);
-              },
+        if (!pcmPlayerRef.current) pcmPlayerRef.current = new PcmPlayer();
+        if (voiceContextWarmRef.current) {
+          await Promise.race([
+            voiceContextWarmRef.current,
+            new Promise((resolve) => window.setTimeout(resolve, 150)),
+          ]);
+        }
+        let firstAudioAt: number | null = null;
+        const outputFrames: Array<{
+          pcmBase64: string;
+          samples: number;
+          sampleRate: number;
+        }> = [];
+        await streamVoice({
+          characterId: character.id,
+          sessionId,
+          turnId: characterTurnId,
+          promptChunk,
+          message: trimmed,
+          history,
+          scene: executionScene,
+          model: activeVoiceModel,
+          ackMode: "off",
+          signal: controller.signal,
+          callbacks: {
+            onTrace: (trace) => {
+              const record: SandboxTraceRecord = {
+                id: `trace-${characterTurnId}`,
+                turnId: characterTurnId,
+                kind: "voice",
+                at: new Date().toISOString(),
+                trace: trace as TracePayload,
+                meta: {
+                  model: activeVoiceModel,
+                },
+              };
+              setTraceRecords((prev) => [...prev.slice(-49), record]);
+              finalize((t) => ({ ...t, trace: trace as TracePayload }));
             },
-          });
+            onToken: (delta) => {
+              finalize((t) => ({
+                ...t,
+                text: t.text + delta,
+              }));
+            },
+            onFirstAudio: (latencyMs) => {
+              firstAudioAt = performance.now();
+              voiceStateRef.current = "speaking";
+              setVoiceState("speaking");
+              finalize((t) => ({
+                ...t,
+                ttftMs: t.ttftMs ?? latencyMs,
+              }));
+            },
+            onAudio: (pcm, samples, rate) => {
+              outputFrames.push({
+                pcmBase64: pcm,
+                samples,
+                sampleRate: rate,
+              });
+              pcmPlayerRef.current?.enqueue(pcm, samples, rate);
+            },
+            onDone: (totals) => {
+              const done = totals as {
+                inputTokens?: number;
+                outputTokens?: number;
+                provider?: string;
+                model?: string;
+                firstAudioMs?: number;
+                totalMs?: number;
+                serverTrace?: TracePayload;
+                estimatedCostUsd?: number;
+              };
+              const ttft = firstAudioAt
+                ? Math.round(firstAudioAt - sentAt)
+                : Math.round(performance.now() - sentAt);
+              if (done.serverTrace) {
+                setTraceRecords((prev) => [
+                  ...prev.slice(-49),
+                  {
+                    id: `done-${characterTurnId}`,
+                    turnId: characterTurnId,
+                    kind: "voice",
+                    at: new Date().toISOString(),
+                    trace: done.serverTrace!,
+                    meta: {
+                      provider: done.provider ?? null,
+                      model: done.model ?? null,
+                      firstAudioMs: done.firstAudioMs ?? null,
+                      totalMs: done.totalMs ?? null,
+                    },
+                  },
+                ]);
+              }
+              if (sessionId && outputFrames.length > 0) {
+                const output = buildWavBlob(outputFrames);
+                if (output) {
+                  void uploadSandboxAudioArtifact({
+                    sessionId,
+                    turnId: characterTurnId,
+                    direction: "output",
+                    blob: output.blob,
+                    filename: `output-${characterTurnId}.wav`,
+                    durationMs: output.durationMs,
+                    sampleRate: output.sampleRate,
+                  });
+                }
+              }
+              finalize((t) => ({
+                ...t,
+                inFlight: false,
+                ttftMs: t.ttftMs ?? ttft,
+                tokens:
+                  typeof done.inputTokens === "number" ||
+                  typeof done.outputTokens === "number"
+                    ? (done.inputTokens ?? 0) + (done.outputTokens ?? 0)
+                    : Math.ceil(t.text.length / 4),
+                provider: done.provider ?? t.provider ?? null,
+                model: done.model ?? t.model ?? null,
+                estimatedCostUsd: done.estimatedCostUsd ?? t.estimatedCostUsd,
+                trace: done.serverTrace ?? t.trace,
+              }));
+              const nextVoiceState = micOnRef.current ? "listening" : "idle";
+              if (nextVoiceState === "listening") {
+                recorderChunksRef.current = [];
+                recorderStartedAtRef.current = performance.now();
+              }
+              voiceStateRef.current = nextVoiceState;
+              setVoiceState(nextVoiceState);
+            },
+            onError: (msg) => {
+              finalize((t) => ({
+                ...t,
+                inFlight: false,
+                text: t.text || `[error: ${msg}]`,
+              }));
+              recorderChunksRef.current = [];
+              recorderStartedAtRef.current = micOnRef.current ? performance.now() : null;
+              voiceStateRef.current = "idle";
+              setVoiceState("idle");
+            },
+          },
+        });
       } catch (err) {
         // AbortError lands here when the user ends the session mid-stream;
         // the turn is already marked done by handleEnd/handleReset, so just
@@ -815,12 +839,157 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     recorderStreamRef.current = null;
     recorderChunksRef.current = [];
     recorderStartedAtRef.current = null;
+    setMicConnection((current) => ({
+      ...current,
+      capture: "idle",
+      stt: "idle",
+      error: null,
+    }));
+  }
+
+  async function takeRecordedAudioInput(): Promise<SandboxAudioInput | undefined> {
+    const rec = recorderRef.current;
+    if (rec && rec.state !== "inactive") {
+      try {
+        rec.requestData();
+        await new Promise((resolve) => window.setTimeout(resolve, 60));
+      } catch {
+        /* requestData can throw if the recorder is already stopping. */
+      }
+    }
+
+    const chunks = recorderChunksRef.current;
+    if (chunks.length === 0) {
+      recorderStartedAtRef.current = performance.now();
+      return undefined;
+    }
+
+    recorderChunksRef.current = [];
+    const mimeType = recorderMimeRef.current || chunks[0]?.type || "audio/webm";
+    const capturedAt = performance.now();
+    const durationMs =
+      recorderStartedAtRef.current === null
+        ? null
+        : Math.max(0, Math.round(capturedAt - recorderStartedAtRef.current));
+    recorderStartedAtRef.current = capturedAt;
+
+    const blob = new Blob(chunks, { type: mimeType });
+    return {
+      blob,
+      mimeType,
+      durationMs,
+      chunkCount: chunks.length,
+      sizeBytes: blob.size,
+    };
+  }
+
+  async function resolveBestStreamingTranscript(input: {
+    transcript: string;
+    audioInput?: SandboxAudioInput;
+    turnId: string;
+    reason: "auto_commit" | "manual_stop";
+  }): Promise<string> {
+    const streamingTranscript = input.transcript.trim();
+    const durationMs = input.audioInput?.durationMs ?? null;
+    const hasRecordedAudio = Boolean(input.audioInput?.blob.size);
+    const shouldFallback =
+      hasRecordedAudio &&
+      (streamingTranscript.length === 0 ||
+        ((durationMs ?? 0) >= STT_FALLBACK_MIN_AUDIO_MS &&
+          isSuspiciousStreamingTranscript(streamingTranscript)));
+    if (!shouldFallback || !input.audioInput) return streamingTranscript;
+
+    const audioInput = input.audioInput;
+    const startedAtMs = performance.now();
+    try {
+      const audioBase64 = await blobToBase64(audioInput.blob);
+      const result = await transcribeAudio(audioBase64, audioInput.mimeType);
+      const batchTranscript = result.transcript.trim();
+      const selectedTranscript =
+        batchTranscript.length > streamingTranscript.length
+          ? batchTranscript
+          : streamingTranscript;
+      setTraceRecords((prev) => [
+        ...prev.slice(-49),
+        {
+          id: `stt-fallback-${input.turnId}`,
+          turnId: input.turnId,
+          kind: "session",
+          at: new Date().toISOString(),
+          trace: {
+            startedAt: new Date(Date.now() - Math.round(result.latencyMs)).toISOString(),
+            elapsedMs: result.latencyMs,
+            events: [
+              {
+                name: "sandbox.stt.batch_fallback",
+                elapsedMs: result.latencyMs,
+                meta: {
+                  reason: input.reason,
+                  streamingTranscript,
+                  batchTranscript,
+                  selectedTranscript,
+                  durationMs,
+                  mimeType: audioInput.mimeType,
+                  audioSizeBytes: audioInput.sizeBytes,
+                  audioChunkCount: audioInput.chunkCount,
+                },
+              },
+            ],
+          } as TracePayload,
+          meta: {
+            provider: result.provider,
+            model: result.model,
+            totalMs: result.latencyMs,
+          },
+        },
+      ]);
+      return selectedTranscript;
+    } catch (err) {
+      const elapsedMs = Math.round(performance.now() - startedAtMs);
+      setTraceRecords((prev) => [
+        ...prev.slice(-49),
+        {
+          id: `stt-fallback-error-${input.turnId}`,
+          turnId: input.turnId,
+          kind: "session",
+          at: new Date().toISOString(),
+          trace: {
+            startedAt: new Date(Date.now() - elapsedMs).toISOString(),
+            elapsedMs,
+            events: [
+              {
+                name: "sandbox.stt.batch_fallback.error",
+                elapsedMs,
+                meta: {
+                  reason: input.reason,
+                  streamingTranscript,
+                  durationMs,
+                  audioSizeBytes: input.audioInput?.sizeBytes ?? null,
+                  audioChunkCount: input.audioInput?.chunkCount ?? null,
+                  message: err instanceof Error ? err.message : String(err),
+                },
+              },
+            ],
+          } as TracePayload,
+          meta: {
+            provider: "stt-fallback",
+            model: null,
+            totalMs: elapsedMs,
+          },
+        },
+      ]);
+      return streamingTranscript;
+    }
   }
 
   function stopStreamingStt() {
     clearStreamingCommitTimer();
     const session = streamingSttRef.current;
     streamingSttRef.current = null;
+    setMicConnection((current) => ({
+      ...current,
+      stt: "idle",
+    }));
     if (session) {
       void session.stop().catch((err) => {
         console.warn("[sandbox] streaming STT stop failed", err);
@@ -855,32 +1024,150 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     }
   }
 
-  function commitStreamingTranscript() {
+  async function commitStreamingTranscript() {
     clearStreamingCommitTimer();
     if (voiceStateRef.current !== "listening") return;
     const transcript = streamingTranscriptRef.current.trim();
     if (!transcript) return;
     const turnId = streamingTurnIdRef.current ?? `chr-${crypto.randomUUID()}`;
+    voiceStateRef.current = "thinking";
+    setVoiceState("thinking");
+    const audioInput = await takeRecordedAudioInput();
+    const finalTranscript = await resolveBestStreamingTranscript({
+      transcript,
+      audioInput,
+      turnId,
+      reason: "auto_commit",
+    });
     streamingTranscriptRef.current = "";
     streamingTurnIdRef.current = `chr-${crypto.randomUUID()}`;
     lastPrepareRef.current = null;
-    void sendUtterance(transcript, undefined, { turnId });
+    await sendUtterance(finalTranscript, audioInput, { turnId });
   }
 
   function scheduleStreamingCommit() {
     clearStreamingCommitTimer();
     autoCommitTimerRef.current = window.setTimeout(() => {
       autoCommitTimerRef.current = null;
-      commitStreamingTranscript();
+      void commitStreamingTranscript();
     }, STREAMING_COMMIT_HOLD_MS);
   }
 
-  async function startVoiceInput(): Promise<void> {
+  function recordStreamingSttTrace(input: {
+    id: string;
+    name: string;
+    startedAtMs: number;
+    meta?: Record<string, unknown> & { provider?: StreamingSttProvider };
+  }) {
+    const elapsedMs = Math.round(performance.now() - input.startedAtMs);
+    setTraceRecords((prev) => [
+      ...prev.slice(-49),
+      {
+        id: `${input.id}-${Date.now()}`,
+        kind: "session",
+        at: new Date().toISOString(),
+        trace: {
+          startedAt: new Date(Date.now() - elapsedMs).toISOString(),
+          elapsedMs,
+          events: [
+            {
+              name: input.name,
+              elapsedMs,
+              meta: input.meta ?? {},
+            },
+          ],
+        } as TracePayload,
+        meta: {
+          provider: input.meta?.provider ?? "audio-rt",
+          model: "streaming-stt",
+          totalMs: elapsedMs,
+        },
+      },
+    ]);
+  }
+
+  function recordSttDecisionTrace(input: {
+    turnId?: string | null;
+    name: string;
+    meta?: Record<string, unknown>;
+  }) {
+    setTraceRecords((prev) => [
+      ...prev.slice(-49),
+      {
+        id: `${input.name}-${Date.now()}`,
+        turnId: input.turnId ?? undefined,
+        kind: "session",
+        at: new Date().toISOString(),
+        trace: {
+          startedAt: new Date().toISOString(),
+          elapsedMs: 0,
+          events: [
+            {
+              name: input.name,
+              elapsedMs: 0,
+              meta: input.meta ?? {},
+            },
+          ],
+        } as TracePayload,
+        meta: {
+          provider: "stt-flow",
+          model: null,
+          totalMs: 0,
+        },
+      },
+    ]);
+  }
+
+  function handleStreamingTranscript(text: string) {
+    if (voiceStateRef.current !== "listening") return;
+    const next = text.trim();
+    if (!next || next === streamingTranscriptRef.current.trim()) return;
+    streamingTranscriptRef.current = next;
+    prepareVoiceContextFromPartial(next);
+    scheduleStreamingCommit();
+  }
+
+  async function startVoiceInput(
+    reason: SttStartReason = "manual_toggle",
+    providerOverride?: StreamingSttProvider,
+  ): Promise<void> {
+    if (micOnRef.current || recorderRef.current || streamingSttRef.current) return;
+    const sttStartedAt = performance.now();
+    const provider = providerOverride ?? sttProvider;
+    setMicConnection((current) => ({
+      ...current,
+      capture: "requesting",
+      stt: "idle",
+      provider,
+      error: null,
+    }));
     try {
       const { recorder, stream, mimeType } = await captureMic();
       recorderRef.current = recorder;
       recorderStreamRef.current = stream;
       recorderMimeRef.current = mimeType || "audio/webm";
+      const primaryTrack = stream.getAudioTracks()[0] ?? null;
+      const syncTrackStatus = () => {
+        setMicConnection((current) => ({
+          ...current,
+          capture: !primaryTrack
+            ? "error"
+            : primaryTrack.readyState === "ended"
+              ? "ended"
+              : primaryTrack.muted
+                ? "muted"
+                : "active",
+          deviceLabel: primaryTrack?.label || current.deviceLabel,
+          mimeType: recorderMimeRef.current,
+          error: primaryTrack ? null : "No audio input track was captured.",
+        }));
+      };
+      if (primaryTrack) {
+        primaryTrack.onmute = syncTrackStatus;
+        primaryTrack.onunmute = syncTrackStatus;
+        primaryTrack.onended = syncTrackStatus;
+      }
+      syncTrackStatus();
       recorderChunksRef.current = [];
       recorder.addEventListener("dataavailable", (e) => {
         if (e.data && e.data.size > 0) {
@@ -893,36 +1180,139 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       streamingTurnIdRef.current = `chr-${crypto.randomUUID()}`;
       lastPrepareRef.current = null;
       const streamingSession = new AudioRtStreamingSttSession();
-      streamingSttRef.current = streamingSession;
-      void streamingSession
-        .start(stream, {
+      const elevenLabsStreamingSession =
+        provider === "elevenlabs-scribe"
+          ? new ElevenLabsScribeStreamingSttSession()
+          : null;
+      const activeStreamingSession =
+        elevenLabsStreamingSession ?? streamingSession;
+      streamingSttRef.current = activeStreamingSession;
+      setMicConnection((current) => ({
+        ...current,
+        provider,
+        stt: "connecting",
+      }));
+      recordStreamingSttTrace({
+        id: "stt-warmup-started",
+        name: "sandbox.stt.warmup_started",
+        startedAtMs: sttStartedAt,
+        meta: {
+          reason,
+          provider,
+          mimeType: recorderMimeRef.current,
+        },
+      });
+      recordSttDecisionTrace({
+        name: "sandbox.stt.recorder_started",
+        meta: {
+          reason,
+          provider,
+          mimeType: recorderMimeRef.current,
+          trackStates: stream.getAudioTracks().map((track) => ({
+            enabled: track.enabled,
+            muted: track.muted,
+            readyState: track.readyState,
+            label: track.label,
+          })),
+        },
+      });
+      const handleOpen = () => {
+        setMicConnection((current) => ({
+          ...current,
+          provider,
+          stt: "open",
+          error: null,
+        }));
+        recordStreamingSttTrace({
+          id: "stt-stream-open",
+          name: "sandbox.stt.streaming_open",
+          startedAtMs: sttStartedAt,
+          meta: {
+            reason,
+            provider,
+            mimeType: recorderMimeRef.current,
+          },
+        });
+      };
+      const handleError = (message: string) => {
+        console.warn("[sandbox] streaming STT error", message);
+        setMicConnection((current) => ({
+          ...current,
+          provider,
+          stt: "error",
+          error: message,
+        }));
+        recordStreamingSttTrace({
+          id: "stt-stream-error",
+          name: "sandbox.stt.streaming_error",
+          startedAtMs: sttStartedAt,
+          meta: {
+            reason,
+            provider,
+            message,
+          },
+        });
+      };
+      const handleClose = () => {
+        if (streamingSttRef.current === activeStreamingSession) {
+          streamingSttRef.current = null;
+          setMicConnection((current) => ({
+            ...current,
+            provider,
+            stt: micOnRef.current ? "closed" : "idle",
+          }));
+        }
+      };
+
+      const startPromise = elevenLabsStreamingSession
+        ? elevenLabsStreamingSession.start(stream, {
+            onOpen: handleOpen,
+            onPartialTranscript: handleStreamingTranscript,
+            onCommittedTranscript: handleStreamingTranscript,
+            onError: handleError,
+            onClose: handleClose,
+          })
+        : streamingSession.start(stream, {
+          onOpen: () => {
+            handleOpen();
+          },
           onWord: (word) => {
             if (voiceStateRef.current !== "listening") return;
             const next = [streamingTranscriptRef.current, word]
               .filter(Boolean)
               .join(" ")
               .trim();
-            streamingTranscriptRef.current = next;
-            prepareVoiceContextFromPartial(next);
-            scheduleStreamingCommit();
+            handleStreamingTranscript(next);
           },
-          onError: (message) => {
-            console.warn("[sandbox] streaming STT error", message);
-          },
-          onClose: () => {
-            if (streamingSttRef.current === streamingSession) {
-              streamingSttRef.current = null;
-            }
-          },
-        })
+          onError: handleError,
+          onClose: handleClose,
+        });
+
+      void startPromise
         .catch((err) => {
           console.warn(
             "[sandbox] streaming STT start failed; blob STT fallback remains active",
             err,
           );
-          if (streamingSttRef.current === streamingSession) {
+          if (streamingSttRef.current === activeStreamingSession) {
             streamingSttRef.current = null;
           }
+          setMicConnection((current) => ({
+            ...current,
+            provider,
+            stt: "error",
+            error: err instanceof Error ? err.message : String(err),
+          }));
+          recordStreamingSttTrace({
+            id: "stt-start-error",
+            name: "sandbox.stt.start_error",
+            startedAtMs: sttStartedAt,
+            meta: {
+              reason,
+              provider,
+              message: err instanceof Error ? err.message : String(err),
+            },
+          });
         });
       micOnRef.current = true;
       voiceStateRef.current = "listening";
@@ -930,6 +1320,12 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       setVoiceState("listening");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      setMicConnection((current) => ({
+        ...current,
+        capture: "error",
+        stt: "idle",
+        error: msg,
+      }));
       setTurns((prev) => [
         ...prev,
         {
@@ -945,6 +1341,15 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       setMicOn(false);
       streamingTurnIdRef.current = null;
       lastPrepareRef.current = null;
+      recordStreamingSttTrace({
+        id: "stt-capture-error",
+        name: "sandbox.stt.capture_error",
+        startedAtMs: sttStartedAt,
+        meta: {
+          reason,
+          message: msg,
+        },
+      });
     }
   }
 
@@ -958,18 +1363,80 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       streamingTurnIdRef.current = null;
       lastPrepareRef.current = null;
       micOnRef.current = false;
-      voiceStateRef.current = transcript ? "thinking" : "idle";
       setMicOn(false);
-      setVoiceState(transcript ? "thinking" : "idle");
       stopStreamingStt();
+      const audioInput = await takeRecordedAudioInput();
+      const hasRecordedAudio = Boolean(audioInput?.sizeBytes);
+      recordSttDecisionTrace({
+        turnId: preparedTurnId,
+        name: "sandbox.stt.manual_stop_captured",
+        meta: {
+          streamingTranscript: transcript,
+          audioCaptured: hasRecordedAudio,
+          audioSizeBytes: audioInput?.sizeBytes ?? 0,
+          audioChunkCount: audioInput?.chunkCount ?? 0,
+          durationMs: audioInput?.durationMs ?? null,
+          mimeType: audioInput?.mimeType ?? recorderMimeRef.current,
+        },
+      });
+      voiceStateRef.current = transcript || hasRecordedAudio ? "thinking" : "idle";
+      setVoiceState(transcript || hasRecordedAudio ? "thinking" : "idle");
       stopRecorder();
-      if (transcript) {
-        await sendUtterance(transcript, undefined, { turnId: preparedTurnId });
+      const finalTranscript = await resolveBestStreamingTranscript({
+        transcript,
+        audioInput,
+        turnId: preparedTurnId,
+        reason: "manual_stop",
+      });
+      if (finalTranscript.trim()) {
+        await sendUtterance(finalTranscript, audioInput, { turnId: preparedTurnId });
+      } else {
+        recordSttDecisionTrace({
+          turnId: preparedTurnId,
+          name: "sandbox.stt.no_transcript_after_stop",
+          meta: {
+            streamingTranscript: transcript,
+            audioCaptured: hasRecordedAudio,
+            audioSizeBytes: audioInput?.sizeBytes ?? 0,
+            audioChunkCount: audioInput?.chunkCount ?? 0,
+            durationMs: audioInput?.durationMs ?? null,
+          },
+        });
+        voiceStateRef.current = "idle";
+        setVoiceState("idle");
       }
       return;
     }
 
-    await startVoiceInput();
+    await startVoiceInput("manual_toggle");
+  }
+
+  async function handleSttProviderChange(nextProvider: StreamingSttProvider) {
+    if (nextProvider === sttProvider) return;
+    setSttProvider(nextProvider);
+    setMicConnection((current) => ({
+      ...current,
+      provider: nextProvider,
+      stt: current.capture === "idle" ? "idle" : current.stt,
+      error: null,
+    }));
+
+    if (phase !== "live") return;
+    if (!micOnRef.current && !recorderRef.current && !streamingSttRef.current) {
+      return;
+    }
+
+    clearStreamingCommitTimer();
+    streamingTranscriptRef.current = "";
+    streamingTurnIdRef.current = `chr-${crypto.randomUUID()}`;
+    lastPrepareRef.current = null;
+    micOnRef.current = false;
+    voiceStateRef.current = "idle";
+    setMicOn(false);
+    setVoiceState("idle");
+    stopStreamingStt();
+    stopRecorder();
+    await startVoiceInput("manual_toggle", nextProvider);
   }
 
   // Tear down audio + mic on unmount so background sessions don't keep
@@ -996,7 +1463,10 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           slug={character.slug}
           title={character.title}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={handleModeChange}
+          sttProvider={sttProvider}
+          onSttProviderChange={(next) => void handleSttProviderChange(next)}
+          micConnection={micConnection}
           debugOpen={debugOpen}
           traceCount={traceRecords.length}
           onToggleDebug={() => setDebugOpen((v) => !v)}
@@ -1031,6 +1501,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     character.slug,
     character.title,
     mode,
+    sttProvider,
+    micConnection,
     debugOpen,
     traceRecords.length,
     phase,
@@ -1069,17 +1541,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             character={character}
             bindings={bindings}
             activeModel={activeModel}
-            mode={mode}
             sessionError={sessionError}
-            onModeChange={setMode}
             onStart={handleStart}
             onCancel={handleCancel}
             heroBackground={
-              <SandboxWavefieldCell
-                atmosphere={0.28}
-                audioData={waveAudioRef.current}
-                idleMotion="ambient"
-              />
+              <SandboxWavefieldCell atmosphere={0.28} audioData={waveAudioRef.current} />
             }
           />
         ) : phase === "post-session" && endedSession ? (
@@ -1088,6 +1554,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             summary={endedSession}
             turns={turns}
             traceRecords={traceRecords}
+            sttProvider={sttProvider}
             onStartNext={handlePrepareNextSession}
             onReturnToCharacter={handleCancel}
           />
@@ -1102,11 +1569,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
               overflow: "hidden",
             }}
           >
-            <SandboxWavefieldCell
-              atmosphere={mode === "voice" && voiceState === "speaking" ? 1 : 0}
-              audioData={waveAudioRef.current}
-              idleMotion={mode === "voice" ? "static" : "ambient"}
-            />
+            <SandboxWavefieldCell atmosphere={1} audioData={waveAudioRef.current} />
             <div
               style={{
                 position: "relative",
@@ -1142,6 +1605,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                   composerValue={composerValue}
                   onComposerChange={setComposerValue}
                   onSend={handleSendText}
+                  micOn={micOn}
+                  voiceState={voiceState}
+                  onMicToggle={() => void handleMicToggle()}
                   savedTurnIds={savedTurnIds}
                   onSaveExample={handleSaveExample}
                 />
@@ -1170,11 +1636,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 function SandboxWavefieldCell({
   atmosphere,
   audioData,
-  idleMotion,
 }: {
   atmosphere: number;
   audioData: AudioData;
-  idleMotion?: "ambient" | "static";
 }) {
   return (
     <div
@@ -1187,11 +1651,7 @@ function SandboxWavefieldCell({
         pointerEvents: "none",
       }}
     >
-      <WavefieldStage
-        audioData={audioData}
-        atmosphere={atmosphere}
-        idleMotion={idleMotion}
-      />
+      <WavefieldStage audioData={audioData} atmosphere={atmosphere} />
     </div>
   );
 }
@@ -1371,6 +1831,7 @@ function SandboxPostSession({
   summary,
   turns,
   traceRecords,
+  sttProvider,
   onStartNext,
   onReturnToCharacter,
 }: {
@@ -1378,6 +1839,7 @@ function SandboxPostSession({
   summary: EndedSandboxSession;
   turns: SandboxTurn[];
   traceRecords: SandboxTraceRecord[];
+  sttProvider: StreamingSttProvider;
   onStartNext: () => void;
   onReturnToCharacter: () => void;
 }) {
@@ -1391,6 +1853,49 @@ function SandboxPostSession({
     : summary.status === "ending"
       ? "ending session"
       : "ended";
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copying" | "copied" | "error">("idle");
+  const [copyError, setCopyError] = useState<string | null>(null);
+
+  async function copyDebugTrace() {
+    setCopyStatus("copying");
+    setCopyError(null);
+    try {
+      const res = await fetch(`/api/scene-sessions/${encodeURIComponent(summary.id)}/detail`, {
+        cache: "no-store",
+      });
+      const persisted = res.ok
+        ? await res.json()
+        : { error: `session detail fetch failed (${res.status})`, body: await res.text() };
+      const payload = {
+        copiedAt: new Date().toISOString(),
+        url: typeof window !== "undefined" ? window.location.href : null,
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+        sandbox: "character",
+        character: {
+          id: character.id,
+          slug: character.slug,
+          title: character.title,
+          voiceSlug: character.voiceSlug,
+          voiceName: character.voiceName,
+          voiceProvider: character.voiceProvider,
+          activeModel: character.brainModel?.model ?? null,
+          activeVoiceModel:
+            character.brainModel?.voice?.model ?? character.brainModel?.model ?? null,
+          sttProvider,
+        },
+        summary,
+        localTurns: turns,
+        localTraceRecords: traceRecords,
+        persisted,
+      };
+      await copyTextToClipboard(JSON.stringify(payload, null, 2));
+      setCopyStatus("copied");
+      window.setTimeout(() => setCopyStatus("idle"), 2400);
+    } catch (err) {
+      setCopyError(err instanceof Error ? err.message : String(err));
+      setCopyStatus("error");
+    }
+  }
 
   return (
     <div
@@ -1512,6 +2017,30 @@ function SandboxPostSession({
         <div
           style={{ display: "flex", gap: "var(--space-12)", flexWrap: "wrap" }}
         >
+          <button
+            type="button"
+            onClick={() => void copyDebugTrace()}
+            disabled={copyStatus === "copying"}
+            style={{
+              minHeight: 42,
+              padding: "0 18px",
+              border: "1px solid var(--accent-border)",
+              background: "var(--accent-fill)",
+              color: ACCENT,
+              fontFamily: FONT_MONO,
+              fontSize: "var(--font-size-sm)",
+              fontWeight: 700,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              cursor: copyStatus === "copying" ? "wait" : "pointer",
+            }}
+          >
+            {copyStatus === "copying"
+              ? "copying debug"
+              : copyStatus === "copied"
+                ? "debug copied"
+                : "copy debug trace"}
+          </button>
           <a
             href={`/sessions/${encodeURIComponent(summary.id)}`}
             style={{
@@ -1570,6 +2099,20 @@ function SandboxPostSession({
             return to character
           </button>
         </div>
+        {copyError ? (
+          <div
+            role="alert"
+            style={{
+              maxWidth: 760,
+              color: DANGER,
+              fontFamily: FONT_MONO,
+              fontSize: "var(--font-size-xs)",
+              lineHeight: "18px",
+            }}
+          >
+            Debug copy failed: {copyError}
+          </div>
+        ) : null}
       </section>
 
       <aside
@@ -1794,6 +2337,9 @@ function SandboxHeaderToolbar({
   title,
   mode,
   onModeChange,
+  sttProvider,
+  onSttProviderChange,
+  micConnection,
   debugOpen,
   traceCount,
   onToggleDebug,
@@ -1804,6 +2350,9 @@ function SandboxHeaderToolbar({
   title: string;
   mode: SandboxMode;
   onModeChange: (next: SandboxMode) => void;
+  sttProvider: StreamingSttProvider;
+  onSttProviderChange: (next: StreamingSttProvider) => void;
+  micConnection: MicConnectionStatus;
   debugOpen: boolean;
   traceCount: number;
   onToggleDebug: () => void;
@@ -1834,6 +2383,13 @@ function SandboxHeaderToolbar({
       />
 
       <ModeToggle mode={mode} onChange={onModeChange} />
+
+      <HeaderSttProviderSelect
+        provider={sttProvider}
+        onChange={onSttProviderChange}
+      />
+
+      <HeaderMicConnectionStatus status={micConnection} />
 
       <div
         style={{
@@ -1902,6 +2458,155 @@ function SandboxHeaderToolbar({
 }
 
 /* ── Toolbar sub-components ───────────────────────────────────── */
+
+function HeaderSttProviderSelect({
+  provider,
+  onChange,
+}: {
+  provider: StreamingSttProvider;
+  onChange: (next: StreamingSttProvider) => void;
+}) {
+  return (
+    <label
+      style={{
+        height: 30,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--space-8)",
+        padding: "0 10px",
+        border:
+          "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
+        borderRadius: "var(--radius-pill)",
+        background: "transparent",
+        color: "var(--text-tertiary)",
+        fontFamily: FONT_MONO,
+        fontSize: "var(--font-size-xs)",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
+      }}
+    >
+      stt
+      <select
+        value={provider}
+        onChange={(event) =>
+          onChange(event.currentTarget.value as StreamingSttProvider)
+        }
+        style={{
+          height: 24,
+          minWidth: 116,
+          border: "0",
+          outline: "0",
+          background: "transparent",
+          color: "var(--text-secondary)",
+          fontFamily: FONT_MONO,
+          fontSize: "var(--font-size-xs)",
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+        }}
+      >
+        <option value="audio-rt">audio-rt</option>
+        <option value="elevenlabs-scribe">scribe</option>
+      </select>
+    </label>
+  );
+}
+
+function HeaderMicConnectionStatus({
+  status,
+}: {
+  status: MicConnectionStatus;
+}) {
+  const captureLabel =
+    status.capture === "requesting"
+      ? "mic requesting"
+      : status.capture === "active"
+        ? "mic active"
+        : status.capture === "muted"
+          ? "mic muted"
+          : status.capture === "ended"
+            ? "mic ended"
+            : status.capture === "error"
+              ? "mic error"
+              : "mic idle";
+  const sttLabel =
+    status.stt === "connecting"
+      ? "stt connecting"
+      : status.stt === "open"
+        ? "stt open"
+        : status.stt === "closed"
+          ? "stt closed"
+          : status.stt === "error"
+            ? "stt error"
+            : "stt idle";
+  const isHealthy = status.capture === "active" && status.stt === "open";
+  const isProblem =
+    status.capture === "error" ||
+    status.capture === "ended" ||
+    status.stt === "error" ||
+    status.stt === "closed";
+  const dotColor = isHealthy
+    ? ACCENT
+    : isProblem
+      ? DANGER
+      : "var(--text-quaternary)";
+  const deviceLabel = status.deviceLabel?.trim() || "device pending";
+  const providerLabel =
+    status.provider === "elevenlabs-scribe" ? "scribe" : "audio-rt";
+  const detail = `${captureLabel} | ${providerLabel} | ${deviceLabel} | ${sttLabel}${
+    status.error ? ` | ${status.error}` : ""
+  }`;
+
+  return (
+    <div
+      title={detail}
+      aria-label={detail}
+      style={{
+        minWidth: 0,
+        maxWidth: 360,
+        height: 30,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--space-8)",
+        padding: "0 12px",
+        border:
+          "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
+        borderRadius: "var(--radius-pill)",
+        background: isProblem
+          ? "color-mix(in srgb, var(--status-error) 8%, transparent)"
+          : "color-mix(in srgb, var(--surface-raised) 82%, transparent)",
+        color: isProblem ? DANGER : "var(--text-secondary)",
+        overflow: "hidden",
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 7,
+          height: 7,
+          flexShrink: 0,
+          borderRadius: "50%",
+          background: dotColor,
+          boxShadow: isHealthy ? `0 0 10px ${dotColor}` : "none",
+        }}
+      />
+      <span
+        style={{
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          fontFamily: FONT_MONO,
+          fontSize: "var(--font-size-xs)",
+          letterSpacing: "0.04em",
+        }}
+      >
+        {captureLabel} · {providerLabel} · {deviceLabel} · {sttLabel}
+      </span>
+    </div>
+  );
+}
 
 function ModeToggle({
   mode,
@@ -2098,7 +2803,7 @@ function TelemetryStrip({
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 
-async function createSandboxWorldSession(input: {
+async function createSandboxSceneSession(input: {
   characterId: string;
   characterSlug: string;
   mode: SandboxMode;
@@ -2110,7 +2815,7 @@ async function createSandboxWorldSession(input: {
     sceneId,
     input.characterSlug,
   );
-  const res = await fetch("/api/world-sessions", {
+  const res = await fetch("/api/scene-sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2129,7 +2834,7 @@ async function createSandboxWorldSession(input: {
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => `${res.status}`);
-    throw new Error(`world-session create failed: ${detail.slice(0, 200)}`);
+    throw new Error(`scene-session create failed: ${detail.slice(0, 200)}`);
   }
   const payload = (await res.json()) as { session?: { id?: string } };
   return payload.session?.id ?? id;
@@ -2153,7 +2858,7 @@ async function fetchSandboxOrchestratorDecision(input: {
   lastUserMessage: string;
 }): Promise<SandboxOrchestratorResult> {
   const res = await fetch(
-    `/api/world-sessions/${encodeURIComponent(input.sessionId)}/orchestrate`,
+    `/api/scene-sessions/${encodeURIComponent(input.sessionId)}/orchestrate`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2211,12 +2916,17 @@ function collectSceneTurns(
 
 function buildSandboxPromptChunk(
   decision: OrchestratorDecision | null,
+  character: SandboxCharacter,
 ): string | undefined {
-  if (!decision) return undefined;
+  const inCharacterGuard =
+    `Stay fully in character as ${character.title}. Do not refer to this as a role, ` +
+    "voice profile, wiki page, prompt, or character description.";
+  if (!decision) return inCharacterGuard;
   if (decision.action === "narrate") {
     const narration = decision.narration?.trim();
-    if (!narration) return undefined;
+    if (!narration) return inCharacterGuard;
     return [
+      inCharacterGuard,
       "Scene direction (orchestrator): narrate this response through the character voice.",
       decision.beat ? `Beat: ${decision.beat}` : "",
       decision.sceneCue ? `Scene cue: ${decision.sceneCue}` : "",
@@ -2225,13 +2935,14 @@ function buildSandboxPromptChunk(
       .filter(Boolean)
       .join("\n");
   }
-  if (decision.action !== "speak") return undefined;
+  if (decision.action !== "speak") return inCharacterGuard;
   const parts = [
+    inCharacterGuard,
     decision.beat ? `Scene direction (orchestrator): ${decision.beat}` : "",
     decision.sceneCue ? `Scene cue: ${decision.sceneCue}` : "",
     decision.beatLabel ? `Beat: ${decision.beatLabel}` : "",
   ].filter(Boolean);
-  return parts.length ? `${parts.join("\n")}\n\n` : undefined;
+  return `${parts.join("\n")}\n\n`;
 }
 
 function buildSandboxExecutionScene(
@@ -2255,7 +2966,7 @@ async function endSandboxWorldSession(
   sessionId: string,
   metadata: Record<string, unknown>,
 ): Promise<void> {
-  const res = await fetch(`/api/world-sessions/${sessionId}`, {
+  const res = await fetch(`/api/scene-sessions/${sessionId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2289,7 +3000,7 @@ async function uploadSandboxAudioArtifact(input: {
   if (input.durationMs !== null)
     form.set("durationMs", String(input.durationMs));
   if (input.sampleRate) form.set("sampleRate", String(input.sampleRate));
-  await fetch(`/api/world-sessions/${input.sessionId}/audio`, {
+  await fetch(`/api/scene-sessions/${input.sessionId}/audio`, {
     method: "POST",
     body: form,
   }).catch((err) => {
@@ -2485,4 +3196,29 @@ function truncateText(value: string, maxLength: number): string {
   const text = value.trim();
   if (text.length <= maxLength) return text;
   return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function isSuspiciousStreamingTranscript(transcript: string): boolean {
+  const normalized = transcript.trim();
+  if (normalized.length <= STT_SUSPICIOUS_MAX_CHARS) return true;
+  return normalized.split(/\s+/).filter(Boolean).length <= 1;
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const ok = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!ok) throw new Error("clipboard copy was blocked");
 }
