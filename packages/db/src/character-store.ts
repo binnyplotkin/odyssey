@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "./client";
 import { retryRead } from "./retry";
-import { charactersTable, worldNodesTable } from "./schema";
+import { charactersTable, sceneNodesTable } from "./schema";
 import type {
   CharacterDirective,
   CharacterIdentity,
@@ -184,12 +184,12 @@ function neonStore(): CharacterStore {
       try {
         const [row] = await retryRead(() =>
           requireDb()
-            .select({ n: sql<number>`count(distinct ${worldNodesTable.worldId})::int` })
-            .from(worldNodesTable)
+            .select({ n: sql<number>`count(distinct ${sceneNodesTable.sceneId})::int` })
+            .from(sceneNodesTable)
             .where(
               and(
-                eq(worldNodesTable.kind, "character"),
-                eq(worldNodesTable.refId, characterId),
+                eq(sceneNodesTable.kind, "character"),
+                eq(sceneNodesTable.refId, characterId),
               ),
             ),
         );

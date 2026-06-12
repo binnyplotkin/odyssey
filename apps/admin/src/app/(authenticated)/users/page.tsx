@@ -4,7 +4,7 @@ import {
   getDb,
   usersTable,
   accountsTable,
-  sessionsTable,
+  sceneSessionsTable,
 } from "@odyssey/db";
 import { UsersTable, type UserRow } from "@/components/users-table";
 
@@ -51,15 +51,15 @@ export default async function UsersPage() {
     providersByUser.get(a.userId)!.add(a.provider);
   }
 
-  // 3. Session count + last active per user (game sessions)
+  // 3. Session count + last active per user (scene sessions)
   const sessionStats = await db
     .select({
-      userId: sessionsTable.userId,
+      userId: sceneSessionsTable.userId,
       sessionCount: sql<number>`count(*)::int`.as("session_count"),
-      lastActiveAt: sql<Date>`max(${sessionsTable.lastActiveAt})`.as("last_active_at"),
+      lastActiveAt: sql<Date>`max(${sceneSessionsTable.lastActiveAt})`.as("last_active_at"),
     })
-    .from(sessionsTable)
-    .groupBy(sessionsTable.userId);
+    .from(sceneSessionsTable)
+    .groupBy(sceneSessionsTable.userId);
 
   const statsByUser = new Map<string, { count: number; lastActive: Date | null }>();
   for (const s of sessionStats) {

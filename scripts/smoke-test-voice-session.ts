@@ -37,7 +37,7 @@ async function main() {
   const turnId = crypto.randomUUID();
   const sceneId = `character-sandbox:${CHARACTER}`;
 
-  await postJson("/api/world-sessions", {
+  await postJson("/api/scene-sessions", {
     id: sessionId,
     characterId: null,
     mode: "voice",
@@ -51,7 +51,7 @@ async function main() {
   });
   console.log(`1. world session created · ${sessionId}`);
 
-  const orchestration = await postJson(`/api/world-sessions/${sessionId}/orchestrate`, {
+  const orchestration = await postJson(`/api/scene-sessions/${sessionId}/orchestrate`, {
     sceneId,
     recentTurns: [
       { speakerSlug: "user", speakerName: "User", text: MESSAGE },
@@ -76,7 +76,7 @@ async function main() {
     `3. voice done · tokens=${done.totalTokens ?? "?"} firstAudio=${done.firstAudioMs ?? "?"}ms cost=$${Number(done.estimatedCostUsd ?? 0).toFixed(6)}`,
   );
 
-  const detailPayload = await getJson(`/api/world-sessions/${sessionId}/detail`);
+  const detailPayload = await getJson(`/api/scene-sessions/${sessionId}/detail`);
   const detail = asRecord(detailPayload.detail);
   if (!detail) throw new Error("Session detail was not persisted.");
 
@@ -110,7 +110,7 @@ async function main() {
   console.log("4. persisted session detail verified");
   console.log(`Open: ${BASE_URL}/sessions/${sessionId}`);
 
-  await fetch(`${BASE_URL}/api/world-sessions/${sessionId}`, {
+  await fetch(`${BASE_URL}/api/scene-sessions/${sessionId}`, {
     method: "PATCH",
     headers: requestHeaders(),
     body: JSON.stringify({

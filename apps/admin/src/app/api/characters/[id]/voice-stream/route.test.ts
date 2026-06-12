@@ -128,7 +128,7 @@ vi.mock("@odyssey/db", () => ({
   getWikisStore: () => ({
     listWikisForCharacter: vi.fn(async () => []),
   }),
-  getWorldSessionStore: () => ({
+  getSceneSessionStore: () => ({
     upsertTurn,
     recordContextBuild,
     appendEvent,

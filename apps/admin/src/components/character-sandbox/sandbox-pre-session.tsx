@@ -6,7 +6,6 @@ import type {
   SandboxCharacter,
 } from "@/app/(authenticated)/characters/[slug]/sandbox/page";
 import { resolveAvatarGradient } from "@/lib/avatar-gradients";
-import type { SandboxMode } from "../character-sandbox";
 
 /**
  * SandboxPreSession - Paper "Sandbox · Pre-Session" direction.
@@ -27,9 +26,7 @@ export function SandboxPreSession({
   character,
   bindings,
   activeModel,
-  mode,
   sessionError,
-  onModeChange,
   onStart,
   onCancel,
   heroBackground,
@@ -37,9 +34,7 @@ export function SandboxPreSession({
   character: SandboxCharacter;
   bindings: SandboxBinding[];
   activeModel: string;
-  mode: SandboxMode;
   sessionError: string | null;
-  onModeChange: (next: SandboxMode) => void;
   onStart: () => void;
   onCancel: () => void;
   heroBackground?: ReactNode;
@@ -109,9 +104,7 @@ export function SandboxPreSession({
         character={character}
         bindings={bindings}
         activeModel={activeModel}
-        mode={mode}
         sessionError={sessionError}
-        onModeChange={onModeChange}
         onStart={onStart}
         traits={traits}
         tones={tones}
@@ -228,9 +221,7 @@ type PaperManifestRailProps = {
   character: SandboxCharacter;
   bindings: SandboxBinding[];
   activeModel: string;
-  mode: SandboxMode;
   sessionError: string | null;
-  onModeChange: (next: SandboxMode) => void;
   onStart: () => void;
   traits: { name: string }[];
   tones: string[];
@@ -252,9 +243,7 @@ function PaperManifestRail({
   character,
   bindings,
   activeModel,
-  mode,
   sessionError,
-  onModeChange,
   onStart,
   traits,
   tones,
@@ -437,8 +426,6 @@ function PaperManifestRail({
             </>
           )}
         </ManifestRailRow>
-
-        <ManifestModeRow mode={mode} onChange={onModeChange} />
       </div>
 
       <footer
@@ -632,95 +619,6 @@ function ManifestRailHint({ children }: { children: ReactNode }) {
     >
       {children}
     </span>
-  );
-}
-
-function ManifestModeRow({
-  mode,
-  onChange,
-}: {
-  mode: SandboxMode;
-  onChange: (next: SandboxMode) => void;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: "var(--space-12)",
-        marginTop: "var(--space-8)",
-        paddingTop: "var(--space-24)",
-        paddingBottom: "var(--space-14)",
-        borderTop: "1px solid var(--border-medium)",
-        borderBottom: "1px solid var(--ink-soft)",
-      }}
-    >
-      <span
-        style={{
-          flexShrink: 0,
-          fontFamily: FONT_MONO,
-          fontSize: "var(--font-size-xs)",
-          letterSpacing: "0.20em",
-          lineHeight: "12px",
-          textTransform: "uppercase",
-          color: TEXT_MUTED,
-        }}
-      >
-        mode
-      </span>
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "var(--space-8)",
-        }}
-      >
-        <ModePill active={mode === "voice"} onClick={() => onChange("voice")}>
-          voice
-        </ModePill>
-        <ModePill active={mode === "chat"} onClick={() => onChange("chat")}>
-          chat
-        </ModePill>
-      </div>
-    </div>
-  );
-}
-
-function ModePill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "6px 14px",
-        borderRadius: "var(--radius-pill)",
-        border: active
-          ? `1px solid ${ACCENT}`
-          : "1px solid var(--border-medium)",
-        background: active ? "var(--accent-wash)" : "transparent",
-        color: active ? ACCENT : TEXT_MUTED,
-        fontFamily: FONT_MONO,
-        fontSize: "var(--font-size-xs)",
-        fontWeight: active ? 600 : 400,
-        letterSpacing: "0.18em",
-        lineHeight: "12px",
-        textTransform: "uppercase",
-        cursor: "pointer",
-      }}
-    >
-      {children}
-    </button>
   );
 }
 

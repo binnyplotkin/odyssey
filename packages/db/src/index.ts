@@ -4,16 +4,8 @@ export {
   accountsTable,
   authSessionsTable,
   verificationTokensTable,
-  sessionsTable,
-  turnsTable,
-  worldSessionsTable,
-  worldSessionContextBuildsTable,
-  worldSessionTurnsTable,
-  worldSessionEventsTable,
-  worldSessionAudioArtifactsTable,
   versionsTable,
   featuresTable,
-  worldsTable,
   ticketsTable,
   platformVersionsTable,
   changelogEntriesTable,
@@ -26,8 +18,14 @@ export {
   voicesTable,
   voicePreviewsTable,
   voiceExtractionAttemptsTable,
-  worldNodesTable,
-  worldEdgesTable,
+  scenesTable,
+  sceneNodesTable,
+  sceneEdgesTable,
+  sceneSessionsTable,
+  sceneSessionContextBuildsTable,
+  sceneSessionTurnsTable,
+  sceneSessionEventsTable,
+  sceneSessionAudioArtifactsTable,
   wikisTable,
   wikiPagesTable,
   wikiPageVersionsTable,
@@ -42,28 +40,6 @@ export {
   evalProbeResultsTable,
   evalSweepsTable,
 } from "./schema";
-export { getPersistenceStore } from "./store";
-export type { PersistenceStore } from "./store";
-export { getWorldSessionStore } from "./world-session-store";
-export type {
-  WorldSessionStore,
-  WorldSessionRecord,
-  WorldSessionSummaryRecord,
-  WorldSessionDetailRecord,
-  WorldSessionUserRecord,
-  WorldSessionAudioArtifactRecord,
-  WorldSessionContextBuildRecord,
-  WorldSessionTurnRecord,
-  WorldSessionEventRecord,
-  CreateWorldSessionInput,
-  RecordContextBuildInput,
-  UpsertWorldSessionTurnInput,
-  AppendWorldSessionEventInput,
-  UpdateWorldSessionSceneInput,
-  AddWorldSessionAudioArtifactInput,
-} from "./world-session-store";
-export { getWorldRepository } from "./repository";
-export type { WorldRepository, WorldDetail, WorldSource } from "./repository";
 export { getTicketStore } from "./ticket-store";
 export type { TicketStore, TicketRecord, CreateTicketInput, UpdateTicketInput } from "./ticket-store";
 export { getVersionStore } from "./version-store";
@@ -176,26 +152,53 @@ export type {
 } from "./wiki-types";
 
 export {
-  getWorldGraphStore,
+  getSceneGraphStore,
   NODE_KINDS,
   KNOWN_EDGE_KINDS,
   characterDataSchema,
   behaviorTriggerSchema,
   placeDataSchema,
   eventDataSchema,
-} from "./world-graph-store";
+  ambienceDataSchema,
+} from "./scene-graph-store";
 export type {
-  WorldGraphStore,
-  WorldNodeRecord,
-  WorldEdgeRecord,
+  SceneGraphStore,
+  SceneNodeRecord,
+  SceneEdgeRecord,
   CreateNodeInput,
   UpdateNodeInput,
   CreateEdgeInput,
-  WorldGraph,
+  SceneGraph,
   NodeKind,
-  WorldEdgeKind,
+  SceneEdgeKind,
   CharacterNodeData,
-} from "./world-graph-store";
+  AmbienceNodeData,
+} from "./scene-graph-store";
+
+export { getSceneStore } from "./scene-store";
+export type {
+  SceneStore,
+  CreateSceneInput,
+  UpdateSceneInput,
+} from "./scene-store";
+
+export { getSceneSessionStore } from "./scene-session-store";
+export type {
+  SceneSessionStore,
+  SceneSessionRecord,
+  SceneSessionSummaryRecord,
+  SceneSessionDetailRecord,
+  SceneSessionUserRecord,
+  SceneSessionAudioArtifactRecord,
+  SceneSessionContextBuildRecord,
+  SceneSessionTurnRecord,
+  SceneSessionEventRecord,
+  CreateSceneSessionInput,
+  UpsertSceneSessionTurnInput,
+  AppendSceneSessionEventInput,
+  UpdateSceneSessionSceneInput,
+  AddSceneSessionAudioArtifactInput,
+} from "./scene-session-store";
 
 export {
   parseWikilinks,
