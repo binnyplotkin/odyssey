@@ -86,6 +86,26 @@ That's the documented path to production-audio benchmarking.
 but collapses the real-time endpointing window, so its `voice-to-voice` is
 **not representative** — smoke checks only.
 
+## Endpointing suite (STT-only)
+
+The `endpointing` suite measures turn detection on two axes a good endpointer
+must win *together*:
+
+- **endpoint latency** on complete utterances (`stt.endpoint-to-word`) — how
+  fast it fires when the user is done;
+- **cutoff rate** on *pause-aware* fixtures — utterances synthesized in parts
+  rejoined with a >800ms silence gap (`{ parts: [...], gapMs }`). A
+  fixed-silence endpointer fires mid-pause and the utterance comes back as
+  **two** STT finals (`finals ≥ 2` → a cutoff); a semantic endpointer keeps
+  it whole (`finals = 1`).
+
+It's `sttOnly: true` — streams to audio-rt and skips the LLM/TTS legs, so it
+needs **no admin cookie and no dev server**, only audio-rt. Point it at a
+local instance with `--audio-rt-ws ws://localhost:…` to A/B a turn-detector
+change. Baseline against the current 800ms-VAD audio-rt: **100% cutoff** —
+that's what the semantic-endpointing work has to drive toward 0 while keeping
+endpoint latency low.
+
 ## Versioning
 
 Two axes, both stamped on every run:

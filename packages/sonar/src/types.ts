@@ -31,6 +31,14 @@ export type TimedSseFrame = {
 
 export type SonarSuiteMode = "voice-stream" | "scene";
 
+/**
+ * What the user says in a turn. A plain string is one synthesized clip (a
+ * complete utterance). `{ parts, gapMs }` synthesizes each part separately
+ * and rejoins them with a silence gap — a pause-aware fixture that probes
+ * whether the endpointer fires prematurely on a mid-sentence pause.
+ */
+export type SonarUtterance = string | { parts: string[]; gapMs?: number };
+
 export type SonarSuite = {
   name: string;
   /** Bump when turns/sessions/mode change — results stop being comparable. */
@@ -45,12 +53,17 @@ export type SonarSuite = {
    */
   mode: SonarSuiteMode;
   /**
-   * What the user says each turn. Every string is synthesized once into a
-   * spoken-audio fixture (a neutral user voice) and streamed into the STT
-   * WebSocket — turns START FROM AUDIO, never from text. Drop a real
-   * recording at the fixture path to override synthesis.
+   * What the user says each turn — synthesized once into spoken-audio
+   * fixtures and streamed into the STT WebSocket (turns START FROM AUDIO,
+   * never text). Drop a real recording at the fixture path to override.
    */
-  turns: string[];
+  turns: SonarUtterance[];
+  /**
+   * STT-only suite: stream each utterance through STT and record endpointing
+   * metrics (endpoint latency, cutoff), but SKIP orchestrate + voice-stream.
+   * Cheap and focused for endpointing benchmarks — no LLM/TTS cost.
+   */
+  sttOnly?: boolean;
   /** Neutral OpenAI TTS voice used to synthesize the user's spoken input. */
   userVoice?: string;
   /** Number of fresh sessions to run the script through. */
@@ -129,11 +142,21 @@ export type SonarTurnUsage = {
   ttsCostUsd: number | null;
 };
 
+export type SonarUtteranceInfo = {
+  /** "complete" = one clip; "paused" = parts joined by a silence gap. */
+  kind: "complete" | "paused";
+  /** Distinct STT finals: 1 = kept whole, ≥2 = endpointer fired mid-utterance. */
+  finals: number;
+  /** True for a paused utterance whose endpointer cut it (finals ≥ 2). */
+  cutoff: boolean;
+};
+
 export type SonarTurnRecord = {
   sessionIndex: number;
   turnIndex: number;
   /** The scripted user utterance (synthesized to the spoken-audio input). */
   message: string;
+  utterance: SonarUtteranceInfo;
   stt: SonarSttInfo;
   spans: Partial<Record<SonarSpanName, number | null>>;
   flags: SonarTurnFlags;
@@ -185,6 +208,11 @@ export type SonarRunRecord = {
   observed: { providers: string[]; models: string[]; ttsProviders: string[]; ttsVoices: string[] };
   turns: SonarTurnRecord[];
   aggregates: Partial<Record<SonarSpanName, SonarAggregate>>;
+  /**
+   * Endpointing summary over pause-aware fixtures (null if the suite has
+   * none): how often the endpointer cut a paused utterance prematurely.
+   */
+  endpointing: { pausedTurns: number; cutoffTurns: number; cutoffRate: number } | null;
   errors: number;
   totalCostUsd: number;
 };
@@ -211,4 +239,6 @@ export type SonarLedgerEntry = {
   vsTtfaP50: number | null; // voice-stream first-audio p50
   llmTtftP50: number | null; // server LLM TTFT p50
   orchestrateP50: number | null;
+  /** Endpointing cutoff rate over paused fixtures (0..1), null if none. */
+  cutoffRate: number | null;
 };

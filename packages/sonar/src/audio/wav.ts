@@ -123,3 +123,23 @@ export function toFrames(samples: Float32Array, frameSize = AUDIO_RT_FRAME_SAMPL
 export function silenceFrames(count: number, frameSize = AUDIO_RT_FRAME_SAMPLES): Float32Array[] {
   return Array.from({ length: count }, () => new Float32Array(frameSize));
 }
+
+/**
+ * Concatenate utterance segments with `gapMs` of silence between them, at
+ * 24kHz. Used to build pause-aware fixtures — a single utterance with a
+ * natural mid-sentence gap — so the harness can measure whether an
+ * endpointer fires prematurely on the pause.
+ */
+export function concatWithSilenceGaps(segments: Float32Array[], gapMs: number): Float32Array {
+  const gap = Math.max(0, Math.round((gapMs / 1000) * AUDIO_RT_SAMPLE_RATE));
+  const total =
+    segments.reduce((sum, s) => sum + s.length, 0) + gap * Math.max(0, segments.length - 1);
+  const out = new Float32Array(total);
+  let offset = 0;
+  segments.forEach((seg, i) => {
+    out.set(seg, offset);
+    offset += seg.length;
+    if (i < segments.length - 1) offset += gap; // leave the gap as zeros (silence)
+  });
+  return out;
+}

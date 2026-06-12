@@ -82,7 +82,8 @@ async function runCommand() {
   if (!suite) throw new Error(`Unknown suite "${suiteName}". Available: ` + Object.keys(SUITES).join(", "));
 
   const cookie = readFlag("--cookie") ?? process.env.ODYSSEY_ADMIN_COOKIE ?? undefined;
-  if (!cookie) {
+  // STT-only (endpointing) suites hit only audio-rt — no admin auth needed.
+  if (!cookie && !suite.sttOnly) {
     throw new Error(
       "No admin auth. The voice-stream/orchestrate routes are behind admin auth — pass a session\n" +
         "cookie via --cookie or the ODYSSEY_ADMIN_COOKIE env var (same as scripts/smoke-test-voice-session.ts).\n" +
@@ -93,7 +94,7 @@ async function runCommand() {
   const record = await runSonarSuite({
     suite,
     baseUrl: readFlag("--base") ?? "http://localhost:3001",
-    cookie,
+    cookie: cookie ?? "",
     repoRoot: REPO_ROOT,
     character: readFlag("--character") ?? undefined,
     model: readFlag("--model") ?? undefined,
@@ -115,7 +116,8 @@ async function runCommand() {
   // (dead model id, rate limits) has biased percentiles — its survivors
   // skew toward whichever turns happened to succeed — so it stays in the
   // per-run record for inspection but never pollutes the progression table.
-  const clean = Boolean(record.aggregates["voice-to-voice"]) && record.errors === 0;
+  const hasSignal = Boolean(record.aggregates["voice-to-voice"]) || record.endpointing !== null;
+  const clean = hasSignal && record.errors === 0;
   if (hasFlag("--no-ledger")) {
     // skip
   } else if (clean) {
