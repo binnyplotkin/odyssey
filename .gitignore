@@ -62,3 +62,6 @@ next-env.d.ts
 
 # Sonar synthesized input fixtures (regenerable via `sonar synth`; ledger stays committed)
 evals/sonar/fixtures/*.wav
+
+# Local audio-rt Python virtualenv (Part 1 of the endpointing spike; STT-only)
+services/audio-rt/.venv/

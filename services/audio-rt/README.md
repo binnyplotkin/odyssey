@@ -77,18 +77,45 @@ its own model, so concurrent `/speak` requests fan out across workers.
 
 ## Local dev
 
+Use **Python 3.12** — torch/onnxruntime/ctranslate2 have no wheels for 3.13+
+yet (a 3.14 system Python will fail to install the stack).
+
 ```bash
 cd services/audio-rt
-python -m venv .venv && source .venv/bin/activate
+/opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pip install --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
 uvicorn gateway:app --port 8765
 ```
 
-`/healthz` will report `ttsRuntime.loaded: false` and `whisper.loaded: false`
-until each background warm-up finishes downloading weights from HuggingFace
-(~30–60s on a cold cache). Set `POCKET_TTS_WARM_ON_STARTUP=0` or
-`WHISPER_WARM_ON_STARTUP=0` to skip the corresponding warm-up.
+On macOS arm64, `pip install torch==2.8.0 torchaudio==2.8.0` from PyPI is
+already CPU/MPS (no CUDA) — the `download.pytorch.org/whl/cpu` index in the
+Dockerfile is a Linux-container concern.
+
+### STT-only (endpointing / turn-detector work)
+
+`pocket_tts`, `faster_whisper`, and `silero_vad` are all imported lazily, so
+you can run the STT WebSocket path without Pocket TTS — its startup warm-up
+fails gracefully in a background thread and the server still serves
+`/api/asr-streaming`. Install everything **except** `pocket-tts`:
+
+```bash
+pip install torch==2.8.0 torchaudio==2.8.0
+pip install numpy fastapi==0.116.1 'uvicorn[standard]==0.35.0' \
+  moshi==0.2.13 julius==0.2.7 soundfile==0.13.1 librosa==0.11.0 \
+  faster-whisper==1.2.0 silero-vad==6.0.0 msgpack==1.1.2 onnxruntime==1.20.1
+PORT=8089 uvicorn gateway:app --host 127.0.0.1 --port 8089 --workers 1
+```
+
+Then point the Sonar endpointing suite at it (no admin cookie / dev server
+needed):
+
+```bash
+npm run sonar -- run --suite endpointing --audio-rt-ws ws://127.0.0.1:8089/api/asr-streaming
+```
+
+`/healthz` reports `whisper.loaded: false` until the background warm-up
+finishes (~2s on a warm HF cache, ~30–60s cold). Set
+`WHISPER_WARM_ON_STARTUP=0` to skip it.
 
 ## Streaming STT (`/api/asr-streaming`)
 
