@@ -159,6 +159,7 @@ export {
   behaviorTriggerSchema,
   placeDataSchema,
   eventDataSchema,
+  ambienceDataSchema,
 } from "./scene-graph-store";
 export type {
   SceneGraphStore,
@@ -171,6 +172,7 @@ export type {
   NodeKind,
   SceneEdgeKind,
   CharacterNodeData,
+  AmbienceNodeData,
 } from "./scene-graph-store";
 
 export { getSceneStore } from "./scene-store";

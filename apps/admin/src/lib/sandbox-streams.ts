@@ -121,6 +121,7 @@ export type StreamVoiceOptions = {
   history: ChatHistoryTurn[];
   scene?: { activeEntities?: string[]; location?: string };
   model?: string;
+  ackMode?: "auto" | "off";
   signal?: AbortSignal;
   callbacks: VoiceStreamCallbacks;
 };
@@ -219,6 +220,7 @@ export async function streamVoice(opts: StreamVoiceOptions): Promise<void> {
         history: opts.history,
         scene: opts.scene,
         model: opts.model,
+        ackMode: opts.ackMode,
       }),
       signal: opts.signal,
     },

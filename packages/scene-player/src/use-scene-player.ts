@@ -20,19 +20,19 @@ export type TraceContract = Record<string, unknown>;
  * Scene runner — owns the orchestration loop for a multi-character scene.
  *
  * Phase 1 design choices:
- *  - Scene state lives in this hook (not the DB). Posted into every
- *    orchestrate call. Lost on reload; fine for the demo.
+ *  - Scene state lives in this hook during a run and is mirrored into
+ *    scene_sessions.current_scene by the orchestrate route.
  *  - Voice playback is gapless via SceneAudioBus's per-frame scheduling.
  *  - Barge-in: caller invokes sendUserMessage(); we stop voice, push the
  *    user's turn, and re-enter the loop with their message as a bias.
  *  - User input source is caller-owned (mic STT, text input, whatever)
  *    — the runner only cares about strings arriving via sendUserMessage.
  *
- * Not handled in Phase 1: scene-state persistence, narrator voice,
- * concurrent speakers, SFX. Each is additive.
+ * Still additive: resume hydration, concurrent speakers, SFX.
  */
 
 export type SceneTurn = {
+  id?: string;
   speakerSlug: string;       // character slug, "user", or "narrator"
   speakerName?: string;
   text: string;
@@ -83,7 +83,7 @@ export type UseSceneRunnerResult = {
   currentSpeakerSlug: string | null;
   error: string | null;
   start: () => Promise<void>;
-  sendUserMessage: (text: string) => Promise<void>;
+  sendUserMessage: (text: string, options?: { turnId?: string }) => Promise<void>;
   stop: () => void;
 };
 
@@ -221,10 +221,26 @@ export function useScenePlayer(opts: UseSceneRunnerOptions): UseSceneRunnerResul
             applyDecision(decision, null);
             return tick(generation);
           }
+          const turnId = generateTurnId();
           setCurrentSpeakerSlug("narrator");
           setPhase("narrating");
-          pushTurn({ speakerSlug: "narrator", text });
-          await playNarration(bus, text, scene.narratorVoice ?? scene.characters[0].voice);
+          pushTurn({ id: turnId, speakerSlug: "narrator", text });
+          const narration = await playNarration(
+            bus,
+            text,
+            scene.narratorVoice ?? scene.characters[0].voice,
+          );
+          void persistSceneTurn({
+            sessionId,
+            turnId,
+            inputMode: "narration",
+            speakerSlug: "narrator",
+            assistantText: text,
+            provider: narration.provider ?? null,
+            status: "completed",
+            audioMetrics: narration.audioMetrics,
+            metadata: { source: "scene-player", voiceId: narration.voiceId },
+          });
           if (!runningRef.current || generation !== loopGenerationRef.current) return;
           applyDecision(decision, "narrator");
           return tick(generation);
@@ -278,7 +294,8 @@ export function useScenePlayer(opts: UseSceneRunnerOptions): UseSceneRunnerResul
 
   const start = useCallback(async () => {
     setError(null);
-    ensureBus(); // satisfies user-gesture rule
+    const bus = ensureBus(); // satisfies user-gesture rule
+    bus.setAmbience(sceneStateRef.current.ambience);
     runningRef.current = true;
     loopGenerationRef.current += 1;
     const generation = loopGenerationRef.current;
@@ -286,7 +303,7 @@ export function useScenePlayer(opts: UseSceneRunnerOptions): UseSceneRunnerResul
   }, [ensureBus, tick]);
 
   const sendUserMessage = useCallback(
-    async (text: string) => {
+    async (text: string, options?: { turnId?: string }) => {
       const trimmed = text.trim();
       if (!trimmed) return;
 
@@ -297,13 +314,23 @@ export function useScenePlayer(opts: UseSceneRunnerOptions): UseSceneRunnerResul
       busRef.current?.stopVoice();
       loopGenerationRef.current += 1;
       const generation = loopGenerationRef.current;
+      const turnId = options?.turnId ?? generateTurnId();
       runningRef.current = true;
       ensureBus();
 
-      pushTurn({ speakerSlug: "user", text: trimmed });
+      pushTurn({ id: turnId, speakerSlug: "user", speakerName: "You", text: trimmed });
+      void persistSceneTurn({
+        sessionId,
+        turnId,
+        inputMode: "text",
+        speakerSlug: "user",
+        userText: trimmed,
+        status: "completed",
+        metadata: { source: "scene-player" },
+      });
       await tick(generation, trimmed);
     },
-    [ensureBus, pushTurn, tick],
+    [ensureBus, generateTurnId, pushTurn, sessionId, tick],
   );
 
   const stop = useCallback(() => {
@@ -521,7 +548,11 @@ async function playNarration(
   bus: SceneAudioBus,
   text: string,
   voiceId: string,
-): Promise<void> {
+): Promise<{
+  provider: string | null;
+  voiceId: string;
+  audioMetrics: Record<string, unknown>;
+}> {
   // Narration routes through /api/scenes/narrate, which resolves a library
   // voice id through the SAME streaming TTS pipeline characters use (PCM
   // frames played via the SceneAudioBus voice track), or falls back to batch
@@ -536,8 +567,17 @@ async function playNarration(
     throw new Error(`narrator ${resp.status}: ${detail.slice(0, 200)}`);
   }
   const payload = (await resp.json()) as
-    | { kind: "pcm"; frames: Array<{ pcm: string; sampleRate: number }> }
-    | { kind: "mp3"; audioBase64?: string; mimeType?: string };
+    | {
+        kind: "pcm";
+        provider?: string;
+        frames: Array<{ pcm: string; sampleRate: number }>;
+      }
+    | {
+        kind: "mp3";
+        provider?: string;
+        audioBase64?: string;
+        mimeType?: string;
+      };
 
   if (payload.kind === "pcm") {
     // Same playback path as character voice — feed frames into the bus's
@@ -546,7 +586,25 @@ async function playNarration(
       bus.enqueueVoiceFrame(SceneAudioBus.decodeFloat32Base64(frame.pcm), frame.sampleRate);
     }
     await bus.voiceDrained();
-    return;
+    const sampleRate = payload.frames[0]?.sampleRate ?? null;
+    const audioSamples = payload.frames.reduce(
+      (sum, frame) => sum + SceneAudioBus.decodeFloat32Base64(frame.pcm).length,
+      0,
+    );
+    return {
+      provider: payload.provider ?? null,
+      voiceId,
+      audioMetrics: {
+        kind: "pcm",
+        sampleRate,
+        audioSamples,
+        durationMs:
+          sampleRate && audioSamples
+            ? Math.round((audioSamples / sampleRate) * 1000)
+            : null,
+        frameCount: payload.frames.length,
+      },
+    };
   }
 
   if (!payload.audioBase64) {
@@ -557,5 +615,56 @@ async function playNarration(
     audio.onended = () => resolve();
     audio.onerror = () => reject(new Error("narrator audio playback failed"));
     audio.play().catch(reject);
+  });
+  return {
+    provider: payload.provider ?? "openai",
+    voiceId,
+    audioMetrics: {
+      kind: "mp3",
+      mimeType: payload.mimeType ?? "audio/mpeg",
+      byteSize: payload.audioBase64.length,
+    },
+  };
+}
+
+async function persistSceneTurn(input: {
+  sessionId: string;
+  turnId: string;
+  inputMode: string;
+  speakerSlug: string;
+  userText?: string | null;
+  assistantText?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  status: string;
+  tokenUsage?: unknown;
+  audioMetrics?: unknown;
+  latencySummary?: unknown;
+  trace?: unknown;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  await fetch(
+    `/api/scene-sessions/${encodeURIComponent(input.sessionId)}/turns/${encodeURIComponent(input.turnId)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        inputMode: input.inputMode,
+        speakerSlug: input.speakerSlug,
+        userText: input.userText ?? null,
+        assistantText: input.assistantText ?? null,
+        provider: input.provider ?? null,
+        model: input.model ?? null,
+        status: input.status,
+        completedAt: new Date().toISOString(),
+        tokenUsage: input.tokenUsage ?? {},
+        audioMetrics: input.audioMetrics ?? {},
+        latencySummary: input.latencySummary ?? {},
+        trace: input.trace ?? {},
+        metadata: input.metadata ?? {},
+      }),
+    },
+  ).catch((err) => {
+    console.warn("[scene-player] turn persistence failed", err);
   });
 }

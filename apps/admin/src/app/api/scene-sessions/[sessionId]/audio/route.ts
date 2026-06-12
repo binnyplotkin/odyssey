@@ -41,6 +41,10 @@ export async function POST(
 
   const artifactId = crypto.randomUUID();
   const mimeType = file.type || "application/octet-stream";
+  const source =
+    typeof form.get("source") === "string" && String(form.get("source")).trim()
+      ? String(form.get("source")).trim()
+      : "admin-character-voice-panel";
   const bytes = new Uint8Array(await file.arrayBuffer());
   const storageKey = makeAudioStorageKey({
     sessionId,
@@ -65,7 +69,7 @@ export async function POST(
       waveformSummary: {},
       metadata: {
         filename: file.name,
-        source: "admin-character-voice-panel",
+        source,
       },
     });
     await store.appendEvent({

@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 type TurnBody = {
   turnIndex?: number | null;
   inputMode?: string;
+  speakerSlug?: string | null;
   userText?: string | null;
   assistantText?: string | null;
   provider?: string | null;
@@ -40,6 +41,7 @@ export async function POST(
       sessionId,
       turnIndex: body.turnIndex ?? null,
       inputMode: body.inputMode ?? "voice",
+      speakerSlug: body.speakerSlug ?? null,
       userText: body.userText ?? null,
       assistantText: body.assistantText ?? null,
       provider: body.provider ?? null,

@@ -29,7 +29,7 @@ export const sceneSchema = z.object({
   // 1-3 sentence description the orchestrator reads to understand the
   // setting. Keep short — this goes in every orchestration call.
   description: z.string().min(1).max(600),
-  characters: z.array(sceneCharacterSchema).min(2),
+  characters: z.array(sceneCharacterSchema).min(1),
   // The beat the scene opens on. The orchestrator can advance to other
   // beats by emitting a new `beatLabel`, so this is a starting state, not
   // an exhaustive list.

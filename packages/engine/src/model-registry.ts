@@ -203,19 +203,10 @@ export const MODEL_REGISTRY: ModelOption[] = [
   // All accept "chat" mode now (OpenAI-compatible HTTP, wired through
   // CerebrasChatProvider). Author beware: long-form chat quality is
   // model-dependent — evaluate each one before adopting in production.
-  {
-    id: "llama3.1-8b",
-    label: "Llama 3.1 8B",
-    description: "Small open-weights. Instant TTFT; quality drops on long-form turns.",
-    provider: "cerebras",
-    modes: ["chat", "voice"],
-    contextWindow: 128_000,
-    maxOutputTokens: 4096,
-    pricing: { input: 0.1, output: 0.1 },
-    capabilities: { promptCache: false, streaming: true, tools: false, vision: false, structuredOutput: false, temperature: true, topP: true },
-    latencyTier: "instant",
-    qualityTier: "budget",
-  },
+  // Note: Cerebras retired its small Llama models from public endpoints
+  // (Llama 3.1 8B deprecated 2026-05-27). As of 2026-06-12 the live
+  // /v1/models list offers only gpt-oss-120b and zai-glm-4.7 — there is
+  // no current Cerebras 8B to replace it with, so the entry was removed.
   {
     id: "qwen-3-235b-a22b-instruct-2507",
     label: "Qwen 3 235B",

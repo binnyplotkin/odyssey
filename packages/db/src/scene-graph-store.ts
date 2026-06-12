@@ -14,7 +14,7 @@ import {
  * is backed by a library (ref_id required) or native to the scene.
  */
 
-export const NODE_KINDS = ["character", "place", "event"] as const;
+export const NODE_KINDS = ["character", "place", "event", "ambience"] as const;
 export type NodeKind = (typeof NODE_KINDS)[number];
 
 export const behaviorTriggerSchema = z
@@ -54,10 +54,21 @@ export const eventDataSchema = z
   })
   .strict();
 
+export const ambienceDataSchema = z
+  .object({
+    trackId: z.string().trim().min(1),
+    description: z.string().trim().optional(),
+    isDefault: z.boolean().optional(),
+  })
+  .strict();
+
+export type AmbienceNodeData = z.infer<typeof ambienceDataSchema>;
+
 const dataSchemasByKind = {
   character: characterDataSchema,
   place: placeDataSchema,
   event: eventDataSchema,
+  ambience: ambienceDataSchema,
 } as const satisfies Record<NodeKind, z.ZodTypeAny>;
 
 const kindsRequiringRef = new Set<NodeKind>(["character"]);

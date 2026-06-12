@@ -78,12 +78,73 @@ export async function addCharacterToScene(
   }
 }
 
+export async function addAmbienceToScene(
+  sceneId: string,
+  input: {
+    label: string;
+    trackId: string;
+    description?: string | null;
+    isDefault?: boolean;
+  },
+): Promise<ActionResult<{ nodeId: string }>> {
+  const trackId = input.trackId.trim();
+  if (!trackId) return { ok: false, error: "Track ID is required." };
+
+  try {
+    const node = await getSceneGraphStore().createNode({
+      sceneId,
+      kind: "ambience",
+      label: input.label.trim() || trackId,
+      summary: input.description?.trim() || null,
+      data: {
+        trackId,
+        ...(input.description?.trim() ? { description: input.description.trim() } : {}),
+        ...(input.isDefault ? { isDefault: true } : {}),
+      },
+    });
+    revalidatePath(`/scenes/${sceneId}`);
+    revalidatePath("/scenes");
+    invalidateScenesList();
+    return { ok: true, data: { nodeId: node.id } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed to add ambience.",
+    };
+  }
+}
+
 export async function removeSceneNode(
   sceneId: string,
   nodeId: string,
 ): Promise<ActionResult> {
   const removed = await getSceneGraphStore().removeNode(nodeId);
   if (!removed) return { ok: false, error: "Node not found." };
+  revalidatePath(`/scenes/${sceneId}`);
+  revalidatePath("/scenes");
+  invalidateScenesList();
+  return { ok: true };
+}
+
+export async function updateSceneNode(
+  sceneId: string,
+  nodeId: string,
+  updates: {
+    label?: string;
+    summary?: string | null;
+    data?: Record<string, unknown>;
+    position?: { x: number; y: number } | null;
+  },
+): Promise<ActionResult> {
+  const graph = getSceneGraphStore();
+  const node = await graph.getNode(nodeId);
+  if (!node || node.sceneId !== sceneId) {
+    return { ok: false, error: "Scene node not found." };
+  }
+
+  const updated = await graph.updateNode(nodeId, updates);
+  if (!updated) return { ok: false, error: "Scene node not found." };
+
   revalidatePath(`/scenes/${sceneId}`);
   revalidatePath("/scenes");
   invalidateScenesList();

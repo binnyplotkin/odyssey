@@ -4,7 +4,7 @@ import { sceneDefinitionSchema } from "@odyssey/types";
 import { getDb } from "./client";
 import { retryRead } from "./retry";
 import { charactersTable, scenesTable } from "./schema";
-import { getSceneGraphStore } from "./scene-graph-store";
+import { getSceneGraphStore, type SceneNodeRecord } from "./scene-graph-store";
 
 /* ── Shape ─────────────────────────────────────────────────────────── */
 
@@ -32,9 +32,9 @@ export interface SceneStore {
   /**
    * Resolve a scene to the orchestrator's `Scene` struct by hydrating
    * character nodes from the global library. Returns null if the scene
-   * doesn't exist or has no character nodes (orchestrator requires ≥2,
-   * but solo character scenes are handled via the `character-sandbox:`
-   * prefix in the orchestrate route).
+   * doesn't exist or has no character nodes. Solo character scenes are valid
+   * for sandbox/rehearsal flows; richer authored scenes can include a larger
+   * roster through the graph.
    */
   resolveOrchestratorScene(id: string): Promise<Scene | null>;
 }
@@ -69,6 +69,23 @@ function normalizeRow(row: typeof scenesTable.$inferSelect): SceneRecord {
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   };
+}
+
+export function selectDefaultAmbienceTrackId(
+  nodes: Array<Pick<SceneNodeRecord, "kind" | "data" | "createdAt" | "id">>,
+  fallback?: string | null,
+): string | null {
+  const defaultAmbienceNode = nodes
+    .filter((n) => n.kind === "ambience" && n.data.isDefault === true)
+    .sort((a, b) => {
+      const byCreatedAt = a.createdAt.localeCompare(b.createdAt);
+      return byCreatedAt === 0 ? a.id.localeCompare(b.id) : byCreatedAt;
+    })[0];
+  const trackId =
+    typeof defaultAmbienceNode?.data.trackId === "string"
+      ? defaultAmbienceNode.data.trackId.trim()
+      : "";
+  return trackId || fallback || null;
 }
 
 /* ── Implementation ────────────────────────────────────────────────── */
@@ -161,6 +178,10 @@ function neonStore(): SceneStore {
       const graph = await getSceneGraphStore().getGraph(id);
       const characterNodes = graph.nodes.filter((n) => n.kind === "character" && n.refId);
       if (characterNodes.length === 0) return null;
+      const defaultAmbienceTrackId = selectDefaultAmbienceTrackId(
+        graph.nodes,
+        record.definition.defaultAmbience,
+      );
 
       const db = requireDb();
       const charIds = characterNodes.map((n) => n.refId).filter((x): x is string => !!x);
@@ -199,7 +220,7 @@ function neonStore(): SceneStore {
         description: record.prompt || record.title,
         characters,
         openingBeat: record.definition.openingBeat || "Scene opens.",
-        defaultAmbience: record.definition.defaultAmbience ?? null,
+        defaultAmbience: defaultAmbienceTrackId,
         narratorVoice: record.definition.narratorVoiceId ?? undefined,
       };
     },

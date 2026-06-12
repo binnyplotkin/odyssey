@@ -1,4 +1,10 @@
 import { notFound } from "next/navigation";
+import type {
+  CharacterBrainModel,
+  CharacterIdentity,
+  SceneEdgeRecord,
+  SceneNodeRecord,
+} from "@odyssey/db";
 import { getCharacterStore, getSceneGraphStore, getSceneStore } from "@odyssey/db";
 import { SceneEditor } from "@/components/scene-editor";
 
@@ -14,6 +20,17 @@ export type SceneLibraryCharacter = {
   id: string;
   slug: string;
   title: string;
+  summary: string | null;
+  image: string | null;
+  thumbnailColor: string | null;
+  identity: CharacterIdentity | null;
+  brainModel: CharacterBrainModel | null;
+  voiceId: string | null;
+};
+
+export type SceneGraphPayload = {
+  nodes: SceneNodeRecord[];
+  edges: SceneEdgeRecord[];
 };
 
 export default async function SceneDetailPage({
@@ -39,6 +56,12 @@ export default async function SceneDetailPage({
     id: c.id,
     slug: c.slug,
     title: c.title,
+    summary: c.summary,
+    image: c.image,
+    thumbnailColor: c.thumbnailColor,
+    identity: c.identity,
+    brainModel: c.brainModel,
+    voiceId: c.voiceId,
   }));
 
   return (
@@ -53,6 +76,7 @@ export default async function SceneDetailPage({
         narratorVoiceId: scene.definition.narratorVoiceId,
       }}
       roster={roster}
+      graph={graph}
       libraryCharacters={libraryCharacters}
     />
   );
