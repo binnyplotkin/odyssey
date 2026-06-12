@@ -1,0 +1,19 @@
+{
+  "name": "@odyssey/sonar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Odyssey Sonar — versioned voice-to-voice latency benchmark harness. Audio in, audio out; emit a ping, time the echo.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
