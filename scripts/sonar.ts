@@ -45,9 +45,11 @@ import { execSync } from "node:child_process";
 import {
   SONAR_VERSION,
   SUITES,
+  RECORDINGS_DIR,
   appendLedger,
   ensureFixture,
   loadLedger,
+  recordingExists,
   renderProgression,
   renderRunSummary,
   runSonarSuite,
@@ -62,15 +64,17 @@ const command = args[0];
 async function main() {
   if (command === "run") return runCommand();
   if (command === "synth") return synthCommand();
+  if (command === "recordings") return recordingsCommand();
   if (command === "report") return reportCommand();
   if (command === "suites") return suitesCommand();
   console.log(
     `Odyssey Sonar v${SONAR_VERSION} — voice-to-voice latency benchmarks\n\n` +
       `Commands:\n` +
-      `  run --suite <name>   run a benchmark suite (audio in → audio out)\n` +
-      `  synth --suite <name> pre-build the spoken-input fixtures\n` +
-      `  report               show benchmark progression from the ledger\n` +
-      `  suites               list available suites`,
+      `  run --suite <name>        run a benchmark suite (audio in → audio out)\n` +
+      `  synth --suite <name>      pre-build the spoken-input fixtures\n` +
+      `  recordings --suite <name> list the real recordings a suite needs (+ what's missing)\n` +
+      `  report                    show benchmark progression from the ledger\n` +
+      `  suites                    list available suites`,
   );
   if (command) process.exit(1);
 }
@@ -154,6 +158,40 @@ async function synthCommand() {
     console.log(`  turn ${i} ${synthesized ? "synthesized" : "cached"} → ${file}`);
   }
   console.log(`Done · ${built} synthesized, ${suite.turns.length - built} already cached.`);
+}
+
+function recordingsCommand() {
+  const suiteName = readFlag("--suite");
+  if (!suiteName) throw new Error("Missing --suite. Available: " + Object.keys(SUITES).join(", "));
+  const suite = SUITES[suiteName];
+  if (!suite) throw new Error(`Unknown suite "${suiteName}". Available: ` + Object.keys(SUITES).join(", "));
+
+  const recordings = suite.turns
+    .map((t) => (typeof t === "object" && "recording" in t ? t : null))
+    .filter((t): t is { recording: string; kind: "complete" | "paused"; script?: string } => t !== null);
+
+  if (recordings.length === 0) {
+    console.log(`Suite "${suite.name}" uses synthesized audio — no recordings needed.`);
+    return;
+  }
+
+  console.log(
+    `Recordings for ${suite.name}@${suite.version} — drop mono WAVs (any sample rate; Sonar\n` +
+      `resamples to 24kHz) at ${RECORDINGS_DIR}/<name>.wav. Record "pause" clips with a\n` +
+      `genuine mid-sentence hesitation — don't let your pitch fall as if finishing.\n`,
+  );
+  let missing = 0;
+  for (const r of recordings) {
+    const present = recordingExists(REPO_ROOT, r.recording);
+    if (!present) missing += 1;
+    console.log(
+      `  [${present ? "✓" : " "}] ${r.recording.padEnd(13)} ${r.kind.padEnd(9)} ${r.script ?? ""}`,
+    );
+  }
+  console.log(
+    `\n${recordings.length - missing}/${recordings.length} present` +
+      (missing > 0 ? ` · ${missing} still to record, then: npm run sonar -- run --suite ${suite.name} --audio-rt-ws ws://127.0.0.1:8089/api/asr-streaming` : " · ready to run"),
+  );
 }
 
 function reportCommand() {

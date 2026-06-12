@@ -32,12 +32,20 @@ export type TimedSseFrame = {
 export type SonarSuiteMode = "voice-stream" | "scene";
 
 /**
- * What the user says in a turn. A plain string is one synthesized clip (a
- * complete utterance). `{ parts, gapMs }` synthesizes each part separately
- * and rejoins them with a silence gap — a pause-aware fixture that probes
- * whether the endpointer fires prematurely on a mid-sentence pause.
+ * What the user says in a turn:
+ * - a plain string → one synthesized clip (a complete utterance);
+ * - `{ parts, gapMs }` → each part synthesized and rejoined with a silence
+ *   gap (a synthetic pause-aware fixture);
+ * - `{ recording, kind }` → a REAL recording loaded from the recordings dir
+ *   by name, with `kind` as the ground truth (a "paused" recording should
+ *   stay whole). Synthetic TTS pauses understate cutoff because clip
+ *   fragments carry falsely-complete intonation; real recordings are the
+ *   fair test. `script` documents what to say (shown by `sonar recordings`).
  */
-export type SonarUtterance = string | { parts: string[]; gapMs?: number };
+export type SonarUtterance =
+  | string
+  | { parts: string[]; gapMs?: number }
+  | { recording: string; kind: "complete" | "paused"; script?: string };
 
 export type SonarSuite = {
   name: string;

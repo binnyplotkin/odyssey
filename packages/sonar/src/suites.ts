@@ -81,8 +81,43 @@ export const ENDPOINTING: SonarSuite = {
   ],
 };
 
+/**
+ * Endpointing on REAL recorded audio — the fair cutoff eval. Synthetic TTS
+ * pauses understate the cutoff benefit (clip fragments carry falsely-complete
+ * falling intonation; a real mid-sentence pause keeps rising/continuing
+ * prosody). Record each clip naturally, drop the WAVs in
+ * evals/sonar/recordings/<name>.wav, then run. `sonar recordings --suite
+ * real-endpointing` lists exactly what to record and what's still missing.
+ *
+ * Record the "pause-*" clips with a genuine mid-sentence hesitation (think
+ * mid-thought, don't let your pitch fall as if finishing) — that's the case
+ * a fixed-silence endpointer cuts and a semantic one should hold.
+ */
+export const REAL_ENDPOINTING: SonarSuite = {
+  name: "real-endpointing",
+  version: "1.0.0",
+  description:
+    "Endpointing on REAL recordings (evals/sonar/recordings/). The fair cutoff eval vs synthetic pauses.",
+  character: "abraham",
+  mode: "voice-stream",
+  sttOnly: true,
+  sessions: 1, // recordings are deterministic through STT — one pass is enough
+  turns: [
+    { recording: "complete-01", kind: "complete", script: "Tell me about the visitors at Mamre." },
+    { recording: "complete-02", kind: "complete", script: "What did Sarah make of their promise?" },
+    { recording: "complete-03", kind: "complete", script: "Peace be with you, friend." },
+    { recording: "pause-01", kind: "paused", script: "Tell me about … <1s> … the visitors who came to your tent at Mamre." },
+    { recording: "pause-02", kind: "paused", script: "I was wondering … <1s> … what you remember of your journey from Ur." },
+    { recording: "pause-03", kind: "paused", script: "And Sarah — … <1s> … did she ever doubt the promise would come to pass?" },
+    { recording: "pause-04", kind: "paused", script: "Hmm … <1s> … let me think about how to ask this." },
+    { recording: "pause-05", kind: "paused", script: "So when you … <1.5s> … when you left Haran, were you afraid?" },
+    { recording: "pause-06", kind: "paused", script: "The thing is … <1.5s> … I don't really know where to begin." },
+  ],
+};
+
 export const SUITES: Record<string, SonarSuite> = {
   [VOICE_BASELINE.name]: VOICE_BASELINE,
   [SCENE_BASELINE.name]: SCENE_BASELINE,
   [ENDPOINTING.name]: ENDPOINTING,
+  [REAL_ENDPOINTING.name]: REAL_ENDPOINTING,
 };
