@@ -93,6 +93,14 @@ type VoiceStreamBody = {
   maxTokens?: number;
   voice?: string;
   ackMode?: "auto" | "off";
+  // Opt-in TTS override: name a voices-table slug to route this turn through
+  // that voice's provider instead of the character's binding, leaving the
+  // rest of the pipeline (identity, context, LLM) identical. The server
+  // resolves all provider config from the DB row — the client supplies only
+  // the slug, never credentials. Used for A/B benchmarking (Sonar) and
+  // voice preview. Falls through to normal resolution if the slug is unknown
+  // or not ready.
+  ttsVoiceSlug?: string;
 };
 
 const ANTHROPIC_DEFAULT_MODEL = "claude-haiku-4-5";
@@ -235,7 +243,26 @@ export async function POST(
   // audio-rt can fetch Supabase-managed embeddings; the URL is one-shot
   // (1h TTL) and only used for this request.
   let voiceForRouting: VoiceForRouting;
-  if (
+  // Opt-in override (benchmarking / preview): route through a named voices
+  // row instead of the character's binding. Resolved entirely from the DB.
+  const ttsOverrideVoice = body.ttsVoiceSlug
+    ? await getVoiceStore()
+        .getBySlug(body.ttsVoiceSlug)
+        .catch(() => null)
+    : null;
+  if (ttsOverrideVoice && ttsOverrideVoice.status === "ready") {
+    const embeddingUrl =
+      ttsOverrideVoice.provider === "pocket_tts" && ttsOverrideVoice.embeddingPath
+        ? await createEmbeddingSignedUrl(ttsOverrideVoice.embeddingPath).catch(() => null)
+        : null;
+    voiceForRouting = {
+      provider: ttsOverrideVoice.provider as StreamingTtsProvider,
+      slug: ttsOverrideVoice.slug,
+      embeddingUrl,
+      providerConfig: ttsOverrideVoice.providerConfig,
+      voiceSettings: null,
+    };
+  } else if (
     "voiceId" in character &&
     typeof character.voiceId === "string" &&
     character.voiceId
@@ -684,6 +711,7 @@ export async function POST(
               id: body.turnId,
               sessionId: body.sessionId,
               inputMode: "voice",
+              speakerSlug: character.slug,
               userText: message,
               status: "in_progress",
               startedAt: new Date(startedAtWall).toISOString(),
@@ -1053,6 +1081,7 @@ export async function POST(
                 id: body.turnId,
                 sessionId: body.sessionId,
                 inputMode: "voice",
+                speakerSlug: character.slug,
                 userText: message,
                 assistantText,
                 provider: chosenProvider,
@@ -1138,6 +1167,8 @@ export async function POST(
           totalMs: Math.round(performance.now() - startedAt),
           provider: chosenProvider,
           model: modelId,
+          ttsProvider,
+          ttsVoice: ttsVoiceContext.slug,
           ackEnabled,
           ackText,
           ackDelivered,
