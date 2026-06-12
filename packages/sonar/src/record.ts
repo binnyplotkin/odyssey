@@ -12,6 +12,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { percentile } from "./stats";
 import type { SonarLedgerEntry, SonarRunRecord } from "./types";
 
 export const RUNS_DIR = ".sonar/runs";
@@ -144,10 +145,24 @@ export function renderProgression(entries: SonarLedgerEntry[], opts?: { suite?: 
 }
 
 export function renderRunSummary(record: SonarRunRecord): string {
+  // Cold (turn-1, session entry) vs warm (subsequent) voice-to-voice — the
+  // axis the prewarm experiment moves; the blended p50 hides it.
+  const v2vAt = (pred: (turnIndex: number) => boolean): number | null => {
+    const vals = record.turns
+      .filter((t) => pred(t.turnIndex))
+      .map((t) => t.spans["voice-to-voice"])
+      .filter((v): v is number => typeof v === "number");
+    return vals.length ? Math.round(percentile(vals, 50) * 10) / 10 : null;
+  };
+  const coldP50 = v2vAt((i) => i === 0);
+  const warmP50 = v2vAt((i) => i > 0);
+
   const lines: string[] = [
     `run ${record.runId.slice(0, 8)} · sonar v${record.sonarVersion} · ${record.suite.name}@${record.suite.version}` +
       (record.label ? ` · "${record.label}"` : ""),
-    `${record.turns.length} turns · ${record.errors} errors · models=[${record.observed.models.join(", ")}] · cost=$${record.totalCostUsd.toFixed(4)}`,
+    `${record.turns.length} turns · ${record.errors} errors · models=[${record.observed.models.join(", ")}] · cost=$${record.totalCostUsd.toFixed(4)}` +
+      (record.config.prewarm ? " · prewarmed" : ""),
+    `voice-to-voice · cold (turn-1) p50 ${ms(coldP50)} · warm p50 ${ms(warmP50)}`,
     "",
     `${"span".padEnd(20)} ${"n".padStart(3)} ${"p50".padStart(8)} ${"p90".padStart(8)} ${"p95".padStart(8)} ${"mean".padStart(8)} ${"max".padStart(8)}`,
   ];

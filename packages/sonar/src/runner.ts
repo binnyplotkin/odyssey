@@ -51,6 +51,12 @@ export type RunSonarSuiteOptions = {
    * voice-to-voice reflects TRUE felt latency. 0 (default) = pipeline-intrinsic.
    */
   commitHoldMs?: number;
+  /**
+   * Warm the session context cache at session open (POST /voice-context),
+   * exactly as the real client does, so turn-1 skips the curator/retrieval
+   * pass. Measures the product's true "enter a world" latency.
+   */
+  prewarm?: boolean;
   /** Override the suite's session count. */
   sessions?: number;
   /** Stream STT frames as fast as possible — non-representative endpointing. */
@@ -80,6 +86,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
       `${sessions} session(s) × ${suite.turns.length} turn(s) · voice-to-voice` +
       (opts.ttsVoice ? ` · tts→${opts.ttsVoice}` : "") +
       (commitHoldMs > 0 ? ` · commit-hold=${commitHoldMs}ms (felt)` : "") +
+      (opts.prewarm ? " · prewarm" : "") +
       (opts.turbo ? " · TURBO (endpointing not representative)" : ""),
   );
 
@@ -112,7 +119,19 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
       currentScene: initialSceneSnapshot(sceneId, character),
       metadata: { source: "sonar", sonarVersion: SONAR_VERSION, runId, characterSlug: character, sceneId },
     });
-    log(`session ${sessionIndex + 1}/${sessions} · ${sessionId}`);
+
+    // Warm the session context cache at open, like the real client does, so
+    // turn-1 skips the curator/retrieval pass. Token budget matches what the
+    // voice-stream route uses for its cache lookup (2500).
+    if (opts.prewarm) {
+      const w0 = performance.now();
+      await http
+        .postJson(`/api/characters/${character}/voice-context`, { sessionId, tokenBudget: 2500 })
+        .then(() => log(`session ${sessionIndex + 1}/${sessions} · ${sessionId} · prewarmed in ${Math.round(performance.now() - w0)}ms`))
+        .catch((err: unknown) => log(`  (prewarm failed: ${String(err)})`));
+    } else {
+      log(`session ${sessionIndex + 1}/${sessions} · ${sessionId}`);
+    }
 
     const history: Array<{ role: "user" | "assistant"; content: string }> = [];
     const sceneTurns: SceneTurn[] = [];
@@ -267,6 +286,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
       model: opts.model ?? null,
       ttsVoice: opts.ttsVoice ?? null,
       commitHoldMs,
+      prewarm: Boolean(opts.prewarm),
       sessions,
       turnsPerSession: suite.turns.length,
     },
