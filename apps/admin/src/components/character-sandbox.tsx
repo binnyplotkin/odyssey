@@ -892,11 +892,12 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     const streamingTranscript = input.transcript.trim();
     const durationMs = input.audioInput?.durationMs ?? null;
     const hasRecordedAudio = Boolean(input.audioInput?.blob.size);
-    const shouldFallback =
-      hasRecordedAudio &&
-      (streamingTranscript.length === 0 ||
-        ((durationMs ?? 0) >= STT_FALLBACK_MIN_AUDIO_MS &&
-          isSuspiciousStreamingTranscript(streamingTranscript)));
+    // Only re-transcribe when the live transcript is genuinely EMPTY. The old
+    // "suspicious → batch re-transcribe, keep whichever is longer" path replaced
+    // clean live transcripts with longer-but-hallucinated batch output (whisper
+    // repeats on a blob → "So long. And long. So long."), garbling good speech.
+    // Trust the audio-rt streaming transcript whenever it has content.
+    const shouldFallback = hasRecordedAudio && streamingTranscript.length === 0;
     if (!shouldFallback || !input.audioInput) return streamingTranscript;
 
     const audioInput = input.audioInput;
