@@ -29,7 +29,10 @@ const MAX_TRAILING_SILENCE_MS = 6_000; // safety cap waiting for end-of-speech +
 const WORD_GRACE_MS = 350; // after the last word, wait this long for stragglers
 // captureAllBursts mode: a fixed listen window after speech so a SECOND
 // burst (a premature cutoff re-firing after a mid-sentence pause) is caught.
-const TRAILING_CAPTURE_MS = 1_800;
+// Generous because a semantic endpointer that *holds* a turn open delays its
+// final transcribe — too short a window would miss the late burst and
+// mismeasure a cut as whole.
+const TRAILING_CAPTURE_MS = 3_000;
 // Words from one transcribe() arrive in a tight burst (<10ms apart); a gap
 // larger than this means a new burst — i.e. the endpointer fired again.
 const BURST_GAP_MS = 400;

@@ -529,6 +529,9 @@ def _warm_tts_on_startup() -> None:
             # Drive one tiny inference so CTranslate2 finishes any JIT-style
             # setup and the first real request is faster.
             whisper_runtime.transcribe_utterance(np.zeros(16000, dtype=np.float32))
+            if SMART_TURN_ENABLED:
+                p = smart_turn.warm()
+                print(f"[startup] Smart Turn v3 warm-up complete (sanity P={p:.3f}).", flush=True)
             print(f"[startup] faster-whisper + silero warm-up complete in {time.time()-t0:.1f}s.", flush=True)
         except Exception as error:  # noqa: BLE001
             print(f"[startup] STT warm-up failed after {time.time()-t0:.1f}s: {error}", flush=True)
@@ -985,6 +988,26 @@ LOOKBACK_CHUNKS = 4             # ~128 ms pre-roll; catches the leading
                                 # phoneme of a word VAD detects one chunk
                                 # late (otherwise "I live" → "live").
 
+# ── Smart Turn v3 (optional semantic endpointing) ────────────────────
+# When enabled, silero still detects the pause but Smart Turn decides whether
+# the turn is actually over: fire fast on a complete utterance, keep listening
+# through a mid-sentence pause. Default off — behaviour is unchanged and the
+# transformers dep isn't loaded unless SMART_TURN_ENABLED=1.
+SMART_TURN_ENABLED = os.getenv("SMART_TURN_ENABLED", "0") == "1"
+# Check turn-completion once this much trailing silence has accrued (~256 ms) —
+# far shorter than the 800 ms fixed window, so complete turns end sooner.
+SMART_TURN_SILENCE_CHUNKS = int(os.getenv("SMART_TURN_SILENCE_CHUNKS", "8"))
+# Force end-of-turn at this much silence even if Smart Turn still says
+# "incomplete" — safety net so a trailing-off utterance can't hang (~2 s).
+SMART_TURN_MAX_SILENCE_CHUNKS = int(os.getenv("SMART_TURN_MAX_SILENCE_CHUNKS", "63"))
+# P(complete) at/above which the turn ends. The model is calibrated for 0.5;
+# raise it to be more reluctant to cut (fewer mid-sentence cutoffs, slightly
+# higher latency on genuinely-complete turns).
+SMART_TURN_THRESHOLD = float(os.getenv("SMART_TURN_THRESHOLD", "0.5"))
+
+if SMART_TURN_ENABLED:
+    import smart_turn
+
 
 @app.websocket("/api/asr-streaming")
 async def asr_streaming(websocket: WebSocket):
@@ -1108,12 +1131,27 @@ async def asr_streaming(websocket: WebSocket):
                         in_speech = False
                         silence_run = 0
 
-                # End-of-speech detection: enough trailing silence after speech.
-                if (
-                    in_speech
-                    and silence_run >= END_OF_SPEECH_SILENCE_CHUNKS
-                    and len(utterance_chunks) >= MIN_UTTERANCE_CHUNKS
-                ):
+                # End-of-turn decision. Fixed-silence by default; Smart Turn
+                # gates on a completion model when enabled.
+                end_turn = False
+                if in_speech and len(utterance_chunks) >= MIN_UTTERANCE_CHUNKS:
+                    if SMART_TURN_ENABLED:
+                        if silence_run >= SMART_TURN_MAX_SILENCE_CHUNKS:
+                            end_turn = True  # safety net — don't hang
+                        elif (
+                            silence_run >= SMART_TURN_SILENCE_CHUNKS
+                            and silence_run % SMART_TURN_SILENCE_CHUNKS == 0
+                        ):
+                            # Re-check every ~256 ms of silence on the utterance
+                            # so far (incl. accruing trailing silence). Sync call
+                            # (~75 ms) — fine here; offload to a thread for prod.
+                            prob = smart_turn.predict_completion(np.concatenate(utterance_chunks))
+                            if prob >= SMART_TURN_THRESHOLD:
+                                end_turn = True
+                    elif silence_run >= END_OF_SPEECH_SILENCE_CHUNKS:
+                        end_turn = True
+
+                if end_turn:
                     in_speech = False
                     silence_run = 0
                     if not transcribe_in_flight:

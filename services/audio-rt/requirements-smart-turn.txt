@@ -1,0 +1,11 @@
+# Optional deps for Smart Turn v3 semantic endpointing (SMART_TURN_ENABLED=1).
+# Kept separate so the default build doesn't pull transformers.
+#
+# transformers is pinned to 4.x: it provides WhisperFeatureExtractor (the
+# model's log-mel preprocessing) while staying on huggingface-hub <1.0.0,
+# which moshi (a base requirement) also needs. transformers 5.x requires
+# huggingface-hub >=1.5 and is incompatible with moshi.
+#
+# The ONNX weights (~8MB) download from HuggingFace on first use:
+#   pipecat-ai/smart-turn-v3 :: smart-turn-v3.1-cpu.onnx
+transformers==4.46.3

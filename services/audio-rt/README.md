@@ -117,6 +117,34 @@ npm run sonar -- run --suite endpointing --audio-rt-ws ws://127.0.0.1:8089/api/a
 finishes (~2s on a warm HF cache, ~30–60s cold). Set
 `WHISPER_WARM_ON_STARTUP=0` to skip it.
 
+### Smart Turn v3 — semantic endpointing (experimental, off by default)
+
+[`smart_turn.py`](./smart_turn.py) gates end-of-turn on a turn-completion
+model (pipecat-ai/smart-turn-v3, ONNX, ~8MB) instead of the fixed 800ms
+silence window: it fires fast on a complete utterance and keeps listening
+through a mid-sentence pause. Off unless `SMART_TURN_ENABLED=1`, so the
+default build is unchanged and doesn't load transformers.
+
+```bash
+pip install -r requirements-smart-turn.txt
+SMART_TURN_ENABLED=1 SMART_TURN_THRESHOLD=0.5 \
+  uvicorn gateway:app --port 8089 --workers 1
+```
+
+Knobs: `SMART_TURN_THRESHOLD` (P(complete) to end, default 0.5),
+`SMART_TURN_SILENCE_CHUNKS` (re-check interval, ~256ms),
+`SMART_TURN_MAX_SILENCE_CHUNKS` (safety force-end, ~2s).
+
+Measured via Sonar's `endpointing` suite (local, vs the fixed-silence
+baseline): endpoint latency on complete utterances **756ms → 415ms** and
+cutoff **100% → 67%** at threshold 0.5 — a real Pareto win, though the
+cutoff number is **pessimistic on synthetic TTS fixtures** (clip fragments
+carry falsely-complete falling intonation real speech doesn't). A fair
+cutoff evaluation needs real recorded pauses (drop them at the Sonar
+fixture paths). Two production refinements remain: trim trailing silence
+before inference (accruing silence inflates completeness), and offload the
+~75ms inference to a thread.
+
 ## Streaming STT (`/api/asr-streaming`)
 
 WebSocket endpoint that the browser connects to via the audio-rt streaming
