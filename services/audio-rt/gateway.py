@@ -529,6 +529,9 @@ def _warm_tts_on_startup() -> None:
             # Drive one tiny inference so CTranslate2 finishes any JIT-style
             # setup and the first real request is faster.
             whisper_runtime.transcribe_utterance(np.zeros(16000, dtype=np.float32))
+            if SMART_TURN_ENABLED:
+                p = smart_turn.warm()
+                print(f"[startup] Smart Turn v3 warm-up complete (sanity P={p:.3f}).", flush=True)
             print(f"[startup] faster-whisper + silero warm-up complete in {time.time()-t0:.1f}s.", flush=True)
         except Exception as error:  # noqa: BLE001
             print(f"[startup] STT warm-up failed after {time.time()-t0:.1f}s: {error}", flush=True)
@@ -985,6 +988,33 @@ LOOKBACK_CHUNKS = 4             # ~128 ms pre-roll; catches the leading
                                 # phoneme of a word VAD detects one chunk
                                 # late (otherwise "I live" → "live").
 
+# ── Smart Turn v3 (optional semantic endpointing) ────────────────────
+# When enabled, silero still detects the pause but Smart Turn decides whether
+# the turn is actually over: fire fast on a complete utterance, keep listening
+# through a mid-sentence pause. Default off — behaviour is unchanged and the
+# transformers dep isn't loaded unless SMART_TURN_ENABLED=1.
+SMART_TURN_ENABLED = os.getenv("SMART_TURN_ENABLED", "0") == "1"
+# Check turn-completion once this much trailing silence has accrued (~448 ms) —
+# shorter than the 800 ms fixed window so complete turns end sooner, but long
+# enough to skip brief internal pauses (commas) so a complete clause like
+# "Peace be with you, friend" isn't split at the comma.
+SMART_TURN_SILENCE_CHUNKS = int(os.getenv("SMART_TURN_SILENCE_CHUNKS", "14"))
+# Force end-of-turn at this much silence even if Smart Turn still says
+# "incomplete" — safety net so a trailing-off utterance can't hang (~2 s).
+SMART_TURN_MAX_SILENCE_CHUNKS = int(os.getenv("SMART_TURN_MAX_SILENCE_CHUNKS", "63"))
+# P(complete) at/above which the turn ends. The model is calibrated for 0.5;
+# raise it to be more reluctant to cut (fewer mid-sentence cutoffs, slightly
+# higher latency on genuinely-complete turns).
+SMART_TURN_THRESHOLD = float(os.getenv("SMART_TURN_THRESHOLD", "0.5"))
+# Trailing silence is itself a completion cue, so a long pause biases the
+# model toward "complete" and cuts mid-sentence. Trim the accruing silence
+# down to this fixed pad (~96ms) before inference so the verdict depends on
+# the speech prosody, not how long the pause has run.
+SMART_TURN_PAD_CHUNKS = int(os.getenv("SMART_TURN_PAD_CHUNKS", "3"))
+
+if SMART_TURN_ENABLED:
+    import smart_turn
+
 
 @app.websocket("/api/asr-streaming")
 async def asr_streaming(websocket: WebSocket):
@@ -1108,12 +1138,34 @@ async def asr_streaming(websocket: WebSocket):
                         in_speech = False
                         silence_run = 0
 
-                # End-of-speech detection: enough trailing silence after speech.
-                if (
-                    in_speech
-                    and silence_run >= END_OF_SPEECH_SILENCE_CHUNKS
-                    and len(utterance_chunks) >= MIN_UTTERANCE_CHUNKS
-                ):
+                # End-of-turn decision. Fixed-silence by default; Smart Turn
+                # gates on a completion model when enabled.
+                end_turn = False
+                if in_speech and len(utterance_chunks) >= MIN_UTTERANCE_CHUNKS:
+                    if SMART_TURN_ENABLED:
+                        if silence_run >= SMART_TURN_MAX_SILENCE_CHUNKS:
+                            end_turn = True  # safety net — don't hang
+                        elif (
+                            silence_run >= SMART_TURN_SILENCE_CHUNKS
+                            and silence_run % SMART_TURN_SILENCE_CHUNKS == 0
+                        ):
+                            # Re-check every ~256 ms of silence. Trim the accruing
+                            # trailing silence to a fixed pad so pause length stops
+                            # biasing the verdict toward "complete".
+                            full = np.concatenate(utterance_chunks)
+                            drop = max(0, silence_run - SMART_TURN_PAD_CHUNKS) * SILERO_CHUNK
+                            speech = full[: full.shape[0] - drop] if 0 < drop < full.shape[0] else full
+                            # Offload the ~75 ms inference so it doesn't stall the
+                            # WebSocket audio recv loop.
+                            prob = await loop.run_in_executor(
+                                None, smart_turn.predict_completion, speech
+                            )
+                            if prob >= SMART_TURN_THRESHOLD:
+                                end_turn = True
+                    elif silence_run >= END_OF_SPEECH_SILENCE_CHUNKS:
+                        end_turn = True
+
+                if end_turn:
                     in_speech = False
                     silence_run = 0
                     if not transcribe_in_flight:

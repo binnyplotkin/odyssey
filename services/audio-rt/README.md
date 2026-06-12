@@ -77,18 +77,84 @@ its own model, so concurrent `/speak` requests fan out across workers.
 
 ## Local dev
 
+Use **Python 3.12** — torch/onnxruntime/ctranslate2 have no wheels for 3.13+
+yet (a 3.14 system Python will fail to install the stack).
+
 ```bash
 cd services/audio-rt
-python -m venv .venv && source .venv/bin/activate
+/opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pip install --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
 uvicorn gateway:app --port 8765
 ```
 
-`/healthz` will report `ttsRuntime.loaded: false` and `whisper.loaded: false`
-until each background warm-up finishes downloading weights from HuggingFace
-(~30–60s on a cold cache). Set `POCKET_TTS_WARM_ON_STARTUP=0` or
-`WHISPER_WARM_ON_STARTUP=0` to skip the corresponding warm-up.
+On macOS arm64, `pip install torch==2.8.0 torchaudio==2.8.0` from PyPI is
+already CPU/MPS (no CUDA) — the `download.pytorch.org/whl/cpu` index in the
+Dockerfile is a Linux-container concern.
+
+### STT-only (endpointing / turn-detector work)
+
+`pocket_tts`, `faster_whisper`, and `silero_vad` are all imported lazily, so
+you can run the STT WebSocket path without Pocket TTS — its startup warm-up
+fails gracefully in a background thread and the server still serves
+`/api/asr-streaming`. Install everything **except** `pocket-tts`:
+
+```bash
+pip install torch==2.8.0 torchaudio==2.8.0
+pip install numpy fastapi==0.116.1 'uvicorn[standard]==0.35.0' \
+  moshi==0.2.13 julius==0.2.7 soundfile==0.13.1 librosa==0.11.0 \
+  faster-whisper==1.2.0 silero-vad==6.0.0 msgpack==1.1.2 onnxruntime==1.20.1
+PORT=8089 uvicorn gateway:app --host 127.0.0.1 --port 8089 --workers 1
+```
+
+Then point the Sonar endpointing suite at it (no admin cookie / dev server
+needed):
+
+```bash
+npm run sonar -- run --suite endpointing --audio-rt-ws ws://127.0.0.1:8089/api/asr-streaming
+```
+
+`/healthz` reports `whisper.loaded: false` until the background warm-up
+finishes (~2s on a warm HF cache, ~30–60s cold). Set
+`WHISPER_WARM_ON_STARTUP=0` to skip it.
+
+### Smart Turn v3 — semantic endpointing (experimental, off by default)
+
+[`smart_turn.py`](./smart_turn.py) gates end-of-turn on a turn-completion
+model (pipecat-ai/smart-turn-v3, ONNX, ~8MB) instead of the fixed 800ms
+silence window: it fires fast on a complete utterance and keeps listening
+through a mid-sentence pause. Off unless `SMART_TURN_ENABLED=1`, so the
+default build is unchanged and doesn't load transformers.
+
+```bash
+pip install -r requirements-smart-turn.txt
+SMART_TURN_ENABLED=1 SMART_TURN_THRESHOLD=0.5 \
+  uvicorn gateway:app --port 8089 --workers 1
+```
+
+Knobs: `SMART_TURN_THRESHOLD` (P(complete) to end, default 0.5),
+`SMART_TURN_SILENCE_CHUNKS` (first-check delay, default 14 ≈ 448ms — long
+enough to skip internal commas, shorter than the 800ms fixed window),
+`SMART_TURN_PAD_CHUNKS` (trailing silence kept before inference, default 3 ≈
+96ms), `SMART_TURN_MAX_SILENCE_CHUNKS` (safety force-end, ~2s).
+
+Implementation notes: trailing silence is trimmed to a fixed pad before
+inference (a long pause otherwise biases the model toward "complete"), and
+the ~75ms inference runs in a thread so it doesn't stall the audio loop.
+
+Measured via Sonar's `endpointing` / `real-endpointing` suites (local, vs
+the fixed-silence baseline). The benefit grows as the test gets fairer —
+synthetic TTS fixtures **understate** it (clip fragments carry
+falsely-complete falling intonation real speech doesn't):
+
+| test | cutoff: fixed-silence → Smart Turn 0.5 |
+|---|---|
+| fragment-synthetic | 100% → 67% |
+| spliced-prosody | 100% → 50% |
+| **real recorded voice** | **83% → 17%** |
+
+On real audio it holds 5 of 6 mid-sentence pauses (only a short "And
+Sarah —" fragment still cuts) with no comma-split regression on complete
+utterances. Endpoint latency on complete turns ~756ms → ~450ms.
 
 ## Streaming STT (`/api/asr-streaming`)
 

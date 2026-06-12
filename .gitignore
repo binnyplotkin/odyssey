@@ -56,3 +56,15 @@ next-env.d.ts
 
 # eval runs (machine + human-readable per-run reports)
 /.evals/
+
+# Sonar latency benchmark raw run records (ledger is committed under evals/sonar/)
+/.sonar/
+
+# Sonar synthesized input fixtures (regenerable via `sonar synth`; ledger stays committed)
+evals/sonar/fixtures/*.wav
+
+# Local audio-rt Python virtualenv (Part 1 of the endpointing spike; STT-only)
+services/audio-rt/.venv/
+
+# Sonar real recordings — user voice; keep WAVs local (README + suite scripts are committed)
+evals/sonar/recordings/*.wav
