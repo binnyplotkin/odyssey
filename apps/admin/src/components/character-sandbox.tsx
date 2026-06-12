@@ -10,12 +10,17 @@ import {
   PcmPlayer,
   blobToBase64,
   captureMic,
+  createAudioContext,
   prepareSandboxVoiceTurn,
   streamVoice,
   transcribeAudio,
   warmSandboxVoiceContext,
   type ChatHistoryTurn,
 } from "@/lib/sandbox-streams";
+import {
+  SessionEntryCue,
+  prefetchSessionEntryCue,
+} from "@/lib/session-entry-audio";
 import { AudioRtStreamingSttSession } from "@/lib/audio-rt-streaming-stt";
 import { ElevenLabsScribeStreamingSttSession } from "@/lib/elevenlabs-scribe-streaming-stt";
 import type { TracePayload } from "@/lib/voice-trace";
@@ -174,6 +179,11 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   // refs for mic capture, and a `voiceState` for the wavefield state pill.
   const abortRef = useRef<AbortController | null>(null);
   const pcmPlayerRef = useRef<PcmPlayer | null>(null);
+  // Shared output AudioContext: created + resumed inside the start gesture so
+  // the entry cue plays instantly and TTS playback inherits an unlocked
+  // context (Safari leaves contexts created outside a gesture suspended).
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const entryCueRef = useRef<SessionEntryCue | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recorderStreamRef = useRef<MediaStream | null>(null);
   const recorderChunksRef = useRef<Blob[]>([]);
@@ -206,6 +216,22 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     micOnRef.current = micOn;
     voiceStateRef.current = voiceState;
   }, [micOn, voiceState]);
+
+  // Pre-session heatup. Cache the entry-cue bytes and warm the
+  // character-scoped voice-context cache (10 min TTL; session-scoped lookups
+  // fall back to it) so the start click only pays for session creation and
+  // the STT handshake. Repeat fires are cheap — the route dedupes in-flight
+  // builds and serves fresh entries from cache.
+  useEffect(() => {
+    if (phase !== "pre-session") return;
+    prefetchSessionEntryCue();
+    if (mode !== "voice") return;
+    void warmSandboxVoiceContext({ characterId: character.id }).catch(
+      (err) => {
+        console.warn("[sandbox] pre-session voice context warm failed", err);
+      },
+    );
+  }, [phase, mode, character.id]);
 
   useEffect(() => {
     const audio = waveAudioRef.current;
@@ -275,6 +301,15 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   }, [micOn, phase, voiceState]);
 
   async function handleStart() {
+    if (mode === "voice") {
+      // Play the entry cue synchronously inside the start gesture — before
+      // the session-create round-trip — so the user hears the session boot
+      // instantly while warmup continues behind it.
+      if (!audioCtxRef.current) audioCtxRef.current = createAudioContext();
+      entryCueRef.current?.stop();
+      entryCueRef.current = new SessionEntryCue(audioCtxRef.current);
+      entryCueRef.current.play();
+    }
     setStartedAt(Date.now());
     setTurns([]);
     setTraceRecords([]);
@@ -296,6 +331,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       return null;
     });
     if (!sessionId) {
+      entryCueRef.current?.stop();
+      entryCueRef.current = null;
       worldSessionIdRef.current = null;
       setWorldSessionId(null);
       return;
@@ -353,6 +390,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     // post-session review surface.
     abortRef.current?.abort();
     pcmPlayerRef.current?.stop();
+    entryCueRef.current?.stop();
+    entryCueRef.current = null;
     stopRecorder();
     stopStreamingStt();
     voiceContextWarmRef.current = null;
@@ -418,6 +457,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   function handlePrepareNextSession() {
     abortRef.current?.abort();
     pcmPlayerRef.current?.stop();
+    entryCueRef.current?.stop();
+    entryCueRef.current = null;
     stopRecorder();
     stopStreamingStt();
     voiceContextWarmRef.current = null;
@@ -439,6 +480,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   function handleReset() {
     abortRef.current?.abort();
     pcmPlayerRef.current?.stop();
+    entryCueRef.current?.stop();
+    entryCueRef.current = null;
     stopRecorder();
     stopStreamingStt();
     voiceContextWarmRef.current = null;
@@ -579,7 +622,10 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 
         // Always use the voice stream so typed chat and mic input share the
         // same orchestrated character response, TTS playback, and trace path.
-        if (!pcmPlayerRef.current) pcmPlayerRef.current = new PcmPlayer();
+        if (!pcmPlayerRef.current)
+          pcmPlayerRef.current = new PcmPlayer(
+            audioCtxRef.current ?? undefined,
+          );
         if (voiceContextWarmRef.current) {
           await Promise.race([
             voiceContextWarmRef.current,
@@ -626,6 +672,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             },
             onFirstAudio: (latencyMs) => {
               firstAudioAt = performance.now();
+              // Duck the entry cue if the character starts speaking mid-cue.
+              entryCueRef.current?.fadeOut();
               voiceStateRef.current = "speaking";
               setVoiceState("speaking");
               finalize((t) => ({
@@ -1447,6 +1495,10 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       abortRef.current?.abort();
       pcmPlayerRef.current?.stop();
       pcmPlayerRef.current = null;
+      entryCueRef.current?.stop();
+      entryCueRef.current = null;
+      void audioCtxRef.current?.close().catch(() => {});
+      audioCtxRef.current = null;
       stopRecorder();
       stopStreamingStt();
     };

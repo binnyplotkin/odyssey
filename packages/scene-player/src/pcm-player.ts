@@ -13,6 +13,15 @@ export class PcmPlayer {
   private nextStart = 0;
   private sources: AudioBufferSourceNode[] = [];
 
+  /**
+   * Optionally share an existing AudioContext — e.g. one created and resumed
+   * inside a user gesture — so entry cues and streamed voice use one output
+   * path and the context is already unlocked when the first frame arrives.
+   */
+  constructor(ctx?: AudioContext) {
+    this.ctx = ctx ?? null;
+  }
+
   enqueue(pcmBase64: string, _samples: number, sampleRate: number) {
     const ctx = this.ensureContext();
     const bytes = base64ToBytes(pcmBase64);
@@ -47,13 +56,16 @@ export class PcmPlayer {
 
   private ensureContext(): AudioContext {
     if (!this.ctx) {
-      this.ctx =
-        new (window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext })
-            .webkitAudioContext)();
+      this.ctx = createAudioContext();
     }
     return this.ctx;
   }
+}
+
+export function createAudioContext(): AudioContext {
+  return new (window.AudioContext ||
+    (window as unknown as { webkitAudioContext: typeof AudioContext })
+      .webkitAudioContext)();
 }
 
 export function base64ToBytes(b64: string): Uint8Array {

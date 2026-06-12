@@ -324,7 +324,7 @@ export async function transcribeAudio(
 // PcmPlayer now lives in @odyssey/scene-player so both the character sandbox
 // and the scenes player share one implementation. Re-exported here so existing
 // `@/lib/sandbox-streams` importers keep working.
-export { PcmPlayer } from "@odyssey/scene-player";
+export { PcmPlayer, createAudioContext } from "@odyssey/scene-player";
 
 /* ── Mic capture ──────────────────────────────────────────────── */
 

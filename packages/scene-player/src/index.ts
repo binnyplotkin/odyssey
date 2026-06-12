@@ -18,4 +18,8 @@ export type {
 } from "./use-scene-player";
 
 export { SceneAudioBus } from "./scene-audio-bus";
-export { PcmPlayer, base64ToBytes } from "./pcm-player";
+export {
+  PcmPlayer,
+  base64ToBytes,
+  createAudioContext,
+} from "./pcm-player";
