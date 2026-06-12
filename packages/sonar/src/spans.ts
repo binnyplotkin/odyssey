@@ -113,6 +113,9 @@ export function extractVoiceStreamSpans(input: {
     model: stringOrNull(done.model),
     ttsProvider: stringOrNull(done.ttsProvider),
     ttsVoice: stringOrNull(done.ttsVoice),
+    // Filled by the runner once the reply text length is known.
+    ttsChars: null,
+    ttsCostUsd: null,
   };
 
   return { spans, flags, usage, serverTrace };

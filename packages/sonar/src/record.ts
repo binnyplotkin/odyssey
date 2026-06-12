@@ -160,7 +160,8 @@ export function renderRunSummary(record: SonarRunRecord): string {
   const lines: string[] = [
     `run ${record.runId.slice(0, 8)} · sonar v${record.sonarVersion} · ${record.suite.name}@${record.suite.version}` +
       (record.label ? ` · "${record.label}"` : ""),
-    `${record.turns.length} turns · ${record.errors} errors · models=[${record.observed.models.join(", ")}] · cost=$${record.totalCostUsd.toFixed(4)}` +
+    `${record.turns.length} turns · ${record.errors} errors · models=[${record.observed.models.join(", ")}] · ` +
+      `cost=$${record.totalCostUsd.toFixed(4)} (llm $${sumUsage(record, "estimatedCostUsd").toFixed(4)} + tts $${sumUsage(record, "ttsCostUsd").toFixed(4)} est)` +
       (record.config.prewarm ? " · prewarmed" : ""),
     `voice-to-voice · cold (turn-1) p50 ${ms(coldP50)} · warm p50 ${ms(warmP50)}`,
     "",
@@ -173,6 +174,10 @@ export function renderRunSummary(record: SonarRunRecord): string {
     );
   }
   return lines.join("\n");
+}
+
+function sumUsage(record: SonarRunRecord, field: "estimatedCostUsd" | "ttsCostUsd"): number {
+  return record.turns.reduce((acc, t) => acc + (t.usage[field] ?? 0), 0);
 }
 
 function ms(value: number | null): string {
