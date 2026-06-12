@@ -56,3 +56,9 @@ next-env.d.ts
 
 # eval runs (machine + human-readable per-run reports)
 /.evals/
+
+# Sonar latency benchmark raw run records (ledger is committed under evals/sonar/)
+/.sonar/
+
+# Sonar synthesized input fixtures (regenerable via `sonar synth`; ledger stays committed)
+evals/sonar/fixtures/*.wav
