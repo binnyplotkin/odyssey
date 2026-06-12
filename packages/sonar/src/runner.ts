@@ -15,7 +15,7 @@
  * providers (STT, LLM, TTS, and TTS for input synthesis) and incurs cost.
  */
 
-import { resolveUtteranceSamples } from "./audio/synth";
+import { loadRecording, resolveUtteranceSamples } from "./audio/synth";
 import { streamUtterance } from "./audio/stt-client";
 import { SONAR_VERSION } from "./version";
 import { aggregate } from "./stats";
@@ -105,16 +105,22 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
   }> = [];
   for (let i = 0; i < suite.turns.length; i += 1) {
     const norm = normalizeUtterance(suite.turns[i]);
-    const { samples, synthesized } = await resolveUtteranceSamples({
-      repoRoot: opts.repoRoot,
-      suite: suite.name,
-      turnIndex: i,
-      parts: norm.parts,
-      gapMs: norm.gapMs,
-      opts: { voice: suite.userVoice },
-      log,
-    });
-    fixtures.push({ samples, synthesized, kind: norm.kind, displayText: norm.displayText });
+    if (norm.source === "recording") {
+      // Real audio — load by name (throws a pointed error if not yet recorded).
+      const samples = loadRecording(opts.repoRoot, norm.name);
+      fixtures.push({ samples, synthesized: false, kind: norm.kind, displayText: norm.displayText });
+    } else {
+      const { samples, synthesized } = await resolveUtteranceSamples({
+        repoRoot: opts.repoRoot,
+        suite: suite.name,
+        turnIndex: i,
+        parts: norm.parts,
+        gapMs: norm.gapMs,
+        opts: { voice: suite.userVoice },
+        log,
+      });
+      fixtures.push({ samples, synthesized, kind: norm.kind, displayText: norm.displayText });
+    }
   }
 
   const turns: SonarTurnRecord[] = [];
@@ -385,15 +391,25 @@ function sttHardError(error: string | null): string | null {
   return error && error !== "stt-empty" ? `stt: ${error}` : null;
 }
 
-/** A string is one complete clip; { parts, gapMs } is a paused utterance. */
-function normalizeUtterance(u: SonarUtterance): {
-  parts: string[];
-  gapMs: number;
-  kind: "complete" | "paused";
-  displayText: string;
-} {
-  if (typeof u === "string") return { parts: [u], gapMs: 0, kind: "complete", displayText: u };
+type NormalizedUtterance =
+  | { source: "synth"; parts: string[]; gapMs: number; kind: "complete" | "paused"; displayText: string }
+  | { source: "recording"; name: string; kind: "complete" | "paused"; displayText: string };
+
+/** Discriminate the three utterance forms: plain synth, synth-pause, real recording. */
+function normalizeUtterance(u: SonarUtterance): NormalizedUtterance {
+  if (typeof u === "string") {
+    return { source: "synth", parts: [u], gapMs: 0, kind: "complete", displayText: u };
+  }
+  if ("recording" in u) {
+    return {
+      source: "recording",
+      name: u.recording,
+      kind: u.kind,
+      displayText: u.script ?? u.recording,
+    };
+  }
   return {
+    source: "synth",
     parts: u.parts,
     gapMs: u.gapMs ?? 1000,
     kind: "paused",

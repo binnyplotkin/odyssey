@@ -19,7 +19,32 @@ import * as path from "node:path";
 import { concatWithSilenceGaps, loadUtterance24k } from "./wav";
 
 export const FIXTURES_DIR = "evals/sonar/fixtures";
+export const RECORDINGS_DIR = "evals/sonar/recordings";
 const OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech";
+
+export function recordingPath(repoRoot: string, name: string): string {
+  return path.join(repoRoot, RECORDINGS_DIR, `${name}.wav`);
+}
+
+export function recordingExists(repoRoot: string, name: string): boolean {
+  return fs.existsSync(recordingPath(repoRoot, name));
+}
+
+/**
+ * Load a real recording by name → 24kHz mono samples. Throws a pointed error
+ * if it's missing, since real audio can't be synthesized as a fallback.
+ */
+export function loadRecording(repoRoot: string, name: string): Float32Array {
+  const file = recordingPath(repoRoot, name);
+  if (!fs.existsSync(file)) {
+    throw new Error(
+      `Missing recording "${name}" (expected ${RECORDINGS_DIR}/${name}.wav). ` +
+        `Record it and drop the WAV there — run \`npm run sonar -- recordings --suite <name>\` ` +
+        `to see every clip a suite needs and what to say.`,
+    );
+  }
+  return loadUtterance24k(fs.readFileSync(file));
+}
 
 export type SynthOptions = {
   /** Neutral user voice — deliberately not a character voice. */

@@ -106,6 +106,26 @@ change. Baseline against the current 800ms-VAD audio-rt: **100% cutoff** —
 that's what the semantic-endpointing work has to drive toward 0 while keeping
 endpoint latency low.
 
+### Real recordings (the fair cutoff eval)
+
+Synthetic TTS pauses **understate** the cutoff benefit — a clip fragment like
+"I was wondering" carries falsely-complete falling intonation a real
+mid-sentence pause doesn't. The `real-endpointing` suite runs on real
+recordings instead:
+
+```bash
+npm run sonar -- recordings --suite real-endpointing   # what to record, what's missing
+# record each clip as a mono WAV → evals/sonar/recordings/<name>.wav, then:
+npm run sonar -- run --suite real-endpointing --audio-rt-ws ws://127.0.0.1:8089/api/asr-streaming
+```
+
+A suite turn references real audio by name with explicit ground truth:
+`{ recording: "pause-01", kind: "paused", script: "…" }`. Recordings load by
+name (no hash juggling); a missing one fails with a pointed message. WAVs are
+gitignored (your voice); the scripts live in the suite, so the eval is
+reproducible by anyone who records the same lines. See
+[`evals/sonar/recordings/README.md`](../../evals/sonar/recordings/README.md).
+
 ## Versioning
 
 Two axes, both stamped on every run:
