@@ -26,7 +26,7 @@ export type OrchestratorExecutorConfig = {
 const CEREBRAS_ENDPOINT = "https://api.cerebras.ai/v1/chat/completions";
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
-const DEFAULT_CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
+const DEFAULT_CEREBRAS_MODEL = "gpt-oss-120b";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_MAX_COMPLETION_TOKENS = 1024;
 

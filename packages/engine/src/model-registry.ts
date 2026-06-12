@@ -203,24 +203,11 @@ export const MODEL_REGISTRY: ModelOption[] = [
   // All accept "chat" mode now (OpenAI-compatible HTTP, wired through
   // CerebrasChatProvider). Author beware: long-form chat quality is
   // model-dependent — evaluate each one before adopting in production.
-  // Note: Cerebras retired its small Llama models from public endpoints
-  // (Llama 3.1 8B deprecated 2026-05-27). As of 2026-06-12 the live
-  // /v1/models list offers only gpt-oss-120b and zai-glm-4.7 — there is
-  // no current Cerebras 8B to replace it with, so the entry was removed.
-  {
-    id: "qwen-3-235b-a22b-instruct-2507",
-    label: "Qwen 3 235B",
-    description: "MoE with ~22B active params. Strong character coherence among the open-weights set.",
-    provider: "cerebras",
-    modes: ["chat", "voice"],
-    contextWindow: 128_000,
-    maxOutputTokens: 4096,
-    pricing: { input: 0.6, output: 1.2 },
-    capabilities: { promptCache: false, streaming: true, tools: false, vision: false, structuredOutput: false, temperature: true, topP: true },
-    latencyTier: "instant",
-    qualityTier: "production",
-    preview: true,
-  },
+  // Note: Cerebras retired several models from its public endpoints. As of
+  // 2026-06-12 the live /v1/models list offers only gpt-oss-120b and
+  // zai-glm-4.7. Removed entries (both now return 404):
+  //   - llama3.1-8b (deprecated 2026-05-27; no current Cerebras 8B replaces it)
+  //   - qwen-3-235b-a22b-instruct-2507 (was DEFAULT_VOICE_MODEL; repointed to gpt-oss-120b)
   {
     id: "gpt-oss-120b",
     label: "GPT-OSS 120B",
@@ -288,11 +275,12 @@ export const MODEL_REGISTRY: ModelOption[] = [
 export const DEFAULT_CHAT_MODEL = "claude-sonnet-4-5";
 
 /**
- * Default model for *voice* contexts. Qwen 3 235B gives noticeably better
- * in-character dialogue than smaller Cerebras models with similar TTFT.
- * Note: Cerebras lists this as Preview — if it 404s, fall back to gpt-oss-120b.
+ * Default model for *voice* contexts. Cerebras gpt-oss-120b is instant-tier
+ * TTFT and the strongest open-weights model still on Cerebras's public
+ * endpoints. (Was qwen-3-235b-a22b-instruct-2507 until Cerebras retired it —
+ * the old qwen id now 404s; gpt-oss-120b was the documented fallback.)
  */
-export const DEFAULT_VOICE_MODEL = "qwen-3-235b-a22b-instruct-2507";
+export const DEFAULT_VOICE_MODEL = "gpt-oss-120b";
 
 /* ── Lookup helpers ────────────────────────────────────────── */
 

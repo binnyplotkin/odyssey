@@ -173,7 +173,7 @@ export type CharacterIdentity = {
  */
 export type CharacterBrainModel = {
   provider?: "anthropic" | "openai" | "cerebras" | "groq";
-  /** Model id from MODEL_REGISTRY (e.g., "claude-sonnet-4-5", "gpt-5", "qwen-3-235b-a22b-instruct-2507"). */
+  /** Model id from MODEL_REGISTRY (e.g., "claude-sonnet-4-5", "gpt-5", "gpt-oss-120b"). */
   model?: string;
   /** 0 = deterministic, 1 = neutral, 2 = chaotic. Provider defaults to ~1. */
   temperature?: number;

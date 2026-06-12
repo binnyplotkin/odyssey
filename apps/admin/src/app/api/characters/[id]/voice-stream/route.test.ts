@@ -96,7 +96,7 @@ vi.mock("@odyssey/db", () => ({
       title: "Abraham",
       brainModel: {
         provider: "cerebras",
-        model: "qwen-3-235b-a22b-instruct-2507",
+        model: "gpt-oss-120b",
         maxTokens: 128,
       },
       directive: null,
@@ -136,7 +136,7 @@ vi.mock("@odyssey/db", () => ({
 }));
 
 vi.mock("@odyssey/engine", () => ({
-  DEFAULT_VOICE_MODEL: "qwen-3-235b-a22b-instruct-2507",
+  DEFAULT_VOICE_MODEL: "gpt-oss-120b",
   POCKET_TTS_SAMPLE_RATE: 24_000,
   embedText: vi.fn(async () => null),
   modelMetaFor: vi.fn((id: string) => ({
@@ -159,7 +159,7 @@ vi.mock("@odyssey/engine", () => ({
         cacheReadTokens: 0,
         cacheCreationTokens: 0,
         cacheState: "off",
-        model: "qwen-3-235b-a22b-instruct-2507",
+        model: "gpt-oss-120b",
       });
     },
   })),
@@ -278,7 +278,7 @@ describe("character voice-stream persistence", () => {
         message: "Are you there?",
         history: [],
         scene: { activeEntities: ["lot"], location: "canaan" },
-        model: "qwen-3-235b-a22b-instruct-2507",
+        model: "gpt-oss-120b",
       }),
       routeCtx,
     );
@@ -441,7 +441,7 @@ describe("character voice-stream persistence", () => {
         message: "Tell me more about Lot.",
         history: [],
         scene: { activeEntities: ["abraham"], location: "character sandbox" },
-        model: "qwen-3-235b-a22b-instruct-2507",
+        model: "gpt-oss-120b",
       }),
       routeCtx,
     );
@@ -513,7 +513,7 @@ describe("character voice-stream persistence", () => {
         message: "Answer in one sentence.",
         history: [],
         scene: { activeEntities: ["abraham"], location: "character sandbox" },
-        model: "qwen-3-235b-a22b-instruct-2507",
+        model: "gpt-oss-120b",
         voice: "abraham",
         ackMode: "off",
       }),
@@ -555,7 +555,7 @@ describe("character voice-stream persistence", () => {
         message: "Tell me more about Lot.",
         history: [],
         scene: { activeEntities: ["abraham"], location: "character sandbox" },
-        model: "qwen-3-235b-a22b-instruct-2507",
+        model: "gpt-oss-120b",
         ackMode: "off",
       }),
       routeCtx,
@@ -618,7 +618,7 @@ describe("character voice-stream persistence", () => {
         message: "Tell me more about Lot.",
         history: [],
         scene: { activeEntities: ["abraham"], location: "character sandbox" },
-        model: "qwen-3-235b-a22b-instruct-2507",
+        model: "gpt-oss-120b",
       }),
       routeCtx,
     );
@@ -660,7 +660,7 @@ describe("character voice-stream persistence", () => {
         message: "Tell me more about Lot.",
         history: [],
         scene: { activeEntities: ["abraham"], location: "character sandbox" },
-        model: "qwen-3-235b-a22b-instruct-2507",
+        model: "gpt-oss-120b",
       }),
       routeCtx,
     );

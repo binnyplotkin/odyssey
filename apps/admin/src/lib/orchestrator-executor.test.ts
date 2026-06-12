@@ -42,7 +42,7 @@ describe("orchestrator executor", () => {
 
     expect(resolution.executor).toMatchObject({
       provider: "cerebras",
-      model: "qwen-3-235b-a22b-instruct-2507",
+      model: "gpt-oss-120b",
     });
   });
 
