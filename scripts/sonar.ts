@@ -23,6 +23,8 @@
  *                       e.g. --tts-voice liam (elevenlabs) vs the default pocket binding
  *   --commit-hold-ms <n> model the sandbox commit hold so v2v = TRUE felt latency
  *                       (0 = pipeline-intrinsic; production is 1500)
+ *   --prewarm           warm the session context cache at open (like the real
+ *                       client) so turn-1 skips curator/retrieval
  *   --sessions <n>      override the suite's session count
  *   --label "<text>"    name the change under test (shows in the ledger)
  *   --cookie <cookie>   or ODYSSEY_ADMIN_COOKIE env
@@ -97,6 +99,7 @@ async function runCommand() {
     model: readFlag("--model") ?? undefined,
     ttsVoice: readFlag("--tts-voice") ?? undefined,
     commitHoldMs: readNumberFlag("--commit-hold-ms"),
+    prewarm: hasFlag("--prewarm"),
     sessions: readNumberFlag("--sessions"),
     turbo: hasFlag("--turbo"),
     audioRtWsUrl: readFlag("--audio-rt-ws") ?? undefined,

@@ -171,6 +171,8 @@ export type SonarRunRecord = {
     ttsVoice: string | null;
     /** Modeled client commit-hold (ms) folded into voice-to-voice; 0 = intrinsic. */
     commitHoldMs: number;
+    /** Whether the session context cache was warmed at open (like the real client). */
+    prewarm: boolean;
     sessions: number;
     turnsPerSession: number;
   };
