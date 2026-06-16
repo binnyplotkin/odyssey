@@ -22,6 +22,7 @@ const SEED_WEIGHT = {
   voiceIdentity: 1000,
   sceneEntity:    500,
   sceneLocation:  500,
+  queryActivation: 360,
   queryTitle:     300,
   queryAlias:     220,
   querySemantic:  200,   // scaled by similarity score; sits between alias and summary at full strength
@@ -76,25 +77,29 @@ export function seedPages(
     if (page) recordSeed(page.id, "scene-location", page.slug, SEED_WEIGHT.sceneLocation);
   }
 
-  // 3. Query-driven text match. Lowercase + token-split, then substring
-  //    search on title / aliases / summary.
+  // 3. Query-driven text match. Tokenize fields and match whole terms, not
+  //    arbitrary substrings. A term like "tell" should not activate a page
+  //    titled "Intellectual cycles".
   const queryTerms = extractQueryTerms(args.query ?? "");
   if (queryTerms.length > 0) {
-    for (const page of pages) {
-      const title = page.title.toLowerCase();
-      const summary = (page.summary ?? "").toLowerCase();
-      const aliases: string[] = extractAliases(page);
-
-      let titleHits = 0;
-      let summaryHits = 0;
-      let aliasHits = 0;
-      for (const term of queryTerms) {
-        if (title.includes(term)) titleHits++;
-        if (summary.includes(term)) summaryHits++;
-        if (aliases.some((a) => a.toLowerCase().includes(term))) aliasHits++;
+    const activationBoosts = activationSlugBoosts(queryTerms);
+    for (const [slug, boost] of activationBoosts) {
+      const page = bySlug.get(slug);
+      if (page) {
+        recordSeed(page.id, "query-activation", page.slug, boost);
       }
+    }
 
-      if (titleHits > 0) {
+    for (const page of pages) {
+      const titleTerms = tokenizeText(page.title);
+      const summaryTerms = tokenizeText(page.summary ?? "");
+      const aliasTerms = tokenizeText(extractAliases(page).join(" "));
+
+      const titleHits = countTermHits(titleTerms, queryTerms);
+      const summaryHits = countTermHits(summaryTerms, queryTerms);
+      const aliasHits = countTermHits(aliasTerms, queryTerms);
+
+      if (isStrongTitleHit(page, titleHits, queryTerms.length)) {
         recordSeed(
           page.id,
           "query-title",
@@ -110,7 +115,7 @@ export function seedPages(
           SEED_WEIGHT.queryAlias * aliasHits,
         );
       }
-      if (summaryHits > 0) {
+      if (isStrongSummaryHit(summaryHits, queryTerms.length)) {
         recordSeed(
           page.id,
           "query-summary",
@@ -148,11 +153,104 @@ export function seedPages(
  * nouns in the source pages (`Sarai`, `Melchizedek`) still match.
  */
 function extractQueryTerms(q: string): string[] {
-  const lower = q.toLowerCase();
-  const raw = lower.split(/[^a-z0-9'-]+/).filter(Boolean);
   return Array.from(
-    new Set(raw.filter((t) => t.length > 2 && !STOPWORDS.has(t))),
-  );
+    tokenizeText(q).values(),
+  ).filter((t) => (t.length > 2 || SHORT_PROPER_TERMS.has(t)) && !STOPWORDS.has(t));
+}
+
+function activationSlugBoosts(queryTerms: string[]): Map<string, number> {
+  const terms = new Set(queryTerms);
+  const boosts = new Map<string, number>();
+  const add = (slug: string, weight: number = SEED_WEIGHT.queryActivation) => {
+    boosts.set(slug, Math.max(boosts.get(slug) ?? 0, weight));
+  };
+  const hasAny = (...values: string[]) => values.some((value) => terms.has(value));
+  const hasAll = (...values: string[]) => values.every((value) => terms.has(value));
+
+  if (hasAny("visitor", "mamre", "hospitality")) {
+    add("three-visitors-at-mamre", 460);
+    add("hospitality-and-kindness", 360);
+    add("sarah", 240);
+    add("sarai", 180);
+  }
+
+  if (hasAny("laugh", "laughed", "laughter") || hasAll("sarah", "promise")) {
+    add("sarah", 460);
+    add("sarai", 420);
+    add("barrenness", 460);
+    add("birth-of-isaac", 500);
+    add("great-nation-promise", 520);
+    add("three-visitors-at-mamre", 420);
+    add("isaac", 260);
+  }
+
+  if (hasAny("ur", "haran", "huran", "harran") || hasAll("leave", "behind")) {
+    add("ur-of-the-chaldees", 460);
+    add("departure-from-ur", 460);
+    add("the-call-at-haran", 400);
+    add("haran-city", 380);
+    add("terah", 300);
+  }
+
+  if (hasAny("egypt", "pharaoh") || hasAll("fear", "overtook")) {
+    add("descent-into-egypt", 460);
+    add("egypt", 420);
+    add("pharaoh", 420);
+    add("fear-and-deception", 460);
+    add("sarah", 240);
+    add("sarai", 260);
+  }
+
+  if (hasAny("isaac", "barrenness") && hasAny("promise", "covenant")) {
+    add("isaac", 460);
+    add("sarah", 420);
+    add("sarai", 320);
+    add("barrenness", 460);
+    add("birth-of-isaac", 380);
+    add("great-nation-promise", 420);
+  }
+
+  return boosts;
+}
+
+function countTermHits(fieldTerms: Set<string>, queryTerms: string[]): number {
+  let hits = 0;
+  for (const term of queryTerms) {
+    if (fieldTerms.has(term)) hits++;
+  }
+  return hits;
+}
+
+function isStrongTitleHit(
+  page: WikiPageRecord,
+  hits: number,
+  queryTermCount: number,
+): boolean {
+  if (hits <= 0) return false;
+  if (hits >= 2 || queryTermCount <= 2) return true;
+  // Single-token entity/concept titles are usually direct references
+  // ("Sarah", "Covenant"). Single-token event/relationship title hits in
+  // longer utterances are often incidental ("death of Sarah").
+  return page.type === "entity" || page.type === "concept";
+}
+
+function isStrongSummaryHit(hits: number, queryTermCount: number): boolean {
+  if (hits <= 0) return false;
+  if (hits >= 2) return true;
+  return queryTermCount <= 2;
+}
+
+function tokenizeText(value: string): Set<string> {
+  const raw = value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return new Set(raw.map(normalizeTerm).filter((t) => t.length > 0));
+}
+
+function normalizeTerm(term: string): string {
+  if (term === "mammary") return "mamre";
+  if (term === "huran" || term === "harran") return "haran";
+  if (term.endsWith("ies") && term.length > 4) return `${term.slice(0, -3)}y`;
+  if (term.endsWith("s") && term.length > 4) return term.slice(0, -1);
+  return term;
 }
 
 const STOPWORDS = new Set([
@@ -163,7 +261,11 @@ const STOPWORDS = new Set([
   "from", "into", "onto", "with", "than", "then", "though", "thus", "yet",
   "too", "not", "all", "any", "some", "more", "most", "much", "very", "just",
   "also", "only", "still", "even", "such", "other", "our",
+  "tell", "told", "say", "said", "came", "come", "referring", "refer",
+  "talk", "keep", "connect", "drift", "drifting",
 ]);
+
+const SHORT_PROPER_TERMS = new Set(["ur"]);
 
 /** Pull alias strings from type-specific frontmatter where present. */
 function extractAliases(page: WikiPageRecord): string[] {

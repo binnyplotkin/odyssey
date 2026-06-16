@@ -502,12 +502,25 @@ export async function POST(
         // Run summary-fetch in parallel with retrieval — both read-only,
         // independent. Promise.all keeps the latency floor at max(both).
         const summariesPromise = getRecentTurnSummaries(body.sessionId, 3);
-        const cachedContext = await getOrWaitSandboxVoiceContextCache({
+        const cachedContextCandidate = await getOrWaitSandboxVoiceContextCache({
           characterId: character.id,
           sessionId: body.sessionId,
           scene: body.scene,
           tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
         }, VOICE_CONTEXT_PREP_WAIT_MS);
+        const cachedContext = cachedContextCandidate && isCachedContextReusableForMessage(
+          cachedContextCandidate.sourceQuery,
+          message,
+        )
+          ? cachedContextCandidate
+          : null;
+        if (cachedContextCandidate && !cachedContext) {
+          serverTrace.mark("server.context.cache.miss_stale", {
+            sourceQuery: cachedContextCandidate.sourceQuery,
+            messageChars: message.length,
+            selectedPages: cachedContextCandidate.pages.length,
+          });
+        }
 
         if (cachedContext) {
           contextCacheHit = true;
@@ -684,6 +697,7 @@ export async function POST(
           wikiPromptChunkChars: wikiPromptChunk.length,
           semanticHits: semanticHitCount,
           selectedPages: curatorSelectedPages.length,
+          selectedPageSlugs: curatorSelectedPages.map((selected) => selected.page.slug),
           retrievalSkipped: skipDecision.skip,
           retrievalSkipReason: skipDecision.skip ? skipDecision.reason : null,
           recentSummaries: recentSummaries.length,
@@ -1255,6 +1269,31 @@ function refreshSandboxVoiceContextCacheInBackground(args: {
     console.error("[voice-stream] context cache refresh failed", err);
   });
 }
+
+function isCachedContextReusableForMessage(sourceQuery: string | null, message: string): boolean {
+  const currentTerms = contentTerms(message);
+  if (currentTerms.length <= 2) return true;
+  const sourceTerms = contentTerms(sourceQuery ?? "");
+  if (sourceTerms.length === 0) return false;
+  const sourceSet = new Set(sourceTerms);
+  const overlap = currentTerms.filter((term) => sourceSet.has(term)).length;
+  return overlap >= Math.min(2, currentTerms.length) || overlap / currentTerms.length >= 0.4;
+}
+
+function contentTerms(value: string): string[] {
+  const raw = value.toLowerCase().split(/[^a-z0-9'-]+/).filter(Boolean);
+  return Array.from(new Set(raw.filter((term) => term.length > 2 && !CONTEXT_CACHE_STOPWORDS.has(term))));
+}
+
+const CONTEXT_CACHE_STOPWORDS = new Set([
+  "the", "and", "for", "are", "but", "you", "your", "they", "them", "who",
+  "what", "when", "where", "why", "how", "this", "that", "these", "those",
+  "tell", "talk", "came", "come", "keep", "connect", "referring", "about",
+  "from", "into", "onto", "with", "than", "then", "though", "thus", "yet",
+  "not", "all", "any", "some", "more", "most", "much", "very", "just",
+  "also", "only", "still", "even", "such", "other", "our", "say", "did",
+  "does", "have", "has", "had", "was", "were", "will", "now",
+]);
 
 /* ── TTS fallback helpers ───────────────────────────────────────── */
 

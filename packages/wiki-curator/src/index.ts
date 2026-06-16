@@ -116,7 +116,10 @@ export async function curate(request: CurateRequest): Promise<CurateResult> {
     };
   });
 
-  const { selected, budgetDropped, tokensUsed } = fitBudget(budgetInputs, budget);
+  const { inputs: focusedBudgetInputs, droppedSlugs: focusDropped } = focusBudgetInputs(budgetInputs);
+  scoreDropped.push(...focusDropped);
+
+  const { selected, budgetDropped, tokensUsed } = fitBudget(focusedBudgetInputs, budget);
 
   // ── 6. Render ──────────────────────────────────────────────────
   const activeEntitySlugs = new Set(request.scene?.activeEntities ?? []);
@@ -172,6 +175,32 @@ function seedReasonFor(
 ): string | null {
   const reasons = seeds.filter((s) => s.slug === page.slug).map((s) => s.reason);
   return reasons.length ? reasons.join("+") : null;
+}
+
+function focusBudgetInputs(inputs: BudgetInput[]): { inputs: BudgetInput[]; droppedSlugs: string[] } {
+  const hasDirectActivation = inputs.some((input) => input.origin.includes("query-activation"));
+  if (!hasDirectActivation) return { inputs, droppedSlugs: [] };
+
+  const topActivatedScore = Math.max(
+    0,
+    ...inputs
+      .filter((input) => input.page.type !== "voice_identity" && input.origin.includes("query-activation"))
+      .map((input) => input.score),
+  );
+  const minHopScore = topActivatedScore * 0.55;
+  const kept: BudgetInput[] = [];
+  const droppedSlugs: string[] = [];
+
+  for (const input of inputs) {
+    const isWeakHop = input.origin.startsWith("hop ") && input.score < minHopScore;
+    if (isWeakHop) {
+      droppedSlugs.push(input.page.slug);
+    } else {
+      kept.push(input);
+    }
+  }
+
+  return { inputs: kept, droppedSlugs };
 }
 
 /* ── Re-exports ────────────────────────────────────────────────── */

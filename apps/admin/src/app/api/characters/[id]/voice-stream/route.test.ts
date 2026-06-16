@@ -217,12 +217,13 @@ function request(body: unknown) {
   });
 }
 
-function seedLotContextCache() {
+function seedLotContextCache(query = "Tell me more about Lot.") {
   storeSandboxVoiceContextCache({
     characterId: "char_1",
     sessionId: "session_1",
     scene: undefined,
     tokenBudget: 2500,
+    query,
     result: {
       promptChunk: "Cached voice identity and Lot context.",
       pages: [
@@ -456,6 +457,11 @@ describe("character voice-stream persistence", () => {
       events?: Array<{ name?: string; meta?: Record<string, unknown> }>;
     };
     expect(trace.events?.some((event) => event.name === "server.context.cache.hit")).toBe(true);
+    expect(trace.events?.some((event) =>
+      event.name === "server.context.attached" &&
+      Array.isArray(event.meta?.selectedPageSlugs) &&
+      event.meta.selectedPageSlugs.includes("lot"),
+    )).toBe(true);
     expect(trace.events?.some((event) => event.name === "server.ack.selected")).toBe(true);
     expect(ttsTexts[0]).toBe("Yes, I remember Lot.");
     const done = events.find((event) => event.event === "done")?.data as {
@@ -498,6 +504,72 @@ describe("character voice-stream persistence", () => {
         metadata: expect.objectContaining({
           ackText: "Yes, I remember Lot.",
           ackDelivered: true,
+        }),
+      }),
+    );
+  });
+
+  it("bypasses stale warmed context and attaches fresh selected page slugs", async () => {
+    seedLotContextCache("Tell me more about Lot.");
+    curate.mockClear();
+    buildVoicePromptPlan.mockClear();
+
+    const response = await POST(
+      request({
+        sessionId: "session_1",
+        turnId: "turn_stale_cache",
+        message: "What happened in Egypt when fear overtook you?",
+        history: [],
+        scene: { activeEntities: ["abraham"], location: "character sandbox" },
+        model: "gpt-oss-120b",
+        ackMode: "off",
+      }),
+      routeCtx,
+    );
+    expect(response.status).toBe(200);
+
+    const events = await collectSse(response);
+    const done = events.find((event) => event.event === "done")?.data as {
+      serverTrace?: {
+        events?: Array<{ name?: string; meta?: Record<string, unknown> }>;
+      };
+    };
+    const traceEvents = done.serverTrace?.events ?? [];
+
+    expect(traceEvents.some((event) =>
+      event.name === "server.context.cache.miss_stale" &&
+      event.meta?.sourceQuery === "Tell me more about Lot.",
+    )).toBe(true);
+    expect(traceEvents.some((event) => event.name === "server.context.cache.hit")).toBe(false);
+    expect(traceEvents.some((event) =>
+      event.name === "server.context.attached" &&
+      Array.isArray(event.meta?.selectedPageSlugs) &&
+      event.meta.selectedPageSlugs.includes("abraham-voice-identity") &&
+      event.meta.selectedPageSlugs.includes("lot"),
+    )).toBe(true);
+    expect(curate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        characterId: "char_1",
+        query: "What happened in Egypt when fear overtook you?",
+        tokenBudget: 2500,
+      }),
+    );
+    expect(buildVoicePromptPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        curatedContext: expect.objectContaining({
+          promptChunk: expect.stringContaining("Lot separated from Abraham"),
+          tokensUsed: 384,
+          tokensBudget: 2500,
+        }),
+      }),
+      expect.any(Object),
+    );
+    expect(recordContextBuild).toHaveBeenCalledWith(
+      expect.objectContaining({
+        turnId: "turn_stale_cache",
+        metadata: expect.objectContaining({
+          contextCacheHit: false,
+          pageSlugs: ["lot", "abraham-voice-identity"],
         }),
       }),
     );

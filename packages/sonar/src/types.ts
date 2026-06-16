@@ -29,7 +29,7 @@ export type TimedSseFrame = {
   atMs: number;
 };
 
-export type SonarSuiteMode = "voice-stream" | "scene";
+export type SonarSuiteMode = "voice-stream" | "scene" | "context";
 
 /**
  * What the user says in a turn:
@@ -78,6 +78,23 @@ export type SonarSuite = {
   sessions: number;
   /** Pause between turns so caches/persistence settle (default 250ms). */
   settleMs?: number;
+  /**
+   * Optional gold labels for context activation scoring. Labels are aligned
+   * by turn index and reused for each session.
+   */
+  contextActivation?: {
+    version: string;
+    turns: Array<SonarContextExpectation | null>;
+  };
+};
+
+export type SonarContextExpectation = {
+  /** Page slugs that should be activated for this turn. */
+  expectedPageSlugs?: string[];
+  /** Page slugs that would indicate context drift or future leakage. */
+  mustNotInjectPageSlugs?: string[];
+  /** Human-readable rubric note for benchmark maintenance. */
+  note?: string;
 };
 
 /** Canonical span names. Extraction maps raw trace marks onto these. */
@@ -164,6 +181,10 @@ export type SonarTurnRecord = {
   turnIndex: number;
   /** The scripted user utterance (synthesized to the spoken-audio input). */
   message: string;
+  /** The assistant/narrator text reconstructed from streamed token frames. */
+  responseText: string;
+  /** Scene-loop prompt chunk derived from the orchestrator decision, when any. */
+  orchestratorPrompt: string | null;
   utterance: SonarUtteranceInfo;
   stt: SonarSttInfo;
   spans: Partial<Record<SonarSpanName, number | null>>;

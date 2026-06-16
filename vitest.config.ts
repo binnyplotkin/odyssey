@@ -7,6 +7,7 @@ export default defineConfig({
     include: [
       "packages/engine/src/**/*.test.ts",
       "packages/db/src/**/*.test.ts",
+      "packages/wiki-curator/src/**/*.test.ts",
       "packages/orchestration/src/**/*.test.ts",
       "apps/admin/src/**/*.test.ts",
     ],

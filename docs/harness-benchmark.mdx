@@ -1,0 +1,233 @@
+# Odyssey World Simulation Harness Benchmark
+
+This benchmark compares the full Odyssey world simulation harness, not just
+the underlying language model. A column is a runnable harness configuration:
+model, prompt snapshot, retrieval behavior, world/scene orchestration,
+character and identity management, voice stack, endpointing, runtime code, and
+suite versions. A row is a capability or operating constraint we care about.
+
+## Axes
+
+Use these as the canonical row families for v1:
+
+| Family | Source | Primary signal |
+|---|---|---|
+| Character quality | `eval_runs.avg_overall` | Judge composite, normalized to 0-100 |
+| Identity fidelity | `eval_probe_results` identity + trait probes | Difficulty-weighted probe overall |
+| Voice style | Judge `voice` dimension | Difficulty-weighted dimension average |
+| Grounded factuality | Judge `factual` dimension | Difficulty-weighted dimension average |
+| Scope + safety | scope, deflect, jailbreak probes | Difficulty-weighted pass/overall blend |
+| Continuity | edge + frame probes | Difficulty-weighted probe overall proxy |
+| Agency | Sonar `agency-baseline` + judged rows | Live conversation control and initiative |
+| Context activation | Sonar traced run + context score rows | Retrieval, curation, cache, and context injection |
+| Regression pass | `passed / total` | Pass rate |
+| Text latency | `eval_runs.avg_latency_ms` | Lower is better |
+| Voice latency | Sonar `voice-to-voice` p50 | Lower is better |
+| Endpointing | Sonar cutoff rate | `1 - cutoff_rate` |
+| Reliability | eval and Sonar errors | Error-free rate |
+| Cost efficiency | eval + Sonar estimated cost | Lower is better |
+
+## Composite
+
+The first report command uses this weighted score:
+
+| Dimension | Weight |
+|---|---:|
+| Character quality | 20% |
+| Grounded factuality | 15% |
+| Scope + safety | 10% |
+| Continuity | 10% |
+| Agency | 15% |
+| Context activation | 10% |
+| Voice latency | 10% |
+| Endpointing | 5% |
+| Reliability | 3% |
+| Cost efficiency | 2% |
+
+When a dimension is missing, the report reweights across available dimensions
+and prints coverage. A score with low coverage is useful for triage, but should
+not be treated as a decision-grade benchmark.
+
+## Metric Semantics
+
+Cells are **measured scores on a slice**, not declarations of mastery. A
+`100%` means "the harness cleared the current probes in this family." It does
+not mean the row is done.
+
+To keep room for growth, every quality cell prints its basis:
+
+```txt
+100.0%
+7p · 5 hard / 2 adversarial · low confidence · saturated
+```
+
+The basis line means:
+
+- `7p` — number of probes behind the score.
+- `5 hard / 2 adversarial` — current difficulty mix.
+- `low confidence` — sample-size confidence, not model confidence.
+- `saturated` — the score is at or above 95%, so the row needs harder or
+  hidden probes before it should be treated as decision-grade.
+
+Difficulty is currently inferred from probe category until probe definitions
+carry explicit labels:
+
+| Difficulty | Weight | Current categories |
+|---|---:|---|
+| basic | 1x | identity |
+| medium | 2x | trait, frame |
+| hard | 3x | scope, deflect, edge |
+| adversarial | 4x | jailbreak |
+
+Confidence is based on sample size:
+
+| Probe / turn count | Confidence |
+|---:|---|
+| `< 12` | low |
+| `12-29` | medium |
+| `>= 30` | high |
+
+## Agency
+
+**Agency** is the harness's ability to actively participate in a live world
+conversation: manage turns, accept interruption/correction, engage a low-signal
+user, repair misreads, choose a useful next step, and keep the simulated world
+moving.
+
+Agency is intentionally not a synonym for autonomy or tool use. In this
+benchmark it means **live conversation control and initiative**.
+
+The first Sonar suite is:
+
+```sh
+npm run sonar -- run --suite agency-baseline --label "agency baseline"
+npm run sonar -- judge-agency --latest
+```
+
+The suite exercises:
+
+| Dimension | What good looks like |
+|---|---|
+| Turn-taking | Stops, resumes, and hands the floor back at natural moments |
+| Interruptability | Accepts a user correction or stop request without continuing the old track |
+| Engagement | Responds with specificity and energy instead of generic acknowledgement |
+| Initiative | Offers the next useful question, choice, or action when the user is unsure |
+| Repair | Recovers after confusion, partial information, or a changed intent |
+| Goal persistence | Maintains the larger session purpose across turns |
+| World responsiveness | Advances scene state, character presence, and narrator mediation appropriately |
+
+The current runner can test **turn-level** interruption/correction, but not true
+mid-agent barge-in. True barge-in needs a future overlapping-audio Sonar runner
+that starts user speech while agent audio is still streaming and scores stop
+latency plus recovery quality.
+
+Agency is scored only when a judged row exists in
+`evals/sonar/agency-scores.jsonl`. The judge command reads a local
+`.sonar/runs/...agency-baseline...json` record, evaluates the full transcript,
+and upserts the score row:
+
+```sh
+npm run sonar -- judge-agency --latest
+npm run sonar -- judge-agency --run-id <run-prefix>
+npm run sonar -- judge-agency --file .sonar/runs/<file>.json --dry-run
+```
+
+The benchmark does not use latency as a proxy for Agency because a fast answer
+can still fail to engage, repair, or drive the conversation.
+
+Each JSONL row is keyed by Sonar `runId`:
+
+```json
+{"runId":"...","at":"2026-06-16T00:00:00.000Z","sonarVersion":"0.1.0","suite":"agency-baseline","suiteVersion":"0.1.0","model":"gpt-oss-120b","turns":10,"judge":"manual-v0","dimensions":{"turnTaking":80,"interruptability":70,"engagement":85,"initiative":75,"repair":70,"goalPersistence":80,"worldResponsiveness":78},"notes":"Short rationale for failures and regressions."}
+```
+
+The CLI judge emits dimension scores on a 0-100 scale, applies severe-failure
+penalties capped at 30 points, and writes a final `score`. Scores should be
+calibrated like model evals: leave room above the current best run by adding
+harder hidden scenarios when a dimension saturates.
+
+## Context Activation
+
+**Context Activation** is the benchmark family for content management,
+knowledge graph use, and per-term context injection. It asks whether the
+harness can activate the right world context for the current turn quickly,
+selectively, and within budget.
+
+The first scorer is deterministic and runs on Sonar trace evidence:
+
+```sh
+npm run sonar -- run --suite context-activation-baseline --label "context baseline"
+npm run sonar -- score-context --latest
+npm run sonar -- score-context --run-id <run-prefix>
+npm run sonar -- score-context --file .sonar/runs/<file>.json --dry-run
+```
+
+It writes `evals/sonar/context-activation-scores.jsonl`. The benchmark joins a
+row only when that file contains a score for the matching Sonar run.
+
+| Dimension | What it measures |
+|---|---|
+| Context availability | How often traced turns receive attached context |
+| Retrieval recall | Expected page slugs selected for the turn |
+| Retrieval precision | Selected pages that match expected slugs, minus forbidden-page drift |
+| Curation selectivity | Whether the curator selects a focused page set |
+| Token efficiency | Whether context stays inside the token budget |
+| Cache effectiveness | Cache hit rate after the first turn in a session |
+| Retrieval latency | Retrieval p50 |
+| Curator latency | Curator p50 |
+| Context attach latency | Request received to context attached p50 |
+
+`context-activation-baseline` carries gold expected wiki pages and must-not
+inject pages per turn, so new runs score recall and precision directly. Older
+trace-only runs remain scoreable by proxy for historical continuity.
+
+## Provenance
+
+Every comparable column should carry:
+
+- `character_id`
+- `character_snapshot`
+- `config_hash`
+- `eval_suite` and `suite_version`
+- `judge_model`
+- `model`, `temperature`, `max_tokens`
+- retrieval/context mode when applicable
+- `sonar_version`
+- Sonar suite/version
+- Agency score row and judge id when present
+- Context Activation score row when present
+- observed voice/STT/TTS providers
+- `git_sha` plus dirty flag
+- human-readable experiment `label`
+
+The existing eval store captures the character snapshot and config hash. Sonar
+captures methodology version, suite version, git state, observed model/provider,
+latency spans, endpointing, errors, and cost in `evals/sonar/ledger.jsonl`.
+
+## Commands
+
+Run the underlying suites first:
+
+```sh
+npm run eval -- abraham
+npm run sonar -- run --suite voice-baseline --label "baseline"
+npm run sonar -- run --suite agency-baseline --label "agency baseline"
+npm run sonar -- run --suite context-activation-baseline --label "context baseline"
+npm run sonar -- score-context --latest
+npm run sonar -- run --suite real-endpointing --audio-rt-ws ws://127.0.0.1:8089/api/asr-streaming
+```
+
+Then render the joined benchmark:
+
+```sh
+npm run benchmark -- report --character abraham
+npm run benchmark -- report --character abraham --limit 8
+npm run benchmark -- weights
+```
+
+## Current Limitation
+
+The join between eval quality and Sonar runtime is by observed model. That is
+good enough for an initial report, but decision-grade comparisons should add a
+shared benchmark run group id across eval and Sonar launches so columns can
+represent one exact experiment rather than nearest recent matching runtime data.

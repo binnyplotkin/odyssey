@@ -96,6 +96,7 @@ export type SeedTrace = {
     | "query-title"
     | "query-summary"
     | "query-alias"
+    | "query-activation"
     | "query-semantic"
     | "scene-entity"
     | "scene-location";

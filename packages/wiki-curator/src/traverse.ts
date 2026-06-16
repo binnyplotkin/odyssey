@@ -17,11 +17,11 @@ export const EDGE_WEIGHT: Record<EdgeKind, number> = {
   participates_in: 0.7,
   happens_at:      0.5,
   contradicts:     0.45,
-  mentions:        0.3,
+  mentions:        0.18,
 };
 
 const HOP_PENALTY = 0.35;
-const MAX_DEPTH = 3;
+const MAX_DEPTH = 2;
 /** Ignore traversal targets whose accumulated score would fall below this. */
 const MIN_SCORE_KEEP = 30;
 
@@ -65,6 +65,11 @@ export function traverse(
     const nextFrontier = new Set<string>();
 
     for (const fromId of frontier) {
+      // Identity is mandatory context, not a topical query seed. Expanding
+      // from it fans out into broad biographical/philosophical pages and
+      // drowns the pages that the current utterance actually asked for.
+      if (pageById.get(fromId)?.type === "voice_identity") continue;
+
       const fromScore = scores.get(fromId) ?? 0;
       const hopMultiplier = Math.max(0, 1 - HOP_PENALTY * hop);
       if (fromScore * hopMultiplier < MIN_SCORE_KEEP) continue;

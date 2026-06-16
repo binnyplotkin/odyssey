@@ -1,13 +1,21 @@
 # Odyssey Sonar
 
-Versioned **voice-to-voice** latency benchmark harness for the Odyssey
-pipeline. A sonar ping is a latency measurement: emit a pulse, time the
-echo. Every Sonar turn starts from *spoken audio* — a synthesized user
-utterance streamed into the audio-rt STT WebSocket at real-time pace — runs
-through the real admin routes (STT → optional orchestrator → voice-stream),
-and is timed to the agent's first audio. Text-initiated turns don't exist
-here: they'd hide the two biggest real costs (VAD endpointing + STT), and
-Odyssey is voice-first.
+Versioned benchmark harness for the Odyssey world simulation pipeline. The
+first Sonar layer is **voice-to-voice**: emit a spoken pulse, time the echo.
+Every Sonar turn starts from *spoken audio* — a synthesized user utterance
+streamed into the audio-rt STT WebSocket at real-time pace — runs through the
+real admin routes (STT → optional orchestrator → voice-stream), and is timed
+to the agent's first audio. Text-initiated turns don't exist here: they'd hide
+the two biggest real costs (VAD endpointing + STT), and Odyssey is
+voice-first.
+
+Sonar also owns benchmark suites for world-simulation behavior, including
+Agency: the harness's ability to manage turns, accept correction, engage,
+repair, and drive the next useful moment in the scene.
+
+It also scores **Context Activation**: the knowledge-graph/content-management
+path that retrieves, curates, caches, and injects world context into each
+turn.
 
 Each run appends a row to a committed progression ledger, so every pipeline
 change shows up as a measurable delta.
@@ -22,6 +30,10 @@ export ODYSSEY_ADMIN_COOKIE='authjs.session-token=...'   # from browser devtools
 
 npm run sonar -- synth --suite voice-baseline           # pre-build input audio (optional; run does it on demand)
 npm run sonar -- run --suite voice-baseline --label "baseline"
+npm run sonar -- run --suite agency-baseline --label "agency baseline"
+npm run sonar -- judge-agency --latest                  # writes evals/sonar/agency-scores.jsonl
+npm run sonar -- run --suite context-activation-baseline --label "context baseline"
+npm run sonar -- score-context --latest                 # writes evals/sonar/context-activation-scores.jsonl
 npm run sonar -- report                                 # progression table across all runs
 npm run sonar -- suites                                 # list available suites
 ```
@@ -125,6 +137,80 @@ name (no hash juggling); a missing one fails with a pointed message. WAVs are
 gitignored (your voice); the scripts live in the suite, so the eval is
 reproducible by anyone who records the same lines. See
 [`evals/sonar/recordings/README.md`](../../evals/sonar/recordings/README.md).
+
+## Agency suite
+
+The `agency-baseline` suite runs through the scene loop and exercises live
+conversation control:
+
+- correction / interruption at turn boundaries;
+- low-information user engagement;
+- initiative when the user does not know what to ask next;
+- repair after a changed intent;
+- scene/world drive rather than passive answer generation.
+
+The current runner is sequential, so it does **not** yet measure true mid-agent
+barge-in. That future suite needs overlapping audio: start user speech while
+agent audio is still streaming, then score stop latency and recovery quality.
+
+Agency is not inferred from latency. A fast reply can still fail to engage or
+drive the scene. The judge command reads the local `.sonar/runs/` record,
+scores the full transcript with a structured rubric, and upserts
+`evals/sonar/agency-scores.jsonl` keyed by Sonar run id:
+
+```bash
+npm run sonar -- judge-agency --latest
+npm run sonar -- judge-agency --run-id <run-prefix>
+npm run sonar -- judge-agency --file .sonar/runs/<file>.json --dry-run
+```
+
+The joined benchmark reads that file and otherwise reports Agency as
+`not judged`.
+
+## Context Activation
+
+Context Activation measures the content-management and knowledge-graph path:
+can Sonar activate the right world context for a term or user prompt, do it
+quickly enough for live voice, keep the cache hot, and avoid flooding the model
+with too much context.
+
+The first scorer is deterministic and reads the `serverTrace` already captured
+in local run records. It uses:
+
+- `server.retrieval.done`: semantic hit count and retrieval latency;
+- `server.curator.done`: selected pages, token use, token budget, curator
+  latency, and cache population;
+- `server.context.attached`: injected wiki prompt size, selected pages, cache
+  hits, retrieval skips, and context attachment latency.
+
+Run the dedicated gold-label suite, then score it:
+
+```bash
+npm run sonar -- run --suite context-activation-baseline --label "context baseline"
+npm run sonar -- score-context --latest
+npm run sonar -- score-context --run-id <run-prefix>
+npm run sonar -- score-context --file .sonar/runs/<file>.json --dry-run
+```
+
+The score is written to `evals/sonar/context-activation-scores.jsonl` and is
+joined into `npm run benchmark -- report`. Current dimensions are:
+
+| Dimension | Signal |
+|---|---|
+| `contextAvailability` | traced turns with attached context |
+| `retrievalRecall` | expected page slugs selected for the turn; proxy only for unlabeled old traces |
+| `retrievalPrecision` | selected pages that match expected slugs, minus forbidden-page drift |
+| `curationSelectivity` | selected pages stay useful rather than broad |
+| `tokenEfficiency` | curator stays within the context token budget |
+| `cacheEffectiveness` | cache hit rate after the first turn in a session |
+| `retrievalLatency` | retrieval p50, lower is better |
+| `curatorLatency` | curator p50, lower is better |
+| `contextAttachLatency` | request received → context attached p50, lower is better |
+
+The dedicated suite is decision-grade for page activation because each turn
+declares expected page slugs and must-not-inject slugs. Older runs without
+`selectedPageSlugs` in their trace still score by proxy so historical rows
+remain readable.
 
 ## Versioning
 

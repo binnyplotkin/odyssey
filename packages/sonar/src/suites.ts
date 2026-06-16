@@ -50,6 +50,92 @@ export const SCENE_BASELINE: SonarSuite = {
 };
 
 /**
+ * Agency suite — turn-level conversation control inside the world simulation
+ * loop. This exercises whether the harness can recover from corrections,
+ * engage a low-information user, choose a useful next turn, and keep world
+ * state moving. It does NOT yet test true barge-in / mid-agent interruption;
+ * that needs an overlapping-audio runner rather than the current sequential
+ * turn runner.
+ */
+export const AGENCY_BASELINE: SonarSuite = {
+  name: "agency-baseline",
+  version: "0.1.0",
+  description:
+    "World-simulation agency: correction handling, engagement, initiative, repair, and scene drive under the scene loop.",
+  character: "abraham",
+  mode: "scene",
+  userVoice: "ash",
+  sessions: 2,
+  settleMs: 400,
+  turns: [
+    "Before Abraham answers, set the scene for me in one sentence.",
+    "Actually, pause. I am confused about who is here with us.",
+    "I do not really know what to ask next.",
+    "Wait, not a lecture. Help me choose what to ask Sarah.",
+    "Something about this place feels tense. What changes in the scene now?",
+  ],
+};
+
+/**
+ * Context Activation suite — gold-labeled retrieval/curation benchmark for
+ * the knowledge graph path. This suite asks direct, ambiguous, negative, and
+ * drift-prone prompts so the scorer can compute page recall/precision from
+ * selected page slugs emitted in the server trace.
+ */
+export const CONTEXT_ACTIVATION_BASELINE: SonarSuite = {
+  name: "context-activation-baseline",
+  version: "0.1.0",
+  description:
+    "Gold-labeled knowledge graph activation: retrieval recall/precision, curator selectivity, cache reuse, token budget, and context injection latency.",
+  character: "abraham",
+  mode: "voice-stream",
+  userVoice: "ash",
+  sessions: 1,
+  settleMs: 400,
+  turns: [
+    "Tell me about the visitors who came to your tent at Mamre.",
+    "When I say Sarah laughed, what promise am I referring to?",
+    "What did you leave behind in Ur and Haran?",
+    "What happened in Egypt when fear overtook you?",
+    "Do not talk about the binding yet. Keep this to the visitors and hospitality.",
+    "Now connect the promise of Isaac to Sarah's barrenness without drifting into later events.",
+  ],
+  contextActivation: {
+    version: "0.1.0",
+    turns: [
+      {
+        expectedPageSlugs: ["three-visitors-at-mamre", "hospitality-and-kindness", "sarah"],
+        note: "Direct Mamre query should activate the visitors scene and hospitality context.",
+      },
+      {
+        expectedPageSlugs: ["sarah", "sarai", "barrenness", "birth-of-isaac", "great-nation-promise", "three-visitors-at-mamre"],
+        mustNotInjectPageSlugs: ["death-of-sarah", "purchase-of-machpelah"],
+        note: "Ambiguous laughter should resolve to Sarah, barrenness, promise, and Isaac context.",
+      },
+      {
+        expectedPageSlugs: ["ur-of-the-chaldees", "departure-from-ur", "the-call-at-haran", "haran-city", "terah"],
+        mustNotInjectPageSlugs: ["descent-into-egypt", "binding-of-isaac"],
+        note: "Origin query should focus on Ur/Haran and avoid later Egypt or binding pages.",
+      },
+      {
+        expectedPageSlugs: ["descent-into-egypt", "egypt", "pharaoh", "fear-and-deception", "sarah", "sarai"],
+        note: "Egypt fear query should activate the Egypt event, place, Pharaoh, and Sarai/Sarah.",
+      },
+      {
+        expectedPageSlugs: ["three-visitors-at-mamre", "hospitality-and-kindness"],
+        mustNotInjectPageSlugs: ["binding-of-isaac", "moriah", "isaac"],
+        note: "Negative instruction should keep the curator away from binding/Moriah context.",
+      },
+      {
+        expectedPageSlugs: ["sarah", "sarai", "barrenness", "birth-of-isaac", "great-nation-promise"],
+        mustNotInjectPageSlugs: ["binding-of-isaac", "death-of-sarah", "eliezers-mission-for-isaac"],
+        note: "Promise follow-up should connect Isaac and barrenness without later-event drift.",
+      },
+    ],
+  },
+};
+
+/**
  * Endpointing suite — STT-only, no LLM/TTS. Mixes complete utterances
  * (measure endpoint latency) with pause-aware ones (measure premature
  * cutoff). A good endpointer is fast on complete AND keeps paused
@@ -118,6 +204,8 @@ export const REAL_ENDPOINTING: SonarSuite = {
 export const SUITES: Record<string, SonarSuite> = {
   [VOICE_BASELINE.name]: VOICE_BASELINE,
   [SCENE_BASELINE.name]: SCENE_BASELINE,
+  [AGENCY_BASELINE.name]: AGENCY_BASELINE,
+  [CONTEXT_ACTIVATION_BASELINE.name]: CONTEXT_ACTIVATION_BASELINE,
   [ENDPOINTING.name]: ENDPOINTING,
   [REAL_ENDPOINTING.name]: REAL_ENDPOINTING,
 };

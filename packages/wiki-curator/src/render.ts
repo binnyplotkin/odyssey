@@ -57,9 +57,17 @@ export function renderPromptChunk(
   if (voiceIdentities.length > 0) {
     parts.push("## Who you are");
     for (const v of voiceIdentities) {
-      if (v.page.body?.trim()) parts.push(v.page.body.trim());
-      const fmText = renderFrontmatter(v.page);
-      if (fmText) parts.push(fmText);
+      if (v.rendering === "full") {
+        if (v.page.body?.trim()) parts.push(v.page.body.trim());
+        const fmText = renderFrontmatter(v.page);
+        if (fmText) parts.push(fmText);
+      } else if (v.rendering === "summary") {
+        parts.push(v.page.summary?.trim() || v.page.title);
+        const fmText = renderFrontmatter(v.page);
+        if (fmText) parts.push(fmText);
+      } else {
+        parts.push(v.page.title);
+      }
     }
   }
 

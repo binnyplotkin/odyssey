@@ -13,6 +13,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.1"
+  },
   "devDependencies": {
     "typescript": "^5"
   }

@@ -283,6 +283,8 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
         sessionIndex,
         turnIndex,
         message: scripted,
+        responseText: assistantText,
+        orchestratorPrompt: promptChunk ?? null,
         utterance,
         stt: {
           transcript: stt.transcript,
@@ -445,6 +447,8 @@ function makeSttOnlyTurn(input: {
     sessionIndex: input.sessionIndex,
     turnIndex: input.turnIndex,
     message: input.scripted,
+    responseText: "",
+    orchestratorPrompt: null,
     utterance: input.utterance,
     stt: {
       transcript: stt.transcript,
