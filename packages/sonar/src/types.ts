@@ -79,6 +79,12 @@ export type SonarSuite = {
   /** Pause between turns so caches/persistence settle (default 250ms). */
   settleMs?: number;
   /**
+   * Voice-to-voice SLO target (ms) for this suite's turns. Overrides the
+   * global DEFAULT_V2V_SLO_MS; the CLI's --slo-ms overrides both. Scene-loop
+   * suites carry orchestrate overhead, so they may set a looser bar.
+   */
+  v2vSloMs?: number;
+  /**
    * Optional gold labels for context activation scoring. Labels are aligned
    * by turn index and reused for each session.
    */
@@ -203,7 +209,17 @@ export type SonarAggregate = {
   p50: number;
   p90: number;
   p95: number;
+  p99: number;
 };
+
+/**
+ * Default voice-to-voice SLO target (ms). Attainment = the share of turns at
+ * or under this bar — the goodput view the percentiles can't give. This is a
+ * near-term engineering target (roughly the production commit hold we plan to
+ * cut), not the human-conversation ideal; the north star is sub-second. Tune
+ * per suite (SonarSuite.v2vSloMs) or per run (--slo-ms).
+ */
+export const DEFAULT_V2V_SLO_MS = 1500;
 
 export type SonarGitInfo = {
   sha: string;
@@ -221,6 +237,13 @@ export type SonarRunRecord = {
   baseUrl: string;
   /** Free-text label for the change under test, e.g. "drop commit hold to 400ms". */
   label: string | null;
+  /**
+   * Shared experiment id stamped across every suite launch (voice, agency,
+   * context, endpointing) and — once the eval side carries it — eval runs, so
+   * a benchmark column represents ONE exact experiment instead of nearest
+   * recent matching runtime. Null for ad-hoc runs.
+   */
+  runGroupId: string | null;
   config: {
     character: string;
     model: string | null;
@@ -237,6 +260,16 @@ export type SonarRunRecord = {
   observed: { providers: string[]; models: string[]; ttsProviders: string[]; ttsVoices: string[] };
   turns: SonarTurnRecord[];
   aggregates: Partial<Record<SonarSpanName, SonarAggregate>>;
+  /**
+   * Voice-to-voice SLO attainment for this run: what share of turns cleared
+   * the target. Null when the suite produced no voice-to-voice signal
+   * (STT-only/context suites).
+   */
+  slo: {
+    v2vTargetMs: number;
+    /** % of voice-to-voice turns at or under target; null if no v2v turns. */
+    v2vAttainmentPct: number | null;
+  } | null;
   /**
    * Endpointing summary over pause-aware fixtures (null if the suite has
    * none): how often the endpointer cut a paused utterance prematurely.
@@ -255,6 +288,8 @@ export type SonarLedgerEntry = {
   suiteVersion: string;
   git: string | null;
   label: string | null;
+  /** Shared experiment id (see SonarRunRecord.runGroupId); null for older/ad-hoc rows. */
+  runGroup: string | null;
   model: string | null;
   /** TTS provider:voice actually observed — the A/B axis. */
   tts: string | null;
@@ -264,6 +299,10 @@ export type SonarLedgerEntry = {
   /** Headline percentiles (ms). */
   v2vP50: number | null; // voice-to-voice p50 — THE number
   v2vP95: number | null;
+  v2vP99: number | null; // tail; only meaningful with a large turn count
+  /** SLO target (ms) and attainment: share of turns at or under it (goodput). */
+  v2vSloMs: number | null;
+  v2vSloPct: number | null;
   sttP50: number | null; // stt.endpoint-to-word p50
   vsTtfaP50: number | null; // voice-stream first-audio p50
   llmTtftP50: number | null; // server LLM TTFT p50

@@ -225,9 +225,71 @@ npm run benchmark -- report --character abraham --limit 8
 npm run benchmark -- weights
 ```
 
+## Run groups
+
+Pass `--run-group <id>` (or set `ODYSSEY_RUN_GROUP`) on every Sonar launch in an
+experiment and the id is stamped on the run record and ledger row. Then
+`npm run benchmark -- report --run-group <id>` scopes **all** Sonar evidence —
+voice, agency, context activation, endpointing — to that one experiment, so a
+column's runtime rows come from the same launch instead of the nearest run that
+merely shares an observed model.
+
+```sh
+export ODYSSEY_RUN_GROUP=abraham-2026-06-17-flux
+npm run sonar -- run --suite voice-baseline --label "flux endpointer"
+npm run sonar -- run --suite agency-baseline --label "flux endpointer"
+npm run sonar -- run --suite context-activation-baseline --label "flux endpointer"
+npm run benchmark -- report --character abraham --run-group abraham-2026-06-17-flux
+```
+
+## SLO attainment
+
+Latency rows headline `p50`/`p95`/`p99`, but percentiles only describe the
+distribution's shape — they don't say how many turns actually cleared the bar.
+Each run also reports **voice-to-voice SLO attainment**: the share of turns at
+or under a target (default 1500ms; override per run with `--slo-ms` or per suite
+with `SonarSuite.v2vSloMs`). The ledger carries `v2vSloMs`/`v2vSloPct`, the
+progression table shows it as `<pct>%@<target>`, and the benchmark's Voice
+latency basis prints `p50 · p99 · SLO attainment`.
+
+The 1500ms default is a near-term engineering target (roughly the production
+commit hold we plan to cut), not the human-conversation ideal. As the pipeline
+approaches the sub-second goal, tighten the target so attainment keeps pulling
+rather than saturating.
+
+## TTS A/B (worked example)
+
+Compare the current Pocket binding against hosted ElevenLabs streaming on the
+same run group, at the new 40-sample `voice-baseline`. Both arms route through
+the `--tts-voice` override path so the only variable is the voice itself
+(control passes the character's own slug rather than omitting the flag):
+
+```sh
+# dev server up + ODYSSEY_ADMIN_COOKIE set; both arms share one run group
+export RG=tts-ab-$(date +%Y%m%d)
+
+# arm A — control: current Pocket binding (pocket_tts:abraham)
+npm run sonar -- run --suite voice-baseline --tts-voice abraham \
+  --run-group "$RG" --label "tts A · pocket (control)"
+
+# arm B — hosted ElevenLabs streaming
+npm run sonar -- run --suite voice-baseline --tts-voice liam \
+  --run-group "$RG" --label "tts B · elevenlabs streaming"
+
+# read both arms side by side
+npm run sonar -- report --suite voice-baseline --last 2
+npm run benchmark -- report --character abraham --run-group "$RG"
+```
+
+Watch `server.tts.ttfa` and `vs.ttfa` for the first-audio win, and confirm
+`v2vSloPct` (share of turns under the 1500ms target) moves with it. Each arm is
+40 turns of real STT+LLM+TTS (~7 min, a few cents); run them back to back so
+network and provider conditions match.
+
 ## Current Limitation
 
-The join between eval quality and Sonar runtime is by observed model. That is
-good enough for an initial report, but decision-grade comparisons should add a
-shared benchmark run group id across eval and Sonar launches so columns can
-represent one exact experiment rather than nearest recent matching runtime data.
+The eval side does not yet carry the run-group id, so eval quality still joins
+to Sonar runtime by observed model even under `--run-group`. The run group makes
+the *Sonar* cross-suite join exact today; making the *eval↔Sonar* join exact is
+the remaining step (stamp the same id on eval launches and filter eval runs by
+it).

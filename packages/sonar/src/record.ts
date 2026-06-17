@@ -28,6 +28,7 @@ export function toLedgerEntry(record: SonarRunRecord): SonarLedgerEntry {
     suiteVersion: record.suite.version,
     git: record.git ? `${record.git.sha}${record.git.dirty ? "*" : ""}` : null,
     label: record.label,
+    runGroup: record.runGroupId,
     model: record.observed.models[0] ?? record.config.model,
     tts:
       record.observed.ttsProviders.length > 0
@@ -40,6 +41,9 @@ export function toLedgerEntry(record: SonarRunRecord): SonarLedgerEntry {
     costUsd: record.totalCostUsd,
     v2vP50: agg["voice-to-voice"]?.p50 ?? null,
     v2vP95: agg["voice-to-voice"]?.p95 ?? null,
+    v2vP99: agg["voice-to-voice"]?.p99 ?? null,
+    v2vSloMs: record.slo?.v2vTargetMs ?? null,
+    v2vSloPct: record.slo?.v2vAttainmentPct ?? null,
     sttP50: agg["stt.endpoint-to-word"]?.p50 ?? null,
     vsTtfaP50: agg["vs.ttfa"]?.p50 ?? null,
     llmTtftP50: agg["server.llm.ttft"]?.p50 ?? null,
@@ -96,6 +100,8 @@ export function renderProgression(entries: SonarLedgerEntry[], opts?: { suite?: 
     "label",
     "v2v p50",
     "v2v p95",
+    "v2v p99",
+    "slo",
     "stt p50",
     "vs.ttfa p50",
     "llm p50",
@@ -121,6 +127,8 @@ export function renderProgression(entries: SonarLedgerEntry[], opts?: { suite?: 
       e.label ?? "–",
       ms(e.v2vP50),
       ms(e.v2vP95),
+      ms(e.v2vP99 ?? null),
+      sloCell(e.v2vSloPct ?? null, e.v2vSloMs ?? null),
       ms(e.sttP50),
       ms(e.vsTtfaP50),
       ms(e.llmTtftP50),
@@ -167,6 +175,13 @@ export function renderRunSummary(record: SonarRunRecord): string {
       `cost=$${record.totalCostUsd.toFixed(4)} (llm $${sumUsage(record, "estimatedCostUsd").toFixed(4)} + tts $${sumUsage(record, "ttsCostUsd").toFixed(4)} est)` +
       (record.config.prewarm ? " · prewarmed" : ""),
     `voice-to-voice · cold (turn-1) p50 ${ms(coldP50)} · warm p50 ${ms(warmP50)}`,
+    ...(record.slo
+      ? [
+          `voice-to-voice · SLO ≤${record.slo.v2vTargetMs}ms: ${
+            record.slo.v2vAttainmentPct === null ? "–" : `${record.slo.v2vAttainmentPct}% of turns within target`
+          }`,
+        ]
+      : []),
     ...(record.endpointing
       ? [
           `endpointing · cutoff ${Math.round(record.endpointing.cutoffRate * 100)}% ` +
@@ -174,12 +189,12 @@ export function renderRunSummary(record: SonarRunRecord): string {
         ]
       : []),
     "",
-    `${"span".padEnd(20)} ${"n".padStart(3)} ${"p50".padStart(8)} ${"p90".padStart(8)} ${"p95".padStart(8)} ${"mean".padStart(8)} ${"max".padStart(8)}`,
+    `${"span".padEnd(20)} ${"n".padStart(3)} ${"p50".padStart(8)} ${"p90".padStart(8)} ${"p95".padStart(8)} ${"p99".padStart(8)} ${"mean".padStart(8)} ${"max".padStart(8)}`,
   ];
   for (const [span, agg] of Object.entries(record.aggregates)) {
     if (!agg) continue;
     lines.push(
-      `${span.padEnd(20)} ${String(agg.count).padStart(3)} ${ms(agg.p50).padStart(8)} ${ms(agg.p90).padStart(8)} ${ms(agg.p95).padStart(8)} ${ms(agg.mean).padStart(8)} ${ms(agg.max).padStart(8)}`,
+      `${span.padEnd(20)} ${String(agg.count).padStart(3)} ${ms(agg.p50).padStart(8)} ${ms(agg.p90).padStart(8)} ${ms(agg.p95).padStart(8)} ${ms(agg.p99).padStart(8)} ${ms(agg.mean).padStart(8)} ${ms(agg.max).padStart(8)}`,
     );
   }
   return lines.join("\n");
@@ -191,4 +206,10 @@ function sumUsage(record: SonarRunRecord, field: "estimatedCostUsd" | "ttsCostUs
 
 function ms(value: number | null): string {
   return value === null ? "–" : `${Math.round(value)}ms`;
+}
+
+/** Compact "<pct>%@<target>" SLO-attainment cell, e.g. "37%@1500". */
+function sloCell(pct: number | null, targetMs: number | null): string {
+  if (pct === null || targetMs === null) return "–";
+  return `${Math.round(pct)}%@${Math.round(targetMs)}`;
 }

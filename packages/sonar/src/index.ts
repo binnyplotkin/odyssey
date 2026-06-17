@@ -3,7 +3,7 @@ export * from "./types";
 export { runSonarSuite, type RunSonarSuiteOptions } from "./runner";
 export { extractVoiceStreamSpans, extractServerTrace } from "./spans";
 export { readTimedSseFrames } from "./sse";
-export { aggregate, percentile } from "./stats";
+export { aggregate, percentile, sloAttainmentPct } from "./stats";
 export {
   RUNS_DIR,
   LEDGER_PATH,

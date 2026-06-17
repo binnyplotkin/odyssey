@@ -129,6 +129,7 @@ export type {
 
 export { getWikiStore, wikiEmbeddingSource } from "./wiki-store";
 export type { WikiStore } from "./wiki-store";
+export { invalidateWikiGraphCache } from "./wiki-graph-cache";
 
 export { getWikisStore } from "./wikis-store";
 export type {

@@ -28,6 +28,12 @@ export type StreamingTtsProvider =
 export const ELEVENLABS_DEFAULT_MODEL_ID = "eleven_flash_v2_5";
 export const POCKET_TTS_PUBLIC_BASE_URL = "https://audio-rt-production.up.railway.app";
 export const POCKET_TTS_SAMPLE_RATE = 24000;
+// Cartesia Sonic streaming. Version is the API contract date (override via
+// CARTESIA_VERSION if the account is pinned to a newer one). Model defaults to
+// sonic-2; CARTESIA_MODEL_ID or the voice row's providerConfig.modelId wins.
+export const CARTESIA_DEFAULT_MODEL_ID = "sonic-2";
+export const CARTESIA_DEFAULT_VERSION = "2024-11-13";
+export const CARTESIA_SAMPLE_RATE = 24000;
 const DEFAULT_TTS_FIRST_AUDIO_TIMEOUT_MS = 15_000;
 
 type StreamReadResult<T> =
@@ -732,6 +738,221 @@ export class ElevenLabsStreamingAdapter
   }
 }
 
+// ── Cartesia (Sonic) streaming adapter ────────────────────────────────
+//
+// Uses Cartesia's `/tts/websocket` streaming endpoint. We request
+// `output_format.encoding=pcm_f32le`, so the wire bytes are already
+// Float32 LE PCM — the base64 chunk passes straight through to the
+// consumer with no int16→float conversion (unlike Pocket/ElevenLabs).
+//
+// Auth + API version go in the query string (Cartesia's documented WS
+// auth). Voice + model come from the voices row's providerConfig
+// ({ voiceId, modelId? }); CARTESIA_VERSION / CARTESIA_MODEL_ID env vars
+// override the version and the default model.
+
+export interface CartesiaVoiceProviderConfig {
+  voiceId: string;
+  modelId?: string;
+}
+
+export class CartesiaStreamingAdapter
+  implements StreamingTextToSpeechAdapter
+{
+  async *stream({
+    text,
+    voice,
+    signal,
+  }: {
+    text: string;
+    voice: VoiceContext;
+    signal?: AbortSignal;
+  }): AsyncIterable<StreamingTtsChunk> {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    const apiKey = process.env.CARTESIA_API_KEY;
+    if (!apiKey) {
+      yield { type: "error", message: "CARTESIA_API_KEY is not configured." };
+      return;
+    }
+
+    const config = (voice.providerConfig ?? {}) as Partial<CartesiaVoiceProviderConfig>;
+    if (!config.voiceId) {
+      yield {
+        type: "error",
+        message: `Cartesia voice "${voice.slug}" is missing providerConfig.voiceId.`,
+      };
+      return;
+    }
+    const modelId =
+      config.modelId ?? (process.env.CARTESIA_MODEL_ID?.trim() || CARTESIA_DEFAULT_MODEL_ID);
+    const version = process.env.CARTESIA_VERSION?.trim() || CARTESIA_DEFAULT_VERSION;
+
+    // Auth in the query string is Cartesia's documented WS handshake. We
+    // never echo the URL in error messages so the key can't leak into logs.
+    const url =
+      `wss://api.cartesia.ai/tts/websocket` +
+      `?api_key=${encodeURIComponent(apiKey)}` +
+      `&cartesia_version=${encodeURIComponent(version)}`;
+
+    const ws = new WebSocket(url);
+
+    // Same ws→async-generator bridge as ElevenLabs: message/error/close
+    // push into `pending`; the drain loop yields it; `streamEnded` flips on
+    // done/error/close/abort and, once `pending` is empty, the loop returns.
+    const pending: StreamingTtsChunk[] = [];
+    let pendingResolve: (() => void) | null = null;
+    let streamEnded = false;
+
+    const wake = () => {
+      if (pendingResolve) {
+        const r = pendingResolve;
+        pendingResolve = null;
+        r();
+      }
+    };
+    const push = (chunk: StreamingTtsChunk) => {
+      pending.push(chunk);
+      wake();
+    };
+    const end = () => {
+      streamEnded = true;
+      wake();
+    };
+
+    ws.on("message", (data: unknown) => {
+      try {
+        const raw = Buffer.isBuffer(data) ? data.toString("utf-8") : String(data);
+        const payload = JSON.parse(raw) as {
+          type?: string;
+          data?: string;
+          error?: string;
+        };
+        if (payload.type === "error") {
+          push({ type: "error", message: `Cartesia: ${payload.error ?? "unknown error"}` });
+          end();
+          return;
+        }
+        if (payload.type === "chunk" && payload.data) {
+          // data is base64 of raw pcm_f32le bytes = our wire format already.
+          const byteLength = Buffer.from(payload.data, "base64").byteLength;
+          push({
+            type: "audio",
+            pcmFloat32Base64: payload.data,
+            samples: (byteLength / 4) | 0,
+            sampleRate: CARTESIA_SAMPLE_RATE,
+          });
+          return;
+        }
+        if (payload.type === "done") end();
+        // Any other type (e.g. timestamps) is absorbed; we don't request them.
+      } catch (parseErr) {
+        push({
+          type: "error",
+          message: `Cartesia WS parse failed: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
+        });
+        end();
+      }
+    });
+
+    ws.on("error", (err: unknown) => {
+      push({
+        type: "error",
+        message: `Cartesia WebSocket error: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      end();
+    });
+
+    ws.on("close", () => end());
+
+    const onAbort = () => {
+      try {
+        ws.close(1000, "client aborted");
+      } catch {
+        /* socket may already be closing */
+      }
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    // Wait for open (or reject on early error/close so a 401/403 surfaces).
+    try {
+      await new Promise<void>((resolve, reject) => {
+        ws.once("open", () => resolve());
+        ws.once("error", (err: unknown) =>
+          reject(err instanceof Error ? err : new Error(String(err))),
+        );
+        ws.once("close", (code: number, reason: Buffer) => {
+          reject(
+            new Error(
+              `Cartesia WS closed before open: ${code}${reason?.length ? ` ${reason.toString("utf-8")}` : ""}`,
+            ),
+          );
+        });
+      });
+    } catch (openErr) {
+      signal?.removeEventListener("abort", onAbort);
+      yield {
+        type: "error",
+        message: openErr instanceof Error ? openErr.message : String(openErr),
+      };
+      return;
+    }
+
+    // One-shot generation: a single request, terminated by `continue:false`.
+    // The server streams `chunk` messages, then a `done`.
+    try {
+      ws.send(
+        JSON.stringify({
+          context_id: crypto.randomUUID(),
+          model_id: modelId,
+          transcript: trimmed,
+          voice: { mode: "id", id: config.voiceId },
+          output_format: {
+            container: "raw",
+            encoding: "pcm_f32le",
+            sample_rate: CARTESIA_SAMPLE_RATE,
+          },
+          language: "en",
+          continue: false,
+        }),
+      );
+    } catch (sendErr) {
+      signal?.removeEventListener("abort", onAbort);
+      yield {
+        type: "error",
+        message: `Cartesia WS send failed: ${sendErr instanceof Error ? sendErr.message : String(sendErr)}`,
+      };
+      try {
+        ws.close();
+      } catch {
+        /* noop */
+      }
+      return;
+    }
+
+    try {
+      while (true) {
+        while (pending.length > 0) {
+          const chunk = pending.shift()!;
+          yield chunk;
+          if (chunk.type === "error") return;
+        }
+        if (streamEnded) return;
+        await new Promise<void>((resolve) => {
+          pendingResolve = resolve;
+        });
+      }
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+      try {
+        ws.close();
+      } catch {
+        /* noop */
+      }
+    }
+  }
+}
+
 /**
  * Voice-level descriptor sufficient to dispatch to the right streaming
  * adapter. Constructed by the route from a `voices` row (+ a signed URL
@@ -778,9 +999,19 @@ export function createStreamingTtsAdapterForVoice(voice: VoiceForRouting): {
         },
       };
     }
+    case "cartesia": {
+      return {
+        provider: "cartesia",
+        adapter: new CartesiaStreamingAdapter(),
+        voiceContext: {
+          slug: voice.slug,
+          providerConfig: voice.providerConfig,
+          voiceSettings: voice.voiceSettings ?? null,
+        },
+      };
+    }
     // Other hosted providers — adapters land here as they're built out.
     case "openai":
-    case "cartesia":
       throw new Error(
         `Streaming TTS adapter for "${voice.provider}" is not implemented yet.`,
       );

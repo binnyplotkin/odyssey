@@ -18,11 +18,12 @@
 import { loadRecording, resolveUtteranceSamples } from "./audio/synth";
 import { streamUtterance } from "./audio/stt-client";
 import { SONAR_VERSION } from "./version";
-import { aggregate } from "./stats";
+import { aggregate, sloAttainmentPct } from "./stats";
 import { extractVoiceStreamSpans } from "./spans";
 import { estimateTtsCostUsd } from "./tts-pricing";
 import { readTimedSseFrames } from "./sse";
 import {
+  DEFAULT_V2V_SLO_MS,
   SONAR_SPANS,
   type SonarAggregate,
   type SonarGitInfo,
@@ -67,6 +68,17 @@ export type RunSonarSuiteOptions = {
   /** audio-rt STT WebSocket URL override. */
   audioRtWsUrl?: string;
   label?: string;
+  /**
+   * Shared experiment id stamped on the run record + ledger row so the
+   * benchmark can join this suite's run to its sibling suite runs (and eval
+   * runs) exactly, instead of by nearest-matching observed model.
+   */
+  runGroupId?: string | null;
+  /**
+   * Voice-to-voice SLO target (ms). Precedence: this flag → suite.v2vSloMs →
+   * DEFAULT_V2V_SLO_MS. Attainment is reported as the share of turns under it.
+   */
+  sloMs?: number;
   git?: SonarGitInfo | null;
   log?: (line: string) => void;
 };
@@ -170,6 +182,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
         wsUrl: opts.audioRtWsUrl,
         turbo: opts.turbo,
         captureAllBursts: suite.sttOnly,
+        log,
       });
       const utterance: SonarUtteranceInfo = {
         kind: fixture.kind,
@@ -341,6 +354,17 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
     if (agg) aggregates[span] = agg;
   }
 
+  // Voice-to-voice SLO attainment (goodput): the share of turns that cleared
+  // the target bar. Null when the suite produced no v2v signal (STT-only).
+  const v2vValues = turns
+    .map((t) => t.spans["voice-to-voice"])
+    .filter((v): v is number => typeof v === "number");
+  const v2vTargetMs = opts.sloMs ?? suite.v2vSloMs ?? DEFAULT_V2V_SLO_MS;
+  const slo =
+    v2vValues.length > 0
+      ? { v2vTargetMs, v2vAttainmentPct: sloAttainmentPct(v2vValues, v2vTargetMs) }
+      : null;
+
   // Endpointing summary over pause-aware fixtures (skip errored turns).
   const pausedOk = turns.filter((t) => t.utterance.kind === "paused" && !t.flags.error);
   const endpointing =
@@ -363,6 +387,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
     git: opts.git ?? null,
     baseUrl: opts.baseUrl,
     label: opts.label ?? null,
+    runGroupId: opts.runGroupId ?? null,
     config: {
       character,
       model: opts.model ?? null,
@@ -380,6 +405,7 @@ export async function runSonarSuite(opts: RunSonarSuiteOptions): Promise<SonarRu
     },
     turns,
     aggregates,
+    slo,
     endpointing,
     errors: turns.filter((t) => t.flags.error && t.flags.error !== "stt-empty").length,
     totalCostUsd: round6(

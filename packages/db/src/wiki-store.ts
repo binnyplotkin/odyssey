@@ -52,6 +52,11 @@ import type {
   WikiSourceRecord,
   WikiSourceRefRecord,
 } from "./wiki-types";
+import {
+  cachedEdgesForWiki,
+  cachedPagesForWiki,
+  invalidateWikiGraphCache,
+} from "./wiki-graph-cache";
 
 /* ── Helpers ────────────────────────────────────────────────────── */
 
@@ -1051,6 +1056,8 @@ function neonStore(): WikiStore {
         }
       }
 
+      // Page (and possibly its edges) changed — drop the cached graph.
+      invalidateWikiGraphCache();
       return {
         page,
         created,
@@ -1078,6 +1085,7 @@ function neonStore(): WikiStore {
           .returning({ id: wikiPagesTable.id });
         updated += rows.length;
       }
+      if (updated > 0) invalidateWikiGraphCache();
       return { updated };
     },
 
@@ -1145,18 +1153,31 @@ function neonStore(): WikiStore {
 
     async listPagesForWiki(wikiId, filter) {
       const db = requireDb();
-      const whereClause = filter?.type
-        ? and(
-            eq(wikiPagesTable.wikiId, wikiId),
-            eq(wikiPagesTable.type, filter.type),
-          )
-        : eq(wikiPagesTable.wikiId, wikiId);
-      const rows = await retryRead(() =>
-        db.select().from(wikiPagesTable).where(whereClause),
-      );
-      return rows
-        .map(normalizePage)
-        .sort((a, b) => a.title.localeCompare(b.title));
+      const loadFull = async () => {
+        const rows = await retryRead(() =>
+          db.select().from(wikiPagesTable).where(eq(wikiPagesTable.wikiId, wikiId)),
+        );
+        return rows
+          .map(normalizePage)
+          .sort((a, b) => a.title.localeCompare(b.title));
+      };
+      // Only the full (unfiltered) per-wiki list is cached — that's the hot
+      // path the curator hits every turn. Type-filtered reads go direct.
+      if (filter?.type) {
+        // Build the where-clause outside the closure so `filter.type` stays
+        // narrowed (TS re-widens captured vars inside the retryRead callback).
+        const whereClause = and(
+          eq(wikiPagesTable.wikiId, wikiId),
+          eq(wikiPagesTable.type, filter.type),
+        );
+        const rows = await retryRead(() =>
+          db.select().from(wikiPagesTable).where(whereClause),
+        );
+        return rows
+          .map(normalizePage)
+          .sort((a, b) => a.title.localeCompare(b.title));
+      }
+      return cachedPagesForWiki(wikiId, loadFull);
     },
 
     async searchPagesByEmbedding(characterId, queryEmbedding, options) {
@@ -1270,6 +1291,7 @@ function neonStore(): WikiStore {
         .delete(wikiPagesTable)
         .where(eq(wikiPagesTable.id, id))
         .returning();
+      if (result.length > 0) invalidateWikiGraphCache();
       return result.length > 0;
     },
 
@@ -1377,13 +1399,15 @@ function neonStore(): WikiStore {
 
     async listWikiEdges(wikiId) {
       const db = requireDb();
-      const rows = await retryRead(() =>
-        db
-          .select()
-          .from(wikiEdgesTable)
-          .where(eq(wikiEdgesTable.wikiId, wikiId)),
-      );
-      return rows.map(normalizeEdge);
+      return cachedEdgesForWiki(wikiId, async () => {
+        const rows = await retryRead(() =>
+          db
+            .select()
+            .from(wikiEdgesTable)
+            .where(eq(wikiEdgesTable.wikiId, wikiId)),
+        );
+        return rows.map(normalizeEdge);
+      });
     },
 
     async reconcileEdgesForWikiPages(wikiId, pageIds) {
@@ -1419,6 +1443,7 @@ function neonStore(): WikiStore {
         removed += diff.removed;
       }
 
+      if (added > 0 || removed > 0) invalidateWikiGraphCache();
       return { added, removed };
     },
 
@@ -1455,6 +1480,7 @@ function neonStore(): WikiStore {
         added += diff.added;
       }
 
+      invalidateWikiGraphCache();
       return { added, removed: existingCount };
     },
 
@@ -1961,6 +1987,7 @@ function neonStore(): WikiStore {
           .where(eq(wikiIngestionLogTable.characterId, characterId))
           .returning({ id: wikiIngestionLogTable.id }),
       ]);
+      invalidateWikiGraphCache();
       return {
         pagesRemoved: pages.length,
         edgesRemoved: edges.length,

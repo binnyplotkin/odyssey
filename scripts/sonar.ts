@@ -30,6 +30,10 @@
  *                       client) so turn-1 skips curator/retrieval
  *   --sessions <n>      override the suite's session count
  *   --label "<text>"    name the change under test (shows in the ledger)
+ *   --run-group <id>    shared experiment id (or ODYSSEY_RUN_GROUP env) so the
+ *                       benchmark joins this run to its sibling suite runs
+ *                       exactly, not by nearest observed model
+ *   --slo-ms <n>        voice-to-voice SLO target for attainment % (default 1500)
  *   --cookie <cookie>   or ODYSSEY_ADMIN_COOKIE env
  *   --audio-rt-ws <url> override the STT WebSocket (or AUDIO_RT_WS_URL env)
  *   --turbo             stream STT frames as fast as possible — NON-representative
@@ -140,6 +144,8 @@ async function runCommand() {
     turbo: hasFlag("--turbo"),
     audioRtWsUrl: readFlag("--audio-rt-ws") ?? undefined,
     label: readFlag("--label") ?? undefined,
+    runGroupId: readFlag("--run-group") ?? process.env.ODYSSEY_RUN_GROUP ?? undefined,
+    sloMs: readNumberFlag("--slo-ms"),
     git: gitInfo(),
     log: (line) => console.log(line),
   });
@@ -295,6 +301,7 @@ async function contextRunCommand() {
     git: gitInfo(),
     baseUrl: "context-only",
     label: readFlag("--label") ?? null,
+    runGroupId: readFlag("--run-group") ?? process.env.ODYSSEY_RUN_GROUP ?? null,
     config: {
       character: characterSlug,
       model,
@@ -312,6 +319,8 @@ async function contextRunCommand() {
     },
     turns,
     aggregates: aggregateTurnSpans(turns),
+    // Context-only runs produce no voice-to-voice signal, so there is no SLO.
+    slo: null,
     endpointing: null,
     errors: 0,
     totalCostUsd: 0,
