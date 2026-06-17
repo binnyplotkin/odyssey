@@ -12,4 +12,4 @@
  *   - Suites version independently (see SonarSuite.version): editing a
  *     suite's turns or session count bumps the suite version, not Sonar's.
  */
-export const SONAR_VERSION = "0.1.1";
+export const SONAR_VERSION = "0.1.2";

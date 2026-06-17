@@ -559,6 +559,10 @@ export async function POST(
               ? `Previous turn: ${lastSummary}\nUser now asks: ${message}`
               : message;
             const queryEmbedding = await embedText(embedQuery);
+            // Split the retrieval span: embed (the OpenAI round-trip — Move 01's
+            // target) vs the pgvector search, so an embedder swap shows a clean
+            // before/after instead of a blurred retrieval number.
+            serverTrace.mark("server.retrieval.embedded", { dims: queryEmbedding?.length ?? 0 });
             if (queryEmbedding) {
               const activeWikiIds = (await getWikisStore().listWikisForCharacter(character.id))
                 .filter((wiki) => wiki.binding.isActive)

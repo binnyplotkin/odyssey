@@ -1,6 +1,6 @@
 {
   "name": "@odyssey/sonar",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "Odyssey Sonar — versioned voice-to-voice latency benchmark harness. Audio in, audio out; emit a ping, time the echo.",
