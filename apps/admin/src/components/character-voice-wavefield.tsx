@@ -153,7 +153,6 @@ export function CharacterVoiceWavefield(props: Props) {
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
       <WavefieldStage
         audioData={waveAudioRef.current}
-        atmosphere={voiceState.phase === "speaking" ? 1 : 0}
         idleMotion="static"
       />
 

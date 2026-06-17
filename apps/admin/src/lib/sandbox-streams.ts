@@ -352,13 +352,16 @@ export function pickMimeType(): string {
   );
 }
 
-export async function captureMic(): Promise<{
+export async function captureMic(options?: { deviceId?: string }): Promise<{
   recorder: MediaRecorder;
   stream: MediaStream;
   mimeType: string;
 }> {
   const mimeType = pickMimeType();
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const audio: MediaTrackConstraints | boolean = options?.deviceId
+    ? { deviceId: { exact: options.deviceId } }
+    : true;
+  const stream = await navigator.mediaDevices.getUserMedia({ audio });
   const recorder = mimeType
     ? new MediaRecorder(stream, { mimeType })
     : new MediaRecorder(stream);

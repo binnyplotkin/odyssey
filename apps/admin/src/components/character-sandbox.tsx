@@ -21,6 +21,7 @@ import {
   SessionEntryCue,
   prefetchSessionEntryCue,
 } from "@/lib/session-entry-audio";
+import { Menu, type MenuItem } from "@/components/menu";
 import { AudioRtStreamingSttSession } from "@/lib/audio-rt-streaming-stt";
 import { ElevenLabsScribeStreamingSttSession } from "@/lib/elevenlabs-scribe-streaming-stt";
 import type { TracePayload } from "@/lib/voice-trace";
@@ -138,6 +139,11 @@ type MicConnectionStatus = {
   error: string | null;
 };
 
+type MicInputDevice = {
+  deviceId: string;
+  label: string;
+};
+
 const INITIAL_MIC_CONNECTION: MicConnectionStatus = {
   capture: "idle",
   stt: "idle",
@@ -170,6 +176,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   const [micOn, setMicOn] = useState(false);
   const [sttProvider, setSttProvider] =
     useState<StreamingSttProvider>("audio-rt");
+  const [selectedMicDeviceId, setSelectedMicDeviceId] = useState("");
+  const [micInputDevices, setMicInputDevices] = useState<MicInputDevice[]>([]);
   const [micConnection, setMicConnection] = useState<MicConnectionStatus>(
     INITIAL_MIC_CONNECTION,
   );
@@ -201,6 +209,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     "idle" | "listening" | "thinking" | "speaking"
   >("idle");
   const micOnRef = useRef(micOn);
+  const selectedMicDeviceIdRef = useRef(selectedMicDeviceId);
   const voiceStateRef = useRef(voiceState);
   const waveAudioRef = useRef<AudioData>(createEmptyAudioData());
 
@@ -216,6 +225,45 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     micOnRef.current = micOn;
     voiceStateRef.current = voiceState;
   }, [micOn, voiceState]);
+
+  useEffect(() => {
+    selectedMicDeviceIdRef.current = selectedMicDeviceId;
+  }, [selectedMicDeviceId]);
+
+  const refreshMicInputDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices
+        .filter((device) => device.kind === "audioinput")
+        .map((device, index) => ({
+          deviceId: device.deviceId,
+          label: device.label || `Microphone ${index + 1}`,
+        }))
+        .filter((device) => Boolean(device.deviceId));
+      setMicInputDevices(inputs);
+    } catch (err) {
+      console.warn("[sandbox] mic device enumeration failed", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = window.localStorage.getItem("odyssey:sandbox:mic-device-id");
+      if (stored) {
+        selectedMicDeviceIdRef.current = stored;
+        setSelectedMicDeviceId(stored);
+      }
+    }
+
+    void refreshMicInputDevices();
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.addEventListener) return;
+    mediaDevices.addEventListener("devicechange", refreshMicInputDevices);
+    return () => {
+      mediaDevices.removeEventListener("devicechange", refreshMicInputDevices);
+    };
+  }, [refreshMicInputDevices]);
 
   // Pre-session heatup. Cache the entry-cue bytes and warm the
   // character-scoped voice-context cache (10 min TTL; session-scoped lookups
@@ -475,24 +523,6 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     setVoiceState("idle");
     setMicOn(false);
     setPhase("pre-session");
-  }
-
-  function handleReset() {
-    abortRef.current?.abort();
-    pcmPlayerRef.current?.stop();
-    entryCueRef.current?.stop();
-    entryCueRef.current = null;
-    stopRecorder();
-    stopStreamingStt();
-    voiceContextWarmRef.current = null;
-    streamingTurnIdRef.current = null;
-    lastPrepareRef.current = null;
-    setStartedAt(Date.now());
-    setTurns([]);
-    setTraceRecords([]);
-    setComposerValue("");
-    setVoiceState("idle");
-    setMicOn(false);
   }
 
   function handleModeChange(nextMode: SandboxMode) {
@@ -772,8 +802,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         });
       } catch (err) {
         // AbortError lands here when the user ends the session mid-stream;
-        // the turn is already marked done by handleEnd/handleReset, so just
-        // swallow it.
+        // the turn is already marked done by handleEnd, so just swallow it.
         const msg = err instanceof Error ? err.message : String(err);
         if (msg !== "AbortError" && !msg.includes("abort")) {
           finalize((t) => ({
@@ -1183,15 +1212,23 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     if (micOnRef.current || recorderRef.current || streamingSttRef.current) return;
     const sttStartedAt = performance.now();
     const provider = providerOverride ?? sttProvider;
+    const selectedDeviceId = selectedMicDeviceIdRef.current || undefined;
+    const selectedDeviceLabel =
+      micInputDevices.find((device) => device.deviceId === selectedDeviceId)
+        ?.label ?? null;
     setMicConnection((current) => ({
       ...current,
       capture: "requesting",
       stt: "idle",
       provider,
+      deviceLabel: selectedDeviceLabel ?? current.deviceLabel,
       error: null,
     }));
     try {
-      const { recorder, stream, mimeType } = await captureMic();
+      const { recorder, stream, mimeType } = await captureMic({
+        deviceId: selectedDeviceId,
+      });
+      void refreshMicInputDevices();
       recorderRef.current = recorder;
       recorderStreamRef.current = stream;
       recorderMimeRef.current = mimeType || "audio/webm";
@@ -1249,6 +1286,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           reason,
           provider,
           mimeType: recorderMimeRef.current,
+          requestedDeviceId: selectedDeviceId ?? "default",
         },
       });
       recordSttDecisionTrace({
@@ -1257,6 +1295,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           reason,
           provider,
           mimeType: recorderMimeRef.current,
+          requestedDeviceId: selectedDeviceId ?? "default",
           trackStates: stream.getAudioTracks().map((track) => ({
             enabled: track.enabled,
             muted: track.muted,
@@ -1280,6 +1319,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             reason,
             provider,
             mimeType: recorderMimeRef.current,
+            requestedDeviceId: selectedDeviceId ?? "default",
           },
         });
       };
@@ -1397,6 +1437,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         meta: {
           reason,
           message: msg,
+          requestedDeviceId: selectedDeviceId ?? "default",
         },
       });
     }
@@ -1488,6 +1529,52 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     await startVoiceInput("manual_toggle", nextProvider);
   }
 
+  async function handleMicDeviceChange(nextDeviceId: string) {
+    if (nextDeviceId === selectedMicDeviceIdRef.current) return;
+    selectedMicDeviceIdRef.current = nextDeviceId;
+    setSelectedMicDeviceId(nextDeviceId);
+    if (typeof window !== "undefined") {
+      if (nextDeviceId) {
+        window.localStorage.setItem("odyssey:sandbox:mic-device-id", nextDeviceId);
+      } else {
+        window.localStorage.removeItem("odyssey:sandbox:mic-device-id");
+      }
+    }
+
+    const nextDeviceLabel =
+      micInputDevices.find((device) => device.deviceId === nextDeviceId)
+        ?.label ?? null;
+    setMicConnection((current) => ({
+      ...current,
+      deviceLabel: nextDeviceLabel,
+      error: null,
+    }));
+
+    if (phase !== "live") return;
+    if (!micOnRef.current && !recorderRef.current && !streamingSttRef.current) {
+      return;
+    }
+
+    recordSttDecisionTrace({
+      name: "sandbox.stt.input_device_changed",
+      meta: {
+        deviceId: nextDeviceId || "default",
+        deviceLabel: nextDeviceLabel ?? "Default input",
+      },
+    });
+    clearStreamingCommitTimer();
+    streamingTranscriptRef.current = "";
+    streamingTurnIdRef.current = `chr-${crypto.randomUUID()}`;
+    lastPrepareRef.current = null;
+    micOnRef.current = false;
+    voiceStateRef.current = "idle";
+    setMicOn(false);
+    setVoiceState("idle");
+    stopStreamingStt();
+    stopRecorder();
+    await startVoiceInput("manual_toggle");
+  }
+
   // Tear down audio + mic on unmount so background sessions don't keep
   // streaming after the user navigates away.
   useEffect(() => {
@@ -1517,13 +1604,12 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           title={character.title}
           mode={mode}
           onModeChange={handleModeChange}
-          sttProvider={sttProvider}
-          onSttProviderChange={(next) => void handleSttProviderChange(next)}
-          micConnection={micConnection}
+          micInputDevices={micInputDevices}
+          selectedMicDeviceId={selectedMicDeviceId}
+          onMicDeviceChange={(next) => void handleMicDeviceChange(next)}
           debugOpen={debugOpen}
           traceCount={traceRecords.length}
           onToggleDebug={() => setDebugOpen((v) => !v)}
-          onReset={handleReset}
           onEnd={handleEnd}
         />
       ) : phase === "post-session" ? (
@@ -1547,15 +1633,15 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       ),
     );
     return () => setContent(null);
-    // `handleReset` / `handleEnd` are stable enough across renders that
-    // we only re-push when the user-facing state actually changes.
+    // `handleEnd` is stable enough across renders that we only re-push when
+    // the user-facing state actually changes.
   }, [
     setContent,
     character.slug,
     character.title,
     mode,
-    sttProvider,
-    micConnection,
+    micInputDevices,
+    selectedMicDeviceId,
     debugOpen,
     traceRecords.length,
     phase,
@@ -1597,9 +1683,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             sessionError={sessionError}
             onStart={handleStart}
             onCancel={handleCancel}
-            heroBackground={
-              <SandboxWavefieldCell atmosphere={0.28} audioData={waveAudioRef.current} />
-            }
+            heroBackground={<SandboxWavefieldCell audioData={waveAudioRef.current} />}
           />
         ) : phase === "post-session" && endedSession ? (
           <SandboxPostSession
@@ -1622,7 +1706,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
               overflow: "hidden",
             }}
           >
-            <SandboxWavefieldCell atmosphere={1} audioData={waveAudioRef.current} />
+            <SandboxWavefieldCell audioData={waveAudioRef.current} />
             <div
               style={{
                 position: "relative",
@@ -1687,10 +1771,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 }
 
 function SandboxWavefieldCell({
-  atmosphere,
   audioData,
 }: {
-  atmosphere: number;
   audioData: AudioData;
 }) {
   return (
@@ -1704,7 +1786,7 @@ function SandboxWavefieldCell({
         pointerEvents: "none",
       }}
     >
-      <WavefieldStage audioData={audioData} atmosphere={atmosphere} />
+      <WavefieldStage audioData={audioData} />
     </div>
   );
 }
@@ -2390,26 +2472,24 @@ function SandboxHeaderToolbar({
   title,
   mode,
   onModeChange,
-  sttProvider,
-  onSttProviderChange,
-  micConnection,
+  micInputDevices,
+  selectedMicDeviceId,
+  onMicDeviceChange,
   debugOpen,
   traceCount,
   onToggleDebug,
-  onReset,
   onEnd,
 }: {
   slug: string;
   title: string;
   mode: SandboxMode;
   onModeChange: (next: SandboxMode) => void;
-  sttProvider: StreamingSttProvider;
-  onSttProviderChange: (next: StreamingSttProvider) => void;
-  micConnection: MicConnectionStatus;
+  micInputDevices: MicInputDevice[];
+  selectedMicDeviceId: string;
+  onMicDeviceChange: (next: string) => void;
   debugOpen: boolean;
   traceCount: number;
   onToggleDebug: () => void;
-  onReset: () => void;
   onEnd: () => void;
 }) {
   return (
@@ -2437,13 +2517,6 @@ function SandboxHeaderToolbar({
 
       <ModeToggle mode={mode} onChange={onModeChange} />
 
-      <HeaderSttProviderSelect
-        provider={sttProvider}
-        onChange={onSttProviderChange}
-      />
-
-      <HeaderMicConnectionStatus status={micConnection} />
-
       <div
         style={{
           display: "flex",
@@ -2452,30 +2525,11 @@ function SandboxHeaderToolbar({
           flexShrink: 0,
         }}
       >
-        <button
-          type="button"
-          onClick={onReset}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: 30,
-            padding: "0 14px",
-            border:
-              "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
-            borderRadius: "var(--radius-pill)",
-            background: "transparent",
-            color: "var(--text-secondary)",
-            fontFamily: FONT_MONO,
-            fontSize: "var(--font-size-sm)",
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          reset
-        </button>
+        <HeaderMicInputSelect
+          devices={micInputDevices}
+          selectedDeviceId={selectedMicDeviceId}
+          onChange={onMicDeviceChange}
+        />
         <button
           type="button"
           onClick={onEnd}
@@ -2512,152 +2566,73 @@ function SandboxHeaderToolbar({
 
 /* ── Toolbar sub-components ───────────────────────────────────── */
 
-function HeaderSttProviderSelect({
-  provider,
+function HeaderMicInputSelect({
+  devices,
+  selectedDeviceId,
   onChange,
 }: {
-  provider: StreamingSttProvider;
-  onChange: (next: StreamingSttProvider) => void;
+  devices: MicInputDevice[];
+  selectedDeviceId: string;
+  onChange: (next: string) => void;
 }) {
+  const hasSelectedDevice =
+    selectedDeviceId && devices.some((device) => device.deviceId === selectedDeviceId);
+  const selectedLabel =
+    devices.find((device) => device.deviceId === selectedDeviceId)?.label ??
+    "Saved input";
+  const items: MenuItem<string>[] = [
+    { value: "", label: "Default input", meta: "browser" },
+    ...(selectedDeviceId && !hasSelectedDevice
+      ? [{ value: selectedDeviceId, label: selectedLabel, meta: "saved" }]
+      : []),
+    ...devices.map((device) => ({
+      value: device.deviceId,
+      label: device.label,
+      meta: "input",
+    })),
+  ];
+
   return (
-    <label
-      style={{
+    <Menu
+      value={selectedDeviceId}
+      onChange={onChange}
+      items={items}
+      ariaLabel="Microphone input"
+      align="right"
+      minWidth={220}
+      triggerStyle={{
         height: 30,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "var(--space-8)",
-        padding: "0 10px",
+        minWidth: 170,
+        maxWidth: 220,
+        padding: "0 11px",
         border:
           "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
         borderRadius: "var(--radius-pill)",
         background: "transparent",
-        color: "var(--text-tertiary)",
+        color: "var(--text-secondary)",
         fontFamily: FONT_MONO,
         fontSize: "var(--font-size-xs)",
         letterSpacing: "0.08em",
         textTransform: "uppercase",
-        whiteSpace: "nowrap",
       }}
-    >
-      stt
-      <select
-        value={provider}
-        onChange={(event) =>
-          onChange(event.currentTarget.value as StreamingSttProvider)
-        }
-        style={{
-          height: 24,
-          minWidth: 116,
-          border: "0",
-          outline: "0",
-          background: "transparent",
-          color: "var(--text-secondary)",
-          fontFamily: FONT_MONO,
-          fontSize: "var(--font-size-xs)",
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-          cursor: "pointer",
-        }}
-      >
-        <option value="audio-rt">audio-rt</option>
-        <option value="elevenlabs-scribe">scribe</option>
-      </select>
-    </label>
-  );
-}
-
-function HeaderMicConnectionStatus({
-  status,
-}: {
-  status: MicConnectionStatus;
-}) {
-  const captureLabel =
-    status.capture === "requesting"
-      ? "mic requesting"
-      : status.capture === "active"
-        ? "mic active"
-        : status.capture === "muted"
-          ? "mic muted"
-          : status.capture === "ended"
-            ? "mic ended"
-            : status.capture === "error"
-              ? "mic error"
-              : "mic idle";
-  const sttLabel =
-    status.stt === "connecting"
-      ? "stt connecting"
-      : status.stt === "open"
-        ? "stt open"
-        : status.stt === "closed"
-          ? "stt closed"
-          : status.stt === "error"
-            ? "stt error"
-            : "stt idle";
-  const isHealthy = status.capture === "active" && status.stt === "open";
-  const isProblem =
-    status.capture === "error" ||
-    status.capture === "ended" ||
-    status.stt === "error" ||
-    status.stt === "closed";
-  const dotColor = isHealthy
-    ? ACCENT
-    : isProblem
-      ? DANGER
-      : "var(--text-quaternary)";
-  const deviceLabel = status.deviceLabel?.trim() || "device pending";
-  const providerLabel =
-    status.provider === "elevenlabs-scribe" ? "scribe" : "audio-rt";
-  const detail = `${captureLabel} | ${providerLabel} | ${deviceLabel} | ${sttLabel}${
-    status.error ? ` | ${status.error}` : ""
-  }`;
-
-  return (
-    <div
-      title={detail}
-      aria-label={detail}
-      style={{
-        minWidth: 0,
-        maxWidth: 360,
-        height: 30,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "var(--space-8)",
-        padding: "0 12px",
-        border:
-          "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
-        borderRadius: "var(--radius-pill)",
-        background: isProblem
-          ? "color-mix(in srgb, var(--status-error) 8%, transparent)"
-          : "color-mix(in srgb, var(--surface-raised) 82%, transparent)",
-        color: isProblem ? DANGER : "var(--text-secondary)",
-        overflow: "hidden",
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          width: 7,
-          height: 7,
-          flexShrink: 0,
-          borderRadius: "50%",
-          background: dotColor,
-          boxShadow: isHealthy ? `0 0 10px ${dotColor}` : "none",
-        }}
-      />
-      <span
-        style={{
-          minWidth: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          fontFamily: FONT_MONO,
-          fontSize: "var(--font-size-xs)",
-          letterSpacing: "0.04em",
-        }}
-      >
-        {captureLabel} · {providerLabel} · {deviceLabel} · {sttLabel}
-      </span>
-    </div>
+      renderTrigger={(current) => (
+        <>
+          <span style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>
+            mic
+          </span>
+          <span
+            style={{
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {current?.label ?? "Default input"}
+          </span>
+        </>
+      )}
+    />
   );
 }
 

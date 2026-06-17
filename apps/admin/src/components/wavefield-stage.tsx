@@ -1306,11 +1306,9 @@ function Scene({
 
 export function WavefieldStage({
   audioData,
-  atmosphere,
   idleMotion = "ambient",
 }: {
   audioData: AudioData;
-  atmosphere: number;
   idleMotion?: IdleMotionMode;
 }) {
   return (
@@ -1318,112 +1316,17 @@ export function WavefieldStage({
       style={{
         position: "absolute",
         inset: 0,
-        // Theme-adaptive container bg. The atmospheric radial gradients above
-        // this layer fade to transparent at their outer stops, so the page bg
-        // shows through — light in light theme, dark in dark theme. Particle
+        // Theme-adaptive container bg behind the Three.js wavefield. Particle
         // colors + fog stay hardcoded as the wavefield's signature aesthetic.
         backgroundColor: "var(--background)",
         overflow: "hidden",
       }}
     >
-      <style>
-        {`
-          @keyframes waveform-airflow-a {
-            0% { transform: translate3d(-1.0%, -0.7%, 0) scale(1.0); }
-            50% { transform: translate3d(0.9%, 0.8%, 0) scale(1.03); }
-            100% { transform: translate3d(-1.0%, -0.7%, 0) scale(1.0); }
-          }
-          @keyframes waveform-airflow-b {
-            0% { transform: translate3d(0.7%, 0.5%, 0) scale(1.0); }
-            50% { transform: translate3d(-0.8%, -0.6%, 0) scale(1.025); }
-            100% { transform: translate3d(0.7%, 0.5%, 0) scale(1.0); }
-          }
-          @keyframes waveform-airflow-c {
-            0% { transform: translate3d(0, 0, 0) scale(1.0); }
-            50% { transform: translate3d(0.6%, -0.4%, 0) scale(1.018); }
-            100% { transform: translate3d(0, 0, 0) scale(1.0); }
-          }
-        `}
-      </style>
-
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: `
-            radial-gradient(140% 92% at 50% -10%, rgba(11,42,91,0.22) 0%, rgba(11,42,91,0.10) 30%, rgba(3,6,13,0) 68%),
-            radial-gradient(120% 84% at 50% 8%, rgba(18,61,143,0.16) 0%, rgba(18,61,143,0.07) 34%, rgba(3,6,13,0) 68%),
-            radial-gradient(130% 86% at 52% 13%, rgba(31,175,156,0.10) 0%, rgba(31,175,156,0.045) 30%, rgba(3,6,13,0) 66%)
-          `,
-          opacity: 0.1 + atmosphere * 0.5,
-          transition: "opacity 1400ms ease",
-          pointerEvents: "none",
-          zIndex: 1,
-        }}
-      />
-
-      <div
-        style={{
-          position: "absolute",
-          left: "-16%",
-          right: "-16%",
-          top: "-36%",
-          height: "72%",
-          background:
-            "radial-gradient(66% 84% at 50% 52%, rgba(111,224,210,0.40) 0%, rgba(31,175,156,0.24) 25%, rgba(18,61,143,0.12) 50%, rgba(3,6,13,0) 79%)",
-          filter: "blur(68px)",
-          mixBlendMode: "screen",
-          opacity: 0.02 + atmosphere * 0.56,
-          animation: "waveform-airflow-a 28s ease-in-out infinite",
-          transition: "opacity 1600ms ease",
-          pointerEvents: "none",
-          zIndex: 2,
-        }}
-      />
-
-      <div
-        style={{
-          position: "absolute",
-          left: "-18%",
-          right: "-18%",
-          top: "-30%",
-          height: "66%",
-          background:
-            "radial-gradient(58% 76% at 52% 48%, rgba(31,175,156,0.24) 0%, rgba(111,224,210,0.16) 24%, rgba(11,42,91,0.10) 52%, rgba(3,6,13,0) 80%)",
-          filter: "blur(78px)",
-          mixBlendMode: "screen",
-          opacity: 0.014 + atmosphere * 0.4,
-          animation: "waveform-airflow-b 34s ease-in-out infinite",
-          transition: "opacity 1700ms ease",
-          pointerEvents: "none",
-          zIndex: 2,
-        }}
-      />
-
-      <div
-        style={{
-          position: "absolute",
-          left: "-22%",
-          right: "-22%",
-          top: "-46%",
-          height: "80%",
-          background:
-            "radial-gradient(72% 92% at 50% 50%, rgba(111,224,210,0.30) 0%, rgba(31,175,156,0.16) 28%, rgba(18,61,143,0.07) 58%, rgba(3,6,13,0) 84%)",
-          filter: "blur(106px)",
-          mixBlendMode: "screen",
-          opacity: 0.01 + atmosphere * 0.32,
-          animation: "waveform-airflow-c 44s ease-in-out infinite",
-          transition: "opacity 2200ms ease",
-          pointerEvents: "none",
-          zIndex: 2,
-        }}
-      />
-
       <Canvas
         frameloop="always"
         dpr={[0.75, 1]}
         camera={{ position: [0, 2.2, 3.22], fov: 42 }}
-        style={{ width: "100%", height: "100%", position: "relative", zIndex: 3 }}
+        style={{ width: "100%", height: "100%", position: "relative", zIndex: 1 }}
         gl={{ antialias: false, alpha: true, powerPreference: "high-performance" }}
       >
         <Scene audioData={audioData} idleMotion={idleMotion} />
@@ -1434,12 +1337,10 @@ export function WavefieldStage({
 
 export function ThreeDWaveformPage() {
   const audio = useAudioAnalysis();
-  const micOn = audio.active;
-  const atmosphere = micOn ? 1 : 0.14;
 
   return (
     <>
-      <WavefieldStage audioData={AUDIO} atmosphere={atmosphere} />
+      <WavefieldStage audioData={AUDIO} />
       <div
         style={{
           position: "absolute",
