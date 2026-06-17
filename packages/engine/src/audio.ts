@@ -1,9 +1,9 @@
-import { createRequire } from "node:module";
-// Avoid a broken optional `bufferutil` native binding from taking down
-// ElevenLabs streaming sends. `ws` falls back to its pure-JS masking path.
-process.env.WS_NO_BUFFER_UTIL ??= "1";
-process.env.WS_NO_UTF_8_VALIDATE ??= "1";
-const require = createRequire(import.meta.url);
+// `./ws-env` MUST be imported before `ws` — it sets WS_NO_BUFFER_UTIL etc. and
+// ESM evaluates imports in order. `ws` is a serverExternalPackage so the Next
+// bundler loads it from node_modules at runtime instead of parsing its node:
+// builtins (which the dev webpack build can't handle).
+import "./ws-env";
+import WsDefault from "ws";
 import { getOpenAIClient } from "./openai-client";
 import {
   SpeechToTextAdapter,
@@ -56,7 +56,7 @@ type NodeWebSocketCtor = new (
   options?: { headers?: Record<string, string> },
 ) => NodeWebSocket;
 
-const WebSocket = (require("ws") as { WebSocket: NodeWebSocketCtor }).WebSocket;
+const WebSocket = (WsDefault as unknown as { WebSocket: NodeWebSocketCtor }).WebSocket;
 
 function getKyutaiSttBaseUrl(): string | null {
   const raw = (process.env.KYUTAI_BASE_URL ?? "").trim().replace(/\/+$/, "");
