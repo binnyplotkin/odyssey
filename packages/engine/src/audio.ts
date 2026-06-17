@@ -3,7 +3,6 @@
 // bundler loads it from node_modules at runtime instead of parsing its node:
 // builtins (which the dev webpack build can't handle).
 import "./ws-env";
-import WsDefault from "ws";
 import { getOpenAIClient } from "./openai-client";
 import {
   SpeechToTextAdapter,
@@ -56,7 +55,28 @@ type NodeWebSocketCtor = new (
   options?: { headers?: Record<string, string> },
 ) => NodeWebSocket;
 
-const WebSocket = (WsDefault as unknown as { WebSocket: NodeWebSocketCtor }).WebSocket;
+// Load `ws` at runtime via webpack's non-bundled require escape hatch. It is
+// defined in the Next server build (dev AND prod webpack) and returns the real
+// ws module, so `.WebSocket` is the actual constructor. A static
+// `import … from "ws"` survived `next dev`/esbuild but the production
+// `next build` interop left `.WebSocket` undefined ("w is not a constructor");
+// the original createRequire did this correctly but needed a `node:module`
+// import the dev webpack build rejects. Lazy, so non-webpack contexts
+// (tsx/scripts/sonar — which never open a ws socket) import this module fine.
+declare const __non_webpack_require__: ((id: string) => unknown) | undefined;
+let cachedWsCtor: NodeWebSocketCtor | null = null;
+function getWebSocketCtor(): NodeWebSocketCtor {
+  if (cachedWsCtor) return cachedWsCtor;
+  if (typeof __non_webpack_require__ !== "function") {
+    throw new Error("ws is only loadable in the Next server runtime");
+  }
+  const mod = __non_webpack_require__("ws") as
+    | (NodeWebSocketCtor & { WebSocket?: NodeWebSocketCtor })
+    | { WebSocket?: NodeWebSocketCtor };
+  cachedWsCtor = ((mod as { WebSocket?: NodeWebSocketCtor }).WebSocket ??
+    (mod as unknown as NodeWebSocketCtor)) as NodeWebSocketCtor;
+  return cachedWsCtor;
+}
 
 function getKyutaiSttBaseUrl(): string | null {
   const raw = (process.env.KYUTAI_BASE_URL ?? "").trim().replace(/\/+$/, "");
@@ -568,7 +588,7 @@ export class ElevenLabsStreamingAdapter
     // ws supports custom headers; ElevenLabs accepts xi-api-key as a
     // header (cleaner than the query-param alternative since the key
     // won't leak into proxy logs).
-    const ws = new WebSocket(url, { headers: { "xi-api-key": apiKey } });
+    const ws = new (getWebSocketCtor())(url, { headers: { "xi-api-key": apiKey } });
 
     // Bridge ws events into an async generator. Three sources push
     // chunks into `pending`; the consumer loop drains it. `streamEnded`
@@ -795,7 +815,7 @@ export class CartesiaStreamingAdapter
       `?api_key=${encodeURIComponent(apiKey)}` +
       `&cartesia_version=${encodeURIComponent(version)}`;
 
-    const ws = new WebSocket(url);
+    const ws = new (getWebSocketCtor())(url);
 
     // Same ws→async-generator bridge as ElevenLabs: message/error/close
     // push into `pending`; the drain loop yields it; `streamEnded` flips on
