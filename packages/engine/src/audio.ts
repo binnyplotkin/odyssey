@@ -63,18 +63,27 @@ type NodeWebSocketCtor = new (
 // the original createRequire did this correctly but needed a `node:module`
 // import the dev webpack build rejects. Lazy, so non-webpack contexts
 // (tsx/scripts/sonar — which never open a ws socket) import this module fine.
-declare const __non_webpack_require__: ((id: string) => unknown) | undefined;
 let cachedWsCtor: NodeWebSocketCtor | null = null;
 function getWebSocketCtor(): NodeWebSocketCtor {
   if (cachedWsCtor) return cachedWsCtor;
-  if (typeof __non_webpack_require__ !== "function") {
-    throw new Error("ws is only loadable in the Next server runtime");
+  // Load `ws` through an ESM-safe `createRequire` obtained at runtime via
+  // process.getBuiltinModule("module") (Node ≥20.16 / ≥22.3). No static
+  // `node:module` import for the dev `next dev --webpack` build to reject on
+  // the node: scheme, and createRequire(import.meta.url)("ws") is exactly the
+  // runtime require that worked on prod originally — webpack's
+  // __non_webpack_require__ exists under `next dev` but NOT in Vercel's
+  // production build, so it can't be relied on. getBuiltinModule is present in
+  // every runtime that loads this module (Next dev, Vercel prod, tsx — all
+  // Node ≥22), so no fallback is needed.
+  const proc = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }).process;
+  const builtin = proc?.getBuiltinModule?.("module") as
+    | { createRequire?: (path: string | URL) => (id: string) => unknown }
+    | undefined;
+  if (typeof builtin?.createRequire !== "function") {
+    throw new Error("process.getBuiltinModule('module').createRequire unavailable (need Node ≥20.16/22.3)");
   }
-  const mod = __non_webpack_require__("ws") as
-    | (NodeWebSocketCtor & { WebSocket?: NodeWebSocketCtor })
-    | { WebSocket?: NodeWebSocketCtor };
-  cachedWsCtor = ((mod as { WebSocket?: NodeWebSocketCtor }).WebSocket ??
-    (mod as unknown as NodeWebSocketCtor)) as NodeWebSocketCtor;
+  const wsModule = builtin.createRequire(import.meta.url)("ws") as { WebSocket?: NodeWebSocketCtor };
+  cachedWsCtor = (wsModule.WebSocket ?? (wsModule as unknown as NodeWebSocketCtor)) as NodeWebSocketCtor;
   return cachedWsCtor;
 }
 
