@@ -7,6 +7,7 @@ export {
   KyutaiSpeechToTextAdapter,
   PocketTtsStreamingAdapter,
   ElevenLabsStreamingAdapter,
+  CartesiaStreamingAdapter,
   createSpeechToTextAdapter,
   createTextToSpeechAdapter,
   createStreamingTtsAdapterForVoice,
