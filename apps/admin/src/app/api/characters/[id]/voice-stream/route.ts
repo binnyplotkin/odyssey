@@ -559,11 +559,11 @@ export async function POST(
             const embedQuery = lastSummary
               ? `Previous turn: ${lastSummary}\nUser now asks: ${message}`
               : message;
-            // Move 01 cutover (flag-gated, default OpenAI): the co-located
-            // bge-small embedder + the 384-dim embedding_bge column when
-            // EMBEDDING_PROVIDER=bge; otherwise OpenAI text-embedding-3-small
+            // Move 01 (promoted): the co-located bge-small embedder + the
+            // 384-dim embedding_bge column are the DEFAULT. Set
+            // EMBEDDING_PROVIDER=openai to fall back to text-embedding-3-small
             // against embedding(1536). Each path uses its matching column.
-            const useBge = process.env.EMBEDDING_PROVIDER === "bge";
+            const useBge = process.env.EMBEDDING_PROVIDER !== "openai";
             const queryEmbedding = useBge
               ? await embedTextLocal(embedQuery, { isQuery: true })
               : await embedText(embedQuery);
