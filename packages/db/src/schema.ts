@@ -586,6 +586,12 @@ export const wikiPagesTable = pgTable(
     embedding: vector("embedding", { dimensions: 1536 }),
     embeddingModel: text("embedding_model"),
     embeddedAt: timestamp("embedded_at", { withTimezone: true }),
+    // Move 01 dual-column: bge-small-en-v1.5 (384-dim) from the co-located
+    // embedder, backfilled alongside the OpenAI column so retrieval can A/B
+    // and roll back instantly. The OpenAI column stays until bge is promoted.
+    embeddingBge: vector("embedding_bge", { dimensions: 384 }),
+    embeddingBgeModel: text("embedding_bge_model"),
+    embeddingBgeAt: timestamp("embedding_bge_at", { withTimezone: true }),
     // Cached 2D layout for the Knowledge view. Computed from embeddings via
     // cosine-distance MDS, persisted so repeat visits are stable. Recomputed
     // lazily when any page in the character is missing coordinates, or via
@@ -607,6 +613,9 @@ export const wikiPagesTable = pgTable(
     index("wiki_pages_embedding_idx")
       .using("hnsw", t.embedding.op("vector_cosine_ops"))
       .where(sql`${t.embedding} IS NOT NULL`),
+    index("wiki_pages_embedding_bge_idx")
+      .using("hnsw", t.embeddingBge.op("vector_cosine_ops"))
+      .where(sql`${t.embeddingBge} IS NOT NULL`),
   ],
 );
 

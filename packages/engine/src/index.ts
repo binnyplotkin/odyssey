@@ -1,6 +1,13 @@
 export { getOpenAIClient } from "./openai-client";
 export { embedText, embedTexts, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS } from "./embedding";
 export {
+  embedTextLocal,
+  embedTextsLocal,
+  warmLocalEmbedder,
+  LOCAL_EMBEDDING_MODEL,
+  LOCAL_EMBEDDING_DIMENSIONS,
+} from "./local-embedding";
+export {
   OpenAISpeechToTextAdapter,
   OpenAITextToSpeechAdapter,
   ElevenLabsTextToSpeechAdapter,
