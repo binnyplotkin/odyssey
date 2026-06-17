@@ -1,4 +1,9 @@
-import { createRequire } from "node:module";
+// Bare "module" (not "node:module"): the Next/webpack server build externalizes
+// bare node builtins, but its loader rejects the "node:" URI scheme with
+// UnhandledSchemeError, which 500s the whole admin dev build. Same builtin,
+// no scheme — keeps createRequire's runtime require("ws") + the env-ordering
+// on the lines below intact.
+import { createRequire } from "module";
 // Avoid a broken optional `bufferutil` native binding from taking down
 // ElevenLabs streaming sends. `ws` falls back to its pure-JS masking path.
 process.env.WS_NO_BUFFER_UTIL ??= "1";
