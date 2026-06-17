@@ -2,13 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
-  // The co-located bge embedder reaches onnxruntime-node through
-  // @huggingface/transformers, which use `node:` builtins (createRequire) and
-  // native .node/.so binaries the Next bundler can't process. Load them from
-  // node_modules at runtime instead of bundling — this fixes the webpack
-  // "UnhandledSchemeError: node:module" dev build failure locally and the
-  // missing-libonnxruntime.so.1 error on the bundled production build.
-  serverExternalPackages: ["@huggingface/transformers", "onnxruntime-node"],
+  // Load these from node_modules at runtime instead of bundling them:
+  //  - @huggingface/transformers / onnxruntime-node: native .node/.so binaries
+  //    the bundler can't process (needed for bge to load on the prod build; the
+  //    deploy must also ship the linux onnxruntime binary).
+  //  - ws (used by the streaming TTS adapters in @odyssey/engine/audio.ts):
+  //    pulls node: builtins the dev `next dev --webpack` build rejects with
+  //    UnhandledSchemeError. Externalizing it keeps ws's internals out of the
+  //    bundle so the build no longer 500s.
+  serverExternalPackages: ["@huggingface/transformers", "onnxruntime-node", "ws"],
   experimental: {
     externalDir: true,
   },
