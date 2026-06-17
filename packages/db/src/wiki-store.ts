@@ -678,6 +678,18 @@ export interface WikiStore {
   ): Promise<
     Array<{ pageId: string; slug: string; title: string; similarity: number }>
   >;
+  /**
+   * Move 01: same as searchPagesByEmbeddingForWikis but against the bge-small
+   * `embedding_bge` (384) column. The query embedding must come from the
+   * co-located bge embedder; used by the EMBEDDING_PROVIDER=bge retrieval path.
+   */
+  searchPagesByBgeEmbeddingForWikis(
+    wikiIds: string[],
+    queryEmbedding: number[],
+    options?: { topK?: number; minSimilarity?: number },
+  ): Promise<
+    Array<{ pageId: string; slug: string; title: string; similarity: number }>
+  >;
 
   // Versions
   listPageVersions(pageId: string): Promise<WikiPageVersionRecord[]>;
@@ -1258,6 +1270,53 @@ function neonStore(): WikiStore {
             FROM wiki_pages
             WHERE wiki_id IN (${sql.join(wikiIdValues, sql`, `)}) AND embedding IS NOT NULL
             ORDER BY embedding <=> ${vectorLiteral}::vector
+            LIMIT ${topK}
+          `,
+        ),
+      );
+      const list = (
+        Array.isArray(rows) ? rows : ((rows as { rows: unknown[] }).rows ?? [])
+      ) as Array<{
+        id: string;
+        slug: string;
+        title: string;
+        similarity: number | string;
+      }>;
+      return list
+        .map((r) => ({
+          pageId: r.id,
+          slug: r.slug,
+          title: r.title,
+          similarity:
+            typeof r.similarity === "string"
+              ? Number(r.similarity)
+              : r.similarity,
+        }))
+        .filter(
+          (r) => Number.isFinite(r.similarity) && r.similarity >= minSimilarity,
+        );
+    },
+
+    async searchPagesByBgeEmbeddingForWikis(wikiIds, queryEmbedding, options) {
+      if (wikiIds.length === 0) return [];
+      const db = requireDb();
+      const topK = options?.topK ?? 5;
+      const minSimilarity = options?.minSimilarity ?? 0.5;
+      const vectorLiteral = `[${queryEmbedding.join(",")}]`;
+      const wikiIdValues = wikiIds.map((id) => sql`${id}`);
+      const rows = await retryRead(() =>
+        db.execute<{
+          id: string;
+          slug: string;
+          title: string;
+          similarity: number;
+        }>(
+          sql`
+            SELECT id, slug, title,
+                   1 - (embedding_bge <=> ${vectorLiteral}::vector(384)) AS similarity
+            FROM wiki_pages
+            WHERE wiki_id IN (${sql.join(wikiIdValues, sql`, `)}) AND embedding_bge IS NOT NULL
+            ORDER BY embedding_bge <=> ${vectorLiteral}::vector(384)
             LIMIT ${topK}
           `,
         ),

@@ -87,6 +87,8 @@ export function extractVoiceStreamSpans(input: {
     "orchestrate.total": input.orchestrate ? round1(input.orchestrate.totalMs) : null,
     "orchestrate.llm": orchestrate.diff("orchestrate.llm.start", "orchestrate.llm.done"),
     "server.retrieval": server.diff("server.retrieval.start", "server.retrieval.done"),
+    "server.retrieval.embed": server.diff("server.retrieval.start", "server.retrieval.embedded"),
+    "server.retrieval.search": server.diff("server.retrieval.embedded", "server.retrieval.done"),
     "server.curator": server.diff("server.curator.start", "server.curator.done"),
     "server.context": sinceReceived("server.context.attached"),
     "server.llm.ttft":

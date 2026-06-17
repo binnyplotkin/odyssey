@@ -128,6 +128,8 @@ export const SONAR_SPANS = [
   "vs.total", // POST → `done` frame
   // Voice-stream server-side spans, derived from the serverTrace:
   "server.retrieval", // server.retrieval.start → server.retrieval.done
+  "server.retrieval.embed", // retrieval.start → retrieval.embedded (the embed call — Move 01 target)
+  "server.retrieval.search", // retrieval.embedded → retrieval.done (pgvector + bindings)
   "server.curator", // server.curator.start → server.curator.done
   "server.context", // server.request.received → server.context.attached
   "server.llm.ttft", // server.request.received → server.llm.first-token
