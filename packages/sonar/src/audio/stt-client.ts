@@ -42,11 +42,17 @@ export type SttSttMark = {
   wsHandshakeMs: number | null;
   /** connect → last speech frame dispatched (i.e. moment user stopped speaking). */
   speechEndMs: number;
-  /** connect → first Word frame. */
+  /** connect → first Word frame (the genuine first word, even if a mid-utterance burst). */
   firstWordMs: number | null;
-  /** speechEnd → first Word: endpointing (≈800ms) + whisper compute + network. */
+  /**
+   * speechEnd → first Word delivered AT/AFTER speechEnd: endpointing (≈800ms) +
+   * whisper compute + network. Measured from the post-speech-end transcribe, not
+   * an early mid-utterance burst — see streamUtterance for why. Null when no word
+   * arrives after speech end (so the metric is explicitly absent, never a
+   * silently-dropped negative).
+   */
   endpointToWordMs: number | null;
-  /** first → last Word. */
+  /** first → last Word within the post-speech-end burst. */
   wordSpanMs: number | null;
 };
 
@@ -76,6 +82,8 @@ export type StreamUtteranceOptions = {
    * pause-aware endpointing fixtures; adds ~1.8s/turn so it's off by default.
    */
   captureAllBursts?: boolean;
+  /** Optional sink for non-fatal STT diagnostics (mid-utterance endpoint fires). */
+  log?: (line: string) => void;
 };
 
 export async function streamUtterance(opts: StreamUtteranceOptions): Promise<SttResult> {
@@ -92,7 +100,15 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
   let wsHandshakeMs: number | null = null;
   let firstWordMs: number | null = null;
   let firstWordPerf: number | null = null;
-  let lastWordPerf: number | null = null;
+  // Words delivered AFTER the user actually stopped speaking. A long "complete"
+  // line with an internal sentence boundary (e.g. "…in your life. Which journey
+  // …") trips the server's fixed VAD window mid-utterance, so an early burst —
+  // transcribing speech the user is still finishing — arrives BEFORE speechEnd.
+  // endpoint-to-word measured from that early burst is a nonsense negative; the
+  // genuine post-endpoint latency is the first word delivered at/after speechEnd.
+  let speechEnded = false;
+  let firstWordAfterEndPerf: number | null = null;
+  let lastWordAfterEndPerf: number | null = null;
   let error: string | null = null;
   let ready = false;
 
@@ -114,12 +130,18 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
         ready = true;
         wsHandshakeMs = since();
       } else if (msg.type === "Word") {
+        const nowPerf = performance.now();
         if (firstWordMs === null) {
           firstWordMs = since();
-          firstWordPerf = performance.now();
+          firstWordPerf = nowPerf;
         }
-        lastWordPerf = performance.now();
-        wordPerfTimes.push(lastWordPerf);
+        // Partition words at speechEnd: only those delivered after the user
+        // stopped speaking measure post-endpoint latency and gate the wait below.
+        if (speechEnded) {
+          if (firstWordAfterEndPerf === null) firstWordAfterEndPerf = nowPerf;
+          lastWordAfterEndPerf = nowPerf;
+        }
+        wordPerfTimes.push(nowPerf);
         words.push({ text: msg.text, startTime: msg.start_time });
       } else if (msg.type === "Error") {
         error = msg.message ?? "streaming STT error";
@@ -155,9 +177,11 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
     if (ws.readyState === WebSocket.OPEN) ws.send(encodeAudioFrame(speechFrames[i]));
     frameIdx += 1;
     if (i === speechFrames.length - 1) {
-      // The instant the user's audio ends — the voice-to-voice origin.
+      // The instant the user's audio ends — the voice-to-voice origin. From
+      // here on, arriving words count as post-endpoint (see the message handler).
       speechEndMs = since();
       speechEndPerf = performance.now();
+      speechEnded = true;
     }
     if (frameMs > 0) {
       const wait = pacingStart + frameIdx * frameMs - performance.now();
@@ -176,11 +200,15 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
       if (error) break;
     }
   } else {
-    // Stop once words arrive (plus a grace window) or the cap trips.
+    // Stop once the POST-speech-end transcribe arrives (plus a grace window) or
+    // the cap trips. Gating on lastWordAfterEndPerf — not any word — is what
+    // keeps an early mid-utterance burst from short-circuiting the wait: bailing
+    // on the early burst would truncate the transcript (dropping the rest of the
+    // utterance) and leave endpoint-to-word with only a pre-speechEnd word.
     while (performance.now() - silenceStart < MAX_TRAILING_SILENCE_MS) {
       await paced(oneSilence);
       if (error) break;
-      if (lastWordPerf !== null && performance.now() - lastWordPerf > WORD_GRACE_MS) break;
+      if (lastWordAfterEndPerf !== null && performance.now() - lastWordAfterEndPerf > WORD_GRACE_MS) break;
     }
   }
 
@@ -197,6 +225,31 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
     .replace(/\s+([.,!?;:])/g, "$1")
     .trim();
 
+  // Endpoint-to-word is the latency from speech end to the first word delivered
+  // AFTER it. Null (not a negative artifact) when no such word arrives.
+  const endpointToWordMs =
+    firstWordAfterEndPerf !== null ? round1(firstWordAfterEndPerf - speechEndPerf) : null;
+  const wordSpanMs =
+    firstWordAfterEndPerf !== null && lastWordAfterEndPerf !== null
+      ? round1(lastWordAfterEndPerf - firstWordAfterEndPerf)
+      : null;
+
+  // Surface what used to be silent: the endpointer fired mid-utterance (an early
+  // burst arrived before speech end), so this metric is taken from the
+  // post-endpoint burst — or, in the degenerate case, is explicitly null. The
+  // inline `firstWordPerf !== null` is what narrows it to a number for the math.
+  const endpointFiredMidSpeech = firstWordPerf !== null && firstWordAfterEndPerf !== firstWordPerf;
+  if (opts.log && endpointFiredMidSpeech && firstWordPerf !== null) {
+    const earlyByMs = Math.round(speechEndPerf - firstWordPerf);
+    opts.log(
+      endpointToWordMs !== null
+        ? `  stt: endpointer fired mid-utterance (first word ${earlyByMs}ms before speech end); ` +
+            `endpoint-to-word taken from the post-endpoint burst (+${endpointToWordMs}ms).`
+        : `  stt: endpointer fired mid-utterance and no word arrived after speech end; ` +
+            `endpoint-to-word is null (avoids a silently-dropped negative).`,
+    );
+  }
+
   return {
     transcript,
     words,
@@ -207,12 +260,8 @@ export async function streamUtterance(opts: StreamUtteranceOptions): Promise<Stt
       wsHandshakeMs: round1(wsHandshakeMs),
       speechEndMs: round1(speechEndMs)!,
       firstWordMs: round1(firstWordMs),
-      endpointToWordMs:
-        firstWordPerf !== null ? round1(firstWordPerf - speechEndPerf) : null,
-      wordSpanMs:
-        firstWordPerf !== null && lastWordPerf !== null
-          ? round1(lastWordPerf - firstWordPerf)
-          : null,
+      endpointToWordMs,
+      wordSpanMs,
     },
   };
 }

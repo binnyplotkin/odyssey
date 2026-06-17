@@ -24,7 +24,21 @@ export function aggregate(values: number[]): SonarAggregate | null {
     p50: round1(percentile(clean, 50)),
     p90: round1(percentile(clean, 90)),
     p95: round1(percentile(clean, 95)),
+    p99: round1(percentile(clean, 99)),
   };
+}
+
+/**
+ * Fraction of samples at or under an SLO target, as a 0-100 percentage.
+ * This is the "goodput" view the headline percentiles can't give: a p95 tells
+ * you the tail height, SLO attainment tells you how many turns actually cleared
+ * the bar. Returns null when there's nothing to score.
+ */
+export function sloAttainmentPct(values: number[], targetMs: number): number | null {
+  const clean = values.filter((v) => Number.isFinite(v) && v >= 0);
+  if (clean.length === 0) return null;
+  const within = clean.filter((v) => v <= targetMs).length;
+  return Math.round((within / clean.length) * 1000) / 10;
 }
 
 function round1(value: number): number {

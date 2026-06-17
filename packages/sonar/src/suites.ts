@@ -16,13 +16,17 @@ import type { SonarSuite } from "./types";
 
 export const VOICE_BASELINE: SonarSuite = {
   name: "voice-baseline",
-  version: "1.0.0",
+  // 1.1.0: sessions 3 → 8. Turns are unchanged, so the same lines stay
+  // comparable; the bump just makes the headline percentiles trustworthy.
+  // 8 × 5 = 40 voice-to-voice samples crosses the harness's own ≥30 "high
+  // confidence" band, so p95/p99/SLO% are stable enough to call a ±200ms A/B.
+  version: "1.1.0",
   description:
     "Single-character voice-to-voice: spoken input → STT → /voice-stream → agent audio. Headline: voice-to-voice.",
   character: "abraham",
   mode: "voice-stream",
   userVoice: "ash",
-  sessions: 3,
+  sessions: 8,
   turns: [
     "Peace be with you, friend.",
     "Tell me about the visitors who came to your tent at Mamre.",

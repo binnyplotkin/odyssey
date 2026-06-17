@@ -140,8 +140,15 @@ async function reportCommand() {
   const agencySuite = readFlag("--agency-suite") ?? "agency-baseline";
   const requestedContextActivationSuite = readFlag("--context-suite");
   const contextActivationSuite = requestedContextActivationSuite ?? "context-activation-baseline";
+  const runGroup = readFlag("--run-group");
 
-  const ledger = loadLedger(REPO_ROOT);
+  // When a run group is given, scope ALL Sonar evidence to that one experiment.
+  // This makes a column's voice/agency/context/endpointing rows come from the
+  // SAME launch rather than the nearest run that merely shares an observed
+  // model — the difference between "one experiment" and "nearest runtime".
+  const ledger = runGroup
+    ? loadLedger(REPO_ROOT).filter((e) => e.runGroup === runGroup)
+    : loadLedger(REPO_ROOT);
   const agencyScores = loadAgencyScores(REPO_ROOT);
   const contextActivationScores = loadContextActivationScores(REPO_ROOT);
   const latestVoiceByModel = latestCleanSonarByModel(ledger, sonarSuite);
@@ -181,7 +188,7 @@ async function reportCommand() {
     columns.push(makeSonarOnlyColumn(sonarOnly, latestEndpointing, null, contextActivation));
   }
 
-  console.log(renderBenchmark(columns, { characterArg, sonarSuite, endpointingSuite, agencySuite, contextActivationSuite: renderedContextActivationSuite }));
+  console.log(renderBenchmark(columns, { characterArg, sonarSuite, endpointingSuite, agencySuite, contextActivationSuite: renderedContextActivationSuite, runGroup }));
 }
 
 async function loadEvalColumns(input: {
@@ -422,7 +429,7 @@ function makeSonarOnlyColumn(
 
 function renderBenchmark(
   columns: BenchmarkColumn[],
-  opts: { characterArg: string; sonarSuite: string; endpointingSuite: string; agencySuite: string; contextActivationSuite: string },
+  opts: { characterArg: string; sonarSuite: string; endpointingSuite: string; agencySuite: string; contextActivationSuite: string; runGroup?: string | null },
 ): string {
   const rows: Array<{ label: string; note: string; render: (c: BenchmarkColumn) => string }> = [
     { label: "Harness score", note: "weighted 0-100", render: (c) => score(c.scores.harnessScore, c.scores.coverage) },
@@ -436,7 +443,7 @@ function renderBenchmark(
     { label: "Context activation", note: "retrieval + injection", render: (c) => pctCell(c.scores.contextActivation, contextActivationLabel(c)) },
     { label: "Regression pass", note: "passed / total", render: (c) => pctCell(c.scores.regressionPass, c.evalRun ? `${c.evalRun.summary.passed}/${c.evalRun.summary.total} · ${confidenceLabel(c.evalRun.summary.total)}` : null) },
     { label: "Text latency", note: "avg eval latency", render: (c) => metricScore(c.scores.textLatency, c.evalRun ? `${c.evalRun.summary.avgLatencyMs}ms · ${confidenceLabel(c.evalRun.summary.total)}` : null) },
-    { label: "Voice latency", note: "Sonar v2v p50", render: (c) => metricScore(c.scores.voiceLatency, c.sonarVoice?.v2vP50 ? `${Math.round(c.sonarVoice.v2vP50)}ms · ${c.sonarVoice.turns} turns` : null) },
+    { label: "Voice latency", note: "Sonar v2v p50", render: (c) => metricScore(c.scores.voiceLatency, voiceLatencyLabel(c)) },
     { label: "Endpointing", note: "1 - cutoff rate", render: (c) => metricScore(c.scores.endpointing, c.sonarEndpointing?.cutoffRate !== null && c.sonarEndpointing?.cutoffRate !== undefined ? `${Math.round(c.sonarEndpointing.cutoffRate * 100)}% cut · latest` : null) },
     { label: "Reliability", note: "error-free rate", render: (c) => pctCell(c.scores.reliability, c.evalRun ? `${c.evalRun.summary.errored} eval errors` : c.sonarVoice ? `${c.sonarVoice.errors} sonar errors` : null) },
     { label: "Cost efficiency", note: "lower is better", render: (c) => metricScore(c.scores.costEfficiency, costLabel(c)) },
@@ -450,7 +457,8 @@ function renderBenchmark(
   }
 
   const lines = [
-    `Odyssey World Simulation Harness Benchmark · character=${opts.characterArg} · sonar=${opts.sonarSuite} · endpointing=${opts.endpointingSuite} · agency=${opts.agencySuite} · context=${opts.contextActivationSuite}`,
+    `Odyssey World Simulation Harness Benchmark · character=${opts.characterArg} · sonar=${opts.sonarSuite} · endpointing=${opts.endpointingSuite} · agency=${opts.agencySuite} · context=${opts.contextActivationSuite}` +
+      (opts.runGroup ? ` · group=${opts.runGroup}` : ""),
     "",
     renderTable(table),
     "",
@@ -458,6 +466,10 @@ function renderBenchmark(
     "Difficulty is inferred from probe category until suites carry explicit difficulty labels. Saturated rows need harder or hidden probes.",
     `Agency is scored only when ${AGENCY_SCORES_PATH} contains a judged row for the matching Sonar run.`,
     `Context Activation is scored only when ${CONTEXT_ACTIVATION_SCORES_PATH} contains a row for the matching Sonar run.`,
+    opts.runGroup
+      ? `Sonar evidence is scoped to run group "${opts.runGroup}" — one experiment per column. (Eval rows still join by model until the eval side carries the group id.)`
+      : "Sonar rows join to eval columns by observed model. For a decision-grade A/B, stamp a shared id with `--run-group <id>` on every launch and pass it here.",
+    "Voice latency basis shows p50 · p99 · SLO attainment. SLO % is the share of voice-to-voice turns under the target (default 1500ms).",
     "Run more inputs with `npm run eval ...` and `npm run sonar -- run ...` to increase coverage.",
   ];
   return lines.join("\n");
@@ -571,6 +583,18 @@ function costLabel(c: BenchmarkColumn): string | null {
   const sonarCost = c.sonarVoice?.costUsd ?? 0;
   const total = evalCost + sonarCost;
   return total > 0 ? `$${total.toFixed(4)}` : null;
+}
+
+function voiceLatencyLabel(c: BenchmarkColumn): string | null {
+  const v = c.sonarVoice;
+  if (!v || v.v2vP50 === null || v.v2vP50 === undefined) return null;
+  const parts = [`${Math.round(v.v2vP50)}ms p50`];
+  if (v.v2vP99 !== null && v.v2vP99 !== undefined) parts.push(`${Math.round(v.v2vP99)}ms p99`);
+  if (v.v2vSloPct !== null && v.v2vSloPct !== undefined && v.v2vSloMs) {
+    parts.push(`${Math.round(v.v2vSloPct)}% ≤${Math.round(v.v2vSloMs)}ms`);
+  }
+  parts.push(`${v.turns} turns`);
+  return parts.join(" · ");
 }
 
 function agencyLabel(c: BenchmarkColumn): string | null {

@@ -240,4 +240,9 @@ the suite's own version.
 - Sonar never forges auth — you pass a real admin cookie.
 - Always pass `--label` when testing a change — the ledger is only as
   readable as its labels.
-- Distributions over averages: read p50 *and* p95.
+- Pass `--run-group <id>` (or set `ODYSSEY_RUN_GROUP`) across every suite in an
+  experiment, then `npm run benchmark -- report --run-group <id>` to compare one
+  exact experiment instead of nearest-matching-model runtime.
+- Distributions over averages: read p50, p95, *and* p99 — and watch SLO
+  attainment (`v2vSloPct`, share of turns under `--slo-ms`, default 1500ms),
+  which is the goodput the percentiles can't show.
