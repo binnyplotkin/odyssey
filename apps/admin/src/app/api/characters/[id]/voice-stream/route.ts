@@ -10,6 +10,7 @@ import {
   createStreamingTtsAdapterForVoice,
   DEFAULT_VOICE_MODEL,
   embedText,
+  embedTextLocal,
   getChatProviderForModel,
   modelMetaFor,
   POCKET_TTS_SAMPLE_RATE,
@@ -558,20 +559,34 @@ export async function POST(
             const embedQuery = lastSummary
               ? `Previous turn: ${lastSummary}\nUser now asks: ${message}`
               : message;
-            const queryEmbedding = await embedText(embedQuery);
-            // Split the retrieval span: embed (the OpenAI round-trip — Move 01's
-            // target) vs the pgvector search, so an embedder swap shows a clean
-            // before/after instead of a blurred retrieval number.
-            serverTrace.mark("server.retrieval.embedded", { dims: queryEmbedding?.length ?? 0 });
+            // Move 01 cutover (flag-gated, default OpenAI): the co-located
+            // bge-small embedder + the 384-dim embedding_bge column when
+            // EMBEDDING_PROVIDER=bge; otherwise OpenAI text-embedding-3-small
+            // against embedding(1536). Each path uses its matching column.
+            const useBge = process.env.EMBEDDING_PROVIDER === "bge";
+            const queryEmbedding = useBge
+              ? await embedTextLocal(embedQuery, { isQuery: true })
+              : await embedText(embedQuery);
+            // Split the retrieval span: embed (Move 01's target) vs pgvector search.
+            serverTrace.mark("server.retrieval.embedded", {
+              dims: queryEmbedding?.length ?? 0,
+              embedder: useBge ? "bge-small" : "openai",
+            });
             if (queryEmbedding) {
               const activeWikiIds = (await getWikisStore().listWikisForCharacter(character.id))
                 .filter((wiki) => wiki.binding.isActive)
                 .map((wiki) => wiki.id);
-              const hits = await getWikiStore().searchPagesByEmbeddingForWikis(
-                activeWikiIds,
-                queryEmbedding,
-                { topK: 5, minSimilarity: 0.5 },
-              );
+              const hits = useBge
+                ? await getWikiStore().searchPagesByBgeEmbeddingForWikis(
+                    activeWikiIds,
+                    queryEmbedding,
+                    { topK: 5, minSimilarity: 0.5 },
+                  )
+                : await getWikiStore().searchPagesByEmbeddingForWikis(
+                    activeWikiIds,
+                    queryEmbedding,
+                    { topK: 5, minSimilarity: 0.5 },
+                  );
               semanticHitCount = hits.length;
               semanticSeeds = hits.map((h) => ({
                 pageId: h.pageId,
