@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Scene } from "@odyssey/types";
 import {
@@ -19,6 +19,11 @@ import {
   adminTokens,
   type AdminTone,
 } from "@/components/admin-ui";
+import {
+  WavefieldStage,
+  createEmptyAudioData,
+  type AudioData,
+} from "@/components/wavefield-stage";
 
 const PHASE_LABEL: Record<ScenePhase, string> = {
   idle: "idle",
@@ -83,6 +88,7 @@ export function SceneSandbox({
 }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const waveAudioRef = useRef<AudioData>(createEmptyAudioData());
   const createdRef = useRef(false);
 
   useEffect(() => {
@@ -119,57 +125,83 @@ export function SceneSandbox({
   return (
     <div
       style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-20)",
-        padding: "var(--space-32) 40px 96px",
-        maxWidth: 860,
+        position: "relative",
+        overflow: "hidden",
         background: adminTokens.bg,
         color: adminTokens.fg,
         fontFamily: adminTokens.fontBody,
         minHeight: "calc(100vh - 48px)",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
-        <Link
-          href={`/scenes/${sceneId}`}
-          style={{
-            color: adminTokens.muted,
-            fontFamily: adminTokens.fontMono,
-            fontSize: "var(--font-size-xs)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            textDecoration: "none",
-          }}
-        >
-          ← {sceneTitle}
-        </Link>
-        <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-10)" }}>
-          <AdminKicker>Rehearsal</AdminKicker>
-          <h1
+      <WavefieldStage audioData={waveAudioRef.current} idleMotion="static" />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 1,
+          pointerEvents: "none",
+          background:
+            "linear-gradient(90deg, color-mix(in srgb, var(--background) 92%, transparent) 0%, color-mix(in srgb, var(--background) 76%, transparent) 48%, color-mix(in srgb, var(--background) 44%, transparent) 100%)",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          zIndex: 2,
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-20)",
+          padding: "var(--space-32) 40px 96px",
+          maxWidth: 860,
+          minHeight: "calc(100vh - 48px)",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+          <Link
+            href={`/scenes/${sceneId}`}
             style={{
-              margin: 0,
-              fontFamily: adminTokens.fontDisplay,
-              fontSize: "var(--font-size-2xl)",
-              fontWeight: 600,
+              color: adminTokens.muted,
+              fontFamily: adminTokens.fontMono,
+              fontSize: "var(--font-size-xs)",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              textDecoration: "none",
             }}
           >
-            {sceneTitle}
-          </h1>
+            ← {sceneTitle}
+          </Link>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-10)" }}>
+            <AdminKicker>Rehearsal</AdminKicker>
+            <h1
+              style={{
+                margin: 0,
+                fontFamily: adminTokens.fontDisplay,
+                fontSize: "var(--font-size-2xl)",
+                fontWeight: 600,
+              }}
+            >
+              {sceneTitle}
+            </h1>
+          </div>
         </div>
-      </div>
 
-      {sessionError ? (
-        <AdminPanel>
-          <span style={{ color: adminTokens.danger }}>{sessionError}</span>
-        </AdminPanel>
-      ) : !sessionId ? (
-        <AdminPanel>
-          <span style={{ color: adminTokens.muted }}>Preparing session…</span>
-        </AdminPanel>
-      ) : (
-        <SceneSandboxRunner sceneId={sceneId} scene={scene} sessionId={sessionId} />
-      )}
+        {sessionError ? (
+          <AdminPanel>
+            <span style={{ color: adminTokens.danger }}>{sessionError}</span>
+          </AdminPanel>
+        ) : !sessionId ? (
+          <AdminPanel>
+            <span style={{ color: adminTokens.muted }}>Preparing session…</span>
+          </AdminPanel>
+        ) : (
+          <SceneSandboxRunner
+            sceneId={sceneId}
+            scene={scene}
+            sessionId={sessionId}
+            waveAudio={waveAudioRef.current}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -178,12 +210,25 @@ function SceneSandboxRunner({
   sceneId,
   scene,
   sessionId,
+  waveAudio,
 }: {
   sceneId: string;
   scene: Scene;
   sessionId: string;
+  waveAudio: AudioData;
 }) {
-  const runner = useScenePlayer({ scene, sessionId });
+  const syncWaveAudio = useCallback(
+    (audio: AudioData) => {
+      waveAudio.energy = audio.energy;
+      waveAudio.bass = audio.bass;
+      waveAudio.mid = audio.mid;
+      waveAudio.high = audio.high;
+      waveAudio.peak = audio.peak;
+      waveAudio.active = audio.active;
+    },
+    [waveAudio],
+  );
+  const runner = useScenePlayer({ scene, sessionId, onVoiceAudio: syncWaveAudio });
   const [composer, setComposer] = useState("");
   const [sessionClosed, setSessionClosed] = useState(false);
   const [endedSession, setEndedSession] = useState<EndedSceneSandboxSession | null>(null);

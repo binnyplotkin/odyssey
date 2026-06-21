@@ -20,14 +20,55 @@
 
 const AMBIENCE_VOLUME = 0.18;
 const AMBIENCE_CROSSFADE_MS = 600;
+const VOICE_RELEASE_TAIL_MS = 680;
+
+export type SceneAudioMetrics = {
+  energy: number;
+  bass: number;
+  mid: number;
+  high: number;
+  peak: number;
+  active: boolean;
+};
+
+type SceneAudioBusCallbacks = {
+  onVoiceAudio?: (audio: SceneAudioMetrics) => void;
+};
+
+type VoiceMetricSnapshot = Omit<SceneAudioMetrics, "active">;
+
+const EMPTY_VOICE_METRICS: VoiceMetricSnapshot = {
+  energy: 0,
+  bass: 0,
+  mid: 0,
+  high: 0,
+  peak: 0,
+};
 
 export class SceneAudioBus {
   private audioContext: AudioContext | null = null;
   private voiceGain: GainNode | null = null;
+  private voiceAnalyser: AnalyserNode | null = null;
   private nextVoiceStartTime = 0;
   private scheduledVoiceSources: Set<AudioBufferSourceNode> = new Set();
   private currentAmbienceId: string | null = null;
   private ambienceEl: HTMLAudioElement | null = null;
+  private callbacks: SceneAudioBusCallbacks = {};
+  private metricsRaf = 0;
+  private releaseRaf = 0;
+  private releaseStartedAt = 0;
+  private frequencyBins: Uint8Array | null = null;
+  private timeBins: Uint8Array | null = null;
+  private lastLiveMetrics: VoiceMetricSnapshot = { ...EMPTY_VOICE_METRICS };
+  private releaseAnchorMetrics: VoiceMetricSnapshot = { ...EMPTY_VOICE_METRICS };
+
+  constructor(callbacks: SceneAudioBusCallbacks = {}) {
+    this.callbacks = callbacks;
+  }
+
+  setCallbacks(callbacks: SceneAudioBusCallbacks): void {
+    this.callbacks = callbacks;
+  }
 
   /**
    * Must be called from a user gesture (click, keypress) — browsers
@@ -37,8 +78,14 @@ export class SceneAudioBus {
     if (this.audioContext) return;
     this.audioContext = new AudioContext();
     this.voiceGain = this.audioContext.createGain();
+    this.voiceAnalyser = this.audioContext.createAnalyser();
+    this.voiceAnalyser.fftSize = 512;
+    this.voiceAnalyser.smoothingTimeConstant = 0.24;
+    this.frequencyBins = new Uint8Array(this.voiceAnalyser.frequencyBinCount);
+    this.timeBins = new Uint8Array(this.voiceAnalyser.fftSize);
     this.voiceGain.gain.value = 1.0;
-    this.voiceGain.connect(this.audioContext.destination);
+    this.voiceGain.connect(this.voiceAnalyser);
+    this.voiceAnalyser.connect(this.audioContext.destination);
     this.nextVoiceStartTime = this.audioContext.currentTime;
   }
 
@@ -66,8 +113,18 @@ export class SceneAudioBus {
     source.start(startAt);
     this.nextVoiceStartTime = startAt + samples.length / sampleRate;
 
+    if (this.scheduledVoiceSources.size === 0) {
+      this.stopReleaseTail();
+      this.startMetricsLoop();
+    }
     this.scheduledVoiceSources.add(source);
-    source.onended = () => this.scheduledVoiceSources.delete(source);
+    source.onended = () => {
+      this.scheduledVoiceSources.delete(source);
+      if (this.scheduledVoiceSources.size === 0) {
+        this.stopMetricsLoop();
+        this.startReleaseTail();
+      }
+    };
   }
 
   /**
@@ -94,6 +151,11 @@ export class SceneAudioBus {
       }
     }
     this.scheduledVoiceSources.clear();
+    this.stopMetricsLoop();
+    this.stopReleaseTail();
+    this.lastLiveMetrics = { ...EMPTY_VOICE_METRICS };
+    this.releaseAnchorMetrics = { ...EMPTY_VOICE_METRICS };
+    this.emitInactiveMetrics();
     // Restore gain after the ramp completes so future frames are audible.
     window.setTimeout(() => {
       try {
@@ -166,6 +228,149 @@ export class SceneAudioBus {
       el.volume = Math.min(AMBIENCE_VOLUME, AMBIENCE_VOLUME * (step / steps));
       if (step >= steps) window.clearInterval(interval);
     }, stepMs);
+  }
+
+  private startMetricsLoop(): void {
+    if (this.metricsRaf !== 0) return;
+    const tick = () => {
+      this.metricsRaf = 0;
+      if (this.scheduledVoiceSources.size === 0) return;
+      this.emitLiveMetrics();
+      this.metricsRaf = window.requestAnimationFrame(tick);
+    };
+    this.metricsRaf = window.requestAnimationFrame(tick);
+  }
+
+  private stopMetricsLoop(): void {
+    if (this.metricsRaf !== 0) {
+      window.cancelAnimationFrame(this.metricsRaf);
+      this.metricsRaf = 0;
+    }
+  }
+
+  private startReleaseTail(): void {
+    this.stopReleaseTail();
+    const seed = {
+      energy: Math.max(this.lastLiveMetrics.energy, this.releaseAnchorMetrics.energy),
+      bass: Math.max(this.lastLiveMetrics.bass, this.releaseAnchorMetrics.bass),
+      mid: Math.max(this.lastLiveMetrics.mid, this.releaseAnchorMetrics.mid),
+      high: Math.max(this.lastLiveMetrics.high, this.releaseAnchorMetrics.high),
+      peak: Math.max(this.lastLiveMetrics.peak, this.releaseAnchorMetrics.peak),
+    };
+    if (seed.energy <= 0.003 && seed.peak <= 0.003) {
+      this.releaseAnchorMetrics = { ...EMPTY_VOICE_METRICS };
+      this.emitInactiveMetrics();
+      return;
+    }
+
+    this.releaseStartedAt = performance.now();
+    const tick = () => {
+      this.releaseRaf = 0;
+      if (this.scheduledVoiceSources.size > 0) return;
+
+      const elapsed = performance.now() - this.releaseStartedAt;
+      const progress = Math.max(0, Math.min(1, elapsed / VOICE_RELEASE_TAIL_MS));
+      const fade = Math.pow(1 - progress, 1.65);
+      this.callbacks.onVoiceAudio?.({
+        energy: seed.energy * fade,
+        bass: seed.bass * fade,
+        mid: seed.mid * fade,
+        high: seed.high * fade,
+        peak: seed.peak * fade,
+        active: true,
+      });
+
+      if (progress >= 1) {
+        this.releaseAnchorMetrics = { ...EMPTY_VOICE_METRICS };
+        this.emitInactiveMetrics();
+        return;
+      }
+      this.releaseRaf = window.requestAnimationFrame(tick);
+    };
+    this.releaseRaf = window.requestAnimationFrame(tick);
+  }
+
+  private stopReleaseTail(): void {
+    if (this.releaseRaf !== 0) {
+      window.cancelAnimationFrame(this.releaseRaf);
+      this.releaseRaf = 0;
+    }
+  }
+
+  private emitInactiveMetrics(): void {
+    this.callbacks.onVoiceAudio?.({
+      ...EMPTY_VOICE_METRICS,
+      active: false,
+    });
+  }
+
+  private emitLiveMetrics(): void {
+    const analyser = this.voiceAnalyser;
+    const frequencyBins = this.frequencyBins;
+    const timeBins = this.timeBins;
+    if (!analyser || !frequencyBins || !timeBins) return;
+
+    analyser.getByteFrequencyData(frequencyBins as Uint8Array<ArrayBuffer>);
+    analyser.getByteTimeDomainData(timeBins as Uint8Array<ArrayBuffer>);
+
+    let rms = 0;
+    for (let i = 0; i < timeBins.length; i += 1) {
+      const v = (timeBins[i] - 128) / 128;
+      rms += v * v;
+    }
+    rms = Math.sqrt(rms / timeBins.length);
+
+    const n = frequencyBins.length;
+    const bEnd = Math.floor(n * 0.16);
+    const mEnd = Math.floor(n * 0.56);
+    let bass = 0;
+    let mid = 0;
+    let high = 0;
+    for (let i = 0; i < n; i += 1) {
+      const v = frequencyBins[i] / 255;
+      if (i < bEnd) bass += v;
+      else if (i < mEnd) mid += v;
+      else high += v;
+    }
+    bass /= Math.max(1, bEnd);
+    mid /= Math.max(1, mEnd - bEnd);
+    high /= Math.max(1, n - mEnd);
+
+    const spectral = (bass + mid + high) / 3;
+    const energy = Math.max(0, Math.min(1, rms * 6.4 + spectral * 1.2));
+    const peak = Math.max(0, Math.min(1, energy * 0.85 + high * 0.25));
+    this.lastLiveMetrics = { energy, bass, mid, high, peak };
+
+    const anchorDecay = 0.955;
+    this.releaseAnchorMetrics.energy = Math.max(
+      energy,
+      this.releaseAnchorMetrics.energy * anchorDecay,
+    );
+    this.releaseAnchorMetrics.bass = Math.max(
+      bass,
+      this.releaseAnchorMetrics.bass * anchorDecay,
+    );
+    this.releaseAnchorMetrics.mid = Math.max(
+      mid,
+      this.releaseAnchorMetrics.mid * anchorDecay,
+    );
+    this.releaseAnchorMetrics.high = Math.max(
+      high,
+      this.releaseAnchorMetrics.high * anchorDecay,
+    );
+    this.releaseAnchorMetrics.peak = Math.max(
+      peak,
+      this.releaseAnchorMetrics.peak * anchorDecay,
+    );
+
+    this.callbacks.onVoiceAudio?.({
+      energy,
+      bass,
+      mid,
+      high,
+      peak,
+      active: true,
+    });
   }
 
   /**

@@ -283,70 +283,20 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 
   useEffect(() => {
     const audio = waveAudioRef.current;
-    let pulse = 0;
 
     const tick = () => {
-      pulse += 0.18;
-      const shimmer = 0.5 + Math.sin(pulse) * 0.5;
-      const voiceActive = phase === "live" && (voiceState !== "idle" || micOn);
-      const target =
-        phase !== "live"
-          ? {
-              energy: 0.04,
-              bass: 0.03,
-              mid: 0.04,
-              high: 0.03,
-              peak: 0.02,
-              active: false,
-            }
-          : voiceState === "listening"
-            ? {
-                energy: 0.5,
-                bass: 0.18,
-                mid: 0.46,
-                high: 0.34,
-                peak: 0.3,
-                active: true,
-              }
-            : voiceState === "thinking"
-              ? {
-                  energy: 0.26,
-                  bass: 0.1,
-                  mid: 0.28,
-                  high: 0.22,
-                  peak: 0.14,
-                  active: true,
-                }
-              : voiceState === "speaking"
-                ? {
-                    energy: 0.72,
-                    bass: 0.34,
-                    mid: 0.62,
-                    high: 0.48,
-                    peak: 0.5,
-                    active: true,
-                  }
-                : {
-                    energy: 0.08,
-                    bass: 0.04,
-                    mid: 0.06,
-                    high: 0.04,
-                    peak: 0.03,
-                    active: false,
-                  };
-
-      audio.energy += (target.energy + shimmer * 0.08 - audio.energy) * 0.12;
-      audio.bass += (target.bass + shimmer * 0.04 - audio.bass) * 0.12;
-      audio.mid += (target.mid + shimmer * 0.05 - audio.mid) * 0.12;
-      audio.high += (target.high + shimmer * 0.04 - audio.high) * 0.12;
-      audio.peak = Math.max(audio.peak * 0.82, target.peak + shimmer * 0.08);
-      audio.active = voiceActive;
+      if (audio.active) return;
+      audio.energy += (0 - audio.energy) * 0.18;
+      audio.bass += (0 - audio.bass) * 0.18;
+      audio.mid += (0 - audio.mid) * 0.18;
+      audio.high += (0 - audio.high) * 0.18;
+      audio.peak *= 0.72;
     };
 
     tick();
     const id = window.setInterval(tick, 80);
     return () => window.clearInterval(id);
-  }, [micOn, phase, voiceState]);
+  }, []);
 
   async function handleStart() {
     if (mode === "voice") {
@@ -652,10 +602,39 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 
         // Always use the voice stream so typed chat and mic input share the
         // same orchestrated character response, TTS playback, and trace path.
-        if (!pcmPlayerRef.current)
+        const syncPlaybackState = (playing: boolean) => {
+          const nextVoiceState = playing
+            ? "speaking"
+            : micOnRef.current
+              ? "listening"
+              : "idle";
+          if (voiceStateRef.current === nextVoiceState) return;
+          voiceStateRef.current = nextVoiceState;
+          setVoiceState(nextVoiceState);
+        };
+        const syncWaveformAudio = (audio: AudioData) => {
+          const wave = waveAudioRef.current;
+          wave.energy = audio.energy;
+          wave.bass = audio.bass;
+          wave.mid = audio.mid;
+          wave.high = audio.high;
+          wave.peak = audio.peak;
+          wave.active = audio.active;
+        };
+        if (!pcmPlayerRef.current) {
           pcmPlayerRef.current = new PcmPlayer(
             audioCtxRef.current ?? undefined,
+            {
+              onPlaybackStateChange: syncPlaybackState,
+              onAudioMetrics: syncWaveformAudio,
+            },
           );
+        } else {
+          pcmPlayerRef.current.setCallbacks({
+            onPlaybackStateChange: syncPlaybackState,
+            onAudioMetrics: syncWaveformAudio,
+          });
+        }
         if (voiceContextWarmRef.current) {
           await Promise.race([
             voiceContextWarmRef.current,
@@ -779,13 +758,15 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                 estimatedCostUsd: done.estimatedCostUsd ?? t.estimatedCostUsd,
                 trace: done.serverTrace ?? t.trace,
               }));
-              const nextVoiceState = micOnRef.current ? "listening" : "idle";
-              if (nextVoiceState === "listening") {
-                recorderChunksRef.current = [];
-                recorderStartedAtRef.current = performance.now();
+              if (outputFrames.length === 0) {
+                const nextVoiceState = micOnRef.current ? "listening" : "idle";
+                if (nextVoiceState === "listening") {
+                  recorderChunksRef.current = [];
+                  recorderStartedAtRef.current = performance.now();
+                }
+                voiceStateRef.current = nextVoiceState;
+                setVoiceState(nextVoiceState);
               }
-              voiceStateRef.current = nextVoiceState;
-              setVoiceState(nextVoiceState);
             },
             onError: (msg) => {
               finalize((t) => ({
@@ -795,8 +776,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
               }));
               recorderChunksRef.current = [];
               recorderStartedAtRef.current = micOnRef.current ? performance.now() : null;
-              voiceStateRef.current = "idle";
-              setVoiceState("idle");
+              const nextVoiceState = micOnRef.current ? "listening" : "idle";
+              voiceStateRef.current = nextVoiceState;
+              setVoiceState(nextVoiceState);
             },
           },
         });
@@ -1786,7 +1768,7 @@ function SandboxWavefieldCell({
         pointerEvents: "none",
       }}
     >
-      <WavefieldStage audioData={audioData} />
+      <WavefieldStage audioData={audioData} idleMotion="static" />
     </div>
   );
 }

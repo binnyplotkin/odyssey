@@ -8,7 +8,7 @@ import {
   resolveSceneDecision,
   type SpeakerTurnRequest,
 } from "@odyssey/orchestration/client";
-import { SceneAudioBus } from "./scene-audio-bus";
+import { SceneAudioBus, type SceneAudioMetrics } from "./scene-audio-bus";
 
 // Trace payloads are opaque JSON the player forwards from the orchestrate /
 // voice-stream APIs straight to the consumer's trace UI — the player never
@@ -72,6 +72,9 @@ export type UseSceneRunnerOptions = {
   // Optional turnId per voice-stream call; if absent, runner generates a
   // random id per turn so persistence still associates audio with turns.
   generateTurnId?: () => string;
+  // Live metrics from the voice output track. Consumers can bind this to a
+  // visualizer without taking over playback.
+  onVoiceAudio?: (audio: SceneAudioMetrics) => void;
 };
 
 export type UseSceneRunnerResult = {
@@ -108,6 +111,7 @@ export function useScenePlayer(opts: UseSceneRunnerOptions): UseSceneRunnerResul
   const sceneStateRef = useRef(sceneState);
   const turnsRef = useRef<SceneTurn[]>(turns);
   const busRef = useRef<SceneAudioBus | null>(null);
+  const onVoiceAudioRef = useRef(opts.onVoiceAudio);
   const runningRef = useRef(false);
   const voiceStreamAbortRef = useRef<AbortController | null>(null);
   const loopGenerationRef = useRef(0);
@@ -118,9 +122,19 @@ export function useScenePlayer(opts: UseSceneRunnerOptions): UseSceneRunnerResul
   useEffect(() => {
     turnsRef.current = turns;
   }, [turns]);
+  useEffect(() => {
+    onVoiceAudioRef.current = opts.onVoiceAudio;
+    busRef.current?.setCallbacks({
+      onVoiceAudio: (audio) => onVoiceAudioRef.current?.(audio),
+    });
+  }, [opts.onVoiceAudio]);
 
   const ensureBus = useCallback((): SceneAudioBus => {
-    if (!busRef.current) busRef.current = new SceneAudioBus();
+    if (!busRef.current) {
+      busRef.current = new SceneAudioBus({
+        onVoiceAudio: (audio) => onVoiceAudioRef.current?.(audio),
+      });
+    }
     busRef.current.start();
     return busRef.current;
   }, []);
