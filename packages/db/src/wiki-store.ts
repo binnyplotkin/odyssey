@@ -25,7 +25,7 @@ import {
   wikiSourcesTable,
   characterKnowledgeBindingsTable,
 } from "./schema";
-import { extractReferencedSlugs } from "./wiki-links";
+import { extractReferencedSlugs, parseWikilinks } from "./wiki-links";
 import type {
   Contradiction,
   CreateSourceInput,
@@ -172,6 +172,7 @@ async function purgeSourceImpl(sourceId: string): Promise<{
   const { orphanPageIds, edgeCount } = await collectPurgeImpact(sourceId);
 
   if (orphanPageIds.length > 0) {
+    await cleanupReferencesToPurgedPages(db, orphanPageIds);
     await db
       .delete(wikiPagesTable)
       .where(inArray(wikiPagesTable.id, orphanPageIds));
@@ -187,6 +188,156 @@ async function purgeSourceImpl(sourceId: string): Promise<{
     pagesRemoved: orphanPageIds.length,
     edgesRemoved: edgeCount,
   };
+}
+
+async function cleanupReferencesToPurgedPages(
+  db: ReturnType<typeof requireDb>,
+  purgedPageIds: string[],
+): Promise<void> {
+  const purgedRows = await retryRead(() =>
+    db
+      .select()
+      .from(wikiPagesTable)
+      .where(inArray(wikiPagesTable.id, purgedPageIds)),
+  );
+  if (purgedRows.length === 0) return;
+
+  const purgedIds = new Set(purgedRows.map((row) => row.id));
+  const purgedSlugs = new Set(purgedRows.map((row) => row.slug));
+  const titleByPurgedSlug = new Map(
+    purgedRows.map((row) => [row.slug, row.title] as const),
+  );
+  const wikiIds = Array.from(
+    new Set(purgedRows.map((row) => row.wikiId).filter(Boolean) as string[]),
+  );
+  const characterIds = Array.from(
+    new Set(
+      purgedRows.map((row) => row.characterId).filter(Boolean) as string[],
+    ),
+  );
+
+  const wikiScope =
+    wikiIds.length > 0 ? inArray(wikiPagesTable.wikiId, wikiIds) : null;
+  const characterScope =
+    characterIds.length > 0
+      ? inArray(wikiPagesTable.characterId, characterIds)
+      : null;
+  const scopePredicate =
+    wikiScope && characterScope ? or(wikiScope, characterScope) : wikiScope ?? characterScope;
+  if (!scopePredicate) return;
+
+  const pageRows = await retryRead(() =>
+    db
+      .select()
+      .from(wikiPagesTable)
+      .where(scopePredicate),
+  );
+  const survivingRows = pageRows.filter((row) => !purgedIds.has(row.id));
+  if (survivingRows.length === 0) return;
+
+  const slugToId = new Map(survivingRows.map((row) => [row.slug, row.id]));
+
+  for (const row of survivingRows) {
+    const page = normalizePage(row);
+    const body = unlinkPurgedWikilinks(page.body, titleByPurgedSlug);
+    const frontmatter = removePurgedFrontmatterRefs(
+      page.type,
+      page.frontmatter,
+      purgedSlugs,
+    );
+    const contradictions = page.contradictions.filter(
+      (c) => !purgedIds.has(c.otherPageId),
+    );
+    const changed =
+      body !== page.body ||
+      frontmatter !== page.frontmatter ||
+      contradictions.length !== page.contradictions.length;
+
+    if (!changed) continue;
+
+    await db
+      .update(wikiPagesTable)
+      .set({
+        body,
+        frontmatter,
+        contradictions,
+        updatedAt: new Date(),
+      })
+      .where(eq(wikiPagesTable.id, page.id));
+
+    await reconcileEdgesForPage(
+      db,
+      { ...page, body, frontmatter, contradictions },
+      slugToId,
+    );
+  }
+}
+
+function unlinkPurgedWikilinks(
+  body: string,
+  titleByPurgedSlug: Map<string, string>,
+): string {
+  if (!body || titleByPurgedSlug.size === 0) return body;
+  let next = body;
+  const replacements = new Map<string, string>();
+  for (const link of parseWikilinks(body)) {
+    if (!titleByPurgedSlug.has(link.slug)) continue;
+    replacements.set(
+      link.raw,
+      link.display ?? titleByPurgedSlug.get(link.slug) ?? link.slug,
+    );
+  }
+  for (const [raw, replacement] of replacements) {
+    next = next.split(raw).join(replacement);
+  }
+  return next;
+}
+
+function removePurgedFrontmatterRefs(
+  type: WikiPageType,
+  frontmatter: Frontmatter,
+  purgedSlugs: Set<string>,
+): Frontmatter {
+  if (purgedSlugs.size === 0) return frontmatter;
+  const next = { ...(frontmatter as Record<string, unknown>) };
+  let changed = false;
+
+  const removeStringField = (key: string) => {
+    if (typeof next[key] === "string" && purgedSlugs.has(next[key] as string)) {
+      delete next[key];
+      changed = true;
+    }
+  };
+  const removeStringArrayField = (key: string) => {
+    const value = next[key];
+    if (!Array.isArray(value)) return;
+    const filtered = value.filter(
+      (item) => typeof item !== "string" || !purgedSlugs.has(item),
+    );
+    if (filtered.length === value.length) return;
+    if (filtered.length > 0) next[key] = filtered;
+    else delete next[key];
+    changed = true;
+  };
+
+  if (type === "entity") {
+    removeStringField("firstAppearance");
+    removeStringField("lastAppearance");
+  } else if (type === "event") {
+    removeStringField("where");
+    removeStringArrayField("participants");
+    removeStringArrayField("causes");
+    removeStringArrayField("effects");
+  } else if (type === "concept") {
+    removeStringArrayField("instances");
+    removeStringArrayField("relatedConcepts");
+  } else if (type === "relationship") {
+    removeStringField("from");
+    removeStringField("to");
+    removeStringArrayField("evolution");
+  }
+
+  return changed ? (next as Frontmatter) : frontmatter;
 }
 
 /**
