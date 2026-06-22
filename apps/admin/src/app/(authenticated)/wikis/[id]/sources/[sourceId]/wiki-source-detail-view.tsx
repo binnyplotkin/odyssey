@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
   WikiIngestionLogRecord,
@@ -12,6 +12,14 @@ import type {
   WikiSourceRefRecord,
 } from "@odyssey/db";
 import { RunEffectDiffDrawer } from "@/components/run-effect-diff-drawer";
+import {
+  PurgeConfirmModal,
+  type PurgePreview,
+} from "@/components/purge-confirm-modal";
+import {
+  previewPurgeWikiSource,
+  purgeWikiSource,
+} from "@/app/(authenticated)/wikis/actions";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -170,6 +178,11 @@ export function WikiSourceDetailView({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(
     activeRunId,
   );
+  const [purgeOpen, setPurgeOpen] = useState(false);
+  const [purgePreview, setPurgePreview] = useState<PurgePreview | null>(null);
+  const [purgePreviewLoading, setPurgePreviewLoading] = useState(false);
+  const [purgeError, setPurgeError] = useState<string | null>(null);
+  const [purgePending, startPurge] = useTransition();
 
   const pageById = useMemo(
     () => new Map(pages.map((p) => [p.id, p])),
@@ -210,6 +223,35 @@ export function WikiSourceDetailView({
     [router, routeBase, source.id, searchParams],
   );
 
+  function openPurge() {
+    setPurgeError(null);
+    setPurgePreview(null);
+    setPurgeOpen(true);
+    setPurgePreviewLoading(true);
+    void previewPurgeWikiSource(wikiId, source.id).then((res) => {
+      setPurgePreviewLoading(false);
+      if (res.ok && res.data) {
+        setPurgePreview(res.data);
+        return;
+      }
+      if (!res.ok) setPurgeError(res.error);
+    });
+  }
+
+  function confirmPurge() {
+    setPurgeError(null);
+    startPurge(async () => {
+      const res = await purgeWikiSource(wikiId, source.id);
+      if (!res.ok) {
+        setPurgeError(res.error);
+        return;
+      }
+      setPurgeOpen(false);
+      router.replace(`${routeBase}/sources`);
+      router.refresh();
+    });
+  }
+
   return (
     <div
       style={{
@@ -227,7 +269,12 @@ export function WikiSourceDetailView({
         sourceTitle={source.title}
       />
 
-      <HeaderBar kindLabel={kindLabel} sourceId={source.id} />
+      <HeaderBar
+        kindLabel={kindLabel}
+        sourceId={source.id}
+        purgePending={purgePending}
+        onPurge={openPurge}
+      />
 
       <HeroBlock source={source} />
 
@@ -281,6 +328,18 @@ export function WikiSourceDetailView({
           effectPageIds={effectPageIds}
         />
       )}
+      <PurgeConfirmModal
+        open={purgeOpen}
+        kind="source"
+        preview={purgePreview}
+        loading={purgePreviewLoading}
+        pending={purgePending}
+        error={purgeError}
+        onCancel={() => {
+          if (!purgePending) setPurgeOpen(false);
+        }}
+        onConfirm={confirmPurge}
+      />
     </div>
   );
 }
@@ -371,9 +430,13 @@ function TopEyebrow({
 function HeaderBar({
   kindLabel,
   sourceId,
+  purgePending,
+  onPurge,
 }: {
   kindLabel: string;
   sourceId: string;
+  purgePending: boolean;
+  onPurge: () => void;
 }) {
   return (
     <div
@@ -444,6 +507,11 @@ function HeaderBar({
       >
         <GhostBtn label="OPEN RAW" trailing="↗" />
         <PrimaryBtn label="RE-INGEST" trailing="↻" />
+        <DangerBtn
+          label={purgePending ? "PURGING" : "PURGE SOURCE"}
+          onClick={onPurge}
+          disabled={purgePending}
+        />
         <IconBtn label="⋯" />
       </div>
     </div>
@@ -516,6 +584,45 @@ function PrimaryBtn({
     >
       {label}
       {trailing && <span>{trailing}</span>}
+    </button>
+  );
+}
+
+function DangerBtn({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--space-8)",
+        padding: "9px 14px",
+        background: DANGER_SOFT,
+        borderTop: `1px solid ${DANGER_RING}`,
+        borderRight: `1px solid ${DANGER_RING}`,
+        borderBottom: `1px solid ${DANGER_RING}`,
+        borderLeft: `1px solid ${DANGER_RING}`,
+        fontFamily: MONO,
+        fontSize: "var(--font-size-sm)",
+        fontWeight: 700,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color: DANGER,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {label}
     </button>
   );
 }
