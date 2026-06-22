@@ -1,19 +1,31 @@
 "use client";
 
-import { type CSSProperties, useEffect, useRef } from "react";
+import {
+  type CSSProperties,
+  type PointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { SandboxCharacter } from "@/app/(authenticated)/characters/[slug]/sandbox/page";
 import type { SandboxTurn } from "../character-sandbox";
 
 /**
- * SandboxChatStage — center stage when the sandbox is in chat mode.
- * Scrollable turn log with mono speaker/timestamp gutter, Inter message
- * body, and a per-turn telemetry row for character replies. Composer
- * docked at the bottom with a mint-edge field; Enter submits.
+ * SandboxChatStage — centered message carousel over the wavefield.
+ * The focused turn is fully visible; nearby turns rotate/fade around it.
  */
 
 const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
+const VISIBLE_DISTANCE = 2;
+const WHEEL_ROTATE_THRESHOLD = 96;
+const WHEEL_RESET_MS = 280;
+const DRAG_ROTATE_THRESHOLD = 72;
+const HOVER_ROTATE_THRESHOLD = 46;
+const HOVER_ROTATE_COOLDOWN_MS = 130;
+const HOVER_RESET_MS = 320;
 
 export function SandboxChatStage({
   character,
@@ -38,14 +50,103 @@ export function SandboxChatStage({
   savedTurnIds: Set<string>;
   onSaveExample: (characterTurnId: string) => void;
 }) {
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const dragStartYRef = useRef<number | null>(null);
+  const dragStartIndexRef = useRef(0);
+  const wheelDeltaRef = useRef(0);
+  const lastWheelAtRef = useRef(0);
+  const hoverYRef = useRef<number | null>(null);
+  const hoverDeltaRef = useRef(0);
+  const lastHoverAtRef = useRef(0);
+  const lastHoverRotateAtRef = useRef(0);
 
-  // Auto-scroll to the latest turn whenever the log grows.
+  const carouselTurns = useMemo(
+    () => turns.filter((turn) => !turn.inFlight || turn.text.trim().length > 0),
+    [turns],
+  );
+
   useEffect(() => {
-    const node = scrollerRef.current;
-    if (!node) return;
-    node.scrollTop = node.scrollHeight;
-  }, [turns.length]);
+    setFocusedIndex(Math.max(0, carouselTurns.length - 1));
+  }, [carouselTurns.length]);
+
+  const clampedFocus = clamp(
+    0,
+    Math.max(0, carouselTurns.length - 1),
+    focusedIndex,
+  );
+  const visibleTurns = useMemo(
+    () =>
+      carouselTurns
+        .map((turn, index) => ({ turn, index, distance: index - clampedFocus }))
+        .filter(({ distance }) => Math.abs(distance) <= VISIBLE_DISTANCE),
+    [carouselTurns, clampedFocus],
+  );
+
+  const focusTurn = (nextIndex: number) => {
+    setFocusedIndex(clamp(0, Math.max(0, carouselTurns.length - 1), nextIndex));
+  };
+
+  const rotateBy = (direction: number) => {
+    if (carouselTurns.length <= 1) return;
+    setFocusedIndex((current) =>
+      clamp(0, Math.max(0, carouselTurns.length - 1), current + direction),
+    );
+  };
+
+  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    dragStartYRef.current = event.clientY;
+    dragStartIndexRef.current = clampedFocus;
+    hoverYRef.current = null;
+    hoverDeltaRef.current = 0;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (dragStartYRef.current !== null) {
+      const delta = event.clientY - dragStartYRef.current;
+      const steps = Math.trunc(delta / DRAG_ROTATE_THRESHOLD);
+      if (steps === 0) return;
+      focusTurn(dragStartIndexRef.current + steps);
+      return;
+    }
+
+    if (event.pointerType !== "mouse" || event.buttons !== 0) return;
+    if (carouselTurns.length <= 1) return;
+    const now = performance.now();
+    if (
+      hoverYRef.current === null ||
+      now - lastHoverAtRef.current > HOVER_RESET_MS
+    ) {
+      hoverYRef.current = event.clientY;
+      hoverDeltaRef.current = 0;
+      lastHoverAtRef.current = now;
+      return;
+    }
+
+    const delta = event.clientY - hoverYRef.current;
+    hoverYRef.current = event.clientY;
+    lastHoverAtRef.current = now;
+    hoverDeltaRef.current += delta;
+    if (Math.abs(hoverDeltaRef.current) < HOVER_ROTATE_THRESHOLD) return;
+    if (now - lastHoverRotateAtRef.current < HOVER_ROTATE_COOLDOWN_MS) return;
+    rotateBy(hoverDeltaRef.current > 0 ? 1 : -1);
+    hoverDeltaRef.current = 0;
+    lastHoverRotateAtRef.current = now;
+  };
+
+  const onPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
+    dragStartYRef.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* already released */
+    }
+  };
+
+  const onPointerLeave = () => {
+    hoverYRef.current = null;
+    hoverDeltaRef.current = 0;
+  };
 
   const initial =
     (character.title.trim() || character.slug).charAt(0).toUpperCase() || "A";
@@ -55,33 +156,70 @@ export function SandboxChatStage({
       style={{
         position: "absolute",
         inset: 0,
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
+        pointerEvents: "none",
       }}
     >
       <div
-        ref={scrollerRef}
+        aria-label="Chat message carousel"
+        tabIndex={0}
+        onWheel={(event) => {
+          event.preventDefault();
+          if (carouselTurns.length <= 1) return;
+          const now = performance.now();
+          if (now - lastWheelAtRef.current > WHEEL_RESET_MS) {
+            wheelDeltaRef.current = 0;
+          }
+          lastWheelAtRef.current = now;
+          wheelDeltaRef.current += event.deltaY;
+          if (Math.abs(wheelDeltaRef.current) < WHEEL_ROTATE_THRESHOLD) return;
+          rotateBy(wheelDeltaRef.current > 0 ? 1 : -1);
+          wheelDeltaRef.current = 0;
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        onPointerLeave={onPointerLeave}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            rotateBy(-1);
+          } else if (event.key === "ArrowDown") {
+            event.preventDefault();
+            rotateBy(1);
+          }
+        }}
         style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: "auto",
-          padding: "80px 64px 32px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-24)",
+          position: "absolute",
+          left: "50%",
+          top: "47%",
+          width: "min(660px, calc(100vw - 56px))",
+          height: "min(520px, calc(100vh - 210px))",
+          transform: "translate(-50%, -50%)",
+          pointerEvents: "auto",
+          perspective: 1100,
+          outline: "none",
+          cursor: carouselTurns.length > 1 ? "ns-resize" : "default",
+          touchAction: "none",
+          overflow: "hidden",
+          maskImage:
+            "linear-gradient(180deg, transparent 0%, black 18%, black 82%, transparent 100%)",
+          WebkitMaskImage:
+            "linear-gradient(180deg, transparent 0%, black 18%, black 82%, transparent 100%)",
         }}
       >
-        {turns.length === 0 ? (
+        {carouselTurns.length === 0 ? (
           <EmptyState characterTitle={character.title} />
         ) : (
-          turns.map((turn) => (
+          visibleTurns.map(({ turn, index, distance }) => (
             <ChatTurn
               key={turn.id}
               turn={turn}
               initial={initial}
               saved={savedTurnIds.has(turn.id)}
               onSave={() => onSaveExample(turn.id)}
+              distance={distance}
+              onFocus={() => focusTurn(index)}
             />
           ))
         )}
@@ -100,50 +238,51 @@ export function SandboxChatStage({
   );
 }
 
-/* ── Sub-components ───────────────────────────────────────────── */
+/* -- Sub-components ---------------------------------------------------- */
 
 function EmptyState({ characterTitle }: { characterTitle: string }) {
   return (
     <div
       style={{
-        margin: "auto",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "var(--space-12)",
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        width: "min(440px, 100%)",
+        transform: "translate(-50%, -50%)",
+        borderRadius: "var(--radius-lg)",
+        border:
+          "1px solid color-mix(in srgb, var(--accent-strong) 22%, transparent)",
+        background:
+          "linear-gradient(180deg, color-mix(in srgb, var(--background) 42%, transparent), color-mix(in srgb, var(--background) 24%, transparent))",
+        backdropFilter: "blur(18px) saturate(1.12)",
+        boxShadow:
+          "0 20px 64px color-mix(in srgb, var(--background) 70%, transparent)",
+        padding: "18px",
       }}
     >
       <span
         style={{
-          fontFamily: FONT_MONO,
-          fontSize: "var(--font-size-sm)",
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          color: ACCENT,
+          display: "block",
+          width: 42,
+          height: 2,
+          marginBottom: "var(--space-12)",
+          borderRadius: "var(--radius-pill)",
+          background: ACCENT,
+          boxShadow:
+            "0 0 20px color-mix(in srgb, var(--accent-strong) 70%, transparent)",
         }}
-      >
-        sandbox · chat mode
-      </span>
+      />
       <span
         style={{
+          display: "block",
           fontFamily: FONT_HEAD,
-          fontSize: 28,
+          fontSize: "var(--font-size-xl)",
+          lineHeight: "24px",
           fontWeight: 600,
-          letterSpacing: "-0.02em",
           color: "var(--text-primary)",
         }}
       >
-        Ask {characterTitle} anything
-      </span>
-      <span
-        style={{
-          fontFamily: FONT_MONO,
-          fontSize: "var(--font-size-sm)",
-          letterSpacing: "0.10em",
-          color: "var(--text-tertiary)",
-        }}
-      >
-        type below · enter to send · ⌘↵ for newline
+        Start with {characterTitle}
       </span>
     </div>
   );
@@ -154,71 +293,104 @@ function ChatTurn({
   initial,
   saved,
   onSave,
+  distance,
+  onFocus,
 }: {
   turn: SandboxTurn;
   initial: string;
   saved: boolean;
   onSave: () => void;
+  distance: number;
+  onFocus: () => void;
 }) {
   const isUser = turn.speaker === "user";
   const speakerLabel = isUser ? "you" : initial;
-  const speakerColor = isUser ? "var(--text-tertiary)" : ACCENT;
   const timestamp = fmtTimestamp(turn.timestampMs);
+  const abs = Math.abs(distance);
+  const opacity = abs === 0 ? 1 : abs === 1 ? 0.44 : 0.12;
+  const y = distance * 96;
+  const rotate = distance * -24;
+  const scale = 1 - abs * 0.09;
+  const blur = abs > 1 ? 1.5 : abs * 0.35;
 
   return (
-    <div style={{ display: "flex", gap: "var(--space-14)" }}>
-      <span
-        style={{
-          fontFamily: FONT_MONO,
-          fontSize: "var(--font-size-xs)",
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          color: speakerColor,
-          width: 64,
-          flexShrink: 0,
-          paddingTop: "var(--space-4)",
-        }}
-      >
-        {speakerLabel} · {timestamp}
-      </span>
+    <article
+      onClick={onFocus}
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        top: "50%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: isUser ? "flex-end" : "flex-start",
+        gap: "var(--space-6)",
+        opacity,
+        filter: blur > 0.05 ? `blur(${blur}px)` : "none",
+        transform: `translateY(calc(-50% + ${y}px)) rotateX(${rotate}deg) scale(${scale})`,
+        transformOrigin: "50% 50%",
+        transformStyle: "preserve-3d",
+        transition:
+          "opacity 180ms ease, transform 180ms ease, filter 180ms ease",
+        zIndex: 40 - abs,
+        pointerEvents: abs <= 1 ? "auto" : "none",
+      }}
+    >
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-8)",
-          maxWidth: 720,
-          minWidth: 0,
+          alignItems: "center",
+          justifyContent: isUser ? "flex-end" : "flex-start",
+          gap: "var(--space-6)",
+          width: "100%",
+          padding: isUser ? "0 10px 0 0" : "0 0 0 10px",
+          fontFamily: FONT_MONO,
+          fontSize: "var(--font-size-2xs)",
+          letterSpacing: 0,
+          textTransform: "uppercase",
+          color: isUser ? "var(--text-tertiary)" : ACCENT,
+        }}
+      >
+        <span>{speakerLabel}</span>
+        <span style={{ color: "var(--text-quaternary)" }}>{timestamp}</span>
+      </div>
+      <div
+        style={{
+          width: "fit-content",
+          maxWidth: "100%",
+          maxHeight: abs === 0 ? "min(300px, 42vh)" : 170,
+          overflowY: abs === 0 ? "auto" : "hidden",
+          borderRadius: "var(--radius-lg)",
+          border: isUser
+            ? "1px solid color-mix(in srgb, var(--text-primary) 16%, transparent)"
+            : "1px solid color-mix(in srgb, var(--accent-strong) 32%, transparent)",
+          background: isUser
+            ? "linear-gradient(180deg, color-mix(in srgb, var(--background) 54%, transparent), color-mix(in srgb, var(--background) 34%, transparent))"
+            : "linear-gradient(180deg, color-mix(in srgb, var(--accent-strong) 14%, transparent), color-mix(in srgb, var(--background) 32%, transparent))",
+          boxShadow:
+            abs === 0
+              ? "0 24px 80px color-mix(in srgb, var(--background) 76%, transparent)"
+              : "none",
+          backdropFilter: "blur(18px) saturate(1.12)",
+          padding: abs === 0 ? "14px 16px" : "10px 12px",
         }}
       >
         <p
           style={{
             margin: 0,
             fontFamily: FONT_HEAD,
-            fontSize: "var(--font-size-xl)",
-            lineHeight: "26px",
+            fontSize: abs === 0 ? "var(--font-size-lg)" : "var(--font-size-base)",
+            lineHeight: abs === 0 ? "25px" : "21px",
             color: "var(--text-primary)",
           }}
         >
           {turn.text}
-          {turn.inFlight && (
-            <span
-              style={{
-                display: "inline-block",
-                marginLeft: "var(--space-4)",
-                color: ACCENT,
-                animation: "sandbox-caret 1s steps(2) infinite",
-              }}
-            >
-              ▍
-            </span>
-          )}
         </p>
-        {!isUser && !turn.inFlight && (
-          <TurnTelemetry turn={turn} saved={saved} onSave={onSave} />
-        )}
       </div>
-      <style>{ANIM_CSS}</style>
-    </div>
+      {!isUser && !turn.inFlight && abs === 0 && (
+        <TurnTelemetry turn={turn} saved={saved} onSave={onSave} />
+      )}
+    </article>
   );
 }
 
@@ -233,32 +405,24 @@ function TurnTelemetry({
 }) {
   const recallLabel =
     (turn.factsRecalled ?? 0) > 0
-      ? `${turn.factsRecalled} facts recalled`
+      ? `${turn.factsRecalled} recall`
       : "no recall";
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        gap: "var(--space-12)",
+        gap: "var(--space-8)",
+        width: "100%",
+        paddingLeft: 10,
         fontFamily: FONT_MONO,
-        fontSize: "var(--font-size-xs)",
-        letterSpacing: "0.10em",
+        fontSize: "var(--font-size-2xs)",
+        letterSpacing: 0,
         color: "var(--text-tertiary)",
       }}
     >
-      {turn.ttftMs != null && (
-        <>
-          <span>{turn.ttftMs}ms ttft</span>
-          <span style={{ color: "var(--text-quaternary)" }}>·</span>
-        </>
-      )}
-      {turn.tokens != null && (
-        <>
-          <span>{turn.tokens} tok</span>
-          <span style={{ color: "var(--text-quaternary)" }}>·</span>
-        </>
-      )}
+      {turn.ttftMs != null && <span>{turn.ttftMs}ms</span>}
+      {turn.tokens != null && <span>{turn.tokens} tok</span>}
       <span
         style={{
           color: (turn.factsRecalled ?? 0) > 0 ? ACCENT : "var(--text-tertiary)",
@@ -272,22 +436,23 @@ function TurnTelemetry({
         disabled={saved}
         style={{
           marginLeft: "auto",
-          padding: "4px 10px",
+          padding: "3px 8px",
+          borderRadius: "var(--radius-md)",
           border: saved
-            ? "1px solid color-mix(in srgb, var(--accent-strong) 60%, transparent)"
-            : "1px solid color-mix(in srgb, var(--accent-strong) 35%, transparent)",
+            ? "1px solid color-mix(in srgb, var(--accent-strong) 56%, transparent)"
+            : "1px solid color-mix(in srgb, var(--accent-strong) 26%, transparent)",
           background: saved
-            ? "color-mix(in srgb, var(--accent-strong) 18%, transparent)"
-            : "transparent",
+            ? "color-mix(in srgb, var(--accent-strong) 14%, transparent)"
+            : "color-mix(in srgb, var(--background) 24%, transparent)",
           color: ACCENT,
           fontFamily: FONT_MONO,
           fontSize: "var(--font-size-2xs)",
-          letterSpacing: "0.14em",
+          letterSpacing: 0,
           textTransform: "uppercase",
           cursor: saved ? "default" : "pointer",
         }}
       >
-        {saved ? "✓ saved" : "+ save"}
+        {saved ? "saved" : "save"}
       </button>
     </div>
   );
@@ -313,36 +478,54 @@ function Composer({
   return (
     <div
       style={{
-        padding: "18px 32px 22px",
-        borderTop: "1px solid var(--border)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-10)",
+        position: "absolute",
+        left: "50%",
+        bottom: 32,
+        width: "min(620px, calc(100vw - 56px))",
+        transform: "translateX(-50%)",
         flexShrink: 0,
+        padding: "10px",
+        borderRadius: "var(--radius-lg)",
+        border:
+          "1px solid color-mix(in srgb, var(--accent-strong) 24%, transparent)",
+        background:
+          "linear-gradient(180deg, color-mix(in srgb, var(--background) 64%, transparent), color-mix(in srgb, var(--background) 48%, transparent))",
+        boxShadow:
+          "0 18px 54px color-mix(in srgb, var(--background) 68%, transparent)",
+        backdropFilter: "blur(18px) saturate(1.12)",
+        pointerEvents: "auto",
       }}
     >
       <label
         style={{
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: "32px minmax(0, 1fr) 32px 32px",
           alignItems: "center",
-          gap: "var(--space-12)",
-          padding: "14px 18px",
-          background: "var(--material-card)",
+          gap: "var(--space-8)",
+          minHeight: 44,
+          padding: "0 8px",
+          borderRadius: "var(--radius-md)",
           border:
-            "1px solid color-mix(in srgb, var(--accent-strong) 28%, transparent)",
+            "1px solid color-mix(in srgb, var(--accent-strong) 24%, transparent)",
+          background: "color-mix(in srgb, var(--background) 46%, transparent)",
         }}
       >
         <span
+          aria-hidden
           style={{
+            width: 24,
+            height: 24,
+            borderRadius: "50%",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "1px solid color-mix(in srgb, var(--text-primary) 16%, transparent)",
+            color: "var(--text-tertiary)",
             fontFamily: FONT_MONO,
-            fontSize: "var(--font-size-sm)",
-            color: ACCENT,
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            flexShrink: 0,
+            fontSize: "var(--font-size-2xs)",
           }}
         >
-          you →
+          Y
         </span>
         <input
           type="text"
@@ -354,80 +537,103 @@ function Composer({
               onSend();
             }
           }}
-          placeholder={`ask ${characterTitle.toLowerCase()} something…`}
+          placeholder={`Message ${characterTitle}`}
           style={inputStyle}
         />
         <button
           type="button"
           onClick={onMicToggle}
           aria-label={micOn ? "Turn voice input off" : "Turn voice input on"}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "var(--space-6)",
-            minHeight: 30,
-            padding: "0 10px",
-            border: micOn
-              ? "1px solid color-mix(in srgb, var(--accent-strong) 55%, transparent)"
-              : "1px solid var(--border)",
-            background: micOn
-              ? "color-mix(in srgb, var(--accent-strong) 12%, transparent)"
-              : "transparent",
-            color: micOn ? ACCENT : "var(--text-tertiary)",
-            fontFamily: FONT_MONO,
-            fontSize: "var(--font-size-xs)",
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-            flexShrink: 0,
-          }}
+          title={micOn ? voiceState : "mic"}
+          style={iconButtonStyle(micOn)}
         >
-          <span
-            aria-hidden
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: micOn ? ACCENT : "var(--text-quaternary)",
-              boxShadow: micOn ? `0 0 10px ${ACCENT}` : "none",
-            }}
-          />
-          {micOn ? voiceState : "mic"}
+          <MicGlyph off={!micOn} />
         </button>
-        <span
-          style={{
-            fontFamily: FONT_MONO,
-            fontSize: "var(--font-size-xs)",
-            color: "var(--text-quaternary)",
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-            flexShrink: 0,
-          }}
+        <button
+          type="button"
+          onClick={onSend}
+          aria-label="Send message"
+          title="send"
+          style={iconButtonStyle(Boolean(value.trim()))}
         >
-          enter ↵
-        </span>
+          <ArrowGlyph />
+        </button>
       </label>
     </div>
   );
 }
 
-/* ── Helpers ──────────────────────────────────────────────────── */
+function MicGlyph({ off }: { off: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <g
+        stroke="currentColor"
+        strokeWidth={1.9}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <path d="M12 19v3" />
+        {off && <path d="M4 4l16 16" />}
+      </g>
+    </svg>
+  );
+}
+
+function ArrowGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 12h13m-5-5 5 5-5 5"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/* -- Helpers ----------------------------------------------------------- */
 
 const inputStyle: CSSProperties = {
-  flex: 1,
+  minWidth: 0,
+  width: "100%",
   background: "transparent",
   border: "none",
   outline: "none",
   fontFamily: FONT_HEAD,
-  fontSize: 15,
+  fontSize: 14,
   color: "var(--text-primary)",
 };
+
+function iconButtonStyle(active: boolean): CSSProperties {
+  return {
+    width: 30,
+    height: 30,
+    borderRadius: "var(--radius-md)",
+    border: active
+      ? "1px solid color-mix(in srgb, var(--accent-strong) 46%, transparent)"
+      : "1px solid color-mix(in srgb, var(--text-primary) 12%, transparent)",
+    background: active
+      ? "color-mix(in srgb, var(--accent-strong) 12%, transparent)"
+      : "transparent",
+    color: active ? ACCENT : "var(--text-tertiary)",
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+  };
+}
+
+function clamp(min: number, max: number, value: number): number {
+  return Math.max(min, Math.min(max, value));
+}
 
 function fmtTimestamp(ms: number): string {
   const m = Math.floor(ms / 60_000);
   const s = Math.floor((ms % 60_000) / 1000);
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
-
-const ANIM_CSS = `@keyframes sandbox-caret{0%,49%{opacity:1}50%,100%{opacity:0}}`;

@@ -4,9 +4,9 @@ import type { SandboxCharacter } from "@/app/(authenticated)/characters/[slug]/s
 
 /**
  * SandboxVoiceStage — center stage when the sandbox is in voice mode.
- * Renders the state pill, big Inter character title with sub-eyebrow,
- * the captured-utterance caption, and the bottom mic dock over the global
- * Three.js wavefield mounted by CharacterSandbox.
+ * Renders the state pill, big Inter character title with sub-eyebrow, and
+ * the bottom mic dock over the global Three.js wavefield mounted by
+ * CharacterSandbox.
  */
 
 const FONT_HEAD = "'Inter', system-ui, sans-serif";
@@ -20,13 +20,11 @@ export function SandboxVoiceStage({
   state,
   micOn,
   onMicToggle,
-  lastUserUtterance,
 }: {
   character: SandboxCharacter;
   state: VoiceState;
   micOn: boolean;
   onMicToggle: () => void;
-  lastUserUtterance: string | null;
 }) {
   const stateLabel: Record<VoiceState, string> = {
     idle: "ready",
@@ -56,7 +54,7 @@ export function SandboxVoiceStage({
           gap: "var(--space-12)",
           fontFamily: FONT_MONO,
           fontSize: "var(--font-size-sm)",
-          letterSpacing: "0.22em",
+          letterSpacing: 0,
           textTransform: "uppercase",
           color: ACCENT,
           textShadow:
@@ -94,7 +92,7 @@ export function SandboxVoiceStage({
             fontSize: 72,
             fontWeight: 600,
             color: "var(--text-primary)",
-            letterSpacing: "-0.03em",
+            letterSpacing: 0,
             lineHeight: 1,
             textShadow:
               "0 10px 40px color-mix(in srgb, var(--background) 72%, transparent)",
@@ -107,7 +105,7 @@ export function SandboxVoiceStage({
             style={{
               fontFamily: FONT_MONO,
               fontSize: "var(--font-size-sm)",
-              letterSpacing: "0.14em",
+              letterSpacing: 0,
               textTransform: "uppercase",
               color: "var(--text-tertiary)",
               textShadow:
@@ -118,28 +116,6 @@ export function SandboxVoiceStage({
           </span>
         )}
       </div>
-
-      {lastUserUtterance && (
-        <div
-          style={{
-            fontFamily: FONT_MONO,
-            fontSize: "var(--font-size-base)",
-            color: "var(--text-secondary)",
-            letterSpacing: "0.04em",
-            maxWidth: 640,
-            textAlign: "center",
-            lineHeight: 1.6,
-            padding: "12px 16px",
-            background:
-              "color-mix(in srgb, var(--background) 52%, transparent)",
-            backdropFilter: "blur(8px)",
-            border:
-              "1px solid color-mix(in srgb, var(--accent-strong) 18%, transparent)",
-          }}
-        >
-          &ldquo;{lastUserUtterance}&rdquo; · captured · ready to respond
-        </div>
-      )}
 
       <style>{ANIM_CSS}</style>
 
@@ -160,7 +136,7 @@ export function SandboxVoiceStage({
           style={{
             fontFamily: FONT_MONO,
             fontSize: "var(--font-size-xs)",
-            letterSpacing: "0.18em",
+            letterSpacing: 0,
             textTransform: "uppercase",
             color: "var(--text-tertiary)",
           }}

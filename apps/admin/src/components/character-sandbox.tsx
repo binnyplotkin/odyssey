@@ -299,15 +299,16 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   }, []);
 
   async function handleStart() {
-    if (mode === "voice") {
-      // Play the entry cue synchronously inside the start gesture — before
-      // the session-create round-trip — so the user hears the session boot
-      // instantly while warmup continues behind it.
-      if (!audioCtxRef.current) audioCtxRef.current = createAudioContext();
-      entryCueRef.current?.stop();
-      entryCueRef.current = new SessionEntryCue(audioCtxRef.current);
-      entryCueRef.current.play();
-    }
+    const launchMode: SandboxMode = "voice";
+    if (mode !== launchMode) setMode(launchMode);
+
+    // Play the entry cue synchronously inside the start gesture — before
+    // the session-create round-trip — so the user hears the session boot
+    // instantly while warmup continues behind it.
+    if (!audioCtxRef.current) audioCtxRef.current = createAudioContext();
+    entryCueRef.current?.stop();
+    entryCueRef.current = new SessionEntryCue(audioCtxRef.current);
+    entryCueRef.current.play();
     setStartedAt(Date.now());
     setTurns([]);
     setTraceRecords([]);
@@ -317,7 +318,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     const sessionId = await createSandboxSceneSession({
       characterId: character.id,
       characterSlug: character.slug,
-      mode,
+      mode: launchMode,
       activeModel,
     }).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
@@ -338,48 +339,44 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     worldSessionIdRef.current = sessionId;
     setWorldSessionId(sessionId);
     setPhase("live");
-    if (mode === "voice") {
-      voiceContextWarmRef.current = warmSandboxVoiceContext({
-        characterId: character.id,
-        sessionId,
-      })
-        .then((context) => {
-          setTraceRecords((prev) => [
-            ...prev.slice(-49),
-            {
-              id: `voice-context-${Date.now()}`,
-              kind: "session",
-              at: new Date().toISOString(),
-              trace: {
-                startedAt: new Date().toISOString(),
-                elapsedMs: context.elapsedMs,
-                events: [
-                  {
-                    name: "sandbox.voice_context.warmed",
-                    elapsedMs: context.elapsedMs,
-                    meta: {
-                      tokensUsed: context.tokensUsed,
-                      pageSlugs: context.pageSlugs,
-                      cacheKey: context.cacheKey,
-                      cacheScope: context.cacheScope,
-                    },
+    voiceContextWarmRef.current = warmSandboxVoiceContext({
+      characterId: character.id,
+      sessionId,
+    })
+      .then((context) => {
+        setTraceRecords((prev) => [
+          ...prev.slice(-49),
+          {
+            id: `voice-context-${Date.now()}`,
+            kind: "session",
+            at: new Date().toISOString(),
+            trace: {
+              startedAt: new Date().toISOString(),
+              elapsedMs: context.elapsedMs,
+              events: [
+                {
+                  name: "sandbox.voice_context.warmed",
+                  elapsedMs: context.elapsedMs,
+                  meta: {
+                    tokensUsed: context.tokensUsed,
+                    pageSlugs: context.pageSlugs,
+                    cacheKey: context.cacheKey,
+                    cacheScope: context.cacheScope,
                   },
-                ],
-              } as unknown as TracePayload,
-              meta: {
-                model: activeVoiceModel,
-              },
+                },
+              ],
+            } as unknown as TracePayload,
+            meta: {
+              model: activeVoiceModel,
             },
-          ]);
-          return context;
-        })
-        .catch((err) => {
-          console.warn("[sandbox] voice context warm failed", err);
-          return null;
-        });
-    } else {
-      voiceContextWarmRef.current = null;
-    }
+          },
+        ]);
+        return context;
+      })
+      .catch((err) => {
+        console.warn("[sandbox] voice context warm failed", err);
+        return null;
+      });
     void startVoiceInput("session_start");
   }
 
@@ -470,6 +467,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     setTurns([]);
     setTraceRecords([]);
     setComposerValue("");
+    setMode("voice");
     setVoiceState("idle");
     setMicOn(false);
     setPhase("pre-session");
@@ -1711,10 +1709,6 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                   character={character}
                   micOn={micOn}
                   onMicToggle={() => void handleMicToggle()}
-                  lastUserUtterance={
-                    [...turns].reverse().find((t) => t.speaker === "user")
-                      ?.text ?? null
-                  }
                   state={voiceState}
                 />
               ) : (
