@@ -638,6 +638,21 @@ def _decode_to_wav_bytes(audio_base64: str, mime_type: str) -> bytes:
             return wav_file.read()
 
 
+def _smart_turn_health() -> dict[str, object]:
+    """Report semantic-endpointing state for /healthz. The silent failure mode
+    is SMART_TURN_ENABLED=1 set but the model never loaded (warm-up faulted →
+    per-connection fallback to fixed silence), so report `loaded`, not just the
+    env flag. SMART_TURN_* are defined later in the module but resolved here at
+    request time, and `smart_turn` is only imported when the flag is on."""
+    if not SMART_TURN_ENABLED:
+        return {"enabled": False}
+    return {
+        "enabled": True,
+        "loaded": smart_turn.is_loaded(),
+        "threshold": SMART_TURN_THRESHOLD,
+    }
+
+
 @app.get("/healthz")
 def healthz():
     return {
@@ -650,6 +665,7 @@ def healthz():
         "streamingSttRuntime": {
             "whisper": whisper_runtime.status(),
             "vad": vad_runtime.status(),
+            "smartTurn": _smart_turn_health(),
         },
     }
 
