@@ -42,18 +42,9 @@ export async function createSourceSignedUrl(
   return data.signedUrl;
 }
 
-export async function createEmbeddingSignedUrl(
-  path: string,
-  ttlSeconds: number = DEFAULT_SIGNED_URL_TTL_S,
-): Promise<string> {
-  const { data, error } = await getSupabaseStorageClient()
-    .storage.from(VOICE_EMBEDDINGS_BUCKET)
-    .createSignedUrl(path, ttlSeconds);
-  if (error || !data?.signedUrl) {
-    throw new Error(`signed-url(embedding) failed: ${error?.message ?? "unknown"}`);
-  }
-  return data.signedUrl;
-}
+// Moved to @odyssey/voice-pipeline so the warm voice-host can sign Pocket
+// voice-embedding URLs on its own; re-exported here for the /voices importers.
+export { createEmbeddingSignedUrl } from "@odyssey/voice-pipeline/voice-embedding-url";
 
 export async function downloadSourceBytes(path: string): Promise<Buffer> {
   const { data, error } = await getSupabaseStorageClient()

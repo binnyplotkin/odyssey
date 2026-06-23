@@ -1,37 +1,4 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-
-/**
- * Server-side Supabase client scoped to Storage. Uses the Secret API key
- * (the new name for service-role) so it can write to private buckets and
- * bypass RLS — never expose this client or its key to the browser.
- *
- * Bucket name lives in code so misconfigured environments fail loudly at
- * upload time rather than silently writing to the wrong place.
- */
-export const CHARACTER_THUMBNAILS_BUCKET = "character-thumbnails";
-// Private buckets that back the /voices admin surface. Sources are the
-// original uploaded clips; embeddings are the .safetensors files
-// extracted by audio-rt. Both are addressed by `${voice.slug}.<ext>` so
-// audio-rt can resolve a voice from /speak by slug alone.
-export const VOICE_SOURCES_BUCKET = "voice-sources";
-export const VOICE_EMBEDDINGS_BUCKET = "voice-embeddings";
-
-let cached: SupabaseClient | null = null;
-
-export function getSupabaseStorageClient(): SupabaseClient {
-  if (cached) return cached;
-  const url = process.env.SUPABASE_URL;
-  // Accept both the new (`SUPABASE_SECRET_KEY`) and legacy
-  // (`SUPABASE_SERVICE_ROLE_KEY`) names so this works regardless of which
-  // Supabase key generation the user's project lives on.
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error(
-      "SUPABASE_URL and SUPABASE_SECRET_KEY are required for storage uploads.",
-    );
-  }
-  cached = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  return cached;
-}
+// Moved to @odyssey/voice-pipeline so the warm voice-host can sign voice
+// objects without the admin app. Re-export shim keeps existing
+// `@/lib/supabase-storage` importers working.
+export * from "@odyssey/voice-pipeline/supabase-storage";

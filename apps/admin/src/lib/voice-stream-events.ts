@@ -1,13 +1,3 @@
-export const VOICE_STREAM_SSE_EVENT_NAMES = {
-  trace: "trace",
-  token: "token",
-  firstAudio: "first-audio",
-  audio: "audio",
-  done: "done",
-  error: "error",
-} as const;
-
-export const VOICE_STREAM_SSE_EVENTS = Object.values(VOICE_STREAM_SSE_EVENT_NAMES);
-
-export type VoiceStreamSseEventName =
-  (typeof VOICE_STREAM_SSE_EVENT_NAMES)[keyof typeof VOICE_STREAM_SSE_EVENT_NAMES];
+// Moved to @odyssey/voice-pipeline so the warm voice-host can share it.
+// Re-export shim keeps existing `@/lib/voice-stream-events` importers working.
+export * from "@odyssey/voice-pipeline/voice-stream-events";
