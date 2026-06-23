@@ -57,7 +57,17 @@ const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
 const DANGER = "var(--status-error)";
 const CHARACTER_SANDBOX_SCENE_PREFIX = "character-sandbox:";
-const STREAMING_COMMIT_HOLD_MS = 1500;
+// Debounce after the last STT word before auto-committing the turn. The
+// audio-rt gateway delivers a turn's words in ONE burst *after* its own
+// server-side end-of-turn detection, so this hold only needs to coalesce that
+// single burst — it is not a substitute for turn detection. Lowered from 1500
+// now that the gateway runs Smart Turn semantic endpointing (which prevents
+// mid-sentence server fires); tune lower once confirmed in prod.
+// NOTE: only safe at this value with SMART_TURN_ENABLED=1 on the audio-rt
+// service. With fixed-silence (800ms) endpointing a long mid-sentence pause can
+// fire the server early, and this short hold would then commit a partial
+// utterance — so enable Smart Turn first, then ship this.
+const STREAMING_COMMIT_HOLD_MS = 600;
 const STT_FALLBACK_MIN_AUDIO_MS = 1200;
 const STT_SUSPICIOUS_MAX_CHARS = 8;
 
