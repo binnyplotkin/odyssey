@@ -1043,6 +1043,10 @@ async def asr_streaming(websocket: WebSocket):
     step_idx = 0
     transcribe_in_flight = False
     pending_drain = False
+    # Per-connection Smart Turn health. If semantic inference faults mid-stream,
+    # flip this off and fall back to the fixed-silence window for the rest of the
+    # connection rather than tearing down the STT socket.
+    smart_turn_ok = SMART_TURN_ENABLED
 
     async def transcribe_and_emit():
         """Drain the utterance buffer through faster-whisper and emit Word frames."""
@@ -1142,7 +1146,7 @@ async def asr_streaming(websocket: WebSocket):
                 # gates on a completion model when enabled.
                 end_turn = False
                 if in_speech and len(utterance_chunks) >= MIN_UTTERANCE_CHUNKS:
-                    if SMART_TURN_ENABLED:
+                    if smart_turn_ok:
                         if silence_run >= SMART_TURN_MAX_SILENCE_CHUNKS:
                             end_turn = True  # safety net — don't hang
                         elif (
@@ -1156,12 +1160,24 @@ async def asr_streaming(websocket: WebSocket):
                             drop = max(0, silence_run - SMART_TURN_PAD_CHUNKS) * SILERO_CHUNK
                             speech = full[: full.shape[0] - drop] if 0 < drop < full.shape[0] else full
                             # Offload the ~75 ms inference so it doesn't stall the
-                            # WebSocket audio recv loop.
-                            prob = await loop.run_in_executor(
-                                None, smart_turn.predict_completion, speech
-                            )
-                            if prob >= SMART_TURN_THRESHOLD:
-                                end_turn = True
+                            # WebSocket audio recv loop. A fault here must never
+                            # tear down STT — drop to fixed-silence for the rest
+                            # of the connection and decide this chunk that way.
+                            try:
+                                prob = await loop.run_in_executor(
+                                    None, smart_turn.predict_completion, speech
+                                )
+                            except Exception as error:  # noqa: BLE001
+                                print(
+                                    f"[asr] Smart Turn inference failed; "
+                                    f"falling back to fixed-silence endpointing: {error}",
+                                    flush=True,
+                                )
+                                smart_turn_ok = False
+                                end_turn = silence_run >= END_OF_SPEECH_SILENCE_CHUNKS
+                            else:
+                                if prob >= SMART_TURN_THRESHOLD:
+                                    end_turn = True
                     elif silence_run >= END_OF_SPEECH_SILENCE_CHUNKS:
                         end_turn = True
 
