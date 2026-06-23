@@ -22,6 +22,7 @@ import {
 import { PromptOverlay } from "./prompt-overlay";
 import { MetadataEditor } from "./metadata-editor";
 import { SourceComposer } from "./source-composer";
+import { FrontmatterEditor } from "./frontmatter-editor";
 import { StickyFooter, type StickyFooterState } from "./sticky-footer";
 import { MissionControl } from "./mission-control";
 import { OpsLog, type OpQueueRow } from "./ops-log";
@@ -35,6 +36,8 @@ import {
   AdminSplitLayout,
   adminTokens,
 } from "@/components/admin-ui";
+import { parseSourceFrontmatter } from "@/lib/source-frontmatter";
+import { generateSourceFrontmatter } from "../../actions";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -322,6 +325,7 @@ export function WikiIngestionView({
   // sibling of the grid, full page width) can read `canRun` / `tokens` and
   // drive the Run action without needing to live inside ComposerCard.
   const [content, setContent] = useState("");
+  const [frontmatter, setFrontmatter] = useState("");
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<SourceKind>("primary");
   const [tags, setTags] = useState<string[]>([]);
@@ -332,8 +336,18 @@ export function WikiIngestionView({
     [content],
   );
   const effectiveContent = normalizedContent;
+  const frontmatterValidation = useMemo(
+    () => parseSourceFrontmatter(frontmatter),
+    [frontmatter],
+  );
+  const frontmatterError = frontmatterValidation.ok
+    ? null
+    : frontmatterValidation.error;
   const tokens = estimateTokensFromText(effectiveContent);
-  const canRun = title.trim().length > 0 && effectiveContent.trim().length > 20;
+  const canRun =
+    title.trim().length > 0 &&
+    effectiveContent.trim().length > 20 &&
+    !frontmatterError;
 
   const watchRun = useCallback(
     async (runId: string, startedAt: number, signal: AbortSignal) => {
@@ -461,6 +475,8 @@ export function WikiIngestionView({
     try {
       const draft = JSON.parse(raw) as Partial<ComposerDraft>;
       if (typeof draft.content === "string") setContent(draft.content);
+      if (typeof draft.frontmatter === "string")
+        setFrontmatter(draft.frontmatter);
       if (typeof draft.title === "string") setTitle(draft.title);
       if (isSourceKind(draft.kind)) setKind(draft.kind);
       if (Array.isArray(draft.tags)) {
@@ -533,10 +549,64 @@ export function WikiIngestionView({
     router.refresh();
   }, [router]);
 
+  const retryFailedOnly = useCallback(
+    async (failedRun: Extract<RunPhase, { phase: "failed" }>) => {
+      const originalRunId = runIdFromEvents(failedRun.events);
+      if (!originalRunId) {
+        setRun({
+          ...failedRun,
+          error: "Could not find the original run id for failed-op retry.",
+        });
+        return;
+      }
+
+      const startedAt = Date.now();
+      const controller = new AbortController();
+      abortRef.current?.abort();
+      abortRef.current = controller;
+      setRun({ phase: "live", runId: null, events: [], startedAt });
+
+      try {
+        const res = await fetch(
+          `/api/wiki/${wikiId}/ingest/runs/${originalRunId}/retry-failed`,
+          {
+            method: "POST",
+            signal: controller.signal,
+          },
+        );
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(`${res.status}: ${body.slice(0, 200)}`);
+        }
+        const queued = (await res.json()) as { runId: string };
+        setRun({ phase: "live", runId: queued.runId, events: [], startedAt });
+        await watchRun(queued.runId, startedAt, controller.signal);
+      } catch (err: unknown) {
+        if (controller.signal.aborted) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        setRun({
+          phase: "failed",
+          events: failedRun.events,
+          error: msg,
+          startedAt: failedRun.startedAt,
+          finishedAt: Date.now(),
+        });
+      }
+    },
+    [watchRun, wikiId],
+  );
+
   const cancelRun = useCallback(() => {
     abortRef.current?.abort();
     setRun({ phase: "idle" });
   }, []);
+
+  const canRetryFailedOnly =
+    run.phase === "failed" &&
+    Boolean(runIdFromEvents(run.events)) &&
+    retryableFailedOps(run.events).length > 0;
+  const retryFailedOnlyCount =
+    run.phase === "failed" ? retryableFailedOps(run.events).length : 0;
 
   return (
     <AdminPageShell>
@@ -559,6 +629,9 @@ export function WikiIngestionView({
               onTitleChange={setTitle}
               content={content}
               onContentChange={setContent}
+              frontmatter={frontmatter}
+              onFrontmatterChange={setFrontmatter}
+              frontmatterError={frontmatterError}
               effectiveContent={effectiveContent}
               kind={kind}
               onKindChange={setKind}
@@ -581,6 +654,10 @@ export function WikiIngestionView({
               run={run}
               totalPagesBefore={brain?.pageCount ?? 0}
               onRetry={dismissResult}
+              onRetryFailedOnly={
+                canRetryFailedOnly ? () => void retryFailedOnly(run) : undefined
+              }
+              retryFailedOnlyCount={retryFailedOnlyCount}
               onDismiss={dismissResult}
             />
           )
@@ -627,17 +704,25 @@ export function WikiIngestionView({
         failedAtOpTotal={footerTelemetry.failedAtOpTotal}
         errorReason={footerTelemetry.errorReason}
         onRun={() => {
+          if (!frontmatterValidation.ok) return;
           window.localStorage.removeItem(draftKey);
           void submitRun({
             title,
             kind,
             tags,
             content: effectiveContent,
+            frontmatter,
             model,
           });
         }}
         onCancel={cancelRun}
         onRetry={dismissResult}
+        onRetryFailedOnly={
+          canRetryFailedOnly && run.phase === "failed"
+            ? () => void retryFailedOnly(run)
+            : undefined
+        }
+        retryFailedOnlyCount={retryFailedOnlyCount}
         onRunAnother={dismissResult}
         onOpenWiki={() => router.push(`/wikis/${wikiId}`)}
         onReviewError={() => undefined}
@@ -666,6 +751,7 @@ type ComposerPayload = {
   kind: SourceKind;
   tags: string[];
   content: string;
+  frontmatter: string;
   model: ModelId;
 };
 
@@ -684,6 +770,9 @@ function ComposerCard({
   onTitleChange,
   content,
   onContentChange,
+  frontmatter,
+  onFrontmatterChange,
+  frontmatterError,
   effectiveContent,
   kind,
   onKindChange,
@@ -704,6 +793,9 @@ function ComposerCard({
   onTitleChange: (next: string) => void;
   content: string;
   onContentChange: (next: string) => void;
+  frontmatter: string;
+  onFrontmatterChange: (next: string) => void;
+  frontmatterError: string | null;
   effectiveContent: string;
   kind: SourceKind;
   onKindChange: (next: SourceKind) => void;
@@ -719,6 +811,9 @@ function ComposerCard({
   const [classifying, setClassifying] = useState(false);
   const [classifiedBy, setClassifiedBy] = useState<"ai" | null>(null);
   const [classifyError, setClassifyError] = useState<string | null>(null);
+  const [frontmatterGenerating, setFrontmatterGenerating] = useState(false);
+  const [frontmatterGenerateError, setFrontmatterGenerateError] =
+    useState<string | null>(null);
   const classifyGenRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sourceSectionRef = useRef<HTMLDivElement | null>(null);
@@ -787,6 +882,34 @@ function ComposerCard({
 
   const canRun = title.trim().length > 0 && effectiveContent.trim().length > 20;
 
+  async function handleGenerateFrontmatter() {
+    if (frontmatterGenerating) return;
+    setFrontmatterGenerating(true);
+    setFrontmatterGenerateError(null);
+    try {
+      const res = await generateSourceFrontmatter({
+        wikiTitle,
+        sourceTitle: title,
+        tags,
+        sourceText: effectiveContent,
+        existingFrontmatter: frontmatter,
+      });
+      if (!res.ok || !res.data) {
+        setFrontmatterGenerateError(
+          res.ok ? "Metadata generation returned no YAML." : res.error,
+        );
+        return;
+      }
+      onFrontmatterChange(res.data.frontmatter);
+    } catch (err) {
+      setFrontmatterGenerateError(
+        err instanceof Error ? err.message : String(err),
+      );
+    } finally {
+      setFrontmatterGenerating(false);
+    }
+  }
+
   return (
     <div
       style={{
@@ -805,6 +928,18 @@ function ComposerCard({
           tokens={tokens}
         />
       </div>
+
+      <FrontmatterEditor
+        value={frontmatter}
+        onChange={(next) => {
+          setFrontmatterGenerateError(null);
+          onFrontmatterChange(next);
+        }}
+        error={frontmatterError}
+        generateError={frontmatterGenerateError}
+        generating={frontmatterGenerating}
+        onGenerate={() => void handleGenerateFrontmatter()}
+      />
 
       {/* Operational stack — metadata stays attached to the ingest surface.
           Runtime estimates live in the sticky command footer. */}
@@ -881,6 +1016,34 @@ function deriveOpQueue(events: IngestionEvent[]): OpQueueRow[] {
     }
     return { state: "queued", op };
   });
+}
+
+function runIdFromEvents(events: IngestionEvent[]): string | null {
+  const started = events.find(
+    (event): event is Extract<IngestionEvent, { type: "started" }> =>
+      event.type === "started",
+  );
+  if (started) return started.runId;
+  const queued = events.find(
+    (event): event is Extract<IngestionEvent, { type: "queued" }> =>
+      event.type === "queued",
+  );
+  return queued?.runId ?? null;
+}
+
+function retryableFailedOps(events: IngestionEvent[]): PlanOp[] {
+  const completedSlugs = new Set(
+    events
+      .filter((event) => event.type === "op-complete")
+      .map((event) => event.op.slug),
+  );
+  const retryBySlug = new Map<string, PlanOp>();
+  for (const event of events) {
+    if (event.type !== "op-failed") continue;
+    if (completedSlugs.has(event.op.slug)) continue;
+    retryBySlug.set(event.op.slug, event.op);
+  }
+  return Array.from(retryBySlug.values());
 }
 
 function LiveProgress({
@@ -1057,11 +1220,15 @@ function FailedFromRun({
   run,
   totalPagesBefore,
   onRetry,
+  onRetryFailedOnly,
+  retryFailedOnlyCount,
   onDismiss,
 }: {
   run: Extract<RunPhase, { phase: "failed" }>;
   totalPagesBefore: number;
   onRetry: () => void;
+  onRetryFailedOnly?: () => void;
+  retryFailedOnlyCount: number;
   onDismiss: () => void;
 }) {
   const opsDone = run.events.filter((e) => e.type === "op-complete").length;
@@ -1106,6 +1273,8 @@ function FailedFromRun({
       tokensUsed={tokensUsed}
       totalPages={totalPagesBefore + pagesAdded}
       onRetry={onRetry}
+      onRetryFailedOnly={onRetryFailedOnly}
+      retryFailedOnlyCount={retryFailedOnlyCount}
       onDismiss={onDismiss}
     />
   );

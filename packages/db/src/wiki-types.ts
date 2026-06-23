@@ -594,6 +594,27 @@ export type WikiSourceRecord = {
   updatedAt: string;
 };
 
+export const SOURCE_METADATA_FILTER_FIELDS = [
+  "character_focus",
+  "canonicality",
+  "knowledge_accessible",
+  "location",
+  "themes",
+  "participants",
+  "speaker",
+  "time_period",
+  "chronological_order",
+] as const;
+
+export type SourceMetadataFilterField =
+  (typeof SOURCE_METADATA_FILTER_FIELDS)[number];
+
+export type SourceMetadataFilterValue = string | boolean | number | string[];
+
+export type SourceMetadataFilters = Partial<
+  Record<SourceMetadataFilterField, SourceMetadataFilterValue>
+>;
+
 export type CreateSourceInput = {
   characterId?: string | null;
   wikiId?: string | null;

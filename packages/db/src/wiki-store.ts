@@ -12,7 +12,7 @@
  * `rebuildEdges(characterId)` is the safety valve for when drift shows up.
  */
 
-import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "./client";
 import { retryRead } from "./retry";
 import {
@@ -40,6 +40,7 @@ import type {
   SavePageHooks,
   SavePageInput,
   SavePageResult,
+  SourceMetadataFilters,
   StartIngestionInput,
   TimeIndex,
   WikiEdgeRecord,
@@ -88,6 +89,77 @@ function requireDb() {
   const db = getDb();
   if (!db) throw new Error("DATABASE_URL is required for the wiki store");
   return db;
+}
+
+const ARRAY_SOURCE_METADATA_FIELDS = new Set([
+  "character_focus",
+  "location",
+  "themes",
+  "participants",
+  "speaker",
+]);
+
+const SUPPORTED_SOURCE_METADATA_FIELDS = new Set([
+  "character_focus",
+  "canonicality",
+  "knowledge_accessible",
+  "location",
+  "themes",
+  "participants",
+  "speaker",
+  "time_period",
+  "chronological_order",
+]);
+
+function sourceMetadataFilterConditions(
+  filters?: SourceMetadataFilters,
+): SQL[] {
+  if (!filters) return [];
+
+  const conditions: SQL[] = [];
+  for (const [field, rawValue] of Object.entries(filters)) {
+    if (!SUPPORTED_SOURCE_METADATA_FIELDS.has(field)) continue;
+    if (rawValue == null) continue;
+    const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+    const valueConditions = values
+      .map((value) => sourceMetadataValueCondition(field, value))
+      .filter((condition): condition is SQL => Boolean(condition));
+    if (valueConditions.length === 1) {
+      conditions.push(valueConditions[0]);
+    } else if (valueConditions.length > 1) {
+      const condition = or(...valueConditions);
+      if (condition) conditions.push(condition);
+    }
+  }
+
+  return conditions;
+}
+
+function sourceMetadataValueCondition(
+  field: string,
+  value: string | boolean | number,
+): SQL | null {
+  if (typeof value === "boolean" || typeof value === "number") {
+    return sql`jsonb_extract_path(${wikiSourcesTable.metadata}, 'frontmatter', ${field}) = ${JSON.stringify(value)}::jsonb`;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (field === "chronological_order" && /^-?\d+(?:\.\d+)?$/.test(trimmed)) {
+    return sql`jsonb_extract_path(${wikiSourcesTable.metadata}, 'frontmatter', ${field}) = ${trimmed}::jsonb`;
+  }
+
+  const scalarMatch = sql`lower(jsonb_extract_path_text(${wikiSourcesTable.metadata}, 'frontmatter', ${field})) = lower(${trimmed})`;
+  if (!ARRAY_SOURCE_METADATA_FIELDS.has(field)) return scalarMatch;
+
+  return sql`(
+    ${scalarMatch}
+    OR (
+      jsonb_typeof(jsonb_extract_path(${wikiSourcesTable.metadata}, 'frontmatter', ${field})) = 'array'
+      AND jsonb_extract_path(${wikiSourcesTable.metadata}, 'frontmatter', ${field}) @> ${JSON.stringify([trimmed])}::jsonb
+    )
+  )`;
 }
 
 /**
@@ -909,8 +981,14 @@ export interface WikiStore {
     characterId: string,
     contentHash: string,
   ): Promise<WikiSourceRecord | null>;
-  listSources(characterId: string): Promise<WikiSourceRecord[]>;
-  listSourcesForWiki(wikiId: string): Promise<WikiSourceRecord[]>;
+  listSources(
+    characterId: string,
+    filters?: SourceMetadataFilters,
+  ): Promise<WikiSourceRecord[]>;
+  listSourcesForWiki(
+    wikiId: string,
+    filters?: SourceMetadataFilters,
+  ): Promise<WikiSourceRecord[]>;
   removeSource(id: string): Promise<boolean>;
   /**
    * Delete a source and any pages whose *only* provenance was this source
@@ -1786,25 +1864,33 @@ function neonStore(): WikiStore {
       return row ? normalizeSource(row) : null;
     },
 
-    async listSources(characterId) {
+    async listSources(characterId, filters) {
       const db = requireDb();
+      const where = and(
+        eq(wikiSourcesTable.characterId, characterId),
+        ...sourceMetadataFilterConditions(filters),
+      );
       const rows = await retryRead(() =>
         db
           .select()
           .from(wikiSourcesTable)
-          .where(eq(wikiSourcesTable.characterId, characterId))
+          .where(where)
           .orderBy(desc(wikiSourcesTable.createdAt)),
       );
       return rows.map(normalizeSource);
     },
 
-    async listSourcesForWiki(wikiId) {
+    async listSourcesForWiki(wikiId, filters) {
       const db = requireDb();
+      const where = and(
+        eq(wikiSourcesTable.wikiId, wikiId),
+        ...sourceMetadataFilterConditions(filters),
+      );
       const rows = await retryRead(() =>
         db
           .select()
           .from(wikiSourcesTable)
-          .where(eq(wikiSourcesTable.wikiId, wikiId))
+          .where(where)
           .orderBy(desc(wikiSourcesTable.createdAt)),
       );
       return rows.map(normalizeSource);

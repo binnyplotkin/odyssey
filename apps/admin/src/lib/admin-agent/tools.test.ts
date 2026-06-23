@@ -588,6 +588,27 @@ describe("admin agent session analysis", () => {
       ],
     });
   });
+
+  it("accepts criteria passed as a single string", async () => {
+    const result = await runReadTool(
+      "analyze_sessions",
+      {
+        characterId: null,
+        criteria: "identity consistency, wiki grounding, latency/errors",
+      },
+      context("conv-session-analysis-criteria-string"),
+    );
+
+    expect(result.summary).toContain("Analyzed");
+    expect(result.data).toMatchObject({
+      characterId: null,
+      criteria: [
+        "identity consistency",
+        "wiki grounding",
+        "latency/errors",
+      ],
+    });
+  });
 });
 
 describe("admin agent codebase read tools", () => {

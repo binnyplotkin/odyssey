@@ -139,7 +139,7 @@ export function MetadataEditor<K extends string>({
             onPointerDown={() => setTitleFocused(true)}
             onFocus={() => setTitleFocused(true)}
             onBlur={() => setTitleFocused(false)}
-            placeholder="e.g. KJV · the binding (ch. 22)"
+            placeholder="e.g. Genesis 11:27–32 — Sarah's Introduction"
             className="ingestion-metadata-input"
             style={inputStyle(titleFocused)}
           />
@@ -152,7 +152,7 @@ export function MetadataEditor<K extends string>({
             ariaLabel="Source kind"
           />
         </FieldLabel>
-        <FieldLabel label="Tags" trailing="frontmatter" style={{ gridColumn: "1 / -1" }}>
+        <FieldLabel label="Tags" trailing="keywords" style={{ gridColumn: "1 / -1" }}>
           <TagsField
             tags={tags}
             focused={tagsFocused}

@@ -141,6 +141,7 @@ export type {
   KnowledgeGraphData,
   KnowledgeGraphNode,
 } from "./wikis-store";
+export { SOURCE_METADATA_FILTER_FIELDS } from "./wiki-types";
 export type {
   Era,
   WikiRecord,
@@ -242,6 +243,9 @@ export type {
   WikiEdgeRecord,
   WikiSourceKind,
   WikiSourceRecord,
+  SourceMetadataFilterField,
+  SourceMetadataFilterValue,
+  SourceMetadataFilters,
   CreateSourceInput,
   WikiSourceRefRecord,
   CreateSourceRefInput,

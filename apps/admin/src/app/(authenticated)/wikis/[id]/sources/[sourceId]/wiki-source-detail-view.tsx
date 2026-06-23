@@ -20,6 +20,7 @@ import {
   previewPurgeWikiSource,
   purgeWikiSource,
 } from "@/app/(authenticated)/wikis/actions";
+import { getSourceParsedMetadata } from "@/lib/source-metadata-filters";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -1397,6 +1398,8 @@ function InputPane({
   const totalWords = wordCount(source.content);
   const tokensApprox = Math.round(totalWords * 1.3);
   const excerpt = source.content.slice(0, 1600);
+  const parsedMetadata = getSourceParsedMetadata(source);
+  const hasParsedMetadata = Object.keys(parsedMetadata).length > 0;
 
   return (
     <PaneShell
@@ -1409,6 +1412,49 @@ function InputPane({
         </span>
       }
     >
+      {hasParsedMetadata && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-8)",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: "var(--font-size-xs)",
+              fontWeight: 600,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: ACCENT,
+            }}
+          >
+            Parsed source metadata
+          </span>
+          <pre
+            style={{
+              margin: 0,
+              padding: "16px 18px",
+              background: INPUT_BG,
+              borderTop: `1px solid ${BORDER}`,
+              borderRight: `1px solid ${BORDER}`,
+              borderBottom: `1px solid ${BORDER}`,
+              borderLeft: `1px solid ${BORDER}`,
+              fontFamily: MONO,
+              fontSize: 12,
+              fontWeight: 400,
+              lineHeight: "20px",
+              color: TEXT_SECONDARY,
+              whiteSpace: "pre-wrap",
+              maxHeight: 260,
+              overflow: "auto",
+            }}
+          >
+            {JSON.stringify(parsedMetadata, null, 2)}
+          </pre>
+        </div>
+      )}
       <pre
         style={{
           margin: 0,

@@ -31,15 +31,17 @@ export async function GET(
   const voice = await store.getById(id);
   if (!voice) return jsonError(404, "voice not found");
 
-  const [sourceUrl, embeddingUrl, boundCharacterCount] = await Promise.all([
+  const [sourceUrl, embeddingUrl, previewUrl, boundCharacterCount] = await Promise.all([
     voice.sourcePath ? createSourceSignedUrl(voice.sourcePath).catch(() => null) : null,
     voice.embeddingPath ? createEmbeddingSignedUrl(voice.embeddingPath).catch(() => null) : null,
+    voice.previewPath ? createEmbeddingSignedUrl(voice.previewPath).catch(() => null) : null,
     store.countCharactersUsing(id),
   ]);
   return NextResponse.json({
     voice: { ...voice, boundCharacterCount },
     sourceUrl,
     embeddingUrl,
+    previewUrl,
   });
 }
 

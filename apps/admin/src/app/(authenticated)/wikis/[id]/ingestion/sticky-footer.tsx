@@ -113,11 +113,13 @@ export type StickyFooterProps = {
   failedAtOpNum?: number;
   failedAtOpTotal?: number;
   errorReason?: string;
+  retryFailedOnlyCount?: number;
 
   /* Callbacks — each state uses the ones it needs. */
   onRun?: () => void;
   onCancel?: () => void;
   onRetry?: () => void;
+  onRetryFailedOnly?: () => void;
   onRunAnother?: () => void;
   onOpenWiki?: () => void;
   onReviewError?: () => void;
@@ -738,6 +740,16 @@ function ActionsCell(props: StickyFooterProps) {
       {state === "failed" && (
         <>
           <GhostButton onClick={props.onReviewError} label="Review error" />
+          {props.onRetryFailedOnly && (
+            <GhostButton
+              onClick={props.onRetryFailedOnly}
+              label={
+                props.retryFailedOnlyCount && props.retryFailedOnlyCount > 0
+                  ? `Retry ${props.retryFailedOnlyCount} failed only`
+                  : "Retry failed only"
+              }
+            />
+          )}
           <DangerSolidButton
             onClick={props.onRetry}
             label="Retry"

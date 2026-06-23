@@ -32,6 +32,10 @@ export type FailedRecoveryProps = {
   totalPages: number;
   /** Primary action — retry the run with the failing op edited or skipped. */
   onRetry: () => void;
+  /** Recovery action — queue a new run with only unresolved failed ops. */
+  onRetryFailedOnly?: () => void;
+  /** Count of unresolved failed ops that will be retried. */
+  retryFailedOnlyCount?: number;
   /** Secondary action — jump to the failing source. */
   onOpenFailingSource?: () => void;
   /** Tertiary action — dismiss and return to idle. */
@@ -49,6 +53,8 @@ export function FailedRecovery({
   tokensUsed,
   totalPages,
   onRetry,
+  onRetryFailedOnly,
+  retryFailedOnlyCount,
   onOpenFailingSource,
   onDismiss,
 }: FailedRecoveryProps) {
@@ -175,7 +181,18 @@ export function FailedRecovery({
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)", paddingTop: "var(--space-6)", flexWrap: "wrap" }}>
-          <PrimaryButton onClick={onRetry}>Retry with edits</PrimaryButton>
+          {onRetryFailedOnly ? (
+            <PrimaryButton onClick={onRetryFailedOnly}>
+              {retryFailedOnlyCount && retryFailedOnlyCount > 0
+                ? `Retry ${retryFailedOnlyCount} failed only`
+                : "Retry failed only"}
+            </PrimaryButton>
+          ) : (
+            <PrimaryButton onClick={onRetry}>Retry with edits</PrimaryButton>
+          )}
+          {onRetryFailedOnly && (
+            <GhostButton onClick={onRetry}>Retry with edits</GhostButton>
+          )}
           {onOpenFailingSource && failingSlug && (
             <GhostButton onClick={onOpenFailingSource}>
               Open failing source ↗

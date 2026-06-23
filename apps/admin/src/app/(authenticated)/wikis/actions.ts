@@ -14,7 +14,9 @@ import {
   type WikiPageType,
 } from "@odyssey/db";
 import { embedText, EMBEDDING_MODEL } from "@odyssey/engine";
+import { call, extractToolUse } from "@odyssey/wiki-ingest";
 import { computeKnowledgeLayout } from "@/lib/kg-layout";
+import { parseSourceFrontmatter } from "@/lib/source-frontmatter";
 
 /**
  * Hooks for `wiki.savePage` triggered from admin quick-edits. On a material
@@ -81,6 +83,47 @@ const wikiSaveHooks = {
 type ActionResult<T = undefined> =
   | { ok: true; data?: T }
   | { ok: false; error: string };
+
+const SOURCE_FRONTMATTER_KEYS = [
+  "title",
+  "book",
+  "chapter",
+  "verses",
+  "source_type",
+  "passage_type",
+  "canonicality",
+  "character_focus",
+  "chronological_order",
+  "time_period",
+  "location",
+  "participants",
+  "speaker",
+  "knowledge_accessible",
+  "themes",
+  "relationships",
+  "emotions",
+  "confidence",
+];
+
+const MAX_FRONTMATTER_SOURCE_CHARS = 12000;
+const LLM_RETRY_DELAYS_MS = [800, 1800];
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isProviderOverloadedError(err: unknown): boolean {
+  const status = (err as { status?: unknown })?.status;
+  const message = err instanceof Error ? err.message : String(err);
+  return status === 529 || /529|overloaded_error|overloaded/i.test(message);
+}
+
+function formatLlmError(err: unknown): string {
+  if (isProviderOverloadedError(err)) {
+    return "Model provider is overloaded. Try generating again in a moment.";
+  }
+  return err instanceof Error ? err.message : String(err);
+}
 
 export async function createUnnamedWiki(): Promise<ActionResult<{ id: string }>> {
   const wikis = getWikisStore();
@@ -150,6 +193,155 @@ export async function updateWikiMeta(
     ok: true,
     data: { title: updated.title, summary: updated.summary },
   };
+}
+
+export async function generateSourceFrontmatter(input: {
+  wikiTitle: string;
+  sourceTitle: string;
+  tags: string[];
+  sourceText: string;
+  existingFrontmatter: string;
+}): Promise<ActionResult<{ frontmatter: string }>> {
+  const sourceText = input.sourceText.trim();
+  if (sourceText.length < 40) {
+    return {
+      ok: false,
+      error: "Add more source text before generating metadata.",
+    };
+  }
+
+  const sourceTitle = input.sourceTitle.trim();
+  const wikiTitle = input.wikiTitle.trim() || "Untitled wiki";
+  const tags = input.tags
+    .filter((tag): tag is string => typeof tag === "string")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  const existingFrontmatter = input.existingFrontmatter.trim();
+  const sourceExcerpt =
+    sourceText.length <= MAX_FRONTMATTER_SOURCE_CHARS
+      ? sourceText
+      : `${sourceText.slice(0, MAX_FRONTMATTER_SOURCE_CHARS)}\n\n...[truncated ${sourceText.length - MAX_FRONTMATTER_SOURCE_CHARS} more chars]`;
+
+  const system = [
+    "You generate YAML frontmatter for source documents before they are ingested into a wiki knowledge graph.",
+    "",
+    "Return valid YAML only through the tool. Do not include markdown fences.",
+    "The YAML must be a top-level mapping/object, not a list or scalar.",
+    "Generate complete YAML frontmatter from the provided source.",
+    "Infer chronology, participants, speaker(s), locations, themes, relationships, emotions, canonicality, and whether the knowledge is accessible to the character at that point in their life.",
+    "Prefer explicit textual evidence over inference.",
+    "When uncertain, lower confidence rather than inventing facts.",
+    "Use concise, factual values grounded in the source text and provided context.",
+    "Do not invent details that are not supported by the source text or context.",
+    "The suggested common keys are optional, not mandatory:",
+    SOURCE_FRONTMATTER_KEYS.join(", "),
+    "",
+    "Prefer these conventions when applicable:",
+    "- sequence fields as YAML arrays",
+    "- knowledge_accessible as a boolean",
+    "- chapter and chronological_order as numbers when clear",
+    "- relationships as a nested mapping",
+    "- confidence as low, medium, or high",
+    "- passage_type when inferable, using one of: primary_narrative, surrounding_narrative_context, commentary, midrash, historical_background, synthetic_memory",
+    "- source_type for broad source category, such as primary, commentary, midrash, historical_background, synthetic_memory, reference, transcript, or note",
+    "Arbitrary additional valid YAML keys are allowed when useful.",
+    "",
+    "For character-focused wikis, infer whether knowledge_accessible is true when the character could plausibly know or experience the information in-world, and false when it is curator-only context, later interpretation, narrator-only framing, scholarship, or synthesis unavailable to the character.",
+    "If a field cannot be confidently inferred, omit it or set it to null.",
+  ].join("\n");
+
+  const userMessage = [
+    "<wiki>",
+    wikiTitle,
+    "</wiki>",
+    "",
+    "<source-title>",
+    sourceTitle || "(not provided)",
+    "</source-title>",
+    "",
+    "<tags>",
+    tags.length > 0 ? tags.join(", ") : "(none)",
+    "</tags>",
+    "",
+    "<existing-frontmatter>",
+    existingFrontmatter || "(none)",
+    "</existing-frontmatter>",
+    "",
+    "<source-text>",
+    sourceExcerpt,
+    "</source-text>",
+    "",
+    "Generate reviewed-draft YAML frontmatter for this source. Preserve useful existing frontmatter fields, improve or add fields when justified by the source text, and leave unsupported fields out.",
+    "Infer chronology, participants, speaker(s), locations, themes, relationships, emotions, canonicality, and character-accessible knowledge whenever the evidence supports it. Prefer explicit textual evidence over inference. When uncertain, lower confidence rather than inventing facts.",
+  ].join("\n");
+
+  try {
+    let result: Awaited<ReturnType<typeof call>> | null = null;
+    for (let attempt = 0; attempt <= LLM_RETRY_DELAYS_MS.length; attempt += 1) {
+      try {
+        result = await call({
+          model: "claude-haiku-4-5",
+          system,
+          messages: [{ role: "user", content: userMessage }],
+          tools: [
+            {
+              name: "generate_frontmatter",
+              description:
+                "Return valid YAML frontmatter for the source document.",
+              input_schema: {
+                type: "object",
+                properties: {
+                  yaml: {
+                    type: "string",
+                    description:
+                      "Valid YAML top-level mapping. No markdown fences.",
+                  },
+                },
+                required: ["yaml"],
+              },
+            },
+          ],
+          toolChoice: { type: "tool", name: "generate_frontmatter" },
+          maxTokens: 1200,
+        });
+        break;
+      } catch (err: unknown) {
+        const retryDelay = LLM_RETRY_DELAYS_MS[attempt];
+        if (retryDelay !== undefined && isProviderOverloadedError(err)) {
+          await sleep(retryDelay);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!result) {
+      throw new Error("Metadata generation did not return a response.");
+    }
+
+    const out = extractToolUse<{ yaml: string }>(
+      result,
+      "generate_frontmatter",
+    );
+    const frontmatter = cleanGeneratedYaml(out.yaml);
+    const parsed = parseSourceFrontmatter(frontmatter);
+    if (!parsed.ok) {
+      return { ok: false, error: parsed.error };
+    }
+
+    return { ok: true, data: { frontmatter } };
+  } catch (err: unknown) {
+    return { ok: false, error: formatLlmError(err) };
+  }
+}
+
+function cleanGeneratedYaml(input: unknown): string {
+  const raw = typeof input === "string" ? input.trim() : "";
+  return raw
+    .replace(/^```(?:ya?ml)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
 }
 
 export type WikiPageContentPatch = {

@@ -59,6 +59,26 @@ const optionalStringArray = (maxItems: number, maxChars: number) =>
   z.preprocess(
     (value) => {
       if (value === null) return undefined;
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return undefined;
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+          try {
+            const parsed = JSON.parse(trimmed) as unknown;
+            if (Array.isArray(parsed)) {
+              return parsed.map((item) =>
+                typeof item === "string" ? item : JSON.stringify(item),
+              );
+            }
+          } catch {
+            /* fall back to delimiter split below */
+          }
+        }
+        return trimmed
+          .split(/[\n,;|]+/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
       if (!Array.isArray(value)) return value;
       return value.map((item) =>
         typeof item === "string" ? item : JSON.stringify(item),

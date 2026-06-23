@@ -4,6 +4,7 @@ dotenv.config({ override: true });
 import { getWikiStore } from "@odyssey/db";
 import { embedText, embedTexts, EMBEDDING_MODEL } from "@odyssey/engine";
 import { runIngestion } from "./pipeline";
+import type { PlanOp } from "./types";
 
 const workerId = process.env.WIKI_INGEST_WORKER_ID ?? `wiki-ingest-${process.pid}`;
 const pollMs = Number(process.env.WIKI_INGEST_POLL_MS ?? 2000);
@@ -49,11 +50,13 @@ async function workOne(): Promise<boolean> {
   }, 30_000);
 
   try {
+    const retryOps = await loadRetryOps(wiki, run.id);
     for await (const ev of runIngestion({
       wikiId: run.wikiId,
       sourceId: run.sourceId,
       runId: run.id,
       model: run.model ?? undefined,
+      retryOps,
       embed: embedText,
       embedMany: embedTexts,
       embeddingModel: EMBEDDING_MODEL,
@@ -101,6 +104,40 @@ async function workOne(): Promise<boolean> {
   }
 
   return true;
+}
+
+async function loadRetryOps(
+  wiki: ReturnType<typeof getWikiStore>,
+  runId: string,
+): Promise<PlanOp[] | undefined> {
+  const events = await wiki.listIngestionEvents(runId, { afterSeq: 0, limit: 20 });
+  const queued = events
+    .map((event) => event.payload)
+    .find(isQueuedRetryPayload);
+  return queued?.retryOps?.filter(isPlanOp);
+}
+
+function isQueuedRetryPayload(
+  payload: unknown,
+): payload is { type: "queued"; retryOps: unknown[] } {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    (payload as { type?: unknown }).type === "queued" &&
+    Array.isArray((payload as { retryOps?: unknown }).retryOps)
+  );
+}
+
+function isPlanOp(value: unknown): value is PlanOp {
+  if (typeof value !== "object" || value === null) return false;
+  const op = value as Partial<PlanOp>;
+  return (
+    (op.action === "create" || op.action === "update" || op.action === "skip") &&
+    typeof op.slug === "string" &&
+    typeof op.type === "string" &&
+    typeof op.title === "string" &&
+    typeof op.rationale === "string"
+  );
 }
 
 async function main() {

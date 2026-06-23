@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import type {
   WikiIngestionLogRecord,
@@ -9,7 +9,18 @@ import type {
   WikiSourceKind,
   WikiSourceRecord,
   WikiSourceRefRecord,
+  SourceMetadataFilterField,
+  SourceMetadataFilters,
 } from "@odyssey/db";
+import {
+  SOURCE_METADATA_FILTER_FIELDS,
+  SOURCE_METADATA_FILTER_LABELS,
+  getSourceParsedMetadata,
+  serializeSourceMetadataFilters,
+  sourceMetadataFilterCount,
+  sourceMetadataFilterText,
+  sourceMetadataPreview,
+} from "@/lib/source-metadata-filters";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -109,6 +120,51 @@ function byteSize(s: string): string {
   return `${(n / (1024 * 1024)).toFixed(1)} mb`;
 }
 
+function emptyMetadataFilterDraft(): MetadataFilterDraft {
+  return Object.fromEntries(
+    SOURCE_METADATA_FILTER_FIELDS.map((field) => [field, ""]),
+  ) as MetadataFilterDraft;
+}
+
+function draftFromMetadataFilters(
+  filters: SourceMetadataFilters,
+): MetadataFilterDraft {
+  const draft = emptyMetadataFilterDraft();
+  for (const field of SOURCE_METADATA_FILTER_FIELDS) {
+    draft[field] = sourceMetadataFilterText(filters, field);
+  }
+  return draft;
+}
+
+function metadataFiltersFromDraft(
+  draft: MetadataFilterDraft,
+): SourceMetadataFilters {
+  const filters: SourceMetadataFilters = {};
+  for (const field of SOURCE_METADATA_FILTER_FIELDS) {
+    const value = draft[field].trim();
+    if (!value) continue;
+
+    if (field === "knowledge_accessible") {
+      if (value === "true") filters[field] = true;
+      if (value === "false") filters[field] = false;
+      continue;
+    }
+
+    if (field === "chronological_order") {
+      filters[field] = /^-?\d+(?:\.\d+)?$/.test(value) ? Number(value) : value;
+      continue;
+    }
+
+    const values = value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (values.length === 1) filters[field] = values[0];
+    if (values.length > 1) filters[field] = values;
+  }
+  return filters;
+}
+
 /* ── Props ─────────────────────────────────────────────────────── */
 
 export type WikiSourcesViewProps = {
@@ -119,9 +175,11 @@ export type WikiSourcesViewProps = {
   refs: WikiSourceRefRecord[];
   runs: WikiIngestionLogRecord[];
   routeBase: string;
+  metadataFilters: SourceMetadataFilters;
 };
 
 type SortKey = "added" | "title" | "size";
+type MetadataFilterDraft = Record<SourceMetadataFilterField, string>;
 
 /* ── Root ──────────────────────────────────────────────────────── */
 
@@ -133,6 +191,7 @@ export function WikiSourcesView({
   refs,
   runs,
   routeBase,
+  metadataFilters,
 }: WikiSourcesViewProps) {
   const router = useRouter();
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -140,6 +199,14 @@ export function WikiSourcesView({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<BucketFilter>("all");
   const [sort, setSort] = useState<SortKey>("added");
+  const [metadataDraft, setMetadataDraft] = useState<MetadataFilterDraft>(() =>
+    draftFromMetadataFilters(metadataFilters),
+  );
+  const activeMetadataFilterCount = sourceMetadataFilterCount(metadataFilters);
+
+  useEffect(() => {
+    setMetadataDraft(draftFromMetadataFilters(metadataFilters));
+  }, [metadataFilters]);
 
   // Focus search on Cmd+K / Ctrl+K
   useEffect(() => {
@@ -201,10 +268,13 @@ export function WikiSourcesView({
       const meta = s.metadata as Record<string, unknown>;
       const tags = Array.isArray(meta.tags) ? (meta.tags as string[]) : [];
       const summary = typeof meta.summary === "string" ? (meta.summary as string) : "";
+      const parsedMetadata = getSourceParsedMetadata(s);
+      const metadataText = JSON.stringify(parsedMetadata).toLowerCase();
       return (
         s.title.toLowerCase().includes(q) ||
         s.kind.toLowerCase().includes(q) ||
         summary.toLowerCase().includes(q) ||
+        metadataText.includes(q) ||
         tags.some((t) => t.toLowerCase().includes(q))
       );
     });
@@ -236,6 +306,26 @@ export function WikiSourcesView({
     router.push(`${routeBase}/sources/${s.id}`);
   }
 
+  function updateMetadataDraft(
+    field: SourceMetadataFilterField,
+    value: string,
+  ) {
+    setMetadataDraft((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function applyMetadataFilters() {
+    const params = serializeSourceMetadataFilters(
+      metadataFiltersFromDraft(metadataDraft),
+    );
+    const qs = params.toString();
+    router.push(`${routeBase}/sources${qs ? `?${qs}` : ""}`);
+  }
+
+  function clearMetadataFilters() {
+    setMetadataDraft(emptyMetadataFilterDraft());
+    router.push(`${routeBase}/sources`);
+  }
+
   return (
     <div
       style={{
@@ -265,12 +355,21 @@ export function WikiSourcesView({
         onSort={setSort}
         ingestHref={`${routeBase}/ingestion`}
       />
+      <MetadataFilterStrip
+        draft={metadataDraft}
+        activeCount={activeMetadataFilterCount}
+        onChange={updateMetadataDraft}
+        onApply={applyMetadataFilters}
+        onClear={clearMetadataFilters}
+      />
       <ListHeader />
       <div style={{ padding: "0 32px" }}>
         {filtered.length === 0 ? (
           <Empty>
             {query.trim()
               ? `No sources match "${query}"`
+              : activeMetadataFilterCount > 0
+                ? "No sources match the current metadata filters."
               : "No sources yet — open the Ingestion tab to add one."}
           </Empty>
         ) : (
@@ -673,6 +772,187 @@ function FilterStrip({
   );
 }
 
+function MetadataFilterStrip({
+  draft,
+  activeCount,
+  onChange,
+  onApply,
+  onClear,
+}: {
+  draft: MetadataFilterDraft;
+  activeCount: number;
+  onChange: (field: SourceMetadataFilterField, value: string) => void;
+  onApply: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+        gap: "var(--space-8)",
+        alignItems: "end",
+        padding: "12px 40px 0",
+      }}
+    >
+      {SOURCE_METADATA_FILTER_FIELDS.map((field) => (
+        <MetadataFilterField
+          key={field}
+          field={field}
+          value={draft[field]}
+          onChange={(value) => onChange(field, value)}
+        />
+      ))}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "var(--space-8)",
+        }}
+      >
+        <button
+          type="button"
+          onClick={onApply}
+          style={{
+            flex: 1,
+            minWidth: 86,
+            padding: "9px 12px",
+            background: ACCENT_SOFT,
+            borderTop: `1px solid ${ACCENT}`,
+            borderRight: `1px solid ${ACCENT}`,
+            borderBottom: `1px solid ${ACCENT}`,
+            borderLeft: `1px solid ${ACCENT}`,
+            color: ACCENT,
+            cursor: "pointer",
+            fontFamily: MONO,
+            fontSize: "var(--font-size-xs)",
+            fontWeight: 700,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+          }}
+        >
+          Apply
+        </button>
+        <button
+          type="button"
+          onClick={onClear}
+          disabled={activeCount === 0}
+          style={{
+            flex: 1,
+            minWidth: 86,
+            padding: "9px 12px",
+            background: "transparent",
+            borderTop: `1px solid ${BORDER_STRONG}`,
+            borderRight: `1px solid ${BORDER_STRONG}`,
+            borderBottom: `1px solid ${BORDER_STRONG}`,
+            borderLeft: `1px solid ${BORDER_STRONG}`,
+            color: activeCount > 0 ? TEXT_SECONDARY : TEXT_FADED,
+            cursor: activeCount > 0 ? "pointer" : "not-allowed",
+            fontFamily: MONO,
+            fontSize: "var(--font-size-xs)",
+            fontWeight: 600,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+          }}
+        >
+          Clear{activeCount > 0 ? ` ${activeCount}` : ""}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MetadataFilterField({
+  field,
+  value,
+  onChange,
+}: {
+  field: SourceMetadataFilterField;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-6)",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: "var(--font-size-xs)",
+          fontWeight: 500,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: TEXT_FADED,
+        }}
+      >
+        {SOURCE_METADATA_FILTER_LABELS[field]}
+      </span>
+      {field === "knowledge_accessible" ? (
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          style={metadataFilterInputStyle}
+        >
+          <option value="">Any</option>
+          <option value="true">True</option>
+          <option value="false">False</option>
+        </select>
+      ) : (
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={metadataPlaceholder(field)}
+          style={metadataFilterInputStyle}
+        />
+      )}
+    </label>
+  );
+}
+
+const metadataFilterInputStyle: CSSProperties = {
+  width: "100%",
+  minWidth: 0,
+  height: 34,
+  padding: "0 10px",
+  background: INPUT_BG,
+  borderTop: `1px solid ${BORDER}`,
+  borderRight: `1px solid ${BORDER}`,
+  borderBottom: `1px solid ${BORDER}`,
+  borderLeft: `1px solid ${BORDER}`,
+  color: FG,
+  outline: "none",
+  fontFamily: MONO,
+  fontSize: 12.5,
+};
+
+function metadataPlaceholder(field: SourceMetadataFilterField) {
+  switch (field) {
+    case "character_focus":
+      return "Sarah";
+    case "canonicality":
+      return "biblical";
+    case "location":
+      return "Haran";
+    case "themes":
+      return "migration, origins";
+    case "participants":
+      return "Sarah, Abraham";
+    case "speaker":
+      return "Narrator";
+    case "time_period":
+      return "Sarah's lifetime";
+    case "chronological_order":
+      return "1";
+    case "knowledge_accessible":
+      return "";
+  }
+}
+
 function FilterPill({
   bucket,
   count,
@@ -975,6 +1255,8 @@ function SourceRow({
   const meta = source.metadata as Record<string, unknown>;
   const summary =
     typeof meta.summary === "string" ? (meta.summary as string) : null;
+  const metadataPreview = sourceMetadataPreview(source);
+  const secondary = [summary, metadataPreview].filter(Boolean).join(" · ");
   const lastRun = runs[0] ?? null;
   const failedCount = runs.filter((r) => r.status === "failed").length;
 
@@ -1057,7 +1339,7 @@ function SourceRow({
             whiteSpace: "nowrap",
           }}
         >
-          {summary ?? <span style={{ color: TEXT_GHOST }}>no summary</span>}
+          {secondary || <span style={{ color: TEXT_GHOST }}>no summary</span>}
         </span>
       </div>
       <div

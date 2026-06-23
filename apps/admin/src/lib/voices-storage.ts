@@ -65,6 +65,16 @@ export async function downloadSourceBytes(path: string): Promise<Buffer> {
   return Buffer.from(await data.arrayBuffer());
 }
 
+export async function downloadEmbeddingBytes(path: string): Promise<Buffer> {
+  const { data, error } = await getSupabaseStorageClient()
+    .storage.from(VOICE_EMBEDDINGS_BUCKET)
+    .download(path);
+  if (error || !data) {
+    throw new Error(`download(embedding) failed: ${error?.message ?? "unknown"}`);
+  }
+  return Buffer.from(await data.arrayBuffer());
+}
+
 export async function uploadEmbedding(
   path: string,
   bytes: Buffer,

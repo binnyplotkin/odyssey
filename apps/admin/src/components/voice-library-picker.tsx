@@ -51,12 +51,12 @@ export function VoiceLibraryPicker({ currentVoiceId, voices, onChange }: Props) 
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  // Audio preview: a single shared HTMLAudioElement that's torn down + recreated
-  // on each play. Signed preview URLs are 1h-TTL — cache them so re-playing the
-  // same voice doesn't re-hit /api/voices/<id>.
+  // Audio sample playback: a single shared HTMLAudioElement so Safari/Arc can
+  // keep one media element "unlocked" for repeated play calls.
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [playError, setPlayError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const previewUrlCache = useRef(new Map<string, string>());
+  const playTokenRef = useRef(0);
 
   const current = useMemo(
     () => (currentVoiceId ? voices.find((v) => v.id === currentVoiceId) ?? null : null),
@@ -136,49 +136,88 @@ export function VoiceLibraryPicker({ currentVoiceId, voices, onChange }: Props) 
   // Stop playback when picker closes or component unmounts.
   useEffect(() => {
     if (!open && audioRef.current) {
+      playTokenRef.current += 1;
       audioRef.current.pause();
+      audioRef.current.currentTime = 0;
       setPlayingVoiceId(null);
     }
   }, [open]);
 
   useEffect(() => {
     return () => {
+      playTokenRef.current += 1;
       audioRef.current?.pause();
       audioRef.current = null;
     };
   }, []);
 
-  const playPreview = useCallback(async (voiceId: string) => {
+  const playPreview = useCallback((voiceId: string) => {
+    setPlayError(null);
+    const audio = audioRef.current;
+    if (!audio) return;
     // Click on currently-playing → stop.
     if (playingVoiceId === voiceId) {
-      audioRef.current?.pause();
+      playTokenRef.current += 1;
+      audio.pause();
+      audio.currentTime = 0;
       setPlayingVoiceId(null);
       return;
     }
-    // Stop any in-flight playback.
-    audioRef.current?.pause();
-
-    let url = previewUrlCache.current.get(voiceId) ?? null;
-    if (!url) {
-      try {
-        const res = await fetch(`/api/voices/${voiceId}`);
-        if (!res.ok) return;
-        const body = (await res.json()) as { previewUrl?: string | null };
-        if (!body.previewUrl) return;
-        url = body.previewUrl;
-        previewUrlCache.current.set(voiceId, url);
-      } catch {
-        return;
-      }
-    }
-
-    const audio = new Audio(url);
+    // Stop any in-flight playback + invalidate stale async play attempts.
+    const token = ++playTokenRef.current;
+    audio.pause();
+    audio.currentTime = 0;
     audio.onended = () => {
       setPlayingVoiceId((prev) => (prev === voiceId ? null : prev));
     };
-    audioRef.current = audio;
+    audio.onerror = null;
     setPlayingVoiceId(voiceId);
-    audio.play().catch(() => setPlayingVoiceId(null));
+
+    const attempt = async (variant: "source" | "preview") => {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.src = `/api/voices/${voiceId}/sample?variant=${variant}`;
+      try {
+        await audio.play();
+        return { ok: true as const, err: null };
+      } catch (err) {
+        return { ok: false as const, err };
+      }
+    };
+
+    void (async () => {
+      const source = await attempt("source");
+      if (token !== playTokenRef.current) return;
+      if (source.ok) return;
+
+      if (
+        source.err instanceof DOMException &&
+        source.err.name === "NotAllowedError"
+      ) {
+        setPlayingVoiceId(null);
+        setPlayError("Browser blocked audio. Click play once more.");
+        return;
+      }
+
+      const preview = await attempt("preview");
+      if (token !== playTokenRef.current) return;
+      if (preview.ok) {
+        setPlayError(
+          "Original sample codec isn’t supported here; playing preview instead.",
+        );
+        return;
+      }
+
+      setPlayingVoiceId(null);
+      if (
+        preview.err instanceof DOMException &&
+        preview.err.name === "NotAllowedError"
+      ) {
+        setPlayError("Browser blocked audio. Click play once more.");
+        return;
+      }
+      setPlayError("Could not play this sample format.");
+    })();
   }, [playingVoiceId]);
 
   const selectVoice = useCallback(
@@ -298,6 +337,28 @@ export function VoiceLibraryPicker({ currentVoiceId, voices, onChange }: Props) 
             </button>
           </div>
         )}
+        {playError && (
+          <div
+            style={{
+              padding: "8px 10px",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--critical-border)",
+              background: "var(--critical-wash)",
+              color: "var(--status-error)",
+              fontFamily: FONT_MONO,
+              fontSize: "var(--font-size-xs)",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {playError}
+          </div>
+        )}
+        <audio
+          ref={audioRef}
+          preload="none"
+          playsInline
+          style={{ display: "none" }}
+        />
       </div>
 
       {/* Popover — portaled to body so it escapes overflow:auto ancestors */}
@@ -518,6 +579,8 @@ function BoundCard({
       </div>
       <button
         type="button"
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={onPreview}
         aria-label={isPlaying ? "Stop preview" : "Play preview"}
         style={{
@@ -871,6 +934,8 @@ function VoiceRow({
       ) : (
         <button
           type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={onPreview}
           aria-label={isPlaying ? "Stop preview" : "Play preview"}
           style={{

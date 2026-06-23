@@ -107,6 +107,9 @@ export type IngestionInput = {
   /** Number of writer LLM calls to run at once. Defaults to the pipeline's
    * conservative server-side setting. */
   writerConcurrency?: number;
+  /** Optional replay list for recovery runs. When present, planner is skipped
+   * and only these failed operations are executed against the current wiki. */
+  retryOps?: PlanOp[];
 };
 
 export type IngestionResult = {
@@ -134,7 +137,14 @@ export type IngestionResult = {
  * serialize (no deep nesting of page bodies).
  */
 export type IngestionEvent =
-  | { type: "queued"; runId: string; model: string | null }
+  | {
+      type: "queued";
+      runId: string;
+      model: string | null;
+      retryOfRunId?: string;
+      retryScopeKey?: string;
+      retryOps?: PlanOp[];
+    }
   | { type: "started"; runId: string; model: string }
   | { type: "loaded-index"; pageCount: number; edgeCount: number }
   | { type: "planning" }

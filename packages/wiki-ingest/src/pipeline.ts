@@ -124,17 +124,21 @@ export async function* runIngestion(
     // ── Plan ───────────────────────────────────────────────────
     yield { type: "planning" };
 
-    const opPlan = await planChunked({
-      model,
-      characterDomainPrompt: wikiRecord.ingestionPrompt,
-      source: {
-        title: source.title,
-        kind: source.kind,
-        tags: sourceTags,
-        content: source.content,
-      },
-      existingPages,
-    });
+    const isRetryRun = input.retryOps !== undefined;
+    const retryOps = (input.retryOps ?? []).filter((o) => o.action !== "skip");
+    const opPlan = isRetryRun
+      ? buildRetryPlan(retryOps)
+      : await planChunked({
+          model,
+          characterDomainPrompt: wikiRecord.ingestionPrompt,
+          source: {
+            title: source.title,
+            kind: source.kind,
+            tags: sourceTags,
+            content: source.content,
+          },
+          existingPages,
+        });
     totalTokens += opPlan.tokens;
     totalInputTokens += opPlan.inputTokens;
     totalOutputTokens += opPlan.outputTokens;
@@ -400,6 +404,17 @@ function resolveWriterConcurrency(input: number | undefined): number {
   const parsed =
     Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_WRITER_CONCURRENCY;
   return Math.max(1, Math.min(MAX_WRITER_CONCURRENCY, parsed));
+}
+
+function buildRetryPlan(ops: PlanOp[]): OpPlan {
+  return {
+    ops,
+    contradictions: [],
+    confidence: 1,
+    tokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+  };
 }
 
 function buildSavePageInput(
