@@ -552,47 +552,55 @@ export async function POST(
             // that", "what about her?") still hit relevant pages instead
             // of embedding the bare 4-word fragment. The summary fetch
             // was already kicked off in parallel above; awaiting it here
-            // is sub-50ms and adds nothing to the critical path beyond
-            // what the embedding API call already takes.
+            // is sub-50ms.
             const summariesForQuery = await summariesPromise;
             const lastSummary = summariesForQuery[summariesForQuery.length - 1];
             const embedQuery = lastSummary
               ? `Previous turn: ${lastSummary}\nUser now asks: ${message}`
               : message;
-            // Move 01 (promoted): the co-located bge-small embedder + the
-            // 384-dim embedding_bge column are the DEFAULT. Set
-            // EMBEDDING_PROVIDER=openai to use text-embedding-3-small against
-            // embedding(1536). Each path uses its matching column.
-            const wantBge = process.env.EMBEDDING_PROVIDER !== "openai";
-            let usedBge = wantBge;
-            let queryEmbedding: number[] | null;
-            if (wantBge) {
-              try {
-                queryEmbedding = await embedTextLocal(embedQuery, { isQuery: true });
-              } catch (bgeErr) {
-                // The co-located embedder can be unavailable in a given runtime
-                // (e.g. onnxruntime's native lib isn't loadable on serverless).
-                // Degrade to OpenAI for this turn instead of dropping to zero
-                // semantic hits. Set EMBEDDING_PROVIDER=openai to skip the
-                // wasted bge attempt entirely on such environments. Note the
-                // fallback embeds (and searches) against the 1536-dim column.
-                serverTrace.mark("server.retrieval.embedder_fallback", {
-                  from: "bge-small",
-                  to: "openai",
-                  message: bgeErr instanceof Error ? bgeErr.message : String(bgeErr),
-                });
-                usedBge = false;
+
+            // Embed + pgvector search, bounded by a latency budget. The embed
+            // sits on the critical path *before* the character LLM, and on
+            // serverless a cold OpenAI embed can spike to several seconds
+            // (cold fn + cold OpenAI connection) — stalling voice-to-voice for
+            // a result that, on small talk, is often zero hits anyway. So race
+            // retrieval against the budget: if it loses, generate from base
+            // context (the curator always seeds the voice-identity page) and
+            // let the next turn's cache catch up. Semantic hits are a bonus,
+            // not a blocker. Tune/disable the cap via VOICE_RETRIEVAL_BUDGET_MS.
+            const retrieveSeeds = (async (): Promise<SemanticSeed[]> => {
+              // Move 01 (promoted): the co-located bge-small embedder + the
+              // 384-dim embedding_bge column are the DEFAULT. Set
+              // EMBEDDING_PROVIDER=openai to use text-embedding-3-small against
+              // embedding(1536). Each path searches its matching column.
+              const wantBge = process.env.EMBEDDING_PROVIDER !== "openai";
+              let usedBge = wantBge;
+              let queryEmbedding: number[] | null;
+              if (wantBge) {
+                try {
+                  queryEmbedding = await embedTextLocal(embedQuery, { isQuery: true });
+                } catch (bgeErr) {
+                  // bge's native lib can be unloadable in a given runtime
+                  // (onnxruntime on serverless). Degrade to OpenAI instead of
+                  // dropping to zero hits; EMBEDDING_PROVIDER=openai skips the
+                  // wasted attempt. The fallback searches the 1536-dim column.
+                  serverTrace.mark("server.retrieval.embedder_fallback", {
+                    from: "bge-small",
+                    to: "openai",
+                    message: bgeErr instanceof Error ? bgeErr.message : String(bgeErr),
+                  });
+                  usedBge = false;
+                  queryEmbedding = await embedText(embedQuery);
+                }
+              } else {
                 queryEmbedding = await embedText(embedQuery);
               }
-            } else {
-              queryEmbedding = await embedText(embedQuery);
-            }
-            // Split the retrieval span: embed (Move 01's target) vs pgvector search.
-            serverTrace.mark("server.retrieval.embedded", {
-              dims: queryEmbedding?.length ?? 0,
-              embedder: usedBge ? "bge-small" : "openai",
-            });
-            if (queryEmbedding) {
+              // Split the retrieval span: embed (Move 01's target) vs search.
+              serverTrace.mark("server.retrieval.embedded", {
+                dims: queryEmbedding?.length ?? 0,
+                embedder: usedBge ? "bge-small" : "openai",
+              });
+              if (!queryEmbedding) return [];
               const activeWikiIds = (await getWikisStore().listWikisForCharacter(character.id))
                 .filter((wiki) => wiki.binding.isActive)
                 .map((wiki) => wiki.id);
@@ -607,18 +615,38 @@ export async function POST(
                     queryEmbedding,
                     { topK: 5, minSimilarity: 0.5 },
                   );
-              semanticHitCount = hits.length;
-              semanticSeeds = hits.map((h) => ({
+              return hits.map((h) => ({
                 pageId: h.pageId,
                 slug: h.slug,
                 similarity: h.similarity,
               }));
+            })();
+
+            const RETRIEVAL_BUDGET_MS = Number(
+              process.env.VOICE_RETRIEVAL_BUDGET_MS ?? "800",
+            );
+            const TIMED_OUT = Symbol("retrieval-budget");
+            let budgetTimer: ReturnType<typeof setTimeout> | undefined;
+            const budget = new Promise<typeof TIMED_OUT>((resolve) => {
+              budgetTimer = setTimeout(() => resolve(TIMED_OUT), RETRIEVAL_BUDGET_MS);
+            });
+            const raced = await Promise.race([retrieveSeeds, budget]);
+            if (budgetTimer) clearTimeout(budgetTimer);
+
+            if (raced === TIMED_OUT) {
+              // Abandon the in-flight embed; swallow its eventual settle so it
+              // can't surface as an unhandled rejection after we've moved on.
+              void retrieveSeeds.catch(() => undefined);
+              serverTrace.mark("server.retrieval.budget_exceeded", {
+                budgetMs: RETRIEVAL_BUDGET_MS,
+              });
+            } else {
+              semanticSeeds = raced;
+              semanticHitCount = raced.length;
               serverTrace.mark("server.retrieval.done", {
                 hits: semanticHitCount,
                 embedQueryAware: Boolean(lastSummary),
               });
-            } else {
-              serverTrace.mark("server.retrieval.skipped", { reason: "no-embedding" });
             }
           } catch (retrievalErr) {
             serverTrace.mark("server.retrieval.error", {
