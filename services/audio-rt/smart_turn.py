@@ -71,3 +71,10 @@ def predict_completion(audio_16k: np.ndarray) -> float:
 def warm() -> Optional[float]:
     """Load weights + prime the graph so the first real call isn't slow."""
     return predict_completion(np.zeros(SAMPLE_RATE, dtype=np.float32))
+
+
+def is_loaded() -> bool:
+    """Whether the ONNX session is loaded — True only after warm()/the first
+    predict has succeeded. Lets /healthz tell 'flag on and working' apart from
+    'flag on but warm-up faulted' (which silently falls back to fixed silence)."""
+    return _session is not None
