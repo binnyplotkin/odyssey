@@ -561,22 +561,42 @@ export async function POST(
               : message;
             // Move 01 (promoted): the co-located bge-small embedder + the
             // 384-dim embedding_bge column are the DEFAULT. Set
-            // EMBEDDING_PROVIDER=openai to fall back to text-embedding-3-small
-            // against embedding(1536). Each path uses its matching column.
-            const useBge = process.env.EMBEDDING_PROVIDER !== "openai";
-            const queryEmbedding = useBge
-              ? await embedTextLocal(embedQuery, { isQuery: true })
-              : await embedText(embedQuery);
+            // EMBEDDING_PROVIDER=openai to use text-embedding-3-small against
+            // embedding(1536). Each path uses its matching column.
+            const wantBge = process.env.EMBEDDING_PROVIDER !== "openai";
+            let usedBge = wantBge;
+            let queryEmbedding: number[] | null;
+            if (wantBge) {
+              try {
+                queryEmbedding = await embedTextLocal(embedQuery, { isQuery: true });
+              } catch (bgeErr) {
+                // The co-located embedder can be unavailable in a given runtime
+                // (e.g. onnxruntime's native lib isn't loadable on serverless).
+                // Degrade to OpenAI for this turn instead of dropping to zero
+                // semantic hits. Set EMBEDDING_PROVIDER=openai to skip the
+                // wasted bge attempt entirely on such environments. Note the
+                // fallback embeds (and searches) against the 1536-dim column.
+                serverTrace.mark("server.retrieval.embedder_fallback", {
+                  from: "bge-small",
+                  to: "openai",
+                  message: bgeErr instanceof Error ? bgeErr.message : String(bgeErr),
+                });
+                usedBge = false;
+                queryEmbedding = await embedText(embedQuery);
+              }
+            } else {
+              queryEmbedding = await embedText(embedQuery);
+            }
             // Split the retrieval span: embed (Move 01's target) vs pgvector search.
             serverTrace.mark("server.retrieval.embedded", {
               dims: queryEmbedding?.length ?? 0,
-              embedder: useBge ? "bge-small" : "openai",
+              embedder: usedBge ? "bge-small" : "openai",
             });
             if (queryEmbedding) {
               const activeWikiIds = (await getWikisStore().listWikisForCharacter(character.id))
                 .filter((wiki) => wiki.binding.isActive)
                 .map((wiki) => wiki.id);
-              const hits = useBge
+              const hits = usedBge
                 ? await getWikiStore().searchPagesByBgeEmbeddingForWikis(
                     activeWikiIds,
                     queryEmbedding,
