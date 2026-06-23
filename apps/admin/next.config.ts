@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
     "@odyssey/db",
     "@odyssey/auth",
     "@odyssey/ui",
+    "@odyssey/voice-pipeline",
   ],
   images: {
     remotePatterns: [
