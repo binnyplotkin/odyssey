@@ -1,0 +1,17 @@
+# Applies to Docker builds whose context is the monorepo root (services/voice-host).
+# Keeps host-platform node_modules (wrong arch) and build artifacts out of the
+# image so `npm ci` installs fresh linux binaries.
+**/node_modules
+**/.next
+**/.next-preview
+**/dist
+**/.turbo
+.git
+.github
+**/coverage
+**/*.log
+.env
+.env.*
+**/.env
+**/.env.*
+.DS_Store

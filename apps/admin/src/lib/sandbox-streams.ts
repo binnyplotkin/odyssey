@@ -201,30 +201,93 @@ export async function prepareSandboxVoiceTurn(opts: {
   return (await res.json()) as { accepted: boolean; cacheKey?: string; reason?: string };
 }
 
+// When NEXT_PUBLIC_VOICE_HOST_URL is set, voice turns go to the warm
+// long-running host (services/voice-host) instead of the Vercel route. The host
+// runs the identical pipeline, so consumeSse and every callback below are
+// unchanged — only the URL, a short-lived bearer token, and characterId-in-body
+// differ. Unset the env var to fall back to the Vercel route instantly.
+const VOICE_HOST_URL =
+  process.env.NEXT_PUBLIC_VOICE_HOST_URL?.replace(/\/+$/, "") || null;
+
+type CachedHostToken = { token: string; expiresAtMs: number };
+const hostTokenCache = new Map<string, CachedHostToken>();
+
+// Mint a host token per (character, session) and reuse it until it's within 10s
+// of expiry — keeps the mint round-trip off the per-turn hot path.
+async function getHostToken(
+  characterId: string,
+  sessionId: string | undefined,
+  signal?: AbortSignal,
+): Promise<string> {
+  const key = `${characterId}:${sessionId ?? ""}`;
+  const cached = hostTokenCache.get(key);
+  if (cached && cached.expiresAtMs - Date.now() > 10_000) return cached.token;
+  const res = await fetch("/api/voice/host-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ characterId, sessionId: sessionId ?? undefined }),
+    signal,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => `${res.status}`);
+    throw new Error(`host-token: ${detail.slice(0, 200)}`);
+  }
+  const { token, expiresIn } = (await res.json()) as {
+    token: string;
+    expiresIn: number;
+  };
+  hostTokenCache.set(key, { token, expiresAtMs: Date.now() + expiresIn * 1000 });
+  return token;
+}
+
 /**
- * POST /api/characters/:id/voice-stream and dispatch parsed SSE events.
- * The route merges LLM token deltas + Kyutai TTS audio frames into one
- * stream — both flow through here.
+ * POST the voice turn and dispatch parsed SSE events. Targets the warm host
+ * (NEXT_PUBLIC_VOICE_HOST_URL) when set, else the Vercel voice-stream route —
+ * both run the identical pipeline. The stream merges LLM token deltas + TTS
+ * audio frames; both flow through here.
  */
 export async function streamVoice(opts: StreamVoiceOptions): Promise<void> {
-  const res = await fetch(
-    `/api/characters/${opts.characterId}/voice-stream`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: opts.sessionId ?? undefined,
-        turnId: opts.turnId,
-        promptChunk: opts.promptChunk,
-        message: opts.message,
-        history: opts.history,
-        scene: opts.scene,
-        model: opts.model,
-        ackMode: opts.ackMode,
-      }),
-      signal: opts.signal,
-    },
-  );
+  const turnBody = {
+    sessionId: opts.sessionId ?? undefined,
+    turnId: opts.turnId,
+    promptChunk: opts.promptChunk,
+    message: opts.message,
+    history: opts.history,
+    scene: opts.scene,
+    model: opts.model,
+    ackMode: opts.ackMode,
+  };
+
+  let url: string;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  let body: string;
+  if (VOICE_HOST_URL) {
+    let token: string;
+    try {
+      token = await getHostToken(
+        opts.characterId,
+        opts.sessionId ?? undefined,
+        opts.signal,
+      );
+    } catch (err) {
+      opts.callbacks.onError?.(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    // The host reads characterId from the body (no URL param).
+    url = `${VOICE_HOST_URL}/voice-stream`;
+    headers.Authorization = `Bearer ${token}`;
+    body = JSON.stringify({ ...turnBody, characterId: opts.characterId });
+  } else {
+    url = `/api/characters/${opts.characterId}/voice-stream`;
+    body = JSON.stringify(turnBody);
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body,
+    signal: opts.signal,
+  });
   if (!res.ok || !res.body) {
     const detail = res.body ? await res.text() : `${res.status}`;
     opts.callbacks.onError?.(`voice-stream: ${detail.slice(0, 200)}`);

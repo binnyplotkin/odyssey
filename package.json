@@ -5,13 +5,15 @@
   "packageManager": "npm@10.9.4",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "services/voice-host"
   ],
   "scripts": {
     "dev": "node scripts/run-turbo-stream.mjs dev",
     "dev:web": "node scripts/run-turbo-stream.mjs dev --filter=@odyssey/web",
     "dev:admin": "node scripts/run-turbo-stream.mjs dev --filter=@odyssey/admin",
     "worker:wiki-ingest": "tsx packages/wiki-ingest/src/worker.ts",
+    "host:voice": "tsx services/voice-host/src/server.ts",
     "eval": "tsx scripts/eval.ts",
     "sonar": "tsx scripts/sonar.ts",
     "benchmark": "tsx scripts/benchmark.ts",
