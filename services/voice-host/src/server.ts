@@ -126,11 +126,26 @@ app.post("/voice-stream", async (req, reply) => {
 
   reply.hijack();
   const res = reply.raw;
+  // reply.hijack() bypasses Fastify's reply lifecycle, so @fastify/cors never
+  // adds its headers to this streamed response: the preflight passes but the
+  // actual SSE response would lack Access-Control-Allow-Origin and the browser
+  // blocks reading it ("Failed to fetch"). Re-apply the cors allowlist here by
+  // hand on the raw response.
+  const reqOrigin = req.headers.origin;
+  const corsOrigin =
+    allowedOrigins.length === 0
+      ? (reqOrigin ?? "*")
+      : reqOrigin && allowedOrigins.includes(reqOrigin)
+        ? reqOrigin
+        : null;
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
+    ...(corsOrigin
+      ? { "Access-Control-Allow-Origin": corsOrigin, Vary: "Origin" }
+      : {}),
   });
   const write = (ev: VoiceStreamEvent) => {
     try {
