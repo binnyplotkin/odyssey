@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSceneSessionStore } from "@odyssey/db";
-import { type SceneState } from "@odyssey/types";
+import { type OrchestratorDecision, type SceneState } from "@odyssey/types";
 import {
   buildSceneDecisionRequest,
   buildSceneSessionSnapshot,
@@ -10,6 +10,7 @@ import {
   readSceneMemoryFromSnapshot,
   readSceneStateFromSnapshot,
   resolveSceneDecision,
+  type SceneDecisionResolution,
   updateSceneMemory,
 } from "@odyssey/orchestration/client";
 import { resolveOrchestratorExecutor } from "@/lib/orchestrator-executor";
@@ -127,6 +128,94 @@ export async function POST(
   });
   trace.mark("orchestrate.request.built", decisionRequest.trace);
 
+  // Shared persistence + response for a resolved decision — used by the
+  // single-character fast-path, the LLM success path, and the LLM-failure
+  // fallback so all three persist events identically and return the same
+  // response shape.
+  const respond = async (
+    resolution: SceneDecisionResolution,
+    orchestrator: { provider: string; model: string } | null,
+  ) => {
+    const degraded = resolution.degraded || undefined;
+    try {
+      trace.mark("orchestrate.persistence.start", {
+        eventCount: resolution.events.length,
+        ...(degraded ? { degraded: true } : {}),
+      });
+      for (const event of resolution.events) {
+        await store.appendEvent({
+          sessionId,
+          type: event.type,
+          source: event.source,
+          payload: {
+            ...event.payload,
+            ...(orchestrator ? { orchestrator } : {}),
+            requestTrace: decisionRequest.trace,
+            trace: trace.toJSON(),
+          },
+        });
+      }
+      await store.updateCurrentScene({
+        sessionId,
+        currentScene: buildSceneSessionSnapshot(resolution.sceneState, {
+          sceneMemory,
+        }),
+      });
+      trace.mark("orchestrate.persistence.done");
+    } catch (eventErr) {
+      trace.mark("orchestrate.persistence.error", {
+        message: eventErr instanceof Error ? eventErr.message : String(eventErr),
+      });
+      console.error("[orchestrate] persistence failed", eventErr);
+    }
+    trace.mark("orchestrate.response.ready", {
+      action: resolution.decision.action,
+      speakerSlug: resolution.speakerSlug,
+      ...(degraded ? { degraded: true } : {}),
+    });
+    return NextResponse.json({
+      decision: resolution.decision,
+      sceneState: resolution.sceneState,
+      sceneMemory,
+      ...(orchestrator ? { orchestrator } : {}),
+      degraded,
+      reason: resolution.reason,
+      trace: trace.toJSON(),
+    });
+  };
+
+  // ── Single-character fast-path ────────────────────────────────────────
+  // With exactly one character present, the orchestrator's core decision —
+  // who speaks next — has only one answer, so the ~0.9–1.1s blocking
+  // orchestrator LLM call (groq/cerebras gpt-oss-120b) is pure latency for no
+  // real choice. Synthesize the decision directly: "speak" for that character
+  // once the user has spoken, otherwise "wait-for-user". This removes the
+  // dominant per-turn cost for single-character sandbox scenes
+  // (character-sandbox:<slug>). Multi-character scenes fall through to the
+  // real orchestrator below.
+  const presentSoloSlugs = sceneState.presentCharacterSlugs.filter((slug) =>
+    scene.characters.some((c) => c.characterSlug === slug),
+  );
+  if (presentSoloSlugs.length === 1) {
+    const soloSlug = presentSoloSlugs[0];
+    const userHasSpoken =
+      Boolean(body.lastUserMessage?.trim()) ||
+      recentTurns[recentTurns.length - 1]?.speakerSlug === "user";
+    const rawDecision: OrchestratorDecision = userHasSpoken
+      ? { action: "speak", speakerId: soloSlug }
+      : defaultSceneDecision(scene, sceneState);
+    trace.mark("orchestrate.fastpath", {
+      reason: "single-character-scene",
+      action: rawDecision.action,
+      speakerId: userHasSpoken ? soloSlug : null,
+    });
+    const resolution = resolveSceneDecision({ scene, sceneState }, rawDecision);
+    return respond(resolution, {
+      provider: "fastpath",
+      model: "single-character",
+    });
+  }
+
   const executorResolution = resolveOrchestratorExecutor();
   if (!executorResolution.executor) {
     trace.mark("orchestrate.provider.unavailable", {
@@ -170,55 +259,9 @@ export async function POST(
       turnIndex: resolution.sceneState.turnIndex,
     });
 
-    try {
-      trace.mark("orchestrate.persistence.start", {
-        eventCount: resolution.events.length,
-      });
-      for (const event of resolution.events) {
-        await store.appendEvent({
-          sessionId,
-          type: event.type,
-          source: event.source,
-          payload: {
-            ...event.payload,
-            orchestrator: {
-              provider: executor.provider,
-              model: executor.model,
-            },
-            requestTrace: decisionRequest.trace,
-            trace: trace.toJSON(),
-          },
-        });
-      }
-      await store.updateCurrentScene({
-        sessionId,
-        currentScene: buildSceneSessionSnapshot(resolution.sceneState, {
-          sceneMemory,
-        }),
-      });
-      trace.mark("orchestrate.persistence.done");
-    } catch (eventErr) {
-      trace.mark("orchestrate.persistence.error", {
-        message: eventErr instanceof Error ? eventErr.message : String(eventErr),
-      });
-      console.error("[orchestrate] persistence failed", eventErr);
-    }
-
-    trace.mark("orchestrate.response.ready", {
-      action: resolution.decision.action,
-      speakerSlug: resolution.speakerSlug,
-    });
-    return NextResponse.json({
-      decision: resolution.decision,
-      sceneState: resolution.sceneState,
-      sceneMemory,
-      orchestrator: {
-        provider: executor.provider,
-        model: executor.model,
-      },
-      degraded: resolution.degraded || undefined,
-      reason: resolution.reason,
-      trace: trace.toJSON(),
+    return respond(resolution, {
+      provider: executor.provider,
+      model: executor.model,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -228,56 +271,10 @@ export async function POST(
       message,
     });
     const resolution = fallbackSceneDecisionResolution({ scene, sceneState }, message);
-    try {
-      trace.mark("orchestrate.persistence.start", {
-        eventCount: resolution.events.length,
-        degraded: true,
-      });
-      for (const event of resolution.events) {
-        await store.appendEvent({
-          sessionId,
-          type: event.type,
-          source: event.source,
-          payload: {
-            ...event.payload,
-            orchestrator: {
-              provider: executor.provider,
-              model: executor.model,
-            },
-            requestTrace: decisionRequest.trace,
-            trace: trace.toJSON(),
-          },
-        });
-      }
-      await store.updateCurrentScene({
-        sessionId,
-        currentScene: buildSceneSessionSnapshot(resolution.sceneState, {
-          sceneMemory,
-        }),
-      });
-      trace.mark("orchestrate.persistence.done");
-    } catch (eventErr) {
-      trace.mark("orchestrate.persistence.error", {
-        message: eventErr instanceof Error ? eventErr.message : String(eventErr),
-      });
-      console.error("[orchestrate] degraded persistence failed", eventErr);
-    }
-    trace.mark("orchestrate.response.ready", {
-      action: resolution.decision.action,
-      degraded: true,
-    });
     console.error(`[orchestrate] ${executor.provider} call failed`, message);
-    return NextResponse.json({
-      decision: resolution.decision,
-      sceneState: resolution.sceneState,
-      sceneMemory,
-      degraded: true,
-      reason: message,
-      orchestrator: {
-        provider: executor.provider,
-        model: executor.model,
-      },
-      trace: trace.toJSON(),
+    return respond(resolution, {
+      provider: executor.provider,
+      model: executor.model,
     });
   }
 }
