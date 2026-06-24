@@ -24,6 +24,7 @@ import {
 import { Menu, type MenuItem } from "@/components/menu";
 import { AudioRtStreamingSttSession } from "@/lib/audio-rt-streaming-stt";
 import { ElevenLabsScribeStreamingSttSession } from "@/lib/elevenlabs-scribe-streaming-stt";
+import { LiveKitVoiceSession } from "@/lib/livekit-voice-session";
 import type { TracePayload } from "@/lib/voice-trace";
 import type {
   SandboxBinding,
@@ -57,6 +58,11 @@ const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
 const DANGER = "var(--status-error)";
 const CHARACTER_SANDBOX_SCENE_PREFIX = "character-sandbox:";
+// When NEXT_PUBLIC_VOICE_AGENT is set, the sandbox drives voice over a LiveKit room
+// (browser publishes mic; the voice-agent worker does STT + brain + TTS) instead of
+// the audio-rt STT + SSE streamVoice path. Per-environment flip; default keeps the
+// existing pipeline untouched.
+const VOICE_AGENT_ENABLED = process.env.NEXT_PUBLIC_VOICE_AGENT === "1";
 // Debounce after the last STT word before auto-committing the turn. The
 // audio-rt gateway delivers a turn's words in ONE burst *after* its own
 // server-side end-of-turn detection, so this hold only needs to coalesce that
@@ -197,6 +203,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   // refs for mic capture, and a `voiceState` for the wavefield state pill.
   const abortRef = useRef<AbortController | null>(null);
   const pcmPlayerRef = useRef<PcmPlayer | null>(null);
+  // LiveKit voice session (when VOICE_AGENT_ENABLED) — replaces the audio-rt STT +
+  // streamVoice engine while reusing the same wavefield + state-pill UI.
+  const liveKitSessionRef = useRef<LiveKitVoiceSession | null>(null);
   // Shared output AudioContext: created + resumed inside the start gesture so
   // the entry cue plays instantly and TTS playback inherits an unlocked
   // context (Safari leaves contexts created outside a gesture suspended).
@@ -387,6 +396,42 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         console.warn("[sandbox] voice context warm failed", err);
         return null;
       });
+    if (VOICE_AGENT_ENABLED) {
+      // LiveKit path: join the room, publish mic, play the agent's voice. The
+      // worker does STT + turn detection + brain + TTS; we just drive the same
+      // wavefield + state pill from its audio track.
+      const lkSession = new LiveKitVoiceSession({
+        onStateChange: (next) => {
+          voiceStateRef.current = next;
+          setVoiceState(next);
+        },
+        onAudioMetrics: (metrics) => {
+          const wave = waveAudioRef.current;
+          wave.energy = metrics.energy;
+          wave.bass = metrics.bass;
+          wave.mid = metrics.mid;
+          wave.high = metrics.high;
+          wave.peak = metrics.peak;
+          wave.active = metrics.active;
+        },
+        onError: (message) => setSessionError(message),
+      });
+      liveKitSessionRef.current = lkSession;
+      micOnRef.current = true;
+      setMicOn(true);
+      void lkSession
+        .connect({
+          characterId: character.id,
+          sessionId,
+          audioContext: audioCtxRef.current ?? undefined,
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          setSessionError(message);
+          console.warn("[sandbox] livekit connect failed", err);
+        });
+      return;
+    }
     void startVoiceInput("session_start");
   }
 
@@ -394,6 +439,8 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     // End the persisted run and retain the local transcript/telemetry for the
     // post-session review surface.
     abortRef.current?.abort();
+    void liveKitSessionRef.current?.disconnect();
+    liveKitSessionRef.current = null;
     pcmPlayerRef.current?.stop();
     entryCueRef.current?.stop();
     entryCueRef.current = null;
@@ -1442,6 +1489,15 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   }
 
   async function handleMicToggle() {
+    if (VOICE_AGENT_ENABLED) {
+      // LiveKit path: continuous mic + server-side turn detection, so the toggle
+      // just mutes/unmutes the published track (no manual commit-and-send).
+      const next = !micOnRef.current;
+      micOnRef.current = next;
+      setMicOn(next);
+      await liveKitSessionRef.current?.setMicEnabled(next);
+      return;
+    }
     if (micOn) {
       clearStreamingCommitTimer();
       const transcript = streamingTranscriptRef.current.trim();
