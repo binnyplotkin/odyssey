@@ -1,0 +1,19 @@
+{
+  "name": "@odyssey/voice-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx --env-file-if-exists=.env src/agent.ts dev",
+    "start": "tsx src/agent.ts start",
+    "prewarm": "tsx scripts/prewarm.ts"
+  },
+  "dependencies": {
+    "@livekit/agents": "^1.4.9",
+    "@livekit/noise-cancellation-node": "^0.1.9",
+    "@livekit/rtc-node": "^0.13.29",
+    "@odyssey/db": "*",
+    "@odyssey/engine": "*",
+    "@odyssey/voice-pipeline": "*"
+  }
+}
