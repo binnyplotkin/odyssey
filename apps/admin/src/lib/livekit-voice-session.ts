@@ -106,20 +106,18 @@ export class LiveKitVoiceSession {
         this.#setState(agentSpeaking ? "speaking" : "listening");
       })
       .on(lk.RoomEvent.Disconnected, () => this.#setState("idle"))
-      .on(lk.RoomEvent.TranscriptionReceived, (segments, participant) => {
-        // The agent publishes the user's STT transcription (attributed to the
-        // local participant); Abraham's reply text is attributed to the agent.
-        const role: "user" | "agent" =
-          participant && participant.identity !== room.localParticipant.identity
-            ? "agent"
-            : "user";
-        for (const segment of segments) {
-          this.#callbacks.onTranscript?.({
-            id: segment.id,
-            text: segment.text,
-            role,
-            final: segment.final,
-          });
+      .on(lk.RoomEvent.DataReceived, (payload, _participant, _kind, topic) => {
+        // The agent publishes grouped turn transcripts on this topic: the user's
+        // FULL turn and the character's streaming reply text (not raw per-pause STT
+        // segments). The sandbox upserts these by id.
+        if (topic !== "odyssey.transcript") return;
+        try {
+          const message = JSON.parse(
+            new TextDecoder().decode(payload),
+          ) as LiveKitVoiceTranscript;
+          this.#callbacks.onTranscript?.(message);
+        } catch {
+          // ignore malformed payloads
         }
       });
 

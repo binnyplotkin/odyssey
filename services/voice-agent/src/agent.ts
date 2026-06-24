@@ -178,20 +178,46 @@ export default defineAgent({
 
     let turn: AbortController | null = null;
 
+    // Publish turn transcripts over a data channel so the sandbox can render them —
+    // the user's FULL turn (grouped, not raw per-pause STT segments) and the
+    // character's streaming reply text. Topic-scoped; the client filters by it.
+    const transcriptEncoder = new TextEncoder();
+    const publishTurn = (msg: {
+      role: "user" | "agent";
+      id: string;
+      text: string;
+      final: boolean;
+    }): void => {
+      void ctx.room.localParticipant?.publishData(
+        transcriptEncoder.encode(JSON.stringify(msg)),
+        { reliable: true, topic: "odyssey.transcript" },
+      );
+    };
+
     // One user turn → run the brain, push its audio frames onto our output track.
     // captureFrame paces to real-time, so the loop naturally tracks playback.
-    const speak = async (message: string, signal: AbortSignal) => {
+    const speak = async (message: string, signal: AbortSignal, replyId: string) => {
+      let replyText = "";
       try {
         for await (const ev of runVoiceStream({ characterId, message, sessionId }, { signal })) {
           if (signal.aborted) break;
           if (ev.event === "audio") {
             const d = ev.data as { pcm: string; sampleRate: number };
             await audioSource.captureFrame(toAudioFrame(d.pcm, d.sampleRate));
+          } else if (ev.event === "token") {
+            const delta = (ev.data as { delta: string }).delta;
+            if (delta) {
+              replyText += delta;
+              publishTurn({ role: "agent", id: replyId, text: replyText, final: false });
+            }
           } else if (ev.event === "first-audio") {
             console.log(`[voice-agent] first audio ${(ev.data as { latencyMs: number }).latencyMs}ms`);
           } else if (ev.event === "error") {
             console.error("[voice-agent] pipeline error", ev.data);
           }
+        }
+        if (replyText && !signal.aborted) {
+          publishTurn({ role: "agent", id: replyId, text: replyText, final: true });
         }
       } catch (err) {
         if (!signal.aborted) console.error("[voice-agent] turn failed", err);
@@ -204,8 +230,10 @@ export default defineAgent({
       turn?.abort();
       audioSource.clearQueue();
       turn = new AbortController();
+      const exchangeId = `x${Date.now()}`;
       console.log(`[voice-agent] user: ${text}`);
-      void speak(text, turn.signal);
+      publishTurn({ role: "user", id: `${exchangeId}u`, text, final: true });
+      void speak(text, turn.signal, `${exchangeId}a`);
     };
     const agent = new BrainAgent(respond);
 
@@ -236,7 +264,7 @@ export default defineAgent({
     if (process.env.VOICE_AGENT_GREET === "1") {
       turn = new AbortController();
       console.log("[voice-agent] greet-test: running a canned brain turn on join");
-      void speak("Greet me warmly in one short sentence.", turn.signal);
+      void speak("Greet me warmly in one short sentence.", turn.signal, `greet${Date.now()}`);
     }
   },
 });
