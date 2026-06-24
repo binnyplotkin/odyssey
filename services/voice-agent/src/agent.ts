@@ -10,7 +10,8 @@
  * string, billed via LiveKit, no separate key) → silero VAD (auto) → v1-mini
  * end-of-turn detector. On each finalized user turn we call `runVoiceStream` —
  * the SAME generator voice-host uses, the unchanged knowledge-graph brain — and
- * stream its audio into the room via `session.say('', { audio })`. No session
+ * push its audio onto a dedicated published track we own (NOT session.say, which
+ * the AgentSession interrupts while finalizing the user turn). No session
  * llm/tts: runVoiceStream does its own retrieve→curate→LLM→TTS.
  *
  * Wire: runVoiceStream yields `{ event: "audio", data: { pcm: base64<Float32>,
@@ -35,7 +36,13 @@ import {
   inference,
   voice,
 } from "@livekit/agents";
-import { AudioFrame } from "@livekit/rtc-node";
+import {
+  AudioFrame,
+  AudioSource,
+  LocalAudioTrack,
+  TrackPublishOptions,
+  TrackSource,
+} from "@livekit/rtc-node";
 import { getCharacterStore, getSceneSessionStore } from "@odyssey/db";
 import { runVoiceStream } from "@odyssey/voice-pipeline";
 
@@ -135,56 +142,58 @@ export default defineAgent({
     // so the Agent's instructions are intentionally empty.
     const agent = new voice.Agent({ instructions: "" });
 
+    // Own the agent's audio OUTPUT directly: a dedicated published track fed from
+    // runVoiceStream. We deliberately do NOT use session.say — the AgentSession
+    // interrupts its own speech while finalizing the user turn ("speech
+    // interrupted, new user turn detected"), which truncated say()-driven replies
+    // to ~12ms. A separate track sidesteps that machinery; barge-in is an explicit
+    // audioSource.clearQueue() on the next user turn.
+    const OUTPUT_SAMPLE_RATE = 24000; // runVoiceStream/ElevenLabs emit 24 kHz mono
+    const audioSource = new AudioSource(OUTPUT_SAMPLE_RATE, 1);
+    const outTrack = LocalAudioTrack.createAudioTrack("abraham-voice", audioSource);
+
     let turn: AbortController | null = null;
 
-    // One finalized user turn → run the brain, stream its audio into the room.
-    const speak = (transcript: string, signal: AbortSignal) => {
-      const audio = new ReadableStream<AudioFrame>({
-        async start(controller) {
-          try {
-            for await (const ev of runVoiceStream(
-              { characterId, message: transcript, sessionId },
-              { signal },
-            )) {
-              if (signal.aborted) break;
-              if (ev.event === "audio") {
-                const d = ev.data as { pcm: string; sampleRate: number };
-                controller.enqueue(toAudioFrame(d.pcm, d.sampleRate));
-              } else if (ev.event === "first-audio") {
-                console.log(`[voice-agent] first audio ${(ev.data as { latencyMs: number }).latencyMs}ms`);
-              } else if (ev.event === "error") {
-                console.error("[voice-agent] pipeline error", ev.data);
-              }
-            }
-          } catch (err) {
-            if (!signal.aborted) console.error("[voice-agent] turn failed", err);
-          } finally {
-            controller.close();
+    // One user turn → run the brain, push its audio frames onto our output track.
+    // captureFrame paces to real-time, so the loop naturally tracks playback.
+    const speak = async (message: string, signal: AbortSignal) => {
+      try {
+        for await (const ev of runVoiceStream({ characterId, message, sessionId }, { signal })) {
+          if (signal.aborted) break;
+          if (ev.event === "audio") {
+            const d = ev.data as { pcm: string; sampleRate: number };
+            await audioSource.captureFrame(toAudioFrame(d.pcm, d.sampleRate));
+          } else if (ev.event === "first-audio") {
+            console.log(`[voice-agent] first audio ${(ev.data as { latencyMs: number }).latencyMs}ms`);
+          } else if (ev.event === "error") {
+            console.error("[voice-agent] pipeline error", ev.data);
           }
-        },
-      });
-      // Empty text + custom audio stream = publish our PCM as the agent's speech,
-      // bypassing the session's (absent) TTS.
-      session.say("", { audio, allowInterruptions: true });
+        }
+      } catch (err) {
+        if (!signal.aborted) console.error("[voice-agent] turn failed", err);
+      }
     };
 
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
       if (!ev.isFinal) return;
       const text = ev.transcript.trim();
       if (!text) return;
-      // A new finalized user turn supersedes whatever's in flight: cancel the
-      // prior brain turn AND interrupt any audio still playing, then start fresh.
-      // (Without the interrupt, rapid back-to-back utterances pile up speech
-      // handles and the real reply never reaches the room — exactly what we hit.)
+      // New finalized user turn supersedes whatever's in flight: cancel the prior
+      // brain turn and cut any audio still playing (barge-in), then respond fresh.
       turn?.abort();
-      session.interrupt();
+      audioSource.clearQueue();
       turn = new AbortController();
       console.log(`[voice-agent] user: ${text}`);
-      speak(text, turn.signal);
+      void speak(text, turn.signal);
     });
 
     await session.start({ agent, room: ctx.room });
-    console.log("[voice-agent] session started — listening");
+    // Publish our output track now that the room is connected.
+    await ctx.room.localParticipant!.publishTrack(
+      outTrack,
+      new TrackPublishOptions({ source: TrackSource.SOURCE_MICROPHONE }),
+    );
+    console.log("[voice-agent] session started — listening (own output track)");
 
     // DIAGNOSTIC (gated): on join, run ONE brain turn from a canned prompt so the
     // smoke client can verify the FULL brain→output path + scene_session
@@ -193,7 +202,7 @@ export default defineAgent({
     if (process.env.VOICE_AGENT_GREET === "1") {
       turn = new AbortController();
       console.log("[voice-agent] greet-test: running a canned brain turn on join");
-      speak("Greet me warmly in one short sentence.", turn.signal);
+      void speak("Greet me warmly in one short sentence.", turn.signal);
     }
   },
 });
