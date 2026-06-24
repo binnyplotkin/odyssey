@@ -72,7 +72,10 @@ async function main() {
 
   const room = new Room();
   const t0 = Date.now();
-  let firstRespMs = 0;
+  const VOICE_THRESHOLD = 500; // Int16 |amp| > ~1.5% of full scale = real audio, not silence
+  let firstVoicedMs = 0;
+  let voicedFrames = 0;
+  let peak = 0;
   let respFrames = 0;
   let respSamples = 0;
   let agentJoined = false;
@@ -87,12 +90,24 @@ async function main() {
       const stream = new AudioStream(track);
       void (async () => {
         for await (const frame of stream) {
-          if (firstRespMs === 0) {
-            firstRespMs = Date.now() - t0;
-            console.log(`[smoke] ◀ FIRST agent audio @ ${firstRespMs}ms`);
+          // Energy gate: an idle AgentSession publishes a SILENT output track, so
+          // "received frames" ≠ "received speech". Count only frames with real amplitude.
+          const data = frame.data;
+          let framePeak = 0;
+          for (let j = 0; j < data.length; j++) {
+            const a = Math.abs(data[j] ?? 0);
+            if (a > framePeak) framePeak = a;
           }
+          if (framePeak > peak) peak = framePeak;
           respFrames++;
           respSamples += frame.samplesPerChannel;
+          if (framePeak > VOICE_THRESHOLD) {
+            voicedFrames++;
+            if (firstVoicedMs === 0) {
+              firstVoicedMs = Date.now() - t0;
+              console.log(`[smoke] ◀ FIRST voiced agent audio @ ${firstVoicedMs}ms (peak ${framePeak})`);
+            }
+          }
         }
       })();
     }
@@ -128,13 +143,15 @@ async function main() {
 
   console.log("\n=== SMOKE RESULT ===");
   console.log(`agent joined room : ${agentJoined}`);
-  console.log(`agent audio frames: ${respFrames} (~${(respSamples / 24000).toFixed(1)}s @24k)`);
-  console.log(`first agent audio : ${firstRespMs ? `${firstRespMs}ms` : "— (no response)"}`);
-  const ok = respFrames > 0;
+  console.log(`audio frames (any): ${respFrames}`);
+  console.log(`VOICED frames     : ${voicedFrames} (peak ${peak}/32767)`);
+  console.log(`first voiced audio: ${firstVoicedMs ? `${firstVoicedMs}ms` : "— (none — silent track only)"}`);
+  // PASS needs real speech energy, not just the session's silent keepalive track.
+  const ok = voicedFrames >= 20 && peak > VOICE_THRESHOLD;
   console.log(
     ok
-      ? "✅ A2 LOOP WORKS — the agent heard the utterance and responded with audio."
-      : "❌ no agent audio — check the worker logs + room dispatch.",
+      ? "✅ A2 LOOP WORKS — the agent heard the utterance and spoke a real response."
+      : "❌ no real speech from the agent (silent track only) — STT/brain didn't complete; see worker logs.",
   );
   await room.disconnect();
   await dispose();

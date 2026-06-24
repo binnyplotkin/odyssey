@@ -36,6 +36,7 @@ import {
   voice,
 } from "@livekit/agents";
 import { AudioFrame } from "@livekit/rtc-node";
+import { getCharacterStore, getSceneSessionStore } from "@odyssey/db";
 import { runVoiceStream } from "@odyssey/voice-pipeline";
 
 // --- Railway healthcheck: the agents worker doesn't serve HTTP itself, so expose
@@ -101,8 +102,26 @@ export default defineAgent({
       throw new Error("VOICE_AGENT_CHARACTER_ID is required (the character this worker voices)");
     }
     await ctx.connect();
+
+    // Resolve the character (id or slug) and open a REAL scene_session for this
+    // room. runVoiceStream persists per-turn context + telemetry against the
+    // sessionId, so it must FK-resolve in scene_sessions — otherwise the
+    // done-event insert violates scene_session_events_session_id_fkey and the
+    // turn throws right after the audio (which is what swallowed the first reply).
+    const character =
+      (await getCharacterStore().getById(CHARACTER_ID)) ??
+      (await getCharacterStore().getBySlug(CHARACTER_ID));
+    if (!character) {
+      throw new Error(`VOICE_AGENT_CHARACTER_ID "${CHARACTER_ID}" did not resolve to a character`);
+    }
+    const sceneSession = await getSceneSessionStore().createSession({
+      characterId: character.id,
+      mode: "voice",
+    });
+    const characterId = character.id;
+    const sessionId = sceneSession.id;
     console.log(
-      `[voice-agent] connected to room "${ctx.room.name}" — character=${CHARACTER_ID} stt=${STT_MODEL}`,
+      `[voice-agent] connected to room "${ctx.room.name}" — character=${character.slug ?? characterId} session=${sessionId} stt=${STT_MODEL}`,
     );
 
     // User side handled by LiveKit: STT (inference model string) + auto silero VAD
@@ -124,7 +143,7 @@ export default defineAgent({
         async start(controller) {
           try {
             for await (const ev of runVoiceStream(
-              { characterId: CHARACTER_ID, message: transcript, sessionId: ctx.room.name },
+              { characterId, message: transcript, sessionId },
               { signal },
             )) {
               if (signal.aborted) break;
@@ -153,20 +172,29 @@ export default defineAgent({
       if (!ev.isFinal) return;
       const text = ev.transcript.trim();
       if (!text) return;
-      turn?.abort(); // supersede any still-running turn
+      // A new finalized user turn supersedes whatever's in flight: cancel the
+      // prior brain turn AND interrupt any audio still playing, then start fresh.
+      // (Without the interrupt, rapid back-to-back utterances pile up speech
+      // handles and the real reply never reaches the room — exactly what we hit.)
+      turn?.abort();
+      session.interrupt();
       turn = new AbortController();
       console.log(`[voice-agent] user: ${text}`);
       speak(text, turn.signal);
     });
 
-    // Barge-in: the user starts speaking while we're playing → cancel the brain
-    // turn (stops TTS via the abort signal); the room/AEC handles the audio cutover.
-    session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
-      if (ev.newState === "speaking") turn?.abort();
-    });
-
     await session.start({ agent, room: ctx.room });
     console.log("[voice-agent] session started — listening");
+
+    // DIAGNOSTIC (gated): on join, run ONE brain turn from a canned prompt so the
+    // smoke client can verify the FULL brain→output path + scene_session
+    // persistence WITHOUT needing STT (which is flaky under local CPU contention).
+    // Doubles as a greeting. Set VOICE_AGENT_GREET=1.
+    if (process.env.VOICE_AGENT_GREET === "1") {
+      turn = new AbortController();
+      console.log("[voice-agent] greet-test: running a canned brain turn on join");
+      speak("Greet me warmly in one short sentence.", turn.signal);
+    }
   },
 });
 
