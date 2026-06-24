@@ -6,7 +6,8 @@
   "workspaces": [
     "packages/*",
     "apps/*",
-    "services/voice-host"
+    "services/voice-host",
+    "services/voice-agent"
   ],
   "scripts": {
     "dev": "node scripts/run-turbo-stream.mjs dev",
@@ -14,6 +15,7 @@
     "dev:admin": "node scripts/run-turbo-stream.mjs dev --filter=@odyssey/admin",
     "worker:wiki-ingest": "tsx packages/wiki-ingest/src/worker.ts",
     "host:voice": "tsx services/voice-host/src/server.ts",
+    "agent:voice": "tsx services/voice-agent/src/agent.ts",
     "eval": "tsx scripts/eval.ts",
     "sonar": "tsx scripts/sonar.ts",
     "benchmark": "tsx scripts/benchmark.ts",

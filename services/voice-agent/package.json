@@ -1,0 +1,15 @@
+{
+  "name": "@odyssey/voice-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/agent.ts dev",
+    "start": "tsx src/agent.ts start",
+    "prewarm": "tsx scripts/prewarm.ts"
+  },
+  "dependencies": {
+    "@odyssey/engine": "*",
+    "@odyssey/voice-pipeline": "*"
+  }
+}
