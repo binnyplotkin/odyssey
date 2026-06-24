@@ -1056,6 +1056,7 @@ async def asr_streaming(websocket: WebSocket):
     utterance_start_wall: float | None = None
     in_speech = False
     silence_run = 0
+    last_voiced_wall: float | None = None  # wall time of last voiced frame (endpoint timing)
     step_idx = 0
     transcribe_in_flight = False
     pending_drain = False
@@ -1064,8 +1065,17 @@ async def asr_streaming(websocket: WebSocket):
     # connection rather than tearing down the STT socket.
     smart_turn_ok = SMART_TURN_ENABLED
 
-    async def transcribe_and_emit():
-        """Drain the utterance buffer through faster-whisper and emit Word frames."""
+    async def transcribe_and_emit(endpoint_wall: float | None = None,
+                                  last_voiced_at: float | None = None):
+        """Drain the utterance buffer through faster-whisper and emit Word frames.
+
+        On a clean end-of-turn the caller passes endpoint_wall + last_voiced_at so
+        we can report the endpointing gap that sits BEFORE the brain+voice pipeline:
+        the deliberate silence hold (last voiced frame -> endpoint decision) and the
+        STT transcription leg. These are server-clock deltas, so both legs are
+        exact; the absolute values trail the physical voice stop by the
+        client->server audio buffer.
+        """
         nonlocal utterance_chunks, transcribe_in_flight
         if not utterance_chunks:
             return
@@ -1076,6 +1086,7 @@ async def asr_streaming(websocket: WebSocket):
             words = await loop.run_in_executor(
                 None, whisper_runtime.transcribe_utterance, full
             )
+            stt_done_wall = time.time()
             for text, start_time in words:
                 if websocket.client_state.value != 1:  # disconnected
                     return
@@ -1084,6 +1095,29 @@ async def asr_streaming(websocket: WebSocket):
                     "text": text,
                     "start_time": float(start_time),
                 }))
+            if endpoint_wall is not None:
+                endpoint_to_stt_ms = int((stt_done_wall - endpoint_wall) * 1000)
+                hold_ms = (
+                    int((endpoint_wall - last_voiced_at) * 1000)
+                    if last_voiced_at is not None else None
+                )
+                total_ms = (
+                    int((stt_done_wall - last_voiced_at) * 1000)
+                    if last_voiced_at is not None else None
+                )
+                print(
+                    f"[asr] endpoint timing: voice-stop->endpoint {hold_ms}ms "
+                    f"(silence hold) | endpoint->STT {endpoint_to_stt_ms}ms | "
+                    f"voice-stop->transcript {total_ms}ms",
+                    flush=True,
+                )
+                if websocket.client_state.value == 1:
+                    await websocket.send_bytes(msgpack.packb({
+                        "type": "Timing",
+                        "voiceStopToEndpointMs": hold_ms,
+                        "endpointToSttMs": endpoint_to_stt_ms,
+                        "voiceStopToTranscriptMs": total_ms,
+                    }))
         except Exception as error:  # noqa: BLE001
             try:
                 await websocket.send_bytes(msgpack.packb({
@@ -1133,6 +1167,7 @@ async def asr_streaming(websocket: WebSocket):
                     in_speech = True
                     silence_run = 0
                     utterance_start_wall = time.time()
+                    last_voiced_wall = utterance_start_wall
                     # Prepend the lookback buffer so the leading phoneme of
                     # the word VAD just caught isn't lost. lookback_buffer
                     # currently holds chunks BEFORE the present one.
@@ -1141,6 +1176,8 @@ async def asr_streaming(websocket: WebSocket):
                     silence_run += 1
                 else:
                     silence_run = 0  # speech (or borderline) — reset
+                    if in_speech:
+                        last_voiced_wall = time.time()  # last voiced frame
 
                 # Maintain ring buffer of recent silence/borderline chunks for
                 # the next speech onset. Updated AFTER the lookback prepend so
@@ -1198,12 +1235,16 @@ async def asr_streaming(websocket: WebSocket):
                         end_turn = True
 
                 if end_turn:
+                    endpoint_wall = time.time()
                     in_speech = False
                     silence_run = 0
                     if not transcribe_in_flight:
-                        asyncio.create_task(transcribe_and_emit())
+                        asyncio.create_task(
+                            transcribe_and_emit(endpoint_wall, last_voiced_wall)
+                        )
                     else:
                         pending_drain = True
+                    last_voiced_wall = None
 
             # Emit ONE Step per inbound WS frame (≈12.5 Hz) rather than per
             # silero chunk (≈31 Hz). The client only thresholds prs[2] for
