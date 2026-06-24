@@ -100,8 +100,12 @@ app.post("/voice-stream", async (req, reply) => {
   }
 
   // Barge-in / client disconnect → abort the in-flight turn (TTS fetches too).
+  // Listen on the RESPONSE close, not req.raw: an IncomingMessage emits "close"
+  // as soon as its body is fully read (which Fastify does up front), which would
+  // abort the pipeline before it streams a single frame. reply.raw "close" fires
+  // only on a real disconnect or on normal completion (a harmless late abort).
   const ac = new AbortController();
-  req.raw.on("close", () => ac.abort());
+  reply.raw.on("close", () => ac.abort());
 
   const iterator = runVoiceStream(
     { ...(body as VoiceStreamBody), characterId },
