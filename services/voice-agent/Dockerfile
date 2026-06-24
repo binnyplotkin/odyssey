@@ -14,10 +14,13 @@ FROM node:22-slim
 # bge (transformers.js) caches models under $HOME; pin HOME so the build-time
 # warmup and the runtime process resolve the SAME baked cache and boot never
 # pays the HuggingFace download.
+# PORT (not HEALTH_PORT) so Railway can override it at runtime and its /healthz
+# probe reaches the worker — agent.ts binds `HEALTH_PORT ?? PORT ?? 8080`. Do NOT
+# set HEALTH_PORT in the Railway variables, or it would pin the bind off $PORT.
 ENV HOME=/app \
     HF_HOME=/app/.cache/huggingface \
     NODE_ENV=production \
-    HEALTH_PORT=8080
+    PORT=8080
 
 WORKDIR /app
 
