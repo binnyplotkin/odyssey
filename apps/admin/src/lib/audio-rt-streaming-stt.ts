@@ -7,15 +7,24 @@ const TARGET_RMS = 0.075;
 const MIN_GAIN_RMS = 0.012;
 const MAX_GAIN = 3.5;
 
+export type AudioRtEndpointTiming = {
+  voiceStopToEndpointMs: number | null;
+  endpointToSttMs: number;
+  voiceStopToTranscriptMs: number | null;
+};
+
 type SttMessage =
   | { type: "Ready" }
   | { type: "Step"; prs?: number[]; step_idx?: number }
   | { type: "Word"; text: string; start_time: number }
+  | ({ type: "Timing" } & AudioRtEndpointTiming)
   | { type: "Error"; message?: string };
 
 export type AudioRtStreamingSttHandlers = {
   onOpen?: () => void;
   onWord?: (word: string, startTime: number) => void;
+  /** Endpointing latency for a clean end-of-turn (voice stop → transcript). */
+  onTiming?: (timing: AudioRtEndpointTiming) => void;
   onError?: (message: string) => void;
   onClose?: () => void;
 };
@@ -65,6 +74,12 @@ export class AudioRtStreamingSttSession {
         const message = decodeMsgpack(new Uint8Array(event.data as ArrayBuffer)) as SttMessage;
         if (message.type === "Word") {
           handlers.onWord?.(message.text, message.start_time);
+        } else if (message.type === "Timing") {
+          handlers.onTiming?.({
+            voiceStopToEndpointMs: message.voiceStopToEndpointMs,
+            endpointToSttMs: message.endpointToSttMs,
+            voiceStopToTranscriptMs: message.voiceStopToTranscriptMs,
+          });
         } else if (message.type === "Error") {
           handlers.onError?.(message.message ?? "streaming STT failed");
         }
