@@ -13,9 +13,17 @@ type LiveKitModule = typeof import("livekit-client");
 
 export type LiveKitVoiceState = "idle" | "listening" | "thinking" | "speaking";
 
+export interface LiveKitVoiceTranscript {
+  id: string;
+  text: string;
+  role: "user" | "agent";
+  final: boolean;
+}
+
 export interface LiveKitVoiceCallbacks {
   onStateChange?: (state: LiveKitVoiceState) => void;
   onAudioMetrics?: (metrics: SceneAudioMetrics) => void;
+  onTranscript?: (segment: LiveKitVoiceTranscript) => void;
   onError?: (message: string) => void;
 }
 
@@ -97,7 +105,23 @@ export class LiveKitVoiceSession {
         );
         this.#setState(agentSpeaking ? "speaking" : "listening");
       })
-      .on(lk.RoomEvent.Disconnected, () => this.#setState("idle"));
+      .on(lk.RoomEvent.Disconnected, () => this.#setState("idle"))
+      .on(lk.RoomEvent.TranscriptionReceived, (segments, participant) => {
+        // The agent publishes the user's STT transcription (attributed to the
+        // local participant); Abraham's reply text is attributed to the agent.
+        const role: "user" | "agent" =
+          participant && participant.identity !== room.localParticipant.identity
+            ? "agent"
+            : "user";
+        for (const segment of segments) {
+          this.#callbacks.onTranscript?.({
+            id: segment.id,
+            text: segment.text,
+            role,
+            final: segment.final,
+          });
+        }
+      });
 
     await room.connect(url, token);
     await room.localParticipant.setMicrophoneEnabled(true);

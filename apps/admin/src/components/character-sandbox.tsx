@@ -398,8 +398,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       });
     if (VOICE_AGENT_ENABLED) {
       // LiveKit path: join the room, publish mic, play the agent's voice. The
-      // worker does STT + turn detection + brain + TTS; we just drive the same
-      // wavefield + state pill from its audio track.
+      // worker does STT + turn detection + brain + TTS; we drive the same wavefield
+      // + state pill from its audio track and surface its transcripts as turns.
+      const sessionStart = Date.now();
       const lkSession = new LiveKitVoiceSession({
         onStateChange: (next) => {
           voiceStateRef.current = next;
@@ -413,6 +414,30 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           wave.high = metrics.high;
           wave.peak = metrics.peak;
           wave.active = metrics.active;
+        },
+        onTranscript: (segment) => {
+          // Upsert a turn keyed by the segment id so interim text updates in place
+          // and the final replaces it.
+          const turnId = `lk-${segment.id}`;
+          const speaker = segment.role === "user" ? "user" : "character";
+          setTurns((prev) => {
+            const idx = prev.findIndex((turn) => turn.id === turnId);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = { ...next[idx], text: segment.text, inFlight: !segment.final };
+              return next;
+            }
+            return [
+              ...prev,
+              {
+                id: turnId,
+                speaker,
+                text: segment.text,
+                timestampMs: Math.max(0, Date.now() - sessionStart),
+                inFlight: !segment.final,
+              },
+            ];
+          });
         },
         onError: (message) => setSessionError(message),
       });
