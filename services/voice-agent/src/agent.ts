@@ -8,7 +8,8 @@
  *
  * SHAPE: LiveKit owns the USER side — mic track → STT (LiveKit Inference model
  * string, billed via LiveKit, no separate key) → silero VAD (auto) → v1-mini
- * end-of-turn detector. On each finalized user turn we call `runVoiceStream` —
+ * end-of-turn detector. At the real end of each user turn (gated by that detector
+ * via onUserTurnCompleted — NOT raw STT finals) we call `runVoiceStream` —
  * the SAME generator voice-host uses, the unchanged knowledge-graph brain — and
  * push its audio onto a dedicated published track we own (NOT session.say, which
  * the AgentSession interrupts while finalizing the user turn). No session
@@ -34,6 +35,7 @@ import {
   cli,
   defineAgent,
   inference,
+  llm,
   voice,
 } from "@livekit/agents";
 import {
@@ -95,6 +97,32 @@ function toAudioFrame(pcmBase64: string, sampleRate: number): AudioFrame {
   return new AudioFrame(i16, sampleRate, 1, i16.length);
 }
 
+/**
+ * Agent that replies via a caller-supplied callback at the REAL end of the user's
+ * turn. We override `onUserTurnCompleted` (fired after the v1 turn detector
+ * confirms the turn is over) instead of reacting to raw STT finals — Deepgram emits
+ * a "final" at every pause, so keying off those made Abraham cut in mid-sentence.
+ * Then we throw `StopResponse`: the reply is on our own track, so the session must
+ * skip its own (LLM-less) `generateReply`.
+ */
+class BrainAgent extends voice.Agent {
+  readonly #respond: (text: string) => void;
+
+  constructor(respond: (text: string) => void) {
+    super({ instructions: "" });
+    this.#respond = respond;
+  }
+
+  override async onUserTurnCompleted(
+    _chatCtx: llm.ChatContext,
+    newMessage: llm.ChatMessage,
+  ): Promise<void> {
+    const text = newMessage.textContent?.trim();
+    if (text) this.#respond(text);
+    throw new voice.StopResponse();
+  }
+}
+
 export default defineAgent({
   // prewarm runs once per worker process before any job — warm bge so the first
   // real turn is hot, matching voice-host's warm-bge boot.
@@ -138,10 +166,6 @@ export default defineAgent({
       turnDetection: new inference.TurnDetector({ version: "v1-mini" }),
     });
 
-    // The persona lives entirely in the knowledge-graph brain (runVoiceStream),
-    // so the Agent's instructions are intentionally empty.
-    const agent = new voice.Agent({ instructions: "" });
-
     // Own the agent's audio OUTPUT directly: a dedicated published track fed from
     // runVoiceStream. We deliberately do NOT use session.say — the AgentSession
     // interrupts its own speech while finalizing the user turn ("speech
@@ -174,17 +198,27 @@ export default defineAgent({
       }
     };
 
-    session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
-      if (!ev.isFinal) return;
-      const text = ev.transcript.trim();
-      if (!text) return;
-      // New finalized user turn supersedes whatever's in flight: cancel the prior
-      // brain turn and cut any audio still playing (barge-in), then respond fresh.
+    // Reply at the REAL end of the user's turn (BrainAgent.onUserTurnCompleted,
+    // gated by the v1 detector): supersede whatever's in flight, then run the brain.
+    const respond = (text: string) => {
       turn?.abort();
       audioSource.clearQueue();
       turn = new AbortController();
       console.log(`[voice-agent] user: ${text}`);
       void speak(text, turn.signal);
+    };
+    const agent = new BrainAgent(respond);
+
+    // Responsive barge-in: the instant the user starts speaking, cancel the
+    // in-flight brain turn and drop buffered audio so Abraham stops mid-word
+    // (don't wait for the transcript to finalize). The mic track is AEC'd by the
+    // browser, so this fires on real user speech — not Abraham's own audio echoing
+    // back — and the session suppresses it during AEC warmup.
+    session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
+      if (ev.newState === "speaking") {
+        turn?.abort();
+        audioSource.clearQueue();
+      }
     });
 
     await session.start({ agent, room: ctx.room });
