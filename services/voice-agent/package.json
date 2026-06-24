@@ -9,6 +9,7 @@
     "prewarm": "tsx scripts/prewarm.ts"
   },
   "dependencies": {
+    "@livekit/agents": "^1.4.9",
     "@odyssey/engine": "*",
     "@odyssey/voice-pipeline": "*"
   }
