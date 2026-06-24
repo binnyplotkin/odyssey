@@ -1,32 +1,42 @@
 /**
- * Odyssey voice-agent — A1 skeleton (LiveKit Node worker).
+ * Odyssey voice-agent — A2 (runVoiceStream behind a LiveKit AgentSession).
  *
- * The LiveKit twin of `services/voice-host`. Where voice-host is a Fastify SSE
- * server the browser POSTs to, this is a long-running `@livekit/agents` WORKER
- * that registers with LiveKit, is dispatched into a room, and runs the pipeline
+ * The LiveKit twin of `services/voice-host`. voice-host is a Fastify SSE server
+ * the browser POSTs to; this is a long-running `@livekit/agents` WORKER that
+ * registers with LiveKit, is dispatched into a room, and runs the pipeline
  * server-side over a WebRTC track (transport + AEC + barge-in come from the room).
  *
- * A1 SCOPE (this file): register + connect + warm bge + prove transport (logs).
- * The brain, STT, and turn detector are deliberately NOT here yet:
- *   - A2 — replace the entry body with an AgentSession whose end-of-turn calls
- *          `runVoiceStream` (the SAME generator voice-host uses) and publishes the
- *          audio to the room. The knowledge-graph brain is reused unchanged.
- *   - A3 — STT plugin (hosted, or audio-rt behind the agent).
- *   - A4 — Silero VAD + LiveKit v1-mini turn detector (replaces Smart Turn).
+ * SHAPE: LiveKit owns the USER side — mic track → STT (LiveKit Inference model
+ * string, billed via LiveKit, no separate key) → silero VAD (auto) → v1-mini
+ * end-of-turn detector. On each finalized user turn we call `runVoiceStream` —
+ * the SAME generator voice-host uses, the unchanged knowledge-graph brain — and
+ * stream its audio into the room via `session.say('', { audio })`. No session
+ * llm/tts: runVoiceStream does its own retrieve→curate→LLM→TTS.
  *
- * Run (from repo root):  npm run agent:voice -- dev
- * Requires LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET (see .env.example).
+ * Wire: runVoiceStream yields `{ event: "audio", data: { pcm: base64<Float32>,
+ * samples, sampleRate } }`; we convert Float32→Int16 AudioFrames.
  *
- * ⚠ VERSION-SENSITIVE: the @livekit/agents worker/session API changes across
- * minor versions. After `npm install`, run `tsc --noEmit -p services/voice-agent`
- * and `npm run agent:voice -- dev` to lock these imports to the installed SDK
- * before building A2 on top. The `^1.4.7` pin is per research — confirm with
- * `npm install @livekit/agents@latest`.
+ * Run (repo root):  npx tsx --env-file=services/voice-agent/.env services/voice-agent/src/agent.ts dev
+ * Requires LIVEKIT_URL / _API_KEY / _API_SECRET + VOICE_AGENT_CHARACTER_ID
+ * (which character this worker voices) + the brain's env (DATABASE_URL,
+ * CEREBRAS_API_KEY, ELEVENLABS_*, …) — see .env.example.
+ *
+ * Still A-series: A4 = tune the v1 detector; A5 = browser LiveKit client + token
+ * mint; A6 = deploy + A/B. Multi-character/world is Arc 2.
  */
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { warmLocalEmbedder } from "@odyssey/engine";
-import { type JobContext, WorkerOptions, cli, defineAgent } from "@livekit/agents";
+import {
+  type JobContext,
+  WorkerOptions,
+  cli,
+  defineAgent,
+  inference,
+  voice,
+} from "@livekit/agents";
+import { AudioFrame } from "@livekit/rtc-node";
+import { runVoiceStream } from "@odyssey/voice-pipeline";
 
 // --- Railway healthcheck: the agents worker doesn't serve HTTP itself, so expose
 // a tiny /healthz on its own port. embedderReady flips when bge is resident. ---
@@ -39,11 +49,33 @@ createServer((req, res) => {
     return;
   }
   res.writeHead(404).end();
-}).listen(HEALTH_PORT, "0.0.0.0", () => console.log(`[voice-agent] healthz on :${HEALTH_PORT}`));
+}).listen(HEALTH_PORT, "0.0.0.0", () =>
+  console.log(`[voice-agent] healthz on :${HEALTH_PORT}`),
+);
+
+// Which character this worker voices, and which LiveKit Inference STT model.
+// (Single-character for A2; the world-agent will pick the character per turn.)
+const CHARACTER_ID = process.env.VOICE_AGENT_CHARACTER_ID;
+const STT_MODEL = process.env.VOICE_AGENT_STT ?? "deepgram/nova-3";
+
+/** base64 Float32 LE PCM (one TTS chunk) → an Int16 mono AudioFrame for the room. */
+function toAudioFrame(pcmBase64: string, sampleRate: number): AudioFrame {
+  const buf = Buffer.from(pcmBase64, "base64");
+  // Copy into a fresh, 4-byte-aligned ArrayBuffer — Buffer pooling can hand back
+  // an unaligned byteOffset, which would make the Float32Array view throw.
+  const aligned = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  const f32 = new Float32Array(aligned);
+  const i16 = new Int16Array(f32.length);
+  for (let i = 0; i < f32.length; i++) {
+    const s = Math.max(-1, Math.min(1, f32[i] ?? 0));
+    i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return new AudioFrame(i16, sampleRate, 1, i16.length);
+}
 
 export default defineAgent({
-  // prewarm runs once per worker process before any job is handled — warm bge here
-  // so the first real turn (A2) is hot, matching voice-host's warm-bge boot.
+  // prewarm runs once per worker process before any job — warm bge so the first
+  // real turn is hot, matching voice-host's warm-bge boot.
   prewarm: async () => {
     await warmLocalEmbedder();
     embedderReady = true;
@@ -51,14 +83,76 @@ export default defineAgent({
   },
 
   entry: async (ctx: JobContext) => {
+    if (!CHARACTER_ID) {
+      throw new Error("VOICE_AGENT_CHARACTER_ID is required (the character this worker voices)");
+    }
     await ctx.connect();
-    // A1 gate: prove transport. The worker is dispatched into a room and connects;
-    // we log the room + participants + subscribed tracks. No audio is produced yet.
-    console.log(`[voice-agent] connected to room "${ctx.room.name}"`);
-    ctx.room.on("participantConnected", (p) => console.log(`[voice-agent] participant joined: ${p.identity}`));
-    ctx.room.on("trackSubscribed", (_track, pub, p) => console.log(`[voice-agent] track ${pub.kind} from ${p.identity}`));
-    // A2: const session = new AgentSession({ vad, stt, turnDetection, /* llm/tts via runVoiceStream */ });
-    //     await session.start({ room: ctx.room, agent });
+    console.log(
+      `[voice-agent] connected to room "${ctx.room.name}" — character=${CHARACTER_ID} stt=${STT_MODEL}`,
+    );
+
+    // User side handled by LiveKit: STT (inference model string) + auto silero VAD
+    // + the bundled v1-mini end-of-turn detector. No llm/tts — the brain generates.
+    const session = new voice.AgentSession({
+      stt: STT_MODEL,
+      turnDetection: new inference.TurnDetector({ version: "v1-mini" }),
+    });
+
+    // The persona lives entirely in the knowledge-graph brain (runVoiceStream),
+    // so the Agent's instructions are intentionally empty.
+    const agent = new voice.Agent({ instructions: "" });
+
+    let turn: AbortController | null = null;
+
+    // One finalized user turn → run the brain, stream its audio into the room.
+    const speak = (transcript: string, signal: AbortSignal) => {
+      const audio = new ReadableStream<AudioFrame>({
+        async start(controller) {
+          try {
+            for await (const ev of runVoiceStream(
+              { characterId: CHARACTER_ID, message: transcript, sessionId: ctx.room.name },
+              { signal },
+            )) {
+              if (signal.aborted) break;
+              if (ev.event === "audio") {
+                const d = ev.data as { pcm: string; sampleRate: number };
+                controller.enqueue(toAudioFrame(d.pcm, d.sampleRate));
+              } else if (ev.event === "first-audio") {
+                console.log(`[voice-agent] first audio ${(ev.data as { latencyMs: number }).latencyMs}ms`);
+              } else if (ev.event === "error") {
+                console.error("[voice-agent] pipeline error", ev.data);
+              }
+            }
+          } catch (err) {
+            if (!signal.aborted) console.error("[voice-agent] turn failed", err);
+          } finally {
+            controller.close();
+          }
+        },
+      });
+      // Empty text + custom audio stream = publish our PCM as the agent's speech,
+      // bypassing the session's (absent) TTS.
+      session.say("", { audio, allowInterruptions: true });
+    };
+
+    session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+      if (!ev.isFinal) return;
+      const text = ev.transcript.trim();
+      if (!text) return;
+      turn?.abort(); // supersede any still-running turn
+      turn = new AbortController();
+      console.log(`[voice-agent] user: ${text}`);
+      speak(text, turn.signal);
+    });
+
+    // Barge-in: the user starts speaking while we're playing → cancel the brain
+    // turn (stops TTS via the abort signal); the room/AEC handles the audio cutover.
+    session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
+      if (ev.newState === "speaking") turn?.abort();
+    });
+
+    await session.start({ agent, room: ctx.room });
+    console.log("[voice-agent] session started — listening");
   },
 });
 
