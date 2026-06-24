@@ -165,6 +165,11 @@ export default defineAgent({
     const session = new voice.AgentSession({
       stt: STT_MODEL,
       turnDetection: new inference.TurnDetector({ version: "v1-mini" }),
+      // Raise the endpointing floor above the 300ms default so a brief mid-sentence
+      // pause (e.g. "…different than [pause] the rest of the days?") doesn't end the
+      // turn early when the detector over-eagerly calls it complete. maxDelay
+      // (2500ms) for clearly-incomplete turns stays the default.
+      turnHandling: { endpointing: { minDelay: 700 } },
     });
 
     // Own the agent's audio OUTPUT directly: a dedicated published track fed from
