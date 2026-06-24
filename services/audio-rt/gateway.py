@@ -666,6 +666,7 @@ def healthz():
             "whisper": whisper_runtime.status(),
             "vad": vad_runtime.status(),
             "smartTurn": _smart_turn_health(),
+            "streamingDecode": {"enabled": STREAMING_DECODE_ENABLED},
         },
     }
 
@@ -1031,6 +1032,21 @@ SMART_TURN_PAD_CHUNKS = int(os.getenv("SMART_TURN_PAD_CHUNKS", "3"))
 if SMART_TURN_ENABLED:
     import smart_turn
 
+# ── Streaming (speculative) decode ───────────────────────────────────
+# The whisper leg (~150–500 ms) normally runs sequentially AFTER the endpoint
+# silence hold. When enabled, kick a speculative transcribe SPECULATIVE_SILENCE_
+# CHUNKS after speech pauses (~64 ms) so that whisper runs concurrently with the
+# silence hold; by the time the endpoint fires the transcript is already in hand
+# and endpoint->STT collapses to ~0. The Word content depends only on the speech
+# already buffered — trailing silence adds no words, and a resumed utterance
+# invalidates the speculation — so the end-of-turn Word burst and its correctness
+# are unchanged. Off by default; flag-off behaviour is byte-identical to the
+# sequential path. NOTE: speculation runs whisper during the hold, so it RAISES
+# average CPU load — only enable once audio-rt has CPU headroom (see Smart Turn vs
+# whisper contention notes).
+STREAMING_DECODE_ENABLED = os.getenv("STREAMING_DECODE_ENABLED", "0") == "1"
+SPECULATIVE_SILENCE_CHUNKS = int(os.getenv("SPECULATIVE_SILENCE_CHUNKS", "2"))
+
 
 @app.websocket("/api/asr-streaming")
 async def asr_streaming(websocket: WebSocket):
@@ -1064,6 +1080,13 @@ async def asr_streaming(websocket: WebSocket):
     # flip this off and fall back to the fixed-silence window for the rest of the
     # connection rather than tearing down the STT socket.
     smart_turn_ok = SMART_TURN_ENABLED
+    # Speculative-decode state (STREAMING_DECODE_ENABLED). `speculative_gen` is a
+    # generation token: bumped whenever speech resumes (or we discard a stale
+    # result) so an in-flight transcribe started on an old buffer can detect it
+    # was superseded and drop its result instead of emitting.
+    speculative_words: list[tuple[str, float]] | None = None
+    speculative_inflight = False
+    speculative_gen = 0
 
     async def transcribe_and_emit(endpoint_wall: float | None = None,
                                   last_voiced_at: float | None = None):
@@ -1129,6 +1152,63 @@ async def asr_streaming(websocket: WebSocket):
         finally:
             transcribe_in_flight = False
 
+    async def run_speculative(gen: int, audio: np.ndarray):
+        """Transcribe a snapshot of the in-progress utterance during the silence
+        hold. Stores the result for the end_turn fast path; discards it if the
+        speculation was superseded (gen mismatch) by resumed speech. Best-effort:
+        a fault here just means end_turn falls back to a fresh transcribe."""
+        nonlocal speculative_words, speculative_inflight
+        try:
+            words = await loop.run_in_executor(
+                None, whisper_runtime.transcribe_utterance, audio
+            )
+        except Exception:  # noqa: BLE001
+            words = None
+        # Only the latest generation owns the shared state; a superseded task
+        # silently exits so it can't clobber a newer speculation's flags.
+        if gen == speculative_gen:
+            speculative_inflight = False
+            if words is not None:
+                speculative_words = words
+
+    async def emit_words(words: list[tuple[str, float]],
+                         endpoint_wall: float, last_voiced_at: float | None):
+        """Emit a precomputed (speculative) transcript. whisper already ran under
+        the silence hold, so endpoint->STT collapses to ~0. Mirrors the Word +
+        Timing wire of transcribe_and_emit — keep the two in sync."""
+        stt_done_wall = time.time()
+        for text, start_time in words:
+            if websocket.client_state.value != 1:  # disconnected
+                return
+            await websocket.send_bytes(msgpack.packb({
+                "type": "Word",
+                "text": text,
+                "start_time": float(start_time),
+            }))
+        endpoint_to_stt_ms = max(0, int((stt_done_wall - endpoint_wall) * 1000))
+        hold_ms = (
+            int((endpoint_wall - last_voiced_at) * 1000)
+            if last_voiced_at is not None else None
+        )
+        total_ms = (
+            int((stt_done_wall - last_voiced_at) * 1000)
+            if last_voiced_at is not None else None
+        )
+        print(
+            f"[asr] endpoint timing (speculative): voice-stop->endpoint {hold_ms}ms "
+            f"(silence hold) | endpoint->STT {endpoint_to_stt_ms}ms | "
+            f"voice-stop->transcript {total_ms}ms",
+            flush=True,
+        )
+        if websocket.client_state.value == 1:
+            await websocket.send_bytes(msgpack.packb({
+                "type": "Timing",
+                "voiceStopToEndpointMs": hold_ms,
+                "endpointToSttMs": endpoint_to_stt_ms,
+                "voiceStopToTranscriptMs": total_ms,
+                "speculative": True,
+            }))
+
     try:
         while True:
             raw = await websocket.receive_bytes()
@@ -1178,6 +1258,15 @@ async def asr_streaming(websocket: WebSocket):
                     silence_run = 0  # speech (or borderline) — reset
                     if in_speech:
                         last_voiced_wall = time.time()  # last voiced frame
+                        # Speech resumed mid-pause: any speculative transcribe is
+                        # now stale (more words coming). Bump the generation so an
+                        # in-flight task drops its result, and clear the cache.
+                        if STREAMING_DECODE_ENABLED and (
+                            speculative_words is not None or speculative_inflight
+                        ):
+                            speculative_gen += 1
+                            speculative_words = None
+                            speculative_inflight = False
 
                 # Maintain ring buffer of recent silence/borderline chunks for
                 # the next speech onset. Updated AFTER the lookback prepend so
@@ -1194,6 +1283,24 @@ async def asr_streaming(websocket: WebSocket):
                             asyncio.create_task(transcribe_and_emit())
                         in_speech = False
                         silence_run = 0
+
+                # Speculative decode: once speech has paused briefly, transcribe
+                # the buffer-so-far concurrently with the silence hold so the
+                # whisper leg is already done when the endpoint fires. Fires once
+                # per pause (exact == guard); a resumed utterance invalidates it.
+                if (
+                    STREAMING_DECODE_ENABLED
+                    and in_speech
+                    and silence_run == SPECULATIVE_SILENCE_CHUNKS
+                    and not transcribe_in_flight
+                    and not speculative_inflight
+                    and speculative_words is None
+                    and len(utterance_chunks) >= MIN_UTTERANCE_CHUNKS
+                ):
+                    speculative_inflight = True
+                    asyncio.create_task(
+                        run_speculative(speculative_gen, np.concatenate(utterance_chunks))
+                    )
 
                 # End-of-turn decision. Fixed-silence by default; Smart Turn
                 # gates on a completion model when enabled.
@@ -1238,12 +1345,36 @@ async def asr_streaming(websocket: WebSocket):
                     endpoint_wall = time.time()
                     in_speech = False
                     silence_run = 0
-                    if not transcribe_in_flight:
+                    if (
+                        STREAMING_DECODE_ENABLED
+                        and speculative_words is not None
+                        and not speculative_inflight
+                    ):
+                        # Fast path: the speculative transcribe landed during the
+                        # hold. Emit it directly — whisper is already paid for.
+                        words = speculative_words
+                        speculative_words = None
+                        speculative_gen += 1
+                        utterance_chunks = []
                         asyncio.create_task(
-                            transcribe_and_emit(endpoint_wall, last_voiced_wall)
+                            emit_words(words, endpoint_wall, last_voiced_wall)
                         )
                     else:
-                        pending_drain = True
+                        # No usable speculation (disabled, still in flight, or
+                        # none) — discard any stale in-flight result and transcribe
+                        # fresh on the full buffer, exactly as the sequential path.
+                        if STREAMING_DECODE_ENABLED and (
+                            speculative_inflight or speculative_words is not None
+                        ):
+                            speculative_gen += 1
+                            speculative_words = None
+                            speculative_inflight = False
+                        if not transcribe_in_flight:
+                            asyncio.create_task(
+                                transcribe_and_emit(endpoint_wall, last_voiced_wall)
+                            )
+                        else:
+                            pending_drain = True
                     last_voiced_wall = None
 
             # Emit ONE Step per inbound WS frame (≈12.5 Hz) rather than per

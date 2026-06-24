@@ -11,6 +11,9 @@ export type AudioRtEndpointTiming = {
   voiceStopToEndpointMs: number | null;
   endpointToSttMs: number;
   voiceStopToTranscriptMs: number | null;
+  /** True when the transcript came from a speculative decode that overlapped
+   * the silence hold (STREAMING_DECODE_ENABLED), so endpoint→STT is ~0. */
+  speculative?: boolean;
 };
 
 type SttMessage =
@@ -79,6 +82,7 @@ export class AudioRtStreamingSttSession {
             voiceStopToEndpointMs: message.voiceStopToEndpointMs,
             endpointToSttMs: message.endpointToSttMs,
             voiceStopToTranscriptMs: message.voiceStopToTranscriptMs,
+            speculative: message.speculative,
           });
         } else if (message.type === "Error") {
           handlers.onError?.(message.message ?? "streaming STT failed");
