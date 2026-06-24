@@ -1363,6 +1363,14 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
               .trim();
             handleStreamingTranscript(next);
           },
+          onTiming: (timing) => {
+            // Endpointing gap (voice stop → transcript) — the latency segment
+            // before the brain+voice pipeline. Surfaces inline in the trace panel.
+            recordSttDecisionTrace({
+              name: "sandbox.stt.endpoint_timing",
+              meta: timing,
+            });
+          },
           onError: handleError,
           onClose: handleClose,
         });
