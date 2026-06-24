@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx src/agent.ts dev",
+    "dev": "tsx --env-file-if-exists=.env src/agent.ts dev",
     "start": "tsx src/agent.ts start",
     "prewarm": "tsx scripts/prewarm.ts"
   },
