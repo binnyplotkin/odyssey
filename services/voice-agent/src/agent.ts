@@ -39,19 +39,33 @@ import { AudioFrame } from "@livekit/rtc-node";
 import { runVoiceStream } from "@odyssey/voice-pipeline";
 
 // --- Railway healthcheck: the agents worker doesn't serve HTTP itself, so expose
-// a tiny /healthz on its own port. embedderReady flips when bge is resident. ---
+// a tiny /healthz on its own port. embedderReady flips when bge is resident.
+//
+// IMPORTANT: @livekit/agents forks job + inference SUBPROCESSES that re-import
+// this module (worker.js / job_proc_executor use child_process.fork). A forked
+// child has an IPC channel (process.send is defined); the main worker process
+// does not. Bind /healthz ONLY in the main process — otherwise the subprocess
+// double-binds the port → EADDRINUSE → "process exited before initializing" →
+// the dispatched job dies before the session ever starts. ---
 let embedderReady = false;
 const HEALTH_PORT = Number(process.env.HEALTH_PORT ?? process.env.PORT ?? 8080);
-createServer((req, res) => {
-  if (req.url === "/healthz") {
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true, service: "voice-agent", embedderReady }));
-    return;
-  }
-  res.writeHead(404).end();
-}).listen(HEALTH_PORT, "0.0.0.0", () =>
-  console.log(`[voice-agent] healthz on :${HEALTH_PORT}`),
-);
+if (!process.send) {
+  const healthServer = createServer((req, res) => {
+    if (req.url === "/healthz") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, service: "voice-agent", embedderReady }));
+      return;
+    }
+    res.writeHead(404).end();
+  });
+  // Defensive: a stray bind error must never crash the worker (see above).
+  healthServer.on("error", (err) =>
+    console.error(`[voice-agent] healthz server error: ${(err as Error).message}`),
+  );
+  healthServer.listen(HEALTH_PORT, "0.0.0.0", () =>
+    console.log(`[voice-agent] healthz on :${HEALTH_PORT}`),
+  );
+}
 
 // Which character this worker voices, and which LiveKit Inference STT model.
 // (Single-character for A2; the world-agent will pick the character per turn.)
