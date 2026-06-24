@@ -45,6 +45,7 @@ import {
   TrackPublishOptions,
   TrackSource,
 } from "@livekit/rtc-node";
+import { BackgroundVoiceCancellation } from "@livekit/noise-cancellation-node";
 import { getCharacterStore, getSceneSessionStore } from "@odyssey/db";
 import { runVoiceStream } from "@odyssey/voice-pipeline";
 
@@ -249,7 +250,14 @@ export default defineAgent({
       }
     });
 
-    await session.start({ agent, room: ctx.room });
+    await session.start({
+      agent,
+      room: ctx.room,
+      // Krisp background-voice + noise cancellation on the USER's audio, applied
+      // before STT / VAD / turn-detection — so room noise and other voices don't
+      // trigger turns or interrupt the agent.
+      inputOptions: { noiseCancellation: BackgroundVoiceCancellation() },
+    });
     // Publish our output track now that the room is connected.
     await ctx.room.localParticipant!.publishTrack(
       outTrack,
