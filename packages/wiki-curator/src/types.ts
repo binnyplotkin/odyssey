@@ -49,6 +49,13 @@ export type CurateRequest = {
    * + full bodies + scaffolding). Defaults to 3000.
    */
   tokenBudget?: number;
+  /**
+   * Drop the character's `voice_identity` sheet from the candidate pool, so
+   * the knowledge graph carries only world knowledge and persona comes solely
+   * from the L01–L03 system-prompt envelope. Set when the envelope is
+   * self-sufficient (L03 voice authored). Reversible; default keeps the sheet.
+   */
+  excludeVoiceIdentity?: boolean;
 };
 
 /* ── Results ───────────────────────────────────────────────────── */

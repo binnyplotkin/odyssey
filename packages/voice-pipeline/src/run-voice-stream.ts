@@ -4,6 +4,7 @@ import {
   getWikiStore,
   getWikisStore,
   getSceneSessionStore,
+  type CharacterVoiceStyle,
 } from "@odyssey/db";
 import {
   createStreamingTtsAdapterForVoice,
@@ -149,6 +150,25 @@ const VOICE_CONTEXT_PREP_WAIT_MS = 100;
 // lower-but-correct scores through.
 const RETRIEVAL_MIN_SIM_BGE = Number(process.env.VOICE_RETRIEVAL_MIN_SIM_BGE ?? "0.5");
 const RETRIEVAL_MIN_SIM_OPENAI = Number(process.env.VOICE_RETRIEVAL_MIN_SIM_OPENAI ?? "0.35");
+
+/** The `<voice>` envelope block (compileVoiceXml) is authored — emits tone/decision/brevity/register. */
+function hasAuthoredVoiceEnvelope(vs: CharacterVoiceStyle | null | undefined): boolean {
+  return Boolean(vs && ((vs.tone?.length ?? 0) > 0 || vs.decision || vs.brevity || vs.register));
+}
+
+/**
+ * Whether to drop the character's `voice_identity` sheet from per-turn context.
+ * Persona lives in the L01–L03 envelope; the sheet is redundant once the envelope's
+ * `<voice>` block is authored (measured: quality flat, faithfulness up). Per-character
+ * by default — a character auto-drops its sheet when its L03 voice is filled in.
+ * `VOICE_IDENTITY_IN_CONTEXT=1` forces keep (rollback); `=0` forces drop for all.
+ */
+function resolveExcludeVoiceIdentity(vs: CharacterVoiceStyle | null | undefined): boolean {
+  const flag = process.env.VOICE_IDENTITY_IN_CONTEXT;
+  if (flag === "1") return false;
+  if (flag === "0") return true;
+  return hasAuthoredVoiceEnvelope(vs);
+}
 type CurateOutput = Awaited<ReturnType<typeof curate>>;
 const EMPTY_CURATOR_TRACE: CurateOutput["trace"] = {
   totalPages: 0,
@@ -238,6 +258,13 @@ export async function* runVoiceStream(
     const character =
       fallbackCharacter ?? (await store.getById(id)) ?? (await store.getBySlug(id));
     if (!character) throw new VoiceStreamHttpError(404, "character not found");
+
+    // Persona lives in the L01–L03 envelope; drop the redundant voice_identity
+    // sheet from per-turn context once this character's <voice> is authored.
+    // (The synthetic fallback character has no voiceStyle → keep the sheet.)
+    const excludeVoiceIdentity = resolveExcludeVoiceIdentity(
+      "voiceStyle" in character ? character.voiceStyle : null,
+    );
 
     // Resolve the voice-mode preference baked into the character's L04
     // Mind/Model config. `brainModel.voice` is the per-mode override block;
@@ -681,6 +708,7 @@ export async function* runVoiceStream(
             scene: input.scene,
             semanticSeeds,
             tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
+            excludeVoiceIdentity,
           });
           wikiPromptChunk = curated.promptChunk;
           curatorSelectedPages = curated.pages;
@@ -1256,6 +1284,7 @@ export async function* runVoiceStream(
             query: message,
             scene: input.scene,
             tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
+            excludeVoiceIdentity,
           });
         }
 
@@ -1338,6 +1367,7 @@ function refreshSandboxVoiceContextCacheInBackground(args: {
   query: string;
   scene?: CuratorScene;
   tokenBudget: number;
+  excludeVoiceIdentity?: boolean;
 }): void {
   void (async () => {
     const startedAt = performance.now();
@@ -1347,6 +1377,7 @@ function refreshSandboxVoiceContextCacheInBackground(args: {
       query: args.query,
       scene: args.scene,
       tokenBudget: args.tokenBudget,
+      excludeVoiceIdentity: args.excludeVoiceIdentity,
     });
     await getSceneSessionStore().appendEvent({
       sessionId: args.sessionId,
