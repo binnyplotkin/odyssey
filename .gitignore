@@ -71,3 +71,6 @@ evals/sonar/recordings/*.wav
 
 # Next.js preview build output (build cache; regenerated on build — should not be tracked)
 apps/admin/.next-preview/
+
+# grounding-eval output reports
+eval-report-*.json
