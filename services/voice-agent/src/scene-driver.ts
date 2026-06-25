@@ -13,6 +13,22 @@ import {
 import type { OrchestratorDecision, Scene, SceneState } from "@odyssey/types";
 
 const RECENT_TURNS_LIMIT = 6;
+/** Don't speculate off a stray opener ("uh", "so") — wait for some real intent. */
+const MIN_SPECULATE_CHARS = 8;
+/** Accept a speculation only if it was computed off ≥ this fraction of the final
+ *  turn (and is a prefix of it) — so the speaker was chosen from ~the whole intent,
+ *  not a short lead-in that happens to prefix-match. */
+const SPECULATION_COVERAGE = 0.6;
+
+/** Lowercase, collapse whitespace, drop trailing punctuation — for prefix matching
+ *  a speculated partial against the final transcript. */
+function normalizeForMatch(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[.,!?;:]+$/g, "")
+    .trim();
+}
 
 /** What the worker's `speak()` needs to voice one character's turn; resolves to the
  *  generated reply text (fed back into the scene's running transcript). */
@@ -41,6 +57,10 @@ export class SceneDriver {
   #sceneState: SceneState;
   #recentTurns: SceneTurnForPlanning[] = [];
   #sceneMemory: string[] = [];
+  // B4: the in-flight speculative decision (orchestrated off a partial transcript
+  // during the endpoint hold) + the text it was computed from, so drive() can
+  // accept it when the final transcript matches and skip the orchestrate latency.
+  #speculation: { basedOnText: string; promise: Promise<OrchestratorDecision> } | null = null;
 
   private constructor(scene: Scene) {
     this.scene = scene;
@@ -57,8 +77,25 @@ export class SceneDriver {
     return scene ? new SceneDriver(scene) : null;
   }
 
+  /**
+   * B4: speculatively orchestrate off a partial transcript DURING the endpoint hold,
+   * so the speaker is usually already chosen when the turn completes. Fire-and-forget
+   * — drive() decides whether to accept it. No-op for a solo roster (the fastpath has
+   * no orchestrate latency to hide) or for a partial we're already speculating on.
+   */
+  speculate(partialText: string): void {
+    const text = partialText.trim();
+    if (text.length < MIN_SPECULATE_CHARS) return;
+    if (this.#presentRoster().length <= 1) return;
+    if (this.#speculation?.basedOnText === text) return;
+    this.#speculation = { basedOnText: text, promise: this.#decide(text, "speculate") };
+  }
+
   /** One finished user turn → orchestrate → voice the chosen character (if any). */
   async drive(userText: string, speak: SceneSpeakFn): Promise<void> {
+    const spec = this.#speculation;
+    this.#speculation = null;
+
     this.#recentTurns.push({ speakerSlug: "user", text: userText });
     this.#trim();
     this.#sceneMemory = updateSceneMemory({
@@ -66,7 +103,23 @@ export class SceneDriver {
       recentTurns: this.#recentTurns,
     });
 
-    const rawDecision = await this.#decide(userText);
+    // Use the speculation if it was computed off ~the same intent as the final turn;
+    // its orchestrate ran under the hold, so the await is usually instant (the gap is
+    // hidden). Otherwise pay the orchestrate on the final transcript.
+    let rawDecision: OrchestratorDecision;
+    if (spec && this.#acceptsSpeculation(spec.basedOnText, userText)) {
+      const waitedAt = Date.now();
+      rawDecision = await spec.promise;
+      console.log(
+        `[voice-agent] speculative HIT (waited ${Date.now() - waitedAt}ms) → ${rawDecision.action} ${rawDecision.speakerId ?? ""}`.trimEnd(),
+      );
+    } else {
+      if (spec) {
+        spec.promise.catch(() => undefined); // discard the stale in-flight speculation
+        console.log("[voice-agent] speculative MISS — orchestrating on final transcript");
+      }
+      rawDecision = await this.#decide(userText);
+    }
     const resolution = resolveSceneDecision(
       { scene: this.scene, sceneState: this.#sceneState },
       rawDecision,
@@ -116,12 +169,27 @@ export class SceneDriver {
     this.#trim();
   }
 
-  /** Solo roster → fastpath (no LLM); otherwise the orchestrator LLM, timed so we
-   *  can SEE the turn-driving cost (the gap we may later hide under the hold). */
-  async #decide(userText: string): Promise<OrchestratorDecision> {
-    const present = this.#sceneState.presentCharacterSlugs.filter((slug) =>
+  /** Slugs in the roster that are currently present — a real choice needs ≥ 2. */
+  #presentRoster(): string[] {
+    return this.#sceneState.presentCharacterSlugs.filter((slug) =>
       this.scene.characters.some((c) => c.characterSlug === slug),
     );
+  }
+
+  /** Accept a speculation only when its text is a prefix of the final turn AND
+   *  covers most of it — so the speaker was chosen off ~the whole intent. */
+  #acceptsSpeculation(basedOnText: string, finalText: string): boolean {
+    const based = normalizeForMatch(basedOnText);
+    const final = normalizeForMatch(finalText);
+    if (!based || !final) return false;
+    return final.startsWith(based) && based.length >= final.length * SPECULATION_COVERAGE;
+  }
+
+  /** Solo roster → fastpath (no LLM); otherwise the orchestrator LLM, timed so we
+   *  can SEE the turn-driving cost (the gap B4 hides under the hold). The phase tag
+   *  distinguishes a speculative pre-call (under the hold) from a final-turn call. */
+  async #decide(userText: string, phase: "final" | "speculate" = "final"): Promise<OrchestratorDecision> {
+    const present = this.#presentRoster();
     if (present.length <= 1) {
       const solo = present[0];
       return solo
@@ -143,7 +211,7 @@ export class SceneDriver {
     try {
       const decision = await executor.execute(request);
       console.log(
-        `[voice-agent] orchestrate ${Date.now() - startedAt}ms → ${decision.action} ${decision.speakerId ?? ""}`.trimEnd(),
+        `[voice-agent] orchestrate[${phase}] ${Date.now() - startedAt}ms → ${decision.action} ${decision.speakerId ?? ""}`.trimEnd(),
       );
       return decision;
     } catch (err) {
