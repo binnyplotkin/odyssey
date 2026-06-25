@@ -103,14 +103,18 @@ function toAudioFrame(pcmBase64: string, sampleRate: number): AudioFrame {
   return new AudioFrame(i16, sampleRate, 1, i16.length);
 }
 
-/** Rooms are named `char-<characterId>-<sessionId>` (both UUIDs) by the browser's
- *  token route, so the character is per-ROOM. Pull the character id out so one
- *  worker can voice ANY character (Sarah's room → Sarah, Abraham's → Abraham). */
-function parseCharacterFromRoom(roomName: string | undefined): string | null {
+/** Rooms are named `char-<characterId>-<sessionId>` by the browser's token route, so
+ *  both the character AND the sandbox's pre-created scene_session are per-ROOM. Pull
+ *  out both: the characterId picks who to voice; the sessionId lets the agent persist
+ *  turns to the SAME session /sessions shows (so they're gradeable) instead of an
+ *  orphan it invents. */
+function parseCharacterFromRoom(
+  roomName: string | undefined,
+): { characterId: string; sessionId: string } | null {
   const match = roomName?.match(
-    /^char-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-/i,
+    /^char-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-(.+)$/i,
   );
-  return match?.[1] ?? null;
+  return match ? { characterId: match[1]!, sessionId: match[2]! } : null;
 }
 
 /** `scene-<sceneId>-<sessionId>` rooms run the multi-character orchestrator loop.
@@ -169,6 +173,7 @@ export default defineAgent({
     // VOICE_AGENT_CHARACTER_ID is only a fallback for rooms that encode neither
     // (e.g. the LiveKit Playground / direct tests).
     const sceneRef = parseSceneFromRoom(ctx.room.name);
+    const charRef = sceneRef ? null : parseCharacterFromRoom(ctx.room.name);
     let sceneDriver: SceneDriver | null = null;
     let character: CharacterRecord | null = null;
     if (sceneRef) {
@@ -177,7 +182,7 @@ export default defineAgent({
         throw new Error(`scene "${sceneRef.sceneId}" (room "${ctx.room.name}") did not resolve`);
       }
     } else {
-      const characterRef = parseCharacterFromRoom(ctx.room.name) ?? CHARACTER_ID;
+      const characterRef = charRef?.characterId ?? CHARACTER_ID;
       if (!characterRef) {
         throw new Error(
           `no character: room "${ctx.room.name}" didn't encode one and VOICE_AGENT_CHARACTER_ID is unset`,
@@ -191,14 +196,24 @@ export default defineAgent({
       }
     }
 
-    // Open a REAL scene_session for this room — runVoiceStream persists per-turn
-    // context + telemetry against it, so it must FK-resolve in scene_sessions
-    // (otherwise the done-event insert violates the session FK and the turn throws).
-    const sceneSession = await getSceneSessionStore().createSession({
-      characterId: character?.id ?? null,
-      mode: "voice",
-    });
+    // Persist to the sandbox's OWN scene_session — the one in the room name, already
+    // created by the browser before connecting. Reusing it means the agent's turns
+    // land in the SAME session /sessions shows, so they're gradeable in the Eval tab
+    // (instead of an orphan session the agent invents). runVoiceStream needs the row
+    // to FK-resolve, which the sandbox guarantees. Only create one when the room
+    // carries none or it doesn't resolve (e.g. the LiveKit Playground / direct tests).
+    const sessionStore = getSceneSessionStore();
+    const roomSessionId = sceneRef?.sessionId ?? charRef?.sessionId ?? null;
+    const existingSession = roomSessionId
+      ? await sessionStore.getSession(roomSessionId).catch(() => null)
+      : null;
+    const sceneSession =
+      existingSession ??
+      (await sessionStore.createSession({ characterId: character?.id ?? null, mode: "voice" }));
     const sessionId = sceneSession.id;
+    console.log(
+      `[voice-agent] session ${sessionId} (${existingSession ? "reused sandbox session — gradeable" : "created"})`,
+    );
     console.log(
       `[voice-agent] connected to room "${ctx.room.name}" — ${
         sceneDriver
