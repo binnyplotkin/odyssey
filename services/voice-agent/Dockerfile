@@ -11,6 +11,13 @@
 # @odyssey/* packages export raw TS.
 FROM node:22-slim
 
+# rtc-node's native WebRTC engine fetches LiveKit Cloud's region routing over HTTPS
+# on room-join (…/settings/regions). In containers a dead IPv6 egress path makes
+# that request fail with "failed to retrieve region info: error sending request".
+# Prefer IPv4 in the system resolver so the native client doesn't dead-end on an
+# AAAA record it can't route to.
+RUN printf 'precedence ::ffff:0:0/96  100\n' >> /etc/gai.conf
+
 # bge (transformers.js) caches models under $HOME; pin HOME so the build-time
 # warmup and the runtime process resolve the SAME baked cache and boot never
 # pays the HuggingFace download.
