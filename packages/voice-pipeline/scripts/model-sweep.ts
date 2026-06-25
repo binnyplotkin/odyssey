@@ -21,7 +21,7 @@ import { mapPool, replayAndEval, type EvalResult } from "./lib/grounding";
 
 const CHARACTER = process.argv[2] ?? "abraham";
 const N = Number(process.env.SWEEP_QUERIES ?? "6");
-const CONC = Number(process.env.EVAL_CONCURRENCY ?? "3");
+const CONC = Number(process.env.EVAL_CONCURRENCY ?? "2");
 
 const DEFAULT_MODELS: Array<{ id: string; label: string }> = [
   { id: "gpt-oss-120b", label: "GPT-OSS 120B · Cerebras (current)" },
@@ -69,20 +69,27 @@ async function main() {
   const pairs = MODELS.flatMap((m) => queries.map((q) => ({ m, q })));
   let done = 0;
   const results = await mapPool(pairs, CONC, async ({ m, q }): Promise<Row> => {
-    try {
-      const r = await replayAndEval({
-        characterId: character.id,
-        message: q,
-        model: m.id,
-        axes: { grounding: true, quality: true },
-      });
-      done += 1;
-      if (done % 4 === 0) console.log(`  …${done}/${pairs.length}`);
-      return { model: m.id, r };
-    } catch (e) {
-      done += 1;
-      return { model: m.id, err: e instanceof Error ? e.message : String(e) };
+    // Retry with backoff — Groq rate-limits (429) under concurrent load; a few
+    // seconds' wait clears them. Model-specific errors fail all 3 and surface below.
+    let lastErr = "";
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const r = await replayAndEval({
+          characterId: character.id,
+          message: q,
+          model: m.id,
+          axes: { grounding: true, quality: true },
+        });
+        done += 1;
+        if (done % 4 === 0) console.log(`  …${done}/${pairs.length}`);
+        return { model: m.id, r };
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e);
+        if (attempt < 3) await new Promise((res) => setTimeout(res, attempt * 3000));
+      }
     }
+    done += 1;
+    return { model: m.id, err: lastErr };
   });
 
   console.log("\n── COMPARISON (mean across queries; sorted by quality) ──────────────");
@@ -114,6 +121,15 @@ async function main() {
     console.log(
       `${s.m.label.padEnd(35)}${f2(s.faith)}   ${f2(s.voice)}  ${f2(s.persona)}   ${f2(s.scope)}  ${f2(s.qual)}  ${String(Math.round(s.ttft)).padStart(5)}  ${s.ok}/${queries.length}`,
     );
+  }
+
+  const failed = summary.filter((s) => s.ok < queries.length);
+  if (failed.length) {
+    console.log("\n⚠ incomplete models (sample error — rate limit vs unsupported output):");
+    for (const s of failed) {
+      const e = results.find((x) => x.model === s.m.id && x.err)?.err;
+      console.log(`  ${s.m.label.padEnd(35)} ${s.ok}/${queries.length}  ${e ? `· ${e.slice(0, 90)}` : ""}`);
+    }
   }
 
   console.log(
