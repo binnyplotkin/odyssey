@@ -4,10 +4,11 @@ import { auth } from "@/lib/auth";
 
 // Mints a short-lived LiveKit room-join token — the WebRTC twin of
 // /api/voice/host-token's SSE bearer. auth() has already verified the signed-in
-// admin (middleware + auth()); this grants join + mic-publish on a per-character
-// room. The registered voice-agent worker auto-dispatches into the room and
-// voices the character. (Multi-character dispatch via room metadata is a
-// follow-up; today the worker's VOICE_AGENT_CHARACTER_ID selects the character.)
+// admin (middleware + auth()); this grants join + mic-publish on a room. The
+// registered voice-agent worker auto-dispatches in and voices whoever the room
+// names: a `sceneId` → the multi-character SceneDriver (`scene-…` room); a
+// `characterId` → a single character (`char-…` room). The worker parses the
+// subject out of the room name — no per-worker env selects it.
 //
 // Requires LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET on the admin server.
 export const runtime = "nodejs";
@@ -31,20 +32,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let payload: { characterId?: string; sessionId?: string };
+  let payload: { characterId?: string; sceneId?: string; sessionId?: string };
   try {
-    payload = (await req.json()) as { characterId?: string; sessionId?: string };
+    payload = (await req.json()) as {
+      characterId?: string;
+      sceneId?: string;
+      sessionId?: string;
+    };
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
   const characterId = payload.characterId?.trim();
-  if (!characterId) {
-    return NextResponse.json({ error: "characterId is required" }, { status: 400 });
+  const sceneId = payload.sceneId?.trim();
+  if (!characterId && !sceneId) {
+    return NextResponse.json({ error: "characterId or sceneId is required" }, { status: 400 });
   }
 
-  // One room per (character, session): the browser publishes its mic here; the
-  // agent worker dispatches in and publishes the character's voice back.
-  const room = `char-${characterId}-${payload.sessionId ?? crypto.randomUUID()}`;
+  // One room per (subject, session): the browser publishes its mic here; the agent
+  // worker dispatches in and publishes voice back. A sceneId routes to the
+  // multi-character SceneDriver (`scene-…`); a characterId to a single character
+  // (`char-…`). The sessionId is just a uniqueness token in the room name — the
+  // worker creates its own scene_session for the brain.
+  const sessionToken = payload.sessionId ?? crypto.randomUUID();
+  const room = sceneId
+    ? `scene-${sceneId}-${sessionToken}`
+    : `char-${characterId}-${sessionToken}`;
 
   const at = new AccessToken(apiKey, apiSecret, {
     identity: session.user.id,

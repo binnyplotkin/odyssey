@@ -236,6 +236,9 @@ export default defineAgent({
       id: string;
       text: string;
       final: boolean;
+      // Multi-character scenes: which character voiced this agent turn so the
+      // client can label it (single-character rooms omit it — the UI knows who).
+      speaker?: { slug: string; name: string };
     }): void => {
       void ctx.room.localParticipant?.publishData(
         transcriptEncoder.encode(JSON.stringify(msg)),
@@ -253,13 +256,15 @@ export default defineAgent({
         message: string;
         history?: Array<{ role: "user" | "assistant"; content: string }>;
         promptChunk?: string;
+        speaker?: { slug: string; name: string };
       },
       signal: AbortSignal,
       replyId: string,
     ): Promise<string> => {
+      const { speaker, ...streamInput } = input;
       let replyText = "";
       try {
-        for await (const ev of runVoiceStream({ ...input, sessionId }, { signal })) {
+        for await (const ev of runVoiceStream({ ...streamInput, sessionId }, { signal })) {
           if (signal.aborted) break;
           if (ev.event === "audio") {
             const d = ev.data as { pcm: string; sampleRate: number };
@@ -268,7 +273,7 @@ export default defineAgent({
             const delta = (ev.data as { delta: string }).delta;
             if (delta) {
               replyText += delta;
-              publishTurn({ role: "agent", id: replyId, text: replyText, final: false });
+              publishTurn({ role: "agent", id: replyId, text: replyText, final: false, speaker });
             }
           } else if (ev.event === "first-audio") {
             console.log(`[voice-agent] first audio ${(ev.data as { latencyMs: number }).latencyMs}ms`);
@@ -277,7 +282,7 @@ export default defineAgent({
           }
         }
         if (replyText && !signal.aborted) {
-          publishTurn({ role: "agent", id: replyId, text: replyText, final: true });
+          publishTurn({ role: "agent", id: replyId, text: replyText, final: true, speaker });
         }
       } catch (err) {
         if (!signal.aborted) console.error("[voice-agent] turn failed", err);

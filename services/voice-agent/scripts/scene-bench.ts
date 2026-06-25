@@ -32,7 +32,7 @@ async function main() {
     await driver.drive(prompt, async (input) => {
       decided = true;
       console.log(
-        `  user: "${prompt}"\n  → decided in ${Date.now() - startedAt}ms (orchestrate + speaker lookup) → characterId=${input.characterId}\n`,
+        `  user: "${prompt}"\n  → decided in ${Date.now() - startedAt}ms → speaker=${input.speaker.name} (${input.speaker.slug}) characterId=${input.characterId}\n`,
       );
       return "(mock reply — not voiced)";
     });

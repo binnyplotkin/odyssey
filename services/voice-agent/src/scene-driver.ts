@@ -21,6 +21,8 @@ export interface SceneSpeakInput {
   message: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
   promptChunk: string;
+  /** Who's speaking — surfaced to the client so it can label the turn. */
+  speaker: { slug: string; name: string };
 }
 export type SceneSpeakFn = (input: SceneSpeakInput, replyId: string) => Promise<string>;
 
@@ -94,6 +96,11 @@ export class SceneDriver {
     });
     if (!turn) return;
 
+    const displayName =
+      this.scene.characters.find((c) => c.characterSlug === resolution.speakerSlug)?.displayName ??
+      character.title ??
+      resolution.speakerSlug;
+
     console.log(`[voice-agent] scene: ${resolution.speakerSlug} speaks`);
     const replyText = await speak(
       {
@@ -101,6 +108,7 @@ export class SceneDriver {
         message: turn.message,
         history: turn.history,
         promptChunk: turn.promptChunk,
+        speaker: { slug: resolution.speakerSlug, name: displayName },
       },
       `s${Date.now()}`,
     );
