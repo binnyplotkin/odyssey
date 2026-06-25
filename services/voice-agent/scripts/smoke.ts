@@ -34,7 +34,9 @@ if (!URL || !KEY || !SECRET) {
 }
 
 const WAV = process.argv[2] ?? "/tmp/utterance.wav";
-const ROOM = `char-abraham-smoke-${Date.now()}`;
+// SMOKE_ROOM lets us target a scene room (scene-<sceneId>-<uuid>) to exercise the
+// multi-character orchestrator loop; default is a single-character smoke room.
+const ROOM = process.env.SMOKE_ROOM ?? `char-abraham-smoke-${Date.now()}`;
 
 /** Minimal 16-bit PCM WAV reader → { sampleRate, channels, pcm: Int16Array }. */
 function readWav(path: string): { sampleRate: number; channels: number; pcm: Int16Array } {

@@ -18,6 +18,8 @@ export interface LiveKitVoiceTranscript {
   text: string;
   role: "user" | "agent";
   final: boolean;
+  /** Multi-character scenes only: which character spoke this agent turn. */
+  speaker?: { slug: string; name: string };
 }
 
 export interface LiveKitVoiceCallbacks {
@@ -28,7 +30,10 @@ export interface LiveKitVoiceCallbacks {
 }
 
 export interface LiveKitVoiceConnectOptions {
-  characterId: string;
+  /** Single-character room. Provide this OR sceneId. */
+  characterId?: string;
+  /** Multi-character scene room — drives the orchestrator. Provide this OR characterId. */
+  sceneId?: string;
   sessionId?: string;
   /** Reuse the sandbox's user-gesture AudioContext so playback is unlocked on Safari. */
   audioContext?: AudioContext;
@@ -72,7 +77,11 @@ export class LiveKitVoiceSession {
     const res = await fetch("/api/voice/livekit-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ characterId: opts.characterId, sessionId: opts.sessionId }),
+      body: JSON.stringify({
+        characterId: opts.characterId,
+        sceneId: opts.sceneId,
+        sessionId: opts.sessionId,
+      }),
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");

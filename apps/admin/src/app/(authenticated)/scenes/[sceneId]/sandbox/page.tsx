@@ -2,10 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSceneStore } from "@odyssey/db";
 import { SceneSandbox } from "@/components/scene-sandbox";
+import { SceneVoiceSandbox } from "@/components/scene-voice-sandbox";
 import { adminTokens } from "@/components/admin-ui";
 import { resolveScene } from "@/lib/scene-orchestration";
 
 export const dynamic = "force-dynamic";
+
+// When the LiveKit voice agent is on, scene rehearsal runs over a real-time room
+// (the SceneDriver) instead of the browser SSE/orchestrate path.
+const VOICE_AGENT_ENABLED = process.env.NEXT_PUBLIC_VOICE_AGENT === "1";
 
 export default async function SceneSandboxPage({
   params,
@@ -54,5 +59,9 @@ export default async function SceneSandboxPage({
     );
   }
 
-  return <SceneSandbox sceneId={sceneId} sceneTitle={record.title} scene={scene} />;
+  return VOICE_AGENT_ENABLED ? (
+    <SceneVoiceSandbox sceneId={sceneId} sceneTitle={record.title} scene={scene} />
+  ) : (
+    <SceneSandbox sceneId={sceneId} sceneTitle={record.title} scene={scene} />
+  );
 }
