@@ -83,6 +83,10 @@ if (!process.send) {
 // (Single-character for A2; the world-agent will pick the character per turn.)
 const CHARACTER_ID = process.env.VOICE_AGENT_CHARACTER_ID;
 const STT_MODEL = process.env.VOICE_AGENT_STT ?? "deepgram/nova-3";
+// B4: speculative speaker-selection. Orchestrate off the partial transcript during
+// the endpoint hold so the multi-character speaker is usually already chosen when
+// the turn completes (hiding the ~0.5s orchestrate gap). Kill-switch: =0.
+const SPECULATE_ENABLED = process.env.VOICE_AGENT_SPECULATE !== "0";
 
 /** base64 Float32 LE PCM (one TTS chunk) → an Int16 mono AudioFrame for the room. */
 function toAudioFrame(pcmBase64: string, sampleRate: number): AudioFrame {
@@ -290,6 +294,10 @@ export default defineAgent({
       return replyText;
     };
 
+    // B4: accumulate the user's finalized STT segments so we can orchestrate off the
+    // running transcript while the turn is still being held open. Reset each turn.
+    let userSegments: string[] = [];
+
     // Reply at the REAL end of the user's turn (gated by the v1 detector), superseding
     // whatever's in flight. SCENE rooms route through the orchestrator (who speaks);
     // single-character rooms run that one character directly.
@@ -305,8 +313,23 @@ export default defineAgent({
       } else {
         void speak({ characterId: character!.id, message: text }, signal, `a${Date.now()}`);
       }
+      userSegments = []; // next turn starts a fresh speculation accumulation
     };
     const agent = new BrainAgent(respond);
+
+    // B4: speculative speaker-selection. Each finalized STT segment (Deepgram emits
+    // one per pause) extends the running transcript; orchestrate off it NOW so the
+    // speaker is usually decided before the turn formally completes. Read-only — we
+    // never SPEAK here (that's onUserTurnCompleted), so there's no mid-sentence cut-in.
+    if (sceneDriver && SPECULATE_ENABLED) {
+      session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+        if (!ev.isFinal) return;
+        const seg = ev.transcript.trim();
+        if (!seg) return;
+        userSegments.push(seg);
+        sceneDriver!.speculate(userSegments.join(" "));
+      });
+    }
 
     // Responsive barge-in: the instant the user starts speaking, cancel the
     // in-flight brain turn and drop buffered audio so Abraham stops mid-word
