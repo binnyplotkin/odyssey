@@ -9,6 +9,7 @@ import {
   gradeGrounding,
   gradeTurn,
   runVoiceStream,
+  type ConstructionVariantFn,
   type GroundingVerdict,
   type JudgeMeta,
   type TurnGrade,
@@ -36,7 +37,7 @@ export type {
 export async function replayTurn(
   characterId: string,
   message: string,
-  opts?: { model?: string },
+  opts?: { model?: string; constructionVariant?: ConstructionVariantFn },
 ): Promise<{
   response: string;
   systemPrompt: string;
@@ -60,7 +61,15 @@ export async function replayTurn(
   // registry). Same retrieval/curator/prompt for every model — only the LLM swaps —
   // so first-token deltas are a fair (retrieval-constant) latency comparison.
   for await (const ev of runVoiceStream(
-    { characterId: character.id, message, sessionId: session.id, turnId, debug: true, model: opts?.model },
+    {
+      characterId: character.id,
+      message,
+      sessionId: session.id,
+      turnId,
+      debug: true,
+      model: opts?.model,
+      __constructionVariant: opts?.constructionVariant,
+    },
     { signal: controller.signal },
   )) {
     if (ev.event === "token") {
@@ -129,13 +138,14 @@ export async function replayAndEval(opts: {
   message: string;
   judgeModel?: string;
   model?: string;
+  constructionVariant?: ConstructionVariantFn;
   responseOverride?: string;
   axes?: { grounding?: boolean; quality?: boolean };
 }): Promise<EvalResult> {
   const { response, systemPrompt, promptChunk, pageSlugs, firstTokenMs } = await replayTurn(
     opts.characterId,
     opts.message,
-    { model: opts.model },
+    { model: opts.model, constructionVariant: opts.constructionVariant },
   );
   const toGrade = opts.responseOverride?.trim() || response;
   if (!toGrade.trim()) throw new Error("no response generated — cannot grade");
