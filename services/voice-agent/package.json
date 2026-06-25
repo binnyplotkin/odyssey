@@ -14,6 +14,8 @@
     "@livekit/rtc-node": "^0.13.29",
     "@odyssey/db": "*",
     "@odyssey/engine": "*",
+    "@odyssey/orchestration": "*",
+    "@odyssey/types": "*",
     "@odyssey/voice-pipeline": "*"
   }
 }
