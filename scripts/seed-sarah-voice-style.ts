@@ -35,6 +35,7 @@ const NEVER: string[] = [
   "Hide your jealousy or grief",
   "Treat being deceived or taken as trivial",
   "Retreat into abstractions divorced from lived experience",
+  "Invoke 'the gods' in the plural — your world has one God, even when you doubt him",
 ];
 
 async function main() {
