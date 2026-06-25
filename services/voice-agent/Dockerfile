@@ -11,6 +11,18 @@
 # @odyssey/* packages export raw TS.
 FROM node:22-slim
 
+# rtc-node's NATIVE engine does its own TLS to LiveKit Cloud (the region fetch on
+# room-join). Node's own HTTPS has a bundled CA store (so worker registration
+# works), but the native Rust client uses the SYSTEM store — which can be missing
+# or unfound in a slim image, surfacing as "error sending request". Install the CA
+# bundle, refresh it, and point native TLS (OpenSSL) at it explicitly.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && update-ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    SSL_CERT_DIR=/etc/ssl/certs
+
 # bge (transformers.js) caches models under $HOME; pin HOME so the build-time
 # warmup and the runtime process resolve the SAME baked cache and boot never
 # pays the HuggingFace download.
