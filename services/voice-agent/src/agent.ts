@@ -131,6 +131,23 @@ export default defineAgent({
     await warmLocalEmbedder();
     embedderReady = true;
     console.log("[voice-agent] bge warm — embedder ready");
+
+    // TEMP DIAG (remove after): can the container reach LiveKit's region host over
+    // plain Node HTTPS? The host is IPv4-only and reachable (registration hits the
+    // same IPs), so if this SUCCEEDS the room-join failure is specific to rtc-node's
+    // native TLS/HTTP stack — not the network.
+    try {
+      const res = await fetch(
+        "https://kawabunga-3lujfpf7.oashburn1b.production.livekit.cloud/settings/regions",
+        { signal: AbortSignal.timeout(8000) },
+      );
+      console.log(`[voice-agent] DIAG region host (Node fetch) → HTTP ${res.status}`);
+    } catch (err) {
+      const e = err as Error & { cause?: { code?: string } };
+      console.error(
+        `[voice-agent] DIAG region host (Node fetch) → FAILED: ${e.message}${e.cause?.code ? ` (${e.cause.code})` : ""}`,
+      );
+    }
   },
 
   entry: async (ctx: JobContext) => {
