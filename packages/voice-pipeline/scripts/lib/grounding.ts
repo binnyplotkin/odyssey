@@ -73,6 +73,45 @@ export function extractJson(text: string): unknown {
   return JSON.parse(body.slice(start, end + 1));
 }
 
+export type JudgeMeta = { model: string; inputTokens: number; outputTokens: number };
+
+/** One judge call that returns parsed JSON, with a single repair pass if the model
+ *  emits invalid JSON (usually an unescaped quote). Shared by every judge axis. */
+async function judgeJson(
+  judgeModel: string,
+  system: string,
+  userContent: string,
+): Promise<{ data: unknown; inputTokens: number; outputTokens: number }> {
+  const provider = getChatProviderForModel(judgeModel);
+  const call = (messages: Array<{ role: "user" | "assistant"; content: string }>) =>
+    provider.complete({
+      model: judgeModel,
+      system: [{ type: "text", text: system }],
+      messages,
+      maxTokens: 1500,
+      temperature: 0,
+    });
+  let res = await call([{ role: "user", content: userContent }]);
+  let inputTokens = res.inputTokens;
+  let outputTokens = res.outputTokens;
+  try {
+    return { data: extractJson(res.text), inputTokens, outputTokens };
+  } catch {
+    res = await call([
+      { role: "user", content: userContent },
+      { role: "assistant", content: res.text },
+      {
+        role: "user",
+        content:
+          "That was not valid JSON (likely an unescaped double quote in a string). Output the SAME evaluation again as STRICTLY valid, parseable JSON only — replace any double quotes inside string values with single quotes.",
+      },
+    ]);
+    inputTokens += res.inputTokens;
+    outputTokens += res.outputTokens;
+    return { data: extractJson(res.text), inputTokens, outputTokens };
+  }
+}
+
 /** Replay one turn through the real pipeline (debug → full retrieval + captured
  *  context) and return the response + the context the character actually saw. */
 export async function replayTurn(
@@ -170,39 +209,8 @@ ${input.response}
 
 Categorize every claim per the rules. Output JSON only.`;
 
-  const provider = getChatProviderForModel(judgeModel);
-  const call = (messages: Array<{ role: "user" | "assistant"; content: string }>) =>
-    provider.complete({
-      model: judgeModel,
-      system: [{ type: "text", text: JUDGE_SYSTEM }],
-      messages,
-      maxTokens: 1500,
-      temperature: 0,
-    });
-
-  let res = await call([{ role: "user", content: judgeUser }]);
-  let inputTokens = res.inputTokens;
-  let outputTokens = res.outputTokens;
-  let parsed: { claims?: GroundingClaim[]; usedRetrievedKnowledge?: boolean; notes?: string };
-  try {
-    parsed = extractJson(res.text) as typeof parsed;
-  } catch {
-    // Repair pass: the model occasionally emits an unescaped quote. Hand its own
-    // output back and ask for strictly valid JSON (a plain retry would repeat it).
-    res = await call([
-      { role: "user", content: judgeUser },
-      { role: "assistant", content: res.text },
-      {
-        role: "user",
-        content:
-          "That was not valid JSON (likely an unescaped double quote in a string). Output the SAME evaluation again as STRICTLY valid, parseable JSON only — replace any double quotes inside string values with single quotes.",
-      },
-    ]);
-    inputTokens += res.inputTokens;
-    outputTokens += res.outputTokens;
-    parsed = extractJson(res.text) as typeof parsed;
-  }
-
+  const { data, inputTokens, outputTokens } = await judgeJson(judgeModel, JUDGE_SYSTEM, judgeUser);
+  const parsed = data as { claims?: GroundingClaim[]; usedRetrievedKnowledge?: boolean; notes?: string };
   const verdict = scoreClaims(
     parsed.claims ?? [],
     Boolean(parsed.usedRetrievedKnowledge),
@@ -234,6 +242,93 @@ export async function replayAndGrade(opts: {
   });
   const { judge, ...verdict } = graded;
   return { message: opts.message, response: toGrade, pageSlugs, verdict, judge };
+}
+
+// ── In-character QUALITY judge (Phase 3) ─────────────────────────────────────
+
+export type QualityDimension = { score: number; notes: string };
+export type QualityVerdict = {
+  voice: QualityDimension;
+  persona: QualityDimension;
+  scope: QualityDimension;
+  issues: string[];
+  qualityScore: number;
+  verdict: "in-character" | "minor-drift" | "out-of-character";
+  notes: string;
+};
+
+const QUALITY_SYSTEM = `You are an IN-CHARACTER QUALITY evaluator for an AI character. You are given the character's DEFINITION (its identity, voice, and scope — the spec it must embody, usually in <identity>/<voice>/<scope> tags) and a RESPONSE it produced to a USER MESSAGE. Assess how well the response embodies the defined character. This is about VOICE and PERSONA fidelity, NOT factual accuracy — a separate grounding check handles facts, so do NOT reward or penalize factual content here.
+
+Score three dimensions, each 0..1:
+- voice: do tone, register, and especially BREVITY match the defined <voice>? If brevity says e.g. '2-4 sentences' and the response runs much longer, score low. Wrong register (casual slang for a formal character; stiffness for a warm one) scores low.
+- persona: does the response embody the character's defined traits/identity and stay IN character? Breaking the fourth wall, 'as an AI', modern self-awareness, or a flat/generic voice score low.
+- scope: does it stay within the defined <engage> topics and appropriately decline/redirect <refuse> topics? Gracefully declining or redirecting an out-of-scope question scores HIGH; answering an out-of-scope question in detail scores low.
+
+List specific issues (too verbose, wrong register, broke character, answered out-of-scope, flat/generic voice, etc.); empty if none.
+
+qualityScore = holistic 0..1 overall. verdict: 'in-character' (strong), 'minor-drift' (small issues), 'out-of-character' (clear failures).
+
+Output ONLY strictly valid JSON (single quotes inside strings, NEVER raw double quotes):
+{"voice":{"score":number,"notes":string},"persona":{"score":number,"notes":string},"scope":{"score":number,"notes":string},"issues":string[],"qualityScore":number,"verdict":"in-character"|"minor-drift"|"out-of-character","notes":string}`;
+
+/** Judge how well `response` embodies the character's defined voice / persona / scope. */
+export async function gradeQuality(input: {
+  message: string;
+  response: string;
+  systemPrompt: string;
+  judgeModel?: string;
+}): Promise<QualityVerdict & { judge: JudgeMeta }> {
+  const judgeModel = input.judgeModel ?? DEFAULT_JUDGE_MODEL;
+  const judgeUser = `## CHARACTER DEFINITION (identity / voice / scope the response must embody)
+${input.systemPrompt || "(none)"}
+
+## USER MESSAGE
+${input.message}
+
+## CHARACTER RESPONSE
+${input.response}
+
+Assess in-character quality per the rules. Output JSON only.`;
+  const { data, inputTokens, outputTokens } = await judgeJson(judgeModel, QUALITY_SYSTEM, judgeUser);
+  const v = data as QualityVerdict;
+  return { ...v, judge: { model: judgeModel, inputTokens, outputTokens } };
+}
+
+// ── Unified eval: replay once, run the requested judge axes ───────────────────
+
+export type EvalResult = {
+  message: string;
+  response: string;
+  pageSlugs: string[];
+  grounding?: GroundingVerdict & { judge: JudgeMeta };
+  quality?: QualityVerdict & { judge: JudgeMeta };
+};
+
+/** Replay a turn ONCE and grade it on the requested axes (grounding and/or quality)
+ *  — the two judges run in parallel off the same response. */
+export async function replayAndEval(opts: {
+  characterId: string;
+  message: string;
+  judgeModel?: string;
+  responseOverride?: string;
+  axes?: { grounding?: boolean; quality?: boolean };
+}): Promise<EvalResult> {
+  const axes = opts.axes ?? { grounding: true };
+  const { response, systemPrompt, promptChunk, pageSlugs } = await replayTurn(
+    opts.characterId,
+    opts.message,
+  );
+  const toGrade = opts.responseOverride?.trim() || response;
+  if (!toGrade.trim()) throw new Error("no response generated — cannot grade");
+  const [grounding, quality] = await Promise.all([
+    axes.grounding
+      ? gradeGrounding({ message: opts.message, response: toGrade, systemPrompt, promptChunk, judgeModel: opts.judgeModel })
+      : Promise.resolve(undefined),
+    axes.quality
+      ? gradeQuality({ message: opts.message, response: toGrade, systemPrompt, judgeModel: opts.judgeModel })
+      : Promise.resolve(undefined),
+  ]);
+  return { message: opts.message, response: toGrade, pageSlugs, grounding, quality };
 }
 
 /** Bounded-concurrency map — replays + judge calls fan out without overwhelming the

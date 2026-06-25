@@ -1,26 +1,31 @@
 /**
- * Batch grounding eval — run a SET of queries through a character and score how
- * grounded each response is. Produces a scorecard (mean/median grounding,
- * verdict distribution, knowledge usage) + ranked failures, and writes a JSON
- * report for regression comparison.
+ * Batch eval — run a SET of queries through a character and score each on TWO axes:
+ * faithfulness (grounded in its knowledge?) and in-character quality (true to its
+ * voice/persona/scope?). Produces a two-dimensional scorecard + ranked failures
+ * (fabrications and lowest-quality turns) and a JSON report for regression.
  *
  *   EMBEDDING_PROVIDER=openai npx tsx --env-file=.env \
  *     packages/voice-pipeline/scripts/batch-eval.ts <characterSlug> [queriesFile]
  *
- * queriesFile: a JSON array of strings (or {query} objects), or a newline-separated
- * list (# comments allowed). Defaults to scripts/eval-sets/<slug>.json if present,
- * else a small built-in probe set. EVAL_CONCURRENCY (default 3) tunes fan-out.
+ * queriesFile: JSON array of strings (or {query} objects) or a newline list (# comments).
+ * Defaults to scripts/eval-sets/<slug>.json if present, else a built-in probe set.
+ * EVAL_AXES=grounding|quality|both (default both). EVAL_CONCURRENCY (default 3).
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { getCharacterStore } from "@odyssey/db";
-import { DEFAULT_JUDGE_MODEL, mapPool, replayAndGrade, type GradedTurn } from "./lib/grounding";
+import { DEFAULT_JUDGE_MODEL, mapPool, replayAndEval, type EvalResult } from "./lib/grounding";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHARACTER = process.argv[2] ?? "abraham";
 const QUERIES_ARG = process.argv[3];
 const CONCURRENCY = Number(process.env.EVAL_CONCURRENCY ?? "3");
+const AXES_ENV = (process.env.EVAL_AXES ?? "both").toLowerCase();
+const AXES = {
+  grounding: AXES_ENV === "both" || AXES_ENV === "grounding",
+  quality: AXES_ENV === "both" || AXES_ENV === "quality",
+};
 
 const BUILTIN_QUERIES = [
   "Tell me about the hardest thing you were ever asked to do.",
@@ -39,16 +44,19 @@ function loadQueries(slug: string): { source: string; queries: string[] } {
     ? (JSON.parse(raw) as Array<string | { query?: string }>)
         .map((x) => (typeof x === "string" ? x : x.query ?? ""))
         .filter(Boolean)
-    : raw
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l && !l.startsWith("#"));
+    : raw.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
   return { source: path, queries };
 }
 
-function pct(n: number, d: number): string {
-  return d ? `${Math.round((100 * n) / d)}%` : "—";
-}
+const stats = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return {
+    mean: s.length ? s.reduce((a, b) => a + b, 0) / s.length : 0,
+    median: s[Math.floor(s.length / 2)] ?? 0,
+    min: s[0] ?? 0,
+  };
+};
+const pct = (n: number, d: number) => (d ? `${Math.round((100 * n) / d)}%` : "—");
 
 async function main() {
   const character =
@@ -60,95 +68,117 @@ async function main() {
   }
   const { source, queries } = loadQueries(character.slug);
   const embedder = process.env.EMBEDDING_PROVIDER ?? "bge";
+  const axisLabel = [AXES.grounding && "faithfulness", AXES.quality && "quality"].filter(Boolean).join(" + ");
 
-  console.log("═══ BATCH GROUNDING EVAL ══════════════════════════════════════════");
+  console.log("═══ BATCH EVAL ════════════════════════════════════════════════════");
   console.log(`character : ${character.title} (${character.slug})`);
   console.log(`queries   : ${queries.length}  (source: ${source})`);
-  console.log(`judge     : ${DEFAULT_JUDGE_MODEL}   embedder: ${embedder}   concurrency: ${CONCURRENCY}`);
+  console.log(`judge     : ${DEFAULT_JUDGE_MODEL}   embedder: ${embedder}   axes: ${axisLabel}   concurrency: ${CONCURRENCY}`);
   console.log("");
 
   let done = 0;
   const results = await mapPool(queries, CONCURRENCY, async (q) => {
     try {
-      const g = await replayAndGrade({ characterId: character.id, message: q });
+      const r = await replayAndEval({ characterId: character.id, message: q, axes: AXES });
       done += 1;
-      const s = g.verdict.faithfulnessScore.toFixed(2);
-      console.log(`  [${done}/${queries.length}] ${s} ${g.verdict.verdict.padEnd(16)} "${q.slice(0, 50)}${q.length > 50 ? "…" : ""}"`);
-      return g;
+      const f = r.grounding ? r.grounding.faithfulnessScore.toFixed(2) : "—";
+      const ql = r.quality ? r.quality.qualityScore.toFixed(2) : "—";
+      console.log(`  [${done}/${queries.length}] faith ${f}  qual ${ql}  "${q.slice(0, 46)}${q.length > 46 ? "…" : ""}"`);
+      return r;
     } catch (err) {
       done += 1;
-      console.log(`  [${done}/${queries.length}] ERR  "${q.slice(0, 56)}": ${err instanceof Error ? err.message : String(err)}`);
+      console.log(`  [${done}/${queries.length}] ERR  "${q.slice(0, 46)}": ${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
   });
-
-  const ok = results.filter(Boolean) as GradedTurn[];
+  const ok = results.filter(Boolean) as EvalResult[];
   if (!ok.length) {
     console.error("\nno turns graded successfully.");
     process.exit(1);
   }
 
-  const scores = ok.map((g) => g.verdict.faithfulnessScore).sort((a, b) => a - b);
-  const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
-  const median = scores[Math.floor(scores.length / 2)] ?? 0;
-  const dist: Record<string, number> = {};
-  for (const g of ok) dist[g.verdict.verdict] = (dist[g.verdict.verdict] ?? 0) + 1;
-  const usedKnowledge = ok.filter((g) => g.verdict.usedRetrievedKnowledge).length;
-  const noRetrieval = ok.filter((g) => g.pageSlugs.length === 0).length;
-  const turnsWithFab = ok.filter((g) => g.verdict.fabrications.length > 0).length;
-  const totalFab = ok.reduce((a, g) => a + g.verdict.fabrications.length, 0);
-  const totalEmb = ok.reduce((a, g) => a + g.verdict.embellishments.length, 0);
-  const judgeTokens = ok.reduce((a, g) => a + g.judge.inputTokens + g.judge.outputTokens, 0);
+  const grounded = ok.map((r) => r.grounding).filter(Boolean) as NonNullable<EvalResult["grounding"]>[];
+  const quals = ok.map((r) => r.quality).filter(Boolean) as NonNullable<EvalResult["quality"]>[];
+  const judgeTokens = ok.reduce(
+    (a, r) => a + (r.grounding ? r.grounding.judge.inputTokens + r.grounding.judge.outputTokens : 0) + (r.quality ? r.quality.judge.inputTokens + r.quality.judge.outputTokens : 0),
+    0,
+  );
 
   console.log("\n── SCORECARD ───────────────────────────────────────────────────────");
   console.log(`graded        : ${ok.length}/${queries.length}`);
-  console.log(`faithfulness  : mean ${mean.toFixed(2)}  ·  median ${median.toFixed(2)}  ·  min ${scores[0]!.toFixed(2)}`);
-  console.log(`verdicts      : ${Object.entries(dist).map(([k, v]) => `${k} ${v}`).join("  ·  ")}`);
-  console.log(`fabrications  : ${totalFab} across ${turnsWithFab}/${ok.length} turns   ← real grounding failures`);
-  console.log(`embellishment : ${totalEmb} (sensory color — not scored)`);
-  console.log(`used graph    : ${usedKnowledge}/${ok.length} (${pct(usedKnowledge, ok.length)})`);
-  console.log(`no retrieval  : ${noRetrieval}/${ok.length} (${pct(noRetrieval, ok.length)})`);
+  if (grounded.length) {
+    const f = stats(grounded.map((g) => g.faithfulnessScore));
+    const fabTurns = grounded.filter((g) => g.fabrications.length > 0).length;
+    const totalFab = grounded.reduce((a, g) => a + g.fabrications.length, 0);
+    const totalEmb = grounded.reduce((a, g) => a + g.embellishments.length, 0);
+    const usedKnowledge = grounded.filter((g) => g.usedRetrievedKnowledge).length;
+    console.log(`FAITHFULNESS  : mean ${f.mean.toFixed(2)} · median ${f.median.toFixed(2)} · min ${f.min.toFixed(2)}   (fabrications ${totalFab} across ${fabTurns} turns)`);
+    console.log(`              : embellishments ${totalEmb} (sensory color, not scored) · used graph ${pct(usedKnowledge, grounded.length)}`);
+  }
+  if (quals.length) {
+    const q = stats(quals.map((x) => x.qualityScore));
+    const qDist: Record<string, number> = {};
+    for (const x of quals) qDist[x.verdict] = (qDist[x.verdict] ?? 0) + 1;
+    const voice = stats(quals.map((x) => x.voice.score)).mean;
+    const persona = stats(quals.map((x) => x.persona.score)).mean;
+    const scope = stats(quals.map((x) => x.scope.score)).mean;
+    console.log(`QUALITY       : mean ${q.mean.toFixed(2)} · median ${q.median.toFixed(2)} · min ${q.min.toFixed(2)}`);
+    console.log(`              : voice ${voice.toFixed(2)} · persona ${persona.toFixed(2)} · scope ${scope.toFixed(2)}`);
+    console.log(`  verdicts    : ${Object.entries(qDist).map(([k, v]) => `${k} ${v}`).join(" · ")}`);
+  }
   console.log(`judge tokens  : ${judgeTokens.toLocaleString()}`);
 
-  const failures = [...ok]
-    .filter((g) => g.verdict.fabrications.length > 0)
-    .sort((a, b) => a.verdict.faithfulnessScore - b.verdict.faithfulnessScore);
-  if (failures.length) {
-    console.log("\n── FABRICATIONS (real grounding failures) ──────────────────────────");
-    for (const g of failures) {
-      console.log(`\n  ${g.verdict.faithfulnessScore.toFixed(2)} · "${g.message}"`);
-      console.log(`    → ${g.response.replace(/\s+/g, " ").trim().slice(0, 140)}…`);
-      for (const f of g.verdict.fabrications) console.log(`    ✗ ${f}`);
+  const fabFailures = ok
+    .filter((r) => (r.grounding?.fabrications.length ?? 0) > 0)
+    .sort((a, b) => (a.grounding!.faithfulnessScore) - (b.grounding!.faithfulnessScore));
+  if (fabFailures.length) {
+    console.log("\n── FABRICATIONS (ungrounded world-facts) ───────────────────────────");
+    for (const r of fabFailures) {
+      console.log(`\n  ${r.grounding!.faithfulnessScore.toFixed(2)} · "${r.message}"`);
+      for (const f of r.grounding!.fabrications) console.log(`    ✗ ${f}`);
     }
-  } else {
-    console.log("\n✓ no fabrications — every graded turn is factually faithful (embellishment aside).");
+  }
+
+  const qualFailures = ok
+    .filter((r) => r.quality && r.quality.qualityScore < 0.9)
+    .sort((a, b) => a.quality!.qualityScore - b.quality!.qualityScore)
+    .slice(0, 5);
+  if (qualFailures.length) {
+    console.log("\n── LOWEST IN-CHARACTER QUALITY ─────────────────────────────────────");
+    for (const r of qualFailures) {
+      const q = r.quality!;
+      console.log(`\n  ${q.qualityScore.toFixed(2)} ${q.verdict} · "${r.message}"  (voice ${q.voice.score.toFixed(1)} persona ${q.persona.score.toFixed(1)} scope ${q.scope.score.toFixed(1)})`);
+      for (const i of q.issues) console.log(`    ⚠ ${i}`);
+    }
+  }
+  if (!fabFailures.length && !qualFailures.length) {
+    console.log("\n✓ no fabrications and no quality drift — clean across the set.");
   }
 
   const report = {
     character: character.slug,
     judge: DEFAULT_JUDGE_MODEL,
     embedder,
+    axes: AXES,
     at: new Date().toISOString(),
     queries: queries.length,
     graded: ok.length,
-    faithfulnessMean: mean,
-    faithfulnessMedian: median,
-    faithfulnessMin: scores[0],
-    distribution: dist,
-    fabricationTurns: turnsWithFab,
-    totalFabrications: totalFab,
-    totalEmbellishments: totalEmb,
-    usedKnowledge,
-    noRetrieval,
-    turns: ok.map((g) => ({
-      message: g.message,
-      faithfulness: g.verdict.faithfulnessScore,
-      verdict: g.verdict.verdict,
-      usedRetrievedKnowledge: g.verdict.usedRetrievedKnowledge,
-      pages: g.pageSlugs,
-      fabrications: g.verdict.fabrications,
-      embellishments: g.verdict.embellishments,
-      response: g.response,
+    faithfulness: grounded.length ? stats(grounded.map((g) => g.faithfulnessScore)) : null,
+    quality: quals.length ? stats(quals.map((x) => x.qualityScore)) : null,
+    turns: ok.map((r) => ({
+      message: r.message,
+      faithfulness: r.grounding?.faithfulnessScore ?? null,
+      fabrications: r.grounding?.fabrications ?? [],
+      embellishments: r.grounding?.embellishments ?? [],
+      usedRetrievedKnowledge: r.grounding?.usedRetrievedKnowledge ?? null,
+      quality: r.quality?.qualityScore ?? null,
+      qualityVerdict: r.quality?.verdict ?? null,
+      voice: r.quality?.voice.score ?? null,
+      persona: r.quality?.persona.score ?? null,
+      scope: r.quality?.scope.score ?? null,
+      issues: r.quality?.issues ?? [],
+      pages: r.pageSlugs,
+      response: r.response,
     })),
   };
   const outPath = resolve(process.cwd(), `eval-report-${character.slug}.json`);
