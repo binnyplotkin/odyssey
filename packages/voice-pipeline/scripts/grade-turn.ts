@@ -39,21 +39,28 @@ async function main() {
   console.log(`response  : ${response.replace(/\s+/g, " ").trim()}`);
   console.log(`retrieved : ${pageSlugs.length ? pageSlugs.join(", ") : "(none)"}`);
   console.log("");
-  const score = typeof verdict.groundingScore === "number" ? verdict.groundingScore.toFixed(2) : "?";
   console.log(
-    `VERDICT   : ${verdict.verdict ?? "?"}  ·  grounding ${score}  ·  used retrieved knowledge: ${verdict.usedRetrievedKnowledge ? "yes" : "no"}`,
+    `VERDICT   : ${verdict.verdict}  ·  faithfulness ${verdict.faithfulnessScore.toFixed(2)}  ·  used graph: ${verdict.usedRetrievedKnowledge ? "yes" : "no"}`,
   );
+  const mark: Record<string, string> = {
+    "grounded-knowledge": "✓ [knowledge]   ",
+    "grounded-identity": "✓ [identity]    ",
+    fabrication: "✗ [FABRICATION] ",
+    embellishment: "~ [embellish]   ",
+  };
   console.log("\nclaims:");
   for (const c of verdict.claims ?? []) {
-    const mark = c.supported ? "✓" : "✗";
-    const src = c.supported ? `[${c.source}]` : "[UNSUPPORTED]";
-    console.log(`  ${mark} ${src} ${c.claim}`);
-    if (c.evidence && c.evidence !== "none")
+    console.log(`  ${mark[c.kind] ?? `? [${c.kind}] `}${c.claim}`);
+    if (c.evidence && c.evidence.trim())
       console.log(`        ↳ ${c.evidence.replace(/\s+/g, " ").trim().slice(0, 160)}`);
   }
-  if (verdict.unsupported?.length) {
-    console.log("\n⚠ unsupported claims (parametric / hallucinated):");
-    for (const u of verdict.unsupported) console.log(`  - ${u}`);
+  if (verdict.fabrications.length) {
+    console.log("\n✗ fabrications (ungrounded world-facts — the real problem):");
+    for (const f of verdict.fabrications) console.log(`  - ${f}`);
+  }
+  if (verdict.embellishments.length) {
+    console.log("\n~ embellishments (sensory color — NOT scored against faithfulness):");
+    for (const e of verdict.embellishments) console.log(`  - ${e}`);
   }
   if (verdict.notes) console.log(`\nnotes: ${verdict.notes}`);
   console.log(`\njudge: ${judge.model} (in=${judge.inputTokens} out=${judge.outputTokens})`);

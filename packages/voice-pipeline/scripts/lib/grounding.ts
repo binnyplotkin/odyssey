@@ -1,8 +1,15 @@
 /**
  * Shared grounding-eval core: replay a turn through the real runVoiceStream and
- * judge whether the response is grounded in the context it was given. Used by both
+ * judge whether the response is faithful to the context it was given. Used by both
  * the single-turn grader (grade-turn.ts) and the batch runner (batch-eval.ts) so the
  * judge prompt + replay live in ONE place.
+ *
+ * The judge separates two kinds of unsupported content:
+ *   - FABRICATION  — a checkable world-fact (event/person/place/time/quote) not in
+ *                    the context. A real hallucination; counts against faithfulness.
+ *   - EMBELLISHMENT — sensory/atmospheric color (weather, light, sensation) that no
+ *                    record could confirm or deny. Immersive, not a grounding failure;
+ *                    surfaced separately, EXCLUDED from the score.
  */
 import { getCharacterStore, getSceneSessionStore } from "@odyssey/db";
 import { getChatProviderForModel } from "@odyssey/engine";
@@ -10,19 +17,24 @@ import { runVoiceStream } from "@odyssey/voice-pipeline";
 
 export const DEFAULT_JUDGE_MODEL = process.env.JUDGE_MODEL ?? "claude-haiku-4-5";
 
-export type GroundingClaim = {
-  claim: string;
-  supported: boolean;
-  source: "knowledge" | "identity" | "none" | string;
-  evidence: string;
-};
+export type ClaimKind =
+  | "grounded-knowledge"
+  | "grounded-identity"
+  | "fabrication"
+  | "embellishment";
+
+export type GroundingClaim = { claim: string; kind: ClaimKind; evidence: string };
 
 export type GroundingVerdict = {
   claims: GroundingClaim[];
-  groundingScore: number;
-  unsupported: string[];
+  /** grounded / (grounded + fabrications) — embellishments EXCLUDED, so immersive
+   *  color doesn't count against the character. 1.0 when there's nothing checkable. */
+  faithfulnessScore: number;
+  fabrications: string[];
+  embellishments: string[];
+  groundedCount: number;
   usedRetrievedKnowledge: boolean;
-  verdict: "grounded" | "partial" | "ungrounded" | string;
+  verdict: "faithful" | "embellished" | "minor-fabrication" | "unfaithful";
   notes: string;
 };
 
@@ -34,18 +46,23 @@ export type GradedTurn = {
   judge: { model: string; inputTokens: number; outputTokens: number };
 };
 
-const JUDGE_SYSTEM = `You are a STRICT grounding evaluator for an AI character system. A character was given CONTEXT (its identity/instructions + a RETRIEVED KNOWLEDGE section pulled from a knowledge graph) and produced a RESPONSE to a user. Determine whether the response's FACTUAL claims are supported by that context.
+const JUDGE_SYSTEM = `You are a STRICT faithfulness evaluator for an AI character. A character was given CONTEXT (its identity/instructions + a RETRIEVED KNOWLEDGE section pulled from a knowledge graph) and produced a RESPONSE to a user. Categorize every CLAIM in the response.
 
-Rules:
-- A "factual claim" is a statement asserting something about events, people, relationships, places, times, or facts. IGNORE emotional expression, first-person feeling, opinion, in-character style, and questions the character asks back — those are not factual claims.
-- A claim is SUPPORTED only if the provided context backs it. A claim that is TRUE in general/world knowledge but NOT present in the context is UNSUPPORTED — the character is leaning on parametric memory rather than its grounded knowledge. Mark its source "none".
-- For supported claims, set source to "knowledge" if backed by the RETRIEVED KNOWLEDGE section, or "identity" if backed by the identity/instructions.
-- Be precise and conservative.
+First, IGNORE pure emotion, opinion, in-character style, and questions the character asks back — those are not claims and must not appear in your output.
 
-Output ONLY valid JSON (no prose, no markdown fences) with this shape:
-{"claims":[{"claim":string,"supported":boolean,"source":"knowledge"|"identity"|"none","evidence":string}],"groundingScore":number,"unsupported":string[],"usedRetrievedKnowledge":boolean,"verdict":"grounded"|"partial"|"ungrounded","notes":string}
-groundingScore = fraction of factual claims that are supported (0..1).
-CRITICAL: the output must be STRICTLY parseable JSON. When quoting source text inside any string value, use single quotes ('), NEVER raw double quotes — an unescaped double quote will break the parse.`;
+For each remaining claim, assign exactly one "kind":
+- "grounded-knowledge": a factual claim supported by the RETRIEVED KNOWLEDGE section.
+- "grounded-identity": a factual claim supported by the identity/instructions.
+- "fabrication": an UNSUPPORTED claim asserting a checkable WORLD-FACT — a specific event, person, place, time, name, relationship, quote, or number that is NOT in the context (or contradicts it). Real hallucinations. e.g. naming a place the character never went, quoting words no source records, inventing a relative/building, an out-of-scope historical detail.
+- "embellishment": an UNSUPPORTED detail adding sensory/atmospheric/narrative COLOR that is not a checkable world-fact — weather, time of day, light, physical sensation, ambient scenery. e.g. "we rose before sunrise", "the cold wind bit the canvas", "the fire glowed". These enrich the telling without asserting anything verifiable.
+
+DECISIVE TEST (fabrication vs embellishment): could a historian mark it true or false against the record? If yes and it is not in the context → fabrication. If it is mood/scenery no record could confirm or deny → embellishment.
+
+For grounded claims, put the supporting context snippet in "evidence". For fabrication/embellishment, "evidence" may be "" or a brief note.
+
+Output ONLY strictly valid JSON (no prose, no markdown fences):
+{"claims":[{"claim":string,"kind":"grounded-knowledge"|"grounded-identity"|"fabrication"|"embellishment","evidence":string}],"usedRetrievedKnowledge":boolean,"notes":string}
+CRITICAL: when quoting source text inside any string value, use single quotes ('), NEVER raw double quotes — an unescaped double quote breaks the parse.`;
 
 export function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -95,14 +112,47 @@ export async function replayTurn(
   };
 }
 
-/** Judge whether `response` is grounded in the context the character was given. */
+/** Compute the verdict from categorized claims — embellishments excluded from the score. */
+function scoreClaims(
+  claims: GroundingClaim[],
+  usedRetrievedKnowledge: boolean,
+  notes: string,
+): GroundingVerdict {
+  const grounded = claims.filter(
+    (c) => c.kind === "grounded-knowledge" || c.kind === "grounded-identity",
+  );
+  const fabrications = claims.filter((c) => c.kind === "fabrication");
+  const embellishments = claims.filter((c) => c.kind === "embellishment");
+  const denom = grounded.length + fabrications.length;
+  const faithfulnessScore = denom === 0 ? 1 : grounded.length / denom;
+  const verdict: GroundingVerdict["verdict"] =
+    fabrications.length === 0
+      ? embellishments.length > 0
+        ? "embellished"
+        : "faithful"
+      : fabrications.length === 1
+        ? "minor-fabrication"
+        : "unfaithful";
+  return {
+    claims,
+    faithfulnessScore,
+    fabrications: fabrications.map((c) => c.claim),
+    embellishments: embellishments.map((c) => c.claim),
+    groundedCount: grounded.length,
+    usedRetrievedKnowledge,
+    verdict,
+    notes,
+  };
+}
+
+/** Judge whether `response` is faithful to the context the character was given. */
 export async function gradeGrounding(input: {
   message: string;
   response: string;
   systemPrompt: string;
   promptChunk: string;
   judgeModel?: string;
-}): Promise<GradedTurn["verdict"] & { judge: GradedTurn["judge"] }> {
+}): Promise<GroundingVerdict & { judge: GradedTurn["judge"] }> {
   const judgeModel = input.judgeModel ?? DEFAULT_JUDGE_MODEL;
   const judgeUser = `## CONTEXT GIVEN TO THE CHARACTER
 
@@ -118,7 +168,7 @@ ${input.message}
 ## CHARACTER RESPONSE
 ${input.response}
 
-Evaluate grounding per the rules. Output JSON only.`;
+Categorize every claim per the rules. Output JSON only.`;
 
   const provider = getChatProviderForModel(judgeModel);
   const call = (messages: Array<{ role: "user" | "assistant"; content: string }>) =>
@@ -133,9 +183,9 @@ Evaluate grounding per the rules. Output JSON only.`;
   let res = await call([{ role: "user", content: judgeUser }]);
   let inputTokens = res.inputTokens;
   let outputTokens = res.outputTokens;
-  let parsed: GroundingVerdict;
+  let parsed: { claims?: GroundingClaim[]; usedRetrievedKnowledge?: boolean; notes?: string };
   try {
-    parsed = extractJson(res.text) as GroundingVerdict;
+    parsed = extractJson(res.text) as typeof parsed;
   } catch {
     // Repair pass: the model occasionally emits an unescaped quote. Hand its own
     // output back and ask for strictly valid JSON (a plain retry would repeat it).
@@ -150,12 +200,15 @@ Evaluate grounding per the rules. Output JSON only.`;
     ]);
     inputTokens += res.inputTokens;
     outputTokens += res.outputTokens;
-    parsed = extractJson(res.text) as GroundingVerdict;
+    parsed = extractJson(res.text) as typeof parsed;
   }
-  return {
-    ...parsed,
-    judge: { model: judgeModel, inputTokens, outputTokens },
-  };
+
+  const verdict = scoreClaims(
+    parsed.claims ?? [],
+    Boolean(parsed.usedRetrievedKnowledge),
+    parsed.notes ?? "",
+  );
+  return { ...verdict, judge: { model: judgeModel, inputTokens, outputTokens } };
 }
 
 /** Replay + grade in one call. `responseOverride` grades an injected/external answer

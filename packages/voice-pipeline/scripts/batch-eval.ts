@@ -72,8 +72,8 @@ async function main() {
     try {
       const g = await replayAndGrade({ characterId: character.id, message: q });
       done += 1;
-      const s = (g.verdict.groundingScore ?? 0).toFixed(2);
-      console.log(`  [${done}/${queries.length}] ${s} ${(g.verdict.verdict ?? "?").padEnd(11)} "${q.slice(0, 56)}${q.length > 56 ? "…" : ""}"`);
+      const s = g.verdict.faithfulnessScore.toFixed(2);
+      console.log(`  [${done}/${queries.length}] ${s} ${g.verdict.verdict.padEnd(16)} "${q.slice(0, 50)}${q.length > 50 ? "…" : ""}"`);
       return g;
     } catch (err) {
       done += 1;
@@ -88,36 +88,40 @@ async function main() {
     process.exit(1);
   }
 
-  const scores = ok.map((g) => g.verdict.groundingScore ?? 0).sort((a, b) => a - b);
+  const scores = ok.map((g) => g.verdict.faithfulnessScore).sort((a, b) => a - b);
   const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
   const median = scores[Math.floor(scores.length / 2)] ?? 0;
   const dist: Record<string, number> = {};
-  for (const g of ok) dist[g.verdict.verdict ?? "?"] = (dist[g.verdict.verdict ?? "?"] ?? 0) + 1;
+  for (const g of ok) dist[g.verdict.verdict] = (dist[g.verdict.verdict] ?? 0) + 1;
   const usedKnowledge = ok.filter((g) => g.verdict.usedRetrievedKnowledge).length;
   const noRetrieval = ok.filter((g) => g.pageSlugs.length === 0).length;
+  const turnsWithFab = ok.filter((g) => g.verdict.fabrications.length > 0).length;
+  const totalFab = ok.reduce((a, g) => a + g.verdict.fabrications.length, 0);
+  const totalEmb = ok.reduce((a, g) => a + g.verdict.embellishments.length, 0);
   const judgeTokens = ok.reduce((a, g) => a + g.judge.inputTokens + g.judge.outputTokens, 0);
 
   console.log("\n── SCORECARD ───────────────────────────────────────────────────────");
   console.log(`graded        : ${ok.length}/${queries.length}`);
-  console.log(`grounding     : mean ${mean.toFixed(2)}  ·  median ${median.toFixed(2)}  ·  min ${scores[0]!.toFixed(2)}`);
+  console.log(`faithfulness  : mean ${mean.toFixed(2)}  ·  median ${median.toFixed(2)}  ·  min ${scores[0]!.toFixed(2)}`);
   console.log(`verdicts      : ${Object.entries(dist).map(([k, v]) => `${k} ${v}`).join("  ·  ")}`);
+  console.log(`fabrications  : ${totalFab} across ${turnsWithFab}/${ok.length} turns   ← real grounding failures`);
+  console.log(`embellishment : ${totalEmb} (sensory color — not scored)`);
   console.log(`used graph    : ${usedKnowledge}/${ok.length} (${pct(usedKnowledge, ok.length)})`);
   console.log(`no retrieval  : ${noRetrieval}/${ok.length} (${pct(noRetrieval, ok.length)})`);
   console.log(`judge tokens  : ${judgeTokens.toLocaleString()}`);
 
   const failures = [...ok]
-    .sort((a, b) => (a.verdict.groundingScore ?? 0) - (b.verdict.groundingScore ?? 0))
-    .filter((g) => (g.verdict.groundingScore ?? 1) < 1)
-    .slice(0, 5);
+    .filter((g) => g.verdict.fabrications.length > 0)
+    .sort((a, b) => a.verdict.faithfulnessScore - b.verdict.faithfulnessScore);
   if (failures.length) {
-    console.log("\n── RANKED FAILURES (lowest grounding) ──────────────────────────────");
+    console.log("\n── FABRICATIONS (real grounding failures) ──────────────────────────");
     for (const g of failures) {
-      console.log(`\n  ${(g.verdict.groundingScore ?? 0).toFixed(2)} · "${g.message}"`);
+      console.log(`\n  ${g.verdict.faithfulnessScore.toFixed(2)} · "${g.message}"`);
       console.log(`    → ${g.response.replace(/\s+/g, " ").trim().slice(0, 140)}…`);
-      for (const u of g.verdict.unsupported ?? []) console.log(`    ✗ ${u}`);
+      for (const f of g.verdict.fabrications) console.log(`    ✗ ${f}`);
     }
   } else {
-    console.log("\n✓ no failures — every graded turn scored 1.00.");
+    console.log("\n✓ no fabrications — every graded turn is factually faithful (embellishment aside).");
   }
 
   const report = {
@@ -127,19 +131,23 @@ async function main() {
     at: new Date().toISOString(),
     queries: queries.length,
     graded: ok.length,
-    mean,
-    median,
-    min: scores[0],
+    faithfulnessMean: mean,
+    faithfulnessMedian: median,
+    faithfulnessMin: scores[0],
     distribution: dist,
+    fabricationTurns: turnsWithFab,
+    totalFabrications: totalFab,
+    totalEmbellishments: totalEmb,
     usedKnowledge,
     noRetrieval,
     turns: ok.map((g) => ({
       message: g.message,
-      score: g.verdict.groundingScore,
+      faithfulness: g.verdict.faithfulnessScore,
       verdict: g.verdict.verdict,
       usedRetrievedKnowledge: g.verdict.usedRetrievedKnowledge,
       pages: g.pageSlugs,
-      unsupported: g.verdict.unsupported,
+      fabrications: g.verdict.fabrications,
+      embellishments: g.verdict.embellishments,
       response: g.response,
     })),
   };
