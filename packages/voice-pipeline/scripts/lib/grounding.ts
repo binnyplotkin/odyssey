@@ -36,7 +36,14 @@ export type {
 export async function replayTurn(
   characterId: string,
   message: string,
-): Promise<{ response: string; systemPrompt: string; promptChunk: string; pageSlugs: string[] }> {
+  opts?: { model?: string },
+): Promise<{
+  response: string;
+  systemPrompt: string;
+  promptChunk: string;
+  pageSlugs: string[];
+  firstTokenMs: number | null;
+}> {
   const character =
     (await getCharacterStore().getById(characterId)) ??
     (await getCharacterStore().getBySlug(characterId));
@@ -46,12 +53,20 @@ export async function replayTurn(
   const turnId = crypto.randomUUID();
 
   let response = "";
+  let firstTokenMs: number | null = null;
+  const startedAt = Date.now();
   const controller = new AbortController();
+  // opts.model overrides the character's configured brain (must be in the model
+  // registry). Same retrieval/curator/prompt for every model — only the LLM swaps —
+  // so first-token deltas are a fair (retrieval-constant) latency comparison.
   for await (const ev of runVoiceStream(
-    { characterId: character.id, message, sessionId: session.id, turnId, debug: true },
+    { characterId: character.id, message, sessionId: session.id, turnId, debug: true, model: opts?.model },
     { signal: controller.signal },
   )) {
-    if (ev.event === "token") response += (ev.data as { delta: string }).delta;
+    if (ev.event === "token") {
+      if (firstTokenMs === null) firstTokenMs = Date.now() - startedAt;
+      response += (ev.data as { delta: string }).delta;
+    }
   }
 
   const store = getSceneSessionStore();
@@ -67,6 +82,7 @@ export async function replayTurn(
     systemPrompt: build?.systemPrompt ?? "",
     promptChunk: build?.promptChunk ?? "",
     pageSlugs: pages.map((p) => p.page?.slug ?? "?"),
+    firstTokenMs,
   };
 }
 
@@ -99,17 +115,28 @@ export async function replayAndGrade(opts: {
   return { message: opts.message, response: toGrade, pageSlugs, verdict, judge };
 }
 
-export type EvalResult = { message: string; response: string; pageSlugs: string[] } & TurnGrade;
+export type EvalResult = {
+  message: string;
+  response: string;
+  pageSlugs: string[];
+  firstTokenMs: number | null;
+} & TurnGrade;
 
-/** Replay a turn ONCE and grade it on the requested axes (judges run in parallel). */
+/** Replay a turn ONCE and grade it on the requested axes (judges run in parallel).
+ *  `model` overrides the character's brain (registry id) for brain-model A/B. */
 export async function replayAndEval(opts: {
   characterId: string;
   message: string;
   judgeModel?: string;
+  model?: string;
   responseOverride?: string;
   axes?: { grounding?: boolean; quality?: boolean };
 }): Promise<EvalResult> {
-  const { response, systemPrompt, promptChunk, pageSlugs } = await replayTurn(opts.characterId, opts.message);
+  const { response, systemPrompt, promptChunk, pageSlugs, firstTokenMs } = await replayTurn(
+    opts.characterId,
+    opts.message,
+    { model: opts.model },
+  );
   const toGrade = opts.responseOverride?.trim() || response;
   if (!toGrade.trim()) throw new Error("no response generated — cannot grade");
   const { grounding, quality } = await gradeTurn({
@@ -120,7 +147,7 @@ export async function replayAndEval(opts: {
     judgeModel: opts.judgeModel,
     axes: opts.axes ?? { grounding: true },
   });
-  return { message: opts.message, response: toGrade, pageSlugs, grounding, quality };
+  return { message: opts.message, response: toGrade, pageSlugs, firstTokenMs, grounding, quality };
 }
 
 /** Bounded-concurrency map — replays + judge calls fan out without overwhelming the

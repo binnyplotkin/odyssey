@@ -74,3 +74,4 @@ apps/admin/.next-preview/
 
 # grounding-eval output reports
 eval-report-*.json
+model-sweep-*.json
