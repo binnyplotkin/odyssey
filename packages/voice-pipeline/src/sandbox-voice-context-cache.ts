@@ -30,6 +30,8 @@ type CacheLookup = {
 type CacheBuildInput = CacheLookup & {
   query?: string;
   semanticSeeds?: SemanticSeed[];
+  /** Drop the voice_identity sheet from the curated context (persona lives in the envelope). */
+  excludeVoiceIdentity?: boolean;
 };
 
 const globalForSandboxVoiceCache = globalThis as typeof globalThis & {
@@ -113,6 +115,7 @@ export async function buildAndStoreSandboxVoiceContextCache(
     scene: input.scene,
     semanticSeeds: input.semanticSeeds,
     tokenBudget,
+    excludeVoiceIdentity: input.excludeVoiceIdentity,
   });
   return storeSandboxVoiceContextCache({
     ...input,

@@ -55,7 +55,14 @@ export async function curate(request: CurateRequest): Promise<CurateResult> {
     Promise.all(activeWikiIds.map((wikiId) => wikiStore.listPagesForWiki(wikiId))),
     Promise.all(activeWikiIds.map((wikiId) => wikiStore.listWikiEdges(wikiId))),
   ]);
-  const pages = pagesByWiki.flat();
+  // When the persona lives fully in the L01–L03 envelope, the voice_identity
+  // sheet is redundant in per-turn context (measured: quality flat, faithfulness
+  // up). Drop it from the candidate pool here — a single gate point, so every
+  // downstream stage (seed/traverse/budget/render) simply never sees it and the
+  // graph carries only world knowledge. Reversible via the request flag.
+  const pages = (request.excludeVoiceIdentity
+    ? pagesByWiki.flat().filter((page) => page.type !== "voice_identity")
+    : pagesByWiki.flat());
   const pageIds = new Set(pages.map((page) => page.id));
   const edges = edgesByWiki
     .flat()
