@@ -317,6 +317,20 @@ export default defineAgent({
     // running transcript while the turn is still being held open. Reset each turn.
     let userSegments: string[] = [];
 
+    // Single-character conversation history. The LiveKit AgentSession does NOT thread
+    // prior turns into our brain (we run runVoiceStream ourselves via our own track), so
+    // without this the character is amnesiac turn-to-turn — it can't follow a follow-up
+    // like "what do you mean?". Accumulate {user, assistant} and pass the PRIOR turns
+    // each turn (the current message is passed separately). Scene rooms keep their own
+    // history inside the SceneDriver. Capped so the cached prompt stays bounded.
+    const history: Array<{ role: "user" | "assistant"; content: string }> = [];
+    const HISTORY_CAP = 16;
+    const recordTurn = (userText: string | null, reply: string) => {
+      if (userText) history.push({ role: "user", content: userText });
+      if (reply) history.push({ role: "assistant", content: reply });
+      if (history.length > HISTORY_CAP) history.splice(0, history.length - HISTORY_CAP);
+    };
+
     // Reply at the REAL end of the user's turn (gated by the v1 detector), superseding
     // whatever's in flight. SCENE rooms route through the orchestrator (who speaks);
     // single-character rooms run that one character directly.
@@ -330,7 +344,12 @@ export default defineAgent({
       if (sceneDriver) {
         void sceneDriver.drive(text, (input, replyId) => speak(input, signal, replyId));
       } else {
-        void speak({ characterId: character!.id, message: text }, signal, `a${Date.now()}`);
+        const prior = [...history];
+        void speak(
+          { characterId: character!.id, message: text, history: prior },
+          signal,
+          `a${Date.now()}`,
+        ).then((reply) => recordTurn(text, reply));
       }
       userSegments = []; // next turn starts a fresh speculation accumulation
     };
@@ -395,7 +414,7 @@ export default defineAgent({
           { characterId: character.id, message: "Greet me warmly in one short sentence." },
           greetSignal,
           `greet${Date.now()}`,
-        );
+        ).then((reply) => recordTurn(null, reply)); // seed history so the 1st reply has the greeting
       }
     }
   },
