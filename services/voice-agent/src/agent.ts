@@ -266,9 +266,13 @@ export default defineAgent({
       replyId: string,
     ): Promise<string> => {
       const { speaker, ...streamInput } = input;
+      // runVoiceStream only persists the turn (context build + record the workbench
+      // renders) when given BOTH sessionId AND turnId — pass one per turn so live
+      // voice turns are debuggable in /sessions, not just the SSE sandbox.
+      const turnId = crypto.randomUUID();
       let replyText = "";
       try {
-        for await (const ev of runVoiceStream({ ...streamInput, sessionId }, { signal })) {
+        for await (const ev of runVoiceStream({ ...streamInput, sessionId, turnId }, { signal })) {
           if (signal.aborted) break;
           if (ev.event === "audio") {
             const d = ev.data as { pcm: string; sampleRate: number };

@@ -107,6 +107,11 @@ export type VoiceStreamBody = {
   // voice preview. Falls through to normal resolution if the slug is unknown
   // or not ready.
   ttsVoiceSlug?: string;
+  // Turn-debugging: emit a `debug` event with the complete brain input (raw
+  // retrieval hits + scores, system blocks, messages array) AND run retrieval to
+  // completion (bypass the latency budget) so the graph data is always captured.
+  // Off by default — never affects production turns.
+  debug?: boolean;
 };
 
 const ANTHROPIC_DEFAULT_MODEL = "claude-haiku-4-5";
@@ -123,6 +128,14 @@ const TTS_MAX_CHUNK_CHARS = 220;
 const TTS_FIRST_CHUNK_TARGET_CHARS = 80;
 const VOICE_CONTEXT_TOKEN_BUDGET = 2500;
 const VOICE_CONTEXT_PREP_WAIT_MS = 100;
+// Relevant-passage cosine similarity differs by embedder: bge-small clusters
+// ~0.55–0.70, openai text-embedding-3-small ~0.40–0.47. A single 0.5 floor silently
+// zeroed the openai path (every relevant hit fell below it) — so prod's Vercel
+// EMBEDDING_PROVIDER=openai retrieval returned nothing but keyword activation.
+// Per-embedder, env-tunable floors keep bge strict while letting openai's
+// lower-but-correct scores through.
+const RETRIEVAL_MIN_SIM_BGE = Number(process.env.VOICE_RETRIEVAL_MIN_SIM_BGE ?? "0.5");
+const RETRIEVAL_MIN_SIM_OPENAI = Number(process.env.VOICE_RETRIEVAL_MIN_SIM_OPENAI ?? "0.35");
 type CurateOutput = Awaited<ReturnType<typeof curate>>;
 const EMPTY_CURATOR_TRACE: CurateOutput["trace"] = {
   totalPages: 0,
@@ -487,12 +500,15 @@ export async function* runVoiceStream(
         scene: input.scene,
         tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
       }, VOICE_CONTEXT_PREP_WAIT_MS);
-      const cachedContext = cachedContextCandidate && isCachedContextReusableForMessage(
-        cachedContextCandidate.sourceQuery,
-        message,
-      )
-        ? cachedContextCandidate
-        : null;
+      // Debug replays always run fresh retrieval + curation (never the cache) so
+      // the inspector shows the REAL graph data this message pulls, not a prior
+      // turn's reused context.
+      const cachedContext =
+        !input.debug &&
+        cachedContextCandidate &&
+        isCachedContextReusableForMessage(cachedContextCandidate.sourceQuery, message)
+          ? cachedContextCandidate
+          : null;
       if (cachedContextCandidate && !cachedContext) {
         serverTrace.mark("server.context.cache.miss_stale", {
           sourceQuery: cachedContextCandidate.sourceQuery,
@@ -586,12 +602,12 @@ export async function* runVoiceStream(
               ? await getWikiStore().searchPagesByBgeEmbeddingForWikis(
                   activeWikiIds,
                   queryEmbedding,
-                  { topK: 5, minSimilarity: 0.5 },
+                  { topK: 5, minSimilarity: RETRIEVAL_MIN_SIM_BGE },
                 )
               : await getWikiStore().searchPagesByEmbeddingForWikis(
                   activeWikiIds,
                   queryEmbedding,
-                  { topK: 5, minSimilarity: 0.5 },
+                  { topK: 5, minSimilarity: RETRIEVAL_MIN_SIM_OPENAI },
                 );
             return hits.map((h) => ({
               pageId: h.pageId,
@@ -600,15 +616,21 @@ export async function* runVoiceStream(
             }));
           })();
 
-          const RETRIEVAL_BUDGET_MS = Number(
-            process.env.VOICE_RETRIEVAL_BUDGET_MS ?? "800",
-          );
+          // Debug turns wait for retrieval (NO budget race) so the graph data is
+          // always present to inspect; production turns keep the latency cap.
+          // (Don't "bypass" by passing a huge timeout — Node clamps any setTimeout
+          // delay over ~2^31 ms to 1 ms, which would make the budget fire instantly.)
+          const RETRIEVAL_BUDGET_MS = Number(process.env.VOICE_RETRIEVAL_BUDGET_MS ?? "800");
           const TIMED_OUT = Symbol("retrieval-budget");
           let budgetTimer: ReturnType<typeof setTimeout> | undefined;
-          const budget = new Promise<typeof TIMED_OUT>((resolve) => {
-            budgetTimer = setTimeout(() => resolve(TIMED_OUT), RETRIEVAL_BUDGET_MS);
-          });
-          const raced = await Promise.race([retrieveSeeds, budget]);
+          const raced = input.debug
+            ? await retrieveSeeds
+            : await Promise.race([
+                retrieveSeeds,
+                new Promise<typeof TIMED_OUT>((resolve) => {
+                  budgetTimer = setTimeout(() => resolve(TIMED_OUT), RETRIEVAL_BUDGET_MS);
+                }),
+              ]);
           if (budgetTimer) clearTimeout(budgetTimer);
 
           if (raced === TIMED_OUT) {
@@ -796,6 +818,9 @@ export async function* runVoiceStream(
             systemPrompt,
             metadata: {
               semanticHits: semanticHitCount,
+              // Raw pgvector hits (slug + cosine similarity) that fed the curator —
+              // lets the inspector tell a retrieval miss from a curation drop.
+              retrievalHits: semanticSeeds,
               retrievalSkipped: skipDecision.skip,
               retrievalSkipReason: skipDecision.skip ? skipDecision.reason : null,
               recentSummaries: recentSummaries.length,
@@ -1014,6 +1039,18 @@ export async function* runVoiceStream(
 
       if (ackText && !cachedAckAudio) {
         dispatchAckChunk(ackText);
+      }
+
+      // Turn-debugging: emit the COMPLETE brain input — raw retrieval hits (with
+      // similarity), the exact system blocks, and the messages array as the model
+      // receives them — right before the LLM call. Opt-in (input.debug), off the
+      // production hot path.
+      if (input.debug) {
+        sendEvent("debug", {
+          retrievalHits: semanticSeeds,
+          system: buildSystemBlocks(promptPlan.systemPromptParts),
+          messages: [...history, { role: "user" as const, content: message }],
+        });
       }
 
       let chosenProvider: LlmProvider | null = null;
