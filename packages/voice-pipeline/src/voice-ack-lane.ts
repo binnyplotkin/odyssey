@@ -15,7 +15,14 @@ export function selectVoiceAck(input: {
   const message = input.message.trim();
   if (!message || isTrivialAckMessage(message)) return null;
   const slugs = input.selectedPages.map((selected) => selected.page.slug.toLowerCase());
-  const titles = input.selectedPages.map((selected) => selected.page.title.trim()).filter(Boolean);
+  // Exclude the character's own *-voice-identity page: it's always seeded, and its title
+  // is an editorial meta-name ("Sarah — Voice & Identity"), not an in-world topic — so
+  // "Yes, I can speak of Sarah — Voice & Identity" breaks the fourth wall. Only real
+  // entity pages are things the character can "speak of".
+  const titles = input.selectedPages
+    .filter((selected) => !selected.page.slug.toLowerCase().endsWith("voice-identity"))
+    .map((selected) => selected.page.title.trim())
+    .filter(Boolean);
   if (slugs.includes("lot") || /\blot\b/i.test(message)) {
     return "Yes, I remember Lot.";
   }
