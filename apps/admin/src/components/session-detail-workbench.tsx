@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type React from "react";
 import type {
   SceneSessionAudioArtifactRecord,
@@ -43,14 +43,15 @@ const C = {
   red: "#F4A8A8",
 } as const;
 
-type TabKey = "pipeline" | "graph" | "prompt" | "voice" | "raw";
+type TabKey = "pipeline" | "graph" | "prompt" | "voice" | "eval" | "raw";
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "pipeline", label: "Pipeline", icon: "1" },
   { key: "graph", label: "Graph", icon: "2" },
   { key: "prompt", label: "Prompt", icon: "3" },
   { key: "voice", label: "Voice", icon: "4" },
-  { key: "raw", label: "Raw", icon: "5" },
+  { key: "eval", label: "Eval", icon: "5" },
+  { key: "raw", label: "Raw", icon: "6" },
 ];
 
 type ConvFilter = "all" | "issues" | "slow";
@@ -1117,6 +1118,9 @@ function InspectorRail({
         {activeTab === "voice" ? (
           <VoicePanel turn={activeTurn} events={turnEvents} audioArtifacts={audioArtifacts} sessionId={session.id} />
         ) : null}
+        {activeTab === "eval" ? (
+          <EvalPanel sessionId={session.id} turn={activeTurn} context={activeContext} />
+        ) : null}
         {activeTab === "raw" ? (
           <RawPanel
             session={session}
@@ -1142,7 +1146,258 @@ function inspectorHeadlineFor(tab: TabKey): string {
   if (tab === "graph") return "What knowledge fed this turn";
   if (tab === "prompt") return "How the prompt was constructed";
   if (tab === "voice") return "Did the engine hear what was said";
+  if (tab === "eval") return "Is this turn faithful and in-character";
   return "All session data";
+}
+
+// ───────────── Eval panel (faithfulness + in-character quality) ─────────────
+
+type EvalGrade = {
+  grounding?: {
+    faithfulnessScore: number;
+    fabrications: string[];
+    embellishments: string[];
+    usedRetrievedKnowledge: boolean;
+    verdict: string;
+    notes: string;
+  };
+  quality?: {
+    qualityScore: number;
+    voice: { score: number; notes: string };
+    persona: { score: number; notes: string };
+    scope: { score: number; notes: string };
+    issues: string[];
+    verdict: string;
+    notes: string;
+  };
+};
+
+function scoreColor(s: number): string {
+  if (s >= 0.9) return C.greenDot;
+  if (s >= 0.7) return C.amber;
+  return C.red;
+}
+
+function EvalPanel({
+  sessionId,
+  turn,
+  context,
+}: {
+  sessionId: string;
+  turn: SceneSessionTurnRecord | null;
+  context: SceneSessionContextBuildRecord | null;
+}) {
+  const [status, setStatus] = useState<"idle" | "grading" | "done" | "error">("idle");
+  const [grade, setGrade] = useState<EvalGrade | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStatus("idle");
+    setGrade(null);
+    setError(null);
+  }, [turn?.id]);
+
+  if (!turn) {
+    return <PanelNote>Select a turn to evaluate.</PanelNote>;
+  }
+  const gradeable = Boolean(turn.assistantText && context?.systemPrompt);
+
+  async function run() {
+    if (!turn) return;
+    setStatus("grading");
+    setError(null);
+    try {
+      const res = await fetch(`/api/scene-sessions/${encodeURIComponent(sessionId)}/grade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ turnId: turn.id }),
+      });
+      if (!res.ok) {
+        const detail = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(detail.error ?? `grade failed (${res.status})`);
+      }
+      const payload = (await res.json()) as { grade: EvalGrade };
+      setGrade(payload.grade);
+      setStatus("done");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-14)", minWidth: 0 }}>
+      {!gradeable ? (
+        <PanelNote>
+          This turn wasn’t captured with its prompt, so it can’t be graded (older turn, or a turn
+          recorded without a turnId).
+        </PanelNote>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void run()}
+          disabled={status === "grading"}
+          style={{
+            alignSelf: "flex-start",
+            padding: "8px 16px",
+            borderRadius: 8,
+            border: `1px solid ${C.mintMid}`,
+            background: status === "grading" ? C.panel : C.mintSoft,
+            color: C.mint,
+            fontFamily: FONT_MONO,
+            fontSize: 12,
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            cursor: status === "grading" ? "default" : "pointer",
+          }}
+        >
+          {status === "grading" ? "Evaluating…" : grade ? "Re-evaluate" : "Evaluate this turn"}
+        </button>
+      )}
+
+      {error ? <PanelNote tone="bad">{error}</PanelNote> : null}
+
+      {grade?.grounding ? (
+        <ScoreCard
+          title="Faithfulness"
+          subtitle="Grounded in the knowledge it was given?"
+          score={grade.grounding.faithfulnessScore}
+          verdict={grade.grounding.verdict}
+          rows={[
+            { label: "used graph", value: grade.grounding.usedRetrievedKnowledge ? "yes" : "no" },
+          ]}
+          bad={grade.grounding.fabrications.map((f) => ({ label: "fabrication", text: f }))}
+          muted={grade.grounding.embellishments.map((e) => ({ label: "embellishment", text: e }))}
+          notes={grade.grounding.notes}
+        />
+      ) : null}
+
+      {grade?.quality ? (
+        <ScoreCard
+          title="In-character quality"
+          subtitle="True to its voice, persona, and scope?"
+          score={grade.quality.qualityScore}
+          verdict={grade.quality.verdict}
+          rows={[
+            { label: "voice", value: grade.quality.voice.score.toFixed(2) },
+            { label: "persona", value: grade.quality.persona.score.toFixed(2) },
+            { label: "scope", value: grade.quality.scope.score.toFixed(2) },
+          ]}
+          bad={grade.quality.issues.map((i) => ({ label: "issue", text: i }))}
+          notes={grade.quality.notes}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ScoreCard({
+  title,
+  subtitle,
+  score,
+  verdict,
+  rows,
+  bad = [],
+  muted = [],
+  notes,
+}: {
+  title: string;
+  subtitle: string;
+  score: number;
+  verdict: string;
+  rows: { label: string; value: string }[];
+  bad?: { label: string; text: string }[];
+  muted?: { label: string; text: string }[];
+  notes?: string;
+}) {
+  return (
+    <div
+      style={{
+        background: C.panel,
+        border: `1px solid ${C.border}`,
+        borderRadius: 10,
+        padding: "16px 18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        minWidth: 0,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ color: C.text, fontFamily: FONT_BODY, fontSize: 14, fontWeight: 600 }}>{title}</span>
+          <span style={{ color: C.textMid, fontSize: 12 }}>{subtitle}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+          <span style={{ color: scoreColor(score), fontFamily: FONT_MONO, fontSize: 26, fontWeight: 700 }}>
+            {score.toFixed(2)}
+          </span>
+          <span
+            style={{
+              color: C.textHigh,
+              fontFamily: FONT_MONO,
+              fontSize: 11,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+            }}
+          >
+            {verdict}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+        {rows.map((r) => (
+          <span key={r.label} style={{ color: C.textHigh, fontFamily: FONT_MONO, fontSize: 12 }}>
+            {r.label} <span style={{ color: C.text }}>{r.value}</span>
+          </span>
+        ))}
+      </div>
+
+      {bad.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {bad.map((b, i) => (
+            <span key={i} style={{ color: C.red, fontSize: 12, lineHeight: 1.5 }}>
+              ✗ <span style={{ color: C.textMid, fontFamily: FONT_MONO, fontSize: 10 }}>{b.label}</span> {b.text}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {muted.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {muted.map((m, i) => (
+            <span key={i} style={{ color: C.textLow, fontSize: 11, lineHeight: 1.5 }}>
+              ~ {m.text}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {notes ? (
+        <p style={{ color: C.textMid, fontSize: 12, lineHeight: 1.6, margin: 0 }}>{notes}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function PanelNote({ children, tone }: { children: ReactNode; tone?: "bad" }) {
+  return (
+    <p
+      style={{
+        margin: 0,
+        padding: "12px 14px",
+        background: C.panel,
+        border: `1px solid ${tone === "bad" ? C.red : C.border}`,
+        borderRadius: 8,
+        color: tone === "bad" ? C.red : C.textMid,
+        fontSize: 12,
+        lineHeight: 1.6,
+      }}
+    >
+      {children}
+    </p>
+  );
 }
 
 function InspectorHeader({
