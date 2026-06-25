@@ -46,8 +46,9 @@ import {
   TrackSource,
 } from "@livekit/rtc-node";
 import { BackgroundVoiceCancellation } from "@livekit/noise-cancellation-node";
-import { getCharacterStore, getSceneSessionStore } from "@odyssey/db";
+import { type CharacterRecord, getCharacterStore, getSceneSessionStore } from "@odyssey/db";
 import { runVoiceStream } from "@odyssey/voice-pipeline";
+import { SceneDriver } from "./scene-driver";
 
 // --- Railway healthcheck: the agents worker doesn't serve HTTP itself, so expose
 // a tiny /healthz on its own port. embedderReady flips when bge is resident.
@@ -108,6 +109,18 @@ function parseCharacterFromRoom(roomName: string | undefined): string | null {
   return match?.[1] ?? null;
 }
 
+/** `scene-<sceneId>-<sessionId>` rooms run the multi-character orchestrator loop.
+ *  sceneId may be a slug ("abrahams-tent") or a DB UUID; the trailing session UUID
+ *  anchors the split. */
+function parseSceneFromRoom(
+  roomName: string | undefined,
+): { sceneId: string; sessionId: string } | null {
+  const match = roomName?.match(
+    /^scene-(.+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
+  );
+  return match ? { sceneId: match[1]!, sessionId: match[2]! } : null;
+}
+
 /**
  * Agent that replies via a caller-supplied callback at the REAL end of the user's
  * turn. We override `onUserTurnCompleted` (fired after the v1 turn detector
@@ -146,36 +159,48 @@ export default defineAgent({
   entry: async (ctx: JobContext) => {
     await ctx.connect();
 
-    // The character is per-ROOM, not per-worker: the token route names rooms
-    // `char-<characterId>-<sessionId>`, so this single worker voices whichever
-    // character the room is for. VOICE_AGENT_CHARACTER_ID is only a fallback for
-    // rooms that don't encode one (e.g. the LiveKit Playground / direct tests).
-    const characterRef = parseCharacterFromRoom(ctx.room.name) ?? CHARACTER_ID;
-    if (!characterRef) {
-      throw new Error(
-        `no character: room "${ctx.room.name}" didn't encode one and VOICE_AGENT_CHARACTER_ID is unset`,
-      );
+    // The unit of voice is a SCENE. A `scene-<sceneId>-<sessionId>` room runs the
+    // multi-character orchestrator loop (SceneDriver picks who speaks each turn); a
+    // `char-<characterId>-<sessionId>` room is the degenerate one-character case.
+    // VOICE_AGENT_CHARACTER_ID is only a fallback for rooms that encode neither
+    // (e.g. the LiveKit Playground / direct tests).
+    const sceneRef = parseSceneFromRoom(ctx.room.name);
+    let sceneDriver: SceneDriver | null = null;
+    let character: CharacterRecord | null = null;
+    if (sceneRef) {
+      sceneDriver = await SceneDriver.load(sceneRef.sceneId);
+      if (!sceneDriver) {
+        throw new Error(`scene "${sceneRef.sceneId}" (room "${ctx.room.name}") did not resolve`);
+      }
+    } else {
+      const characterRef = parseCharacterFromRoom(ctx.room.name) ?? CHARACTER_ID;
+      if (!characterRef) {
+        throw new Error(
+          `no character: room "${ctx.room.name}" didn't encode one and VOICE_AGENT_CHARACTER_ID is unset`,
+        );
+      }
+      character =
+        (await getCharacterStore().getById(characterRef)) ??
+        (await getCharacterStore().getBySlug(characterRef));
+      if (!character) {
+        throw new Error(`character "${characterRef}" (from room "${ctx.room.name}") did not resolve`);
+      }
     }
 
-    // Resolve the character and open a REAL scene_session for this room.
-    // runVoiceStream persists per-turn context + telemetry against the sessionId,
-    // so it must FK-resolve in scene_sessions — otherwise the done-event insert
-    // violates scene_session_events_session_id_fkey and the turn throws right
-    // after the audio (which is what swallowed the first reply).
-    const character =
-      (await getCharacterStore().getById(characterRef)) ??
-      (await getCharacterStore().getBySlug(characterRef));
-    if (!character) {
-      throw new Error(`character "${characterRef}" (from room "${ctx.room.name}") did not resolve`);
-    }
+    // Open a REAL scene_session for this room — runVoiceStream persists per-turn
+    // context + telemetry against it, so it must FK-resolve in scene_sessions
+    // (otherwise the done-event insert violates the session FK and the turn throws).
     const sceneSession = await getSceneSessionStore().createSession({
-      characterId: character.id,
+      characterId: character?.id ?? null,
       mode: "voice",
     });
-    const characterId = character.id;
     const sessionId = sceneSession.id;
     console.log(
-      `[voice-agent] connected to room "${ctx.room.name}" — character=${character.slug ?? characterId} session=${sessionId} stt=${STT_MODEL}`,
+      `[voice-agent] connected to room "${ctx.room.name}" — ${
+        sceneDriver
+          ? `scene=${sceneDriver.scene.id} (${sceneDriver.scene.characters.length} characters)`
+          : `character=${character!.slug ?? character!.id}`
+      } session=${sessionId} stt=${STT_MODEL}`,
     );
 
     // User side handled by LiveKit: STT (inference model string) + auto silero VAD
@@ -198,7 +223,7 @@ export default defineAgent({
     // audioSource.clearQueue() on the next user turn.
     const OUTPUT_SAMPLE_RATE = 24000; // runVoiceStream/ElevenLabs emit 24 kHz mono
     const audioSource = new AudioSource(OUTPUT_SAMPLE_RATE, 1);
-    const outTrack = LocalAudioTrack.createAudioTrack("abraham-voice", audioSource);
+    const outTrack = LocalAudioTrack.createAudioTrack("agent-voice", audioSource);
 
     let turn: AbortController | null = null;
 
@@ -218,12 +243,23 @@ export default defineAgent({
       );
     };
 
-    // One user turn → run the brain, push its audio frames onto our output track.
-    // captureFrame paces to real-time, so the loop naturally tracks playback.
-    const speak = async (message: string, signal: AbortSignal, replyId: string) => {
+    // Voice one character's turn: run the brain for input.characterId, push its audio
+    // onto our output track, stream its text as a transcript, and resolve to the full
+    // reply (fed back into the scene's running transcript). captureFrame paces to
+    // real-time, so the loop naturally tracks playback.
+    const speak = async (
+      input: {
+        characterId: string;
+        message: string;
+        history?: Array<{ role: "user" | "assistant"; content: string }>;
+        promptChunk?: string;
+      },
+      signal: AbortSignal,
+      replyId: string,
+    ): Promise<string> => {
       let replyText = "";
       try {
-        for await (const ev of runVoiceStream({ characterId, message, sessionId }, { signal })) {
+        for await (const ev of runVoiceStream({ ...input, sessionId }, { signal })) {
           if (signal.aborted) break;
           if (ev.event === "audio") {
             const d = ev.data as { pcm: string; sampleRate: number };
@@ -246,18 +282,24 @@ export default defineAgent({
       } catch (err) {
         if (!signal.aborted) console.error("[voice-agent] turn failed", err);
       }
+      return replyText;
     };
 
-    // Reply at the REAL end of the user's turn (BrainAgent.onUserTurnCompleted,
-    // gated by the v1 detector): supersede whatever's in flight, then run the brain.
+    // Reply at the REAL end of the user's turn (gated by the v1 detector), superseding
+    // whatever's in flight. SCENE rooms route through the orchestrator (who speaks);
+    // single-character rooms run that one character directly.
     const respond = (text: string) => {
       turn?.abort();
       audioSource.clearQueue();
       turn = new AbortController();
-      const exchangeId = `x${Date.now()}`;
+      const signal = turn.signal;
       console.log(`[voice-agent] user: ${text}`);
-      publishTurn({ role: "user", id: `${exchangeId}u`, text, final: true });
-      void speak(text, turn.signal, `${exchangeId}a`);
+      publishTurn({ role: "user", id: `u${Date.now()}`, text, final: true });
+      if (sceneDriver) {
+        void sceneDriver.drive(text, (input, replyId) => speak(input, signal, replyId));
+      } else {
+        void speak({ characterId: character!.id, message: text }, signal, `a${Date.now()}`);
+      }
     };
     const agent = new BrainAgent(respond);
 
@@ -288,14 +330,26 @@ export default defineAgent({
     );
     console.log("[voice-agent] session started — listening (own output track)");
 
-    // DIAGNOSTIC (gated): on join, run ONE brain turn from a canned prompt so the
-    // smoke client can verify the FULL brain→output path + scene_session
-    // persistence WITHOUT needing STT (which is flaky under local CPU contention).
-    // Doubles as a greeting. Set VOICE_AGENT_GREET=1.
+    // DIAGNOSTIC (gated): on join, drive ONE turn from a canned user message so the
+    // smoke client can verify the loop WITHOUT STT — a scene room exercises the full
+    // orchestrate→speaker→brain path; a single-character room just runs the brain.
+    // Set VOICE_AGENT_GREET=1.
     if (process.env.VOICE_AGENT_GREET === "1") {
       turn = new AbortController();
-      console.log("[voice-agent] greet-test: running a canned brain turn on join");
-      void speak("Greet me warmly in one short sentence.", turn.signal, `greet${Date.now()}`);
+      const greetSignal = turn.signal;
+      if (sceneDriver) {
+        console.log("[voice-agent] greet-test: driving one scene turn on join");
+        void sceneDriver.drive("Hello? Who's here?", (input, replyId) =>
+          speak(input, greetSignal, replyId),
+        );
+      } else if (character) {
+        console.log("[voice-agent] greet-test: running a canned brain turn on join");
+        void speak(
+          { characterId: character.id, message: "Greet me warmly in one short sentence." },
+          greetSignal,
+          `greet${Date.now()}`,
+        );
+      }
     }
   },
 });
