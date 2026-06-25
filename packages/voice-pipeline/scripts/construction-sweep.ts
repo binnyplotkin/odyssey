@@ -37,7 +37,7 @@ const STEER = `<reminder>
 </reminder>`;
 
 // Each variant rewrites the assembled envelope. baseline = identity (no change).
-const VARIANTS: Array<{ name: string; fn: ConstructionVariantFn | null }> = [
+const ALL_VARIANTS: Array<{ name: string; fn: ConstructionVariantFn | null }> = [
   { name: "baseline", fn: null },
   {
     name: "voice-first", // structural: lead with HOW to speak, before WHO
@@ -71,7 +71,31 @@ const VARIANTS: Array<{ name: string; fn: ConstructionVariantFn | null }> = [
         ? { ...parts, perTurn: `${parts.perTurn}\n\nAnswer from the knowledge above, in one or two plain sentences.` }
         : parts,
   },
+  {
+    // The architecture question: with persona in the L01–L03 envelope, is the
+    // KG voice_identity sheet (rendered as "## Who you are…" in <context>)
+    // redundant? Strip it from the per-turn context and re-measure. If quality
+    // holds, the sheet is pure duplication; if it drops, the envelope (L03) is
+    // leaning on it and must absorb that voice content first.
+    name: "no-identity-sheet",
+    fn: ({ parts }) => {
+      if (!parts.perTurn) return parts;
+      const stripped = parts.perTurn
+        .replace(/##\s*Who you are[\s\S]*?(?=\n##\s|\n*<\/context>)/i, "")
+        .replace(/\n{3,}/g, "\n\n");
+      // If only the "## Relevant knowledge" header + whitespace remains, drop context.
+      const inner = stripped
+        .replace(/<\/?context>/g, "")
+        .replace(/##\s*Relevant knowledge/i, "")
+        .trim();
+      return { ...parts, perTurn: inner ? stripped : "" };
+    },
+  },
 ];
+
+// SWEEP_VARIANTS=baseline,no-identity-sheet runs a focused A/B; default runs all.
+const ONLY = process.env.SWEEP_VARIANTS?.split(",").map((s) => s.trim());
+const VARIANTS = ONLY ? ALL_VARIANTS.filter((v) => ONLY.includes(v.name)) : ALL_VARIANTS;
 
 function loadQueries(slug: string): string[] {
   const here = dirname(fileURLToPath(import.meta.url));
