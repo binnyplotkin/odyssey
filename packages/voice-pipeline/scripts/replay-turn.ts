@@ -50,21 +50,33 @@ async function main() {
   const controller = new AbortController();
   let response = "";
   let firstAudioMs = 0;
-  let done: Record<string, unknown> | null = null;
   let streamError: string | null = null;
+  let debug: {
+    retrievalHits?: Array<{ slug: string; similarity: number }>;
+    system?: Array<{ text: string }>;
+    messages?: Array<{ role: string; content: string }>;
+  } | null = null;
   const traceNames: string[] = [];
+  let embedMeta: Record<string, unknown> | null = null;
+  let embedFallback: Record<string, unknown> | null = null;
   const startedAt = Date.now();
   try {
+    // debug: true → emit raw retrieval hits + the exact messages array, and run
+    // retrieval to completion (bypass the latency budget) so the graph is captured.
     for await (const ev of runVoiceStream(
-      { characterId: character.id, message: MESSAGE, sessionId: session.id, turnId },
+      { characterId: character.id, message: MESSAGE, sessionId: session.id, turnId, debug: true },
       { signal: controller.signal },
     )) {
       if (ev.event === "token") response += (ev.data as { delta: string }).delta;
       else if (ev.event === "first-audio") firstAudioMs = (ev.data as { latencyMs: number }).latencyMs;
-      else if (ev.event === "done") done = ev.data as Record<string, unknown>;
+      else if (ev.event === "debug") debug = ev.data as typeof debug;
       else if (ev.event === "trace") {
-        const t = ev.data as { events?: Array<{ name: string }> };
-        for (const e of t.events ?? []) traceNames.push(e.name);
+        const t = ev.data as { events?: Array<{ name: string; meta?: Record<string, unknown> }> };
+        for (const e of t.events ?? []) {
+          traceNames.push(e.name);
+          if (e.name === "server.retrieval.embedded") embedMeta = e.meta ?? null;
+          if (e.name === "server.retrieval.embedder_fallback") embedFallback = e.meta ?? null;
+        }
       } else if (ev.event === "error") streamError = JSON.stringify(ev.data);
     }
   } catch (err) {
@@ -84,7 +96,19 @@ async function main() {
   const build = detail?.contextBuilds?.[0] ?? null;
   const turn = detail?.turns?.[0] ?? null;
 
-  // ── INPUT: knowledge graph (what the curator selected) ──
+  // ── INPUT: raw retrieval — what MATCHED the query, pre-curation ──
+  rule("INPUT · RETRIEVAL (raw pgvector hits)");
+  console.log(
+    `embedder: ${embedMeta?.embedder ?? "?"} (${embedMeta?.dims ?? "?"} dims)${embedFallback ? `  ⚠ FELL BACK: ${embedFallback.from}→${embedFallback.to} (${embedFallback.message})` : ""}`,
+  );
+  const hits = debug?.retrievalHits ?? [];
+  if (hits.length) {
+    for (const h of hits) console.log(`  • ${h.slug}  similarity=${Number(h.similarity).toFixed(4)}`);
+  } else {
+    console.log("  (0 semantic hits — curator fell back to activation/alias matching)");
+  }
+
+  // ── INPUT: knowledge graph (what the curator selected from the hits) ──
   rule("INPUT · KNOWLEDGE GRAPH (curated)");
   if (build) {
     const pages = (build.selectedPages ?? []) as Array<Record<string, unknown>>;
@@ -117,9 +141,14 @@ async function main() {
     console.log(`\nprompt chunk / injected knowledge (${chars(build.promptChunk)}):`);
     console.log(indent(build.promptChunk ?? "(none)"));
   }
-  console.log(
-    "\n  ⚠ GAP: the exact messages array ([...history, userMessage]) the model received is NOT captured — only the system prompt above.",
-  );
+  // ── INPUT: the exact messages array as the model received it ──
+  rule("INPUT · MESSAGES (as sent to the brain)");
+  const messages = debug?.messages ?? [];
+  if (messages.length) {
+    for (const m of messages) console.log(`  [${m.role}] ${truncate(m.content, 400)}`);
+  } else {
+    console.log("  (none captured — no debug event)");
+  }
 
   // ── OUTPUT ──
   rule("OUTPUT · RESPONSE");
@@ -134,12 +163,17 @@ async function main() {
   console.log(`trace pts: ${traceNames.length} (${[...new Set(traceNames)].slice(0, 12).join(", ")}…)`);
   if (streamError) console.log(`stream error: ${streamError}`);
 
-  // ── what we still can't see ──
-  rule("CAPTURE GAPS (Phase 1 to close)");
-  console.log("  ✗ raw pgvector hits + cosine-similarity scores (what MATCHED, pre-curation)");
-  console.log("  ✗ the exact LLM messages array (system blocks + history + user)");
+  rule("CAPTURE");
+  console.log(
+    "  ✓ raw retrieval hits + scores   ✓ curated graph + edges   ✓ full prompt   ✓ messages array",
+  );
   console.log(`\ninspect in the UI: /sessions/${session.id}`);
   process.exit(0);
+}
+
+function truncate(s: string, n: number): string {
+  const flat = s.replace(/\s+/g, " ").trim();
+  return flat.length > n ? `${flat.slice(0, n)}… (+${flat.length - n} chars)` : flat;
 }
 
 function indent(s: string): string {

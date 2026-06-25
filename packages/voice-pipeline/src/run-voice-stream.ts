@@ -107,6 +107,11 @@ export type VoiceStreamBody = {
   // voice preview. Falls through to normal resolution if the slug is unknown
   // or not ready.
   ttsVoiceSlug?: string;
+  // Turn-debugging: emit a `debug` event with the complete brain input (raw
+  // retrieval hits + scores, system blocks, messages array) AND run retrieval to
+  // completion (bypass the latency budget) so the graph data is always captured.
+  // Off by default — never affects production turns.
+  debug?: boolean;
 };
 
 const ANTHROPIC_DEFAULT_MODEL = "claude-haiku-4-5";
@@ -487,12 +492,15 @@ export async function* runVoiceStream(
         scene: input.scene,
         tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
       }, VOICE_CONTEXT_PREP_WAIT_MS);
-      const cachedContext = cachedContextCandidate && isCachedContextReusableForMessage(
-        cachedContextCandidate.sourceQuery,
-        message,
-      )
-        ? cachedContextCandidate
-        : null;
+      // Debug replays always run fresh retrieval + curation (never the cache) so
+      // the inspector shows the REAL graph data this message pulls, not a prior
+      // turn's reused context.
+      const cachedContext =
+        !input.debug &&
+        cachedContextCandidate &&
+        isCachedContextReusableForMessage(cachedContextCandidate.sourceQuery, message)
+          ? cachedContextCandidate
+          : null;
       if (cachedContextCandidate && !cachedContext) {
         serverTrace.mark("server.context.cache.miss_stale", {
           sourceQuery: cachedContextCandidate.sourceQuery,
@@ -600,9 +608,11 @@ export async function* runVoiceStream(
             }));
           })();
 
-          const RETRIEVAL_BUDGET_MS = Number(
-            process.env.VOICE_RETRIEVAL_BUDGET_MS ?? "800",
-          );
+          // Debug turns wait for retrieval (no budget race) so the graph data is
+          // always present to inspect; production turns keep the latency cap.
+          const RETRIEVAL_BUDGET_MS = input.debug
+            ? Number.MAX_SAFE_INTEGER
+            : Number(process.env.VOICE_RETRIEVAL_BUDGET_MS ?? "800");
           const TIMED_OUT = Symbol("retrieval-budget");
           let budgetTimer: ReturnType<typeof setTimeout> | undefined;
           const budget = new Promise<typeof TIMED_OUT>((resolve) => {
@@ -796,6 +806,9 @@ export async function* runVoiceStream(
             systemPrompt,
             metadata: {
               semanticHits: semanticHitCount,
+              // Raw pgvector hits (slug + cosine similarity) that fed the curator —
+              // lets the inspector tell a retrieval miss from a curation drop.
+              retrievalHits: semanticSeeds,
               retrievalSkipped: skipDecision.skip,
               retrievalSkipReason: skipDecision.skip ? skipDecision.reason : null,
               recentSummaries: recentSummaries.length,
@@ -1014,6 +1027,18 @@ export async function* runVoiceStream(
 
       if (ackText && !cachedAckAudio) {
         dispatchAckChunk(ackText);
+      }
+
+      // Turn-debugging: emit the COMPLETE brain input — raw retrieval hits (with
+      // similarity), the exact system blocks, and the messages array as the model
+      // receives them — right before the LLM call. Opt-in (input.debug), off the
+      // production hot path.
+      if (input.debug) {
+        sendEvent("debug", {
+          retrievalHits: semanticSeeds,
+          system: buildSystemBlocks(promptPlan.systemPromptParts),
+          messages: [...history, { role: "user" as const, content: message }],
+        });
       }
 
       let chosenProvider: LlmProvider | null = null;
