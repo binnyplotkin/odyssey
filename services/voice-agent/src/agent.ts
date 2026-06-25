@@ -98,6 +98,16 @@ function toAudioFrame(pcmBase64: string, sampleRate: number): AudioFrame {
   return new AudioFrame(i16, sampleRate, 1, i16.length);
 }
 
+/** Rooms are named `char-<characterId>-<sessionId>` (both UUIDs) by the browser's
+ *  token route, so the character is per-ROOM. Pull the character id out so one
+ *  worker can voice ANY character (Sarah's room → Sarah, Abraham's → Abraham). */
+function parseCharacterFromRoom(roomName: string | undefined): string | null {
+  const match = roomName?.match(
+    /^char-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-/i,
+  );
+  return match?.[1] ?? null;
+}
+
 /**
  * Agent that replies via a caller-supplied callback at the REAL end of the user's
  * turn. We override `onUserTurnCompleted` (fired after the v1 turn detector
@@ -134,21 +144,29 @@ export default defineAgent({
   },
 
   entry: async (ctx: JobContext) => {
-    if (!CHARACTER_ID) {
-      throw new Error("VOICE_AGENT_CHARACTER_ID is required (the character this worker voices)");
-    }
     await ctx.connect();
 
-    // Resolve the character (id or slug) and open a REAL scene_session for this
-    // room. runVoiceStream persists per-turn context + telemetry against the
-    // sessionId, so it must FK-resolve in scene_sessions — otherwise the
-    // done-event insert violates scene_session_events_session_id_fkey and the
-    // turn throws right after the audio (which is what swallowed the first reply).
+    // The character is per-ROOM, not per-worker: the token route names rooms
+    // `char-<characterId>-<sessionId>`, so this single worker voices whichever
+    // character the room is for. VOICE_AGENT_CHARACTER_ID is only a fallback for
+    // rooms that don't encode one (e.g. the LiveKit Playground / direct tests).
+    const characterRef = parseCharacterFromRoom(ctx.room.name) ?? CHARACTER_ID;
+    if (!characterRef) {
+      throw new Error(
+        `no character: room "${ctx.room.name}" didn't encode one and VOICE_AGENT_CHARACTER_ID is unset`,
+      );
+    }
+
+    // Resolve the character and open a REAL scene_session for this room.
+    // runVoiceStream persists per-turn context + telemetry against the sessionId,
+    // so it must FK-resolve in scene_sessions — otherwise the done-event insert
+    // violates scene_session_events_session_id_fkey and the turn throws right
+    // after the audio (which is what swallowed the first reply).
     const character =
-      (await getCharacterStore().getById(CHARACTER_ID)) ??
-      (await getCharacterStore().getBySlug(CHARACTER_ID));
+      (await getCharacterStore().getById(characterRef)) ??
+      (await getCharacterStore().getBySlug(characterRef));
     if (!character) {
-      throw new Error(`VOICE_AGENT_CHARACTER_ID "${CHARACTER_ID}" did not resolve to a character`);
+      throw new Error(`character "${characterRef}" (from room "${ctx.room.name}") did not resolve`);
     }
     const sceneSession = await getSceneSessionStore().createSession({
       characterId: character.id,
