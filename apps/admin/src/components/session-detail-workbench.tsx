@@ -1119,7 +1119,12 @@ function InspectorRail({
           <VoicePanel turn={activeTurn} events={turnEvents} audioArtifacts={audioArtifacts} sessionId={session.id} />
         ) : null}
         {activeTab === "eval" ? (
-          <EvalPanel sessionId={session.id} turn={activeTurn} context={activeContext} />
+          <EvalPanel
+            sessionId={session.id}
+            characterId={session.characterId ?? null}
+            turn={activeTurn}
+            context={activeContext}
+          />
         ) : null}
         {activeTab === "raw" ? (
           <RawPanel
@@ -1180,21 +1185,27 @@ function scoreColor(s: number): string {
 
 function EvalPanel({
   sessionId,
+  characterId,
   turn,
   context,
 }: {
   sessionId: string;
+  characterId: string | null;
   turn: SceneSessionTurnRecord | null;
   context: SceneSessionContextBuildRecord | null;
 }) {
   const [status, setStatus] = useState<"idle" | "grading" | "done" | "error">("idle");
   const [grade, setGrade] = useState<EvalGrade | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [promote, setPromote] = useState<"idle" | "saving" | "added" | "duplicate" | "full" | "error">("idle");
+  const [promoteMsg, setPromoteMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setStatus("idle");
     setGrade(null);
     setError(null);
+    setPromote("idle");
+    setPromoteMsg(null);
   }, [turn?.id]);
 
   if (!turn) {
@@ -1224,6 +1235,36 @@ function EvalPanel({
       setStatus("error");
     }
   }
+
+  async function promoteExemplar() {
+    if (!characterId || !turn?.userText || !turn?.assistantText) return;
+    setPromote("saving");
+    setPromoteMsg(null);
+    try {
+      const res = await fetch(`/api/characters/${encodeURIComponent(characterId)}/directive/exemplars`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: turn.userText, you: turn.assistantText }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { status?: string; exemplarCount?: number; error?: string };
+      if (!res.ok && res.status !== 409) throw new Error(data.error ?? `promote failed (${res.status})`);
+      if (data.status === "added") {
+        setPromote("added");
+        setPromoteMsg(`Added to exemplars (${data.exemplarCount}/8) — feeds this character's voice on the next turn.`);
+      } else if (data.status === "duplicate") {
+        setPromote("duplicate");
+        setPromoteMsg("Already an exemplar.");
+      } else {
+        setPromote("full");
+        setPromoteMsg(data.error ?? "Exemplar cap reached (8) — drop one in the L02 editor first.");
+      }
+    } catch (err) {
+      setPromote("error");
+      setPromoteMsg(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const canPromote = Boolean(characterId && turn?.userText && turn?.assistantText);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-14)", minWidth: 0 }}>
@@ -1286,6 +1327,47 @@ function EvalPanel({
           bad={grade.quality.issues.map((i) => ({ label: "issue", text: i }))}
           notes={grade.quality.notes}
         />
+      ) : null}
+
+      {grade && canPromote ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+          <button
+            type="button"
+            onClick={() => void promoteExemplar()}
+            disabled={promote === "saving" || promote === "added"}
+            title="Append this exchange to the character's L02 exemplars (few-shots its voice)"
+            style={{
+              padding: "7px 14px",
+              borderRadius: 8,
+              border: `1px solid ${promote === "added" ? C.mintMid : C.border}`,
+              background: promote === "added" ? C.mintSoft : C.panelStrong,
+              color: promote === "added" ? C.mint : C.textHigh,
+              fontFamily: FONT_MONO,
+              fontSize: 11,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              cursor: promote === "saving" || promote === "added" ? "default" : "pointer",
+            }}
+          >
+            {promote === "saving" ? "Promoting…" : promote === "added" ? "✓ Promoted to exemplar" : "Promote to exemplar"}
+          </button>
+          {grade.quality && grade.quality.qualityScore < 0.85 && promote === "idle" ? (
+            <span style={{ color: C.textLow, fontSize: 11, lineHeight: 1.5 }}>
+              Exemplars few-shot the voice — promote only your strongest turns.
+            </span>
+          ) : null}
+          {promoteMsg ? (
+            <span
+              style={{
+                color: promote === "error" || promote === "full" ? C.amber : C.textMid,
+                fontSize: 11,
+                lineHeight: 1.5,
+              }}
+            >
+              {promoteMsg}
+            </span>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
