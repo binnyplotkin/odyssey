@@ -114,6 +114,19 @@ export type VoiceStreamBody = {
   debug?: boolean;
 };
 
+/** Materials handed to a construction variant: the assembled baseline parts plus the
+ *  raw inputs, so a variant can string-transform (reorder/swap blocks) or rebuild. */
+export type ConstructionMaterials = {
+  characterName: string;
+  curatorChunk: string;
+  parts: { cached: string; perTurn: string };
+};
+
+/** Debug-only (eval): rewrite the assembled system prompt before the LLM sees it, for
+ *  prompt-construction A/B. Passed per-call (not a global), so it is concurrency-safe;
+ *  only applied when `debug` is set, so production turns are never affected. */
+export type ConstructionVariantFn = (m: ConstructionMaterials) => { cached: string; perTurn: string };
+
 const ANTHROPIC_DEFAULT_MODEL = "claude-haiku-4-5";
 const OPENAI_DEFAULT_MODEL = "gpt-5-nano";
 const GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b";
@@ -199,7 +212,7 @@ function findForceFlushBoundary(
 }
 
 export async function* runVoiceStream(
-  input: VoiceStreamBody & { characterId: string },
+  input: VoiceStreamBody & { characterId: string; __constructionVariant?: ConstructionVariantFn },
   { signal }: { signal: AbortSignal },
 ): AsyncIterable<VoiceStreamEvent> {
   const queue = createEventQueue<VoiceStreamEvent>();
@@ -755,7 +768,19 @@ export async function* runVoiceStream(
           curate,
         },
       );
-      const systemPrompt = promptPlan.systemPrompt;
+      // Prompt-construction A/B (debug only): let the eval rewrite the assembled
+      // envelope before the LLM sees it. promptPlan.systemPromptParts is what the LLM
+      // call reads, so mutate it; recompute systemPrompt for persistence + grading.
+      if (input.debug && input.__constructionVariant) {
+        promptPlan.systemPromptParts = input.__constructionVariant({
+          characterName: character.title ?? character.slug ?? character.id,
+          curatorChunk: composedPromptChunk,
+          parts: promptPlan.systemPromptParts,
+        });
+      }
+      const systemPrompt = [promptPlan.systemPromptParts.cached, promptPlan.systemPromptParts.perTurn]
+        .filter(Boolean)
+        .join("\n\n");
       serverTrace.mark("server.context.attached", {
         characterId: character.id,
         sessionId: input.sessionId ?? null,
