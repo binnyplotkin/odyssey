@@ -14,27 +14,52 @@ export function selectVoiceAck(input: {
   if (!input.enabled) return null;
   const message = input.message.trim();
   if (!message || isTrivialAckMessage(message)) return null;
-  const slugs = input.selectedPages.map((selected) => selected.page.slug.toLowerCase());
-  // Exclude the character's own *-voice-identity page: it's always seeded, and its title
-  // is an editorial meta-name ("Sarah — Voice & Identity"), not an in-world topic — so
-  // "Yes, I can speak of Sarah — Voice & Identity" breaks the fourth wall. Only real
-  // entity pages are things the character can "speak of".
+  const messageLower = message.toLowerCase();
+  // Candidate entity pages (exclude the always-seeded *-voice-identity sheet —
+  // its title is an editorial meta-name, not an in-world topic).
   const titles = input.selectedPages
     .filter((selected) => !selected.page.slug.toLowerCase().endsWith("voice-identity"))
     .map((selected) => selected.page.title.trim())
     .filter(Boolean);
-  if (slugs.includes("lot") || /\blot\b/i.test(message)) {
-    return "Yes, I remember Lot.";
-  }
-  const firstEntityTitle =
-    titles.find((title) => title.toLowerCase() !== input.characterTitle.toLowerCase()) ?? null;
-  if (firstEntityTitle && /\b(who|what|where|when|why|how|tell|describe|explain|remember)\b/i.test(message)) {
-    return `Yes, I can speak of ${firstEntityTitle}.`;
+
+  // Only "speak of X" when the user actually NAMED X this turn. selectedPages can
+  // be stale (served from the per-session context cache) or alias-seeded, so naming
+  // a page the user didn't mention yields wrong, meta acks ("Yes, I can speak of
+  // Hagar" when they asked about the husband). Ground the ack in the user's words.
+  const namedEntity = titles.find(
+    (title) =>
+      title.toLowerCase() !== input.characterTitle.toLowerCase() &&
+      titleMentionedInMessage(title, messageLower),
+  );
+  if (namedEntity && /\b(who|what|where|when|why|how|tell|describe|explain|remember)\b/i.test(message)) {
+    return `Yes, I can speak of ${namedEntity}.`;
   }
   if (/\bseparat|part(ed|ing)?|leave|left\b/i.test(message)) {
     return "That parting was not easy.";
   }
   return "I can speak to that.";
+}
+
+const ACK_TITLE_STOPWORDS = new Set([
+  "your", "this", "that", "with", "from", "they", "them", "what", "when",
+  "where", "which", "there", "here", "about", "into", "their",
+]);
+
+/** The page title — or a distinctive word from it — appears in the user's message. */
+function titleMentionedInMessage(title: string, messageLower: string): boolean {
+  const t = title.toLowerCase();
+  // Whole-title mention, word-boundaried so "Lot" can't match "a lot"; min 4 chars
+  // so short/common names fall through to a generic ack instead of false-firing.
+  if (t.length >= 4 && new RegExp(`\\b${escapeRegExp(t)}\\b`).test(messageLower)) return true;
+  // Multi-word titles: match on a distinctive word (≥4 letters, not a stopword).
+  return t
+    .split(/[^a-z]+/)
+    .filter((w) => w.length >= 4 && !ACK_TITLE_STOPWORDS.has(w))
+    .some((w) => new RegExp(`\\b${w}\\b`).test(messageLower));
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function isAckLaneEnabled(): boolean {
