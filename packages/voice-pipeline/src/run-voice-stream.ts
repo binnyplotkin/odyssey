@@ -128,6 +128,14 @@ const TTS_MAX_CHUNK_CHARS = 220;
 const TTS_FIRST_CHUNK_TARGET_CHARS = 80;
 const VOICE_CONTEXT_TOKEN_BUDGET = 2500;
 const VOICE_CONTEXT_PREP_WAIT_MS = 100;
+// Relevant-passage cosine similarity differs by embedder: bge-small clusters
+// ~0.55–0.70, openai text-embedding-3-small ~0.40–0.47. A single 0.5 floor silently
+// zeroed the openai path (every relevant hit fell below it) — so prod's Vercel
+// EMBEDDING_PROVIDER=openai retrieval returned nothing but keyword activation.
+// Per-embedder, env-tunable floors keep bge strict while letting openai's
+// lower-but-correct scores through.
+const RETRIEVAL_MIN_SIM_BGE = Number(process.env.VOICE_RETRIEVAL_MIN_SIM_BGE ?? "0.5");
+const RETRIEVAL_MIN_SIM_OPENAI = Number(process.env.VOICE_RETRIEVAL_MIN_SIM_OPENAI ?? "0.35");
 type CurateOutput = Awaited<ReturnType<typeof curate>>;
 const EMPTY_CURATOR_TRACE: CurateOutput["trace"] = {
   totalPages: 0,
@@ -594,12 +602,12 @@ export async function* runVoiceStream(
               ? await getWikiStore().searchPagesByBgeEmbeddingForWikis(
                   activeWikiIds,
                   queryEmbedding,
-                  { topK: 5, minSimilarity: 0.5 },
+                  { topK: 5, minSimilarity: RETRIEVAL_MIN_SIM_BGE },
                 )
               : await getWikiStore().searchPagesByEmbeddingForWikis(
                   activeWikiIds,
                   queryEmbedding,
-                  { topK: 5, minSimilarity: 0.5 },
+                  { topK: 5, minSimilarity: RETRIEVAL_MIN_SIM_OPENAI },
                 );
             return hits.map((h) => ({
               pageId: h.pageId,
@@ -608,17 +616,21 @@ export async function* runVoiceStream(
             }));
           })();
 
-          // Debug turns wait for retrieval (no budget race) so the graph data is
+          // Debug turns wait for retrieval (NO budget race) so the graph data is
           // always present to inspect; production turns keep the latency cap.
-          const RETRIEVAL_BUDGET_MS = input.debug
-            ? Number.MAX_SAFE_INTEGER
-            : Number(process.env.VOICE_RETRIEVAL_BUDGET_MS ?? "800");
+          // (Don't "bypass" by passing a huge timeout — Node clamps any setTimeout
+          // delay over ~2^31 ms to 1 ms, which would make the budget fire instantly.)
+          const RETRIEVAL_BUDGET_MS = Number(process.env.VOICE_RETRIEVAL_BUDGET_MS ?? "800");
           const TIMED_OUT = Symbol("retrieval-budget");
           let budgetTimer: ReturnType<typeof setTimeout> | undefined;
-          const budget = new Promise<typeof TIMED_OUT>((resolve) => {
-            budgetTimer = setTimeout(() => resolve(TIMED_OUT), RETRIEVAL_BUDGET_MS);
-          });
-          const raced = await Promise.race([retrieveSeeds, budget]);
+          const raced = input.debug
+            ? await retrieveSeeds
+            : await Promise.race([
+                retrieveSeeds,
+                new Promise<typeof TIMED_OUT>((resolve) => {
+                  budgetTimer = setTimeout(() => resolve(TIMED_OUT), RETRIEVAL_BUDGET_MS);
+                }),
+              ]);
           if (budgetTimer) clearTimeout(budgetTimer);
 
           if (raced === TIMED_OUT) {
