@@ -82,6 +82,7 @@ export function seedPages(
   //    titled "Intellectual cycles".
   const queryTerms = extractQueryTerms(args.query ?? "");
   if (queryTerms.length > 0) {
+    const queryTermSet = new Set(queryTerms);
     const activationBoosts = activationSlugBoosts(queryTerms);
     for (const [slug, boost] of activationBoosts) {
       const page = bySlug.get(slug);
@@ -93,11 +94,10 @@ export function seedPages(
     for (const page of pages) {
       const titleTerms = tokenizeText(page.title);
       const summaryTerms = tokenizeText(page.summary ?? "");
-      const aliasTerms = tokenizeText(extractAliases(page).join(" "));
 
       const titleHits = countTermHits(titleTerms, queryTerms);
       const summaryHits = countTermHits(summaryTerms, queryTerms);
-      const aliasHits = countTermHits(aliasTerms, queryTerms);
+      const aliasHits = aliasMatchCount(page, queryTermSet);
 
       if (isStrongTitleHit(page, titleHits, queryTerms.length)) {
         recordSeed(
@@ -217,6 +217,24 @@ function countTermHits(fieldTerms: Set<string>, queryTerms: string[]): number {
   let hits = 0;
   for (const term of queryTerms) {
     if (fieldTerms.has(term)) hits++;
+  }
+  return hits;
+}
+
+/**
+ * Count aliases that FULLY match the query. An alias only counts when ALL of its
+ * significant tokens (>2 chars or a known short proper term, non-stopword) appear
+ * in the query — so a single common word can't pull the page in. Without this,
+ * "driven woman" matched Hagar via her alias "that slave-woman" on the token
+ * "woman"; a multi-word alias should match as a name, not a bag of words.
+ */
+function aliasMatchCount(page: WikiPageRecord, queryTerms: Set<string>): number {
+  let hits = 0;
+  for (const alias of extractAliases(page)) {
+    const tokens = Array.from(tokenizeText(alias)).filter(
+      (t) => (t.length > 2 || SHORT_PROPER_TERMS.has(t)) && !STOPWORDS.has(t),
+    );
+    if (tokens.length > 0 && tokens.every((t) => queryTerms.has(t))) hits++;
   }
   return hits;
 }
