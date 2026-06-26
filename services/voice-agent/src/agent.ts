@@ -87,6 +87,12 @@ const STT_MODEL = process.env.VOICE_AGENT_STT ?? "deepgram/nova-3";
 // the endpoint hold so the multi-character speaker is usually already chosen when
 // the turn completes (hiding the ~0.5s orchestrate gap). Kill-switch: =0.
 const SPECULATE_ENABLED = process.env.VOICE_AGENT_SPECULATE !== "0";
+// Phase 4: the proactive director loop. Ships DARK (default off). When on, the
+// director may take a turn on its own after the user goes quiet for IDLE_MS, bounded
+// to MAX_PROACTIVE consecutive turns so it never monologues. Barge-in always wins.
+const PROACTIVE_ENABLED = process.env.VOICE_AGENT_PROACTIVE === "1";
+const MAX_PROACTIVE = Number(process.env.VOICE_AGENT_MAX_PROACTIVE ?? 2);
+const IDLE_MS = Number(process.env.VOICE_AGENT_IDLE_MS ?? 3500);
 
 /** base64 Float32 LE PCM (one TTS chunk) → an Int16 mono AudioFrame for the room. */
 function toAudioFrame(pcmBase64: string, sampleRate: number): AudioFrame {
@@ -248,6 +254,13 @@ export default defineAgent({
     const outTrack = LocalAudioTrack.createAudioTrack("agent-voice", audioSource);
 
     let turn: AbortController | null = null;
+    // Phase 4 loop state. `turn` is the single shared gate (aborted on barge-in AND on
+    // each new turn). These booleans only gate whether we ARM a follow-up — the abort
+    // is always the same `turn.abort()`.
+    let speaking = false;
+    let userIsSpeaking = false;
+    let proactiveCount = 0;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Publish turn transcripts over a data channel so the sandbox can render them —
     // the user's FULL turn (grouped, not raw per-pause STT segments) and the
@@ -324,17 +337,65 @@ export default defineAgent({
     // the user turn and each reply, and threads role-tagged history into every turn —
     // so single- and multi-character rooms share one store (no agent-side history).
 
+    // Phase 4: proactive loop helpers. `armIdle` schedules a director follow-up after a
+    // turn finishes speaking; the director's own `wait-for-user` (or MAX_PROACTIVE)
+    // decides when to stop. (Mutually recursive with proactiveTick — fine, both are
+    // only called at session runtime, after all consts are initialized.)
+    const clearIdle = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+    };
+    const armIdle = () => {
+      clearIdle();
+      if (!PROACTIVE_ENABLED) return;
+      if (userIsSpeaking || speaking) return;
+      if (proactiveCount >= MAX_PROACTIVE) return; // bounded → wait for the user
+      idleTimer = setTimeout(proactiveTick, IDLE_MS);
+    };
+    const proactiveTick = () => {
+      idleTimer = null;
+      if (userIsSpeaking || speaking) return; // someone already has the floor
+      turn?.abort(); // supersede any straggler (defensive — barge-in already aborts)
+      audioSource.clearQueue();
+      turn = new AbortController();
+      const signal = turn.signal;
+      proactiveCount += 1;
+      console.log(`[voice-agent] proactive tick #${proactiveCount}`);
+      void sceneDriver
+        .driveProactive((input, replyId) => {
+          if (signal.aborted) return Promise.resolve("");
+          speaking = true;
+          return speak(input, signal, replyId).finally(() => {
+            speaking = false;
+          });
+        })
+        .then((spoke) => {
+          if (spoke) armIdle(); // chain another bounded follow-up
+        });
+    };
+
     // Reply at the REAL end of the user's turn (gated by the v1 detector), superseding
     // whatever's in flight. Every room routes through the driver (who speaks + the
-    // director cue); a single-character room is just the 1-char fastpath.
+    // director cue); a single-character room is just the 1-char fastpath. A real user
+    // turn resets the proactive budget; after the character speaks, we arm a follow-up.
     const respond = (text: string) => {
       turn?.abort();
       audioSource.clearQueue();
+      clearIdle();
+      proactiveCount = 0;
       turn = new AbortController();
       const signal = turn.signal;
       console.log(`[voice-agent] user: ${text}`);
       publishTurn({ role: "user", id: `u${Date.now()}`, text, final: true });
-      void sceneDriver.drive(text, (input, replyId) => speak(input, signal, replyId));
+      void sceneDriver.drive(text, (input, replyId) => {
+        speaking = true;
+        return speak(input, signal, replyId).finally(() => {
+          speaking = false;
+          armIdle();
+        });
+      });
       userSegments = []; // next turn starts a fresh speculation accumulation
     };
     const agent = new BrainAgent(respond);
@@ -359,7 +420,9 @@ export default defineAgent({
     // browser, so this fires on real user speech — not Abraham's own audio echoing
     // back — and the session suppresses it during AEC warmup.
     session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
+      userIsSpeaking = ev.newState === "speaking";
       if (ev.newState === "speaking") {
+        clearIdle(); // the user has the floor — cancel any pending proactive tick
         turn?.abort();
         audioSource.clearQueue();
       }

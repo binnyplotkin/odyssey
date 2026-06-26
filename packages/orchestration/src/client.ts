@@ -445,6 +445,11 @@ function buildOrchestratorSystemPrompt(
   ].join("\n");
 }
 
+/** Sentinel passed as `lastUserMessage` when the orchestrator is consulted with no
+ *  user utterance (a proactive/silence tick): the director should advance-or-hold,
+ *  not respond to a message. */
+export const PROACTIVE_SILENCE_MARKER = "(the user has gone quiet)";
+
 function buildOrchestratorUserPrompt(
   recentTurns: SceneTurnForPlanning[],
   lastUserMessage?: string,
@@ -459,7 +464,13 @@ function buildOrchestratorUserPrompt(
       lines.push(`  ${who}: ${turn.text}`);
     }
   }
-  if (lastUserMessage) {
+  if (lastUserMessage === PROACTIVE_SILENCE_MARKER) {
+    lines.push("");
+    lines.push("The user has gone quiet - no new message. Decide whether the scene");
+    lines.push("should advance NOW (a character follows up, re-engages, or presses)");
+    lines.push("or `wait-for-user` if the last turn already invited them in and the");
+    lines.push("silence is natural. Don't fill every silence.");
+  } else if (lastUserMessage) {
     lines.push("");
     lines.push(`The user just said: "${lastUserMessage}"`);
     lines.push("Bias your decision toward whoever the user is addressing.");
