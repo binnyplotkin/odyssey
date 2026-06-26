@@ -20,6 +20,13 @@ const MIN_SPECULATE_CHARS = 8;
  *  not a short lead-in that happens to prefix-match. */
 const SPECULATION_COVERAGE = 0.6;
 
+/** Solo scenes get a latency-hidden director cue (Phase 3). =0 restores the 0ms
+ *  single-character fastpath with no per-turn direction. */
+const SOLO_CUE_ENABLED = process.env.VOICE_AGENT_SOLO_CUE !== "0";
+/** On a solo FINAL-turn speculation MISS, pay the orchestrator inline for the cue
+ *  (default off → serve the no-cue floor, zero added hot-path latency). */
+const SOLO_CUE_ON_MISS = process.env.VOICE_AGENT_SOLO_CUE_ON_MISS === "1";
+
 /** Lowercase, collapse whitespace, drop trailing punctuation — for prefix matching
  *  a speculated partial against the final transcript. */
 function normalizeForMatch(text: string): string {
@@ -117,14 +124,15 @@ export class SceneDriver {
 
   /**
    * B4: speculatively orchestrate off a partial transcript DURING the endpoint hold,
-   * so the speaker is usually already chosen when the turn completes. Fire-and-forget
-   * — drive() decides whether to accept it. No-op for a solo roster (the fastpath has
-   * no orchestrate latency to hide) or for a partial we're already speculating on.
+   * so the decision (speaker + director `beat`) is usually ready when the turn
+   * completes. Fire-and-forget — drive() decides whether to accept it. Solo scenes
+   * speculate too (to fetch a latency-hidden director cue) unless the solo cue is
+   * disabled; no-op for a partial we're already speculating on.
    */
   speculate(partialText: string): void {
     const text = partialText.trim();
     if (text.length < MIN_SPECULATE_CHARS) return;
-    if (this.#presentRoster().length <= 1) return;
+    if (!SOLO_CUE_ENABLED && this.#presentRoster().length <= 1) return;
     if (this.#speculation?.basedOnText === text) return;
     this.#speculation = { basedOnText: text, promise: this.#decide(text, "speculate") };
   }
@@ -231,16 +239,31 @@ export class SceneDriver {
     return final.startsWith(based) && based.length >= final.length * SPECULATION_COVERAGE;
   }
 
-  /** Solo roster → fastpath (no LLM); otherwise the orchestrator LLM, timed so we
-   *  can SEE the turn-driving cost (the gap B4 hides under the hold). The phase tag
-   *  distinguishes a speculative pre-call (under the hold) from a final-turn call. */
+  /** Ask the orchestrator who speaks + the director `beat`. A solo roster used to
+   *  fastpath with no LLM (0ms, no direction); now it also fetches a director cue,
+   *  but only when it's worth it — disabled entirely if SOLO_CUE is off, and on the
+   *  hot path (final) skipped unless a HIT was speculated under the hold (drive()) or
+   *  SOLO_CUE_ON_MISS forces an inline call. The phase tag distinguishes a speculative
+   *  pre-call (under the hold) from a final-turn call. */
   async #decide(userText: string, phase: "final" | "speculate" = "final"): Promise<OrchestratorDecision> {
     const present = this.#presentRoster();
-    if (present.length <= 1) {
-      const solo = present[0];
-      return solo
-        ? { action: "speak", speakerId: solo }
-        : defaultSceneDecision(this.scene, this.#sceneState);
+    const solo = present.length <= 1 ? (present[0] ?? null) : null;
+    const soloFloor: OrchestratorDecision | null =
+      present.length === 0
+        ? defaultSceneDecision(this.scene, this.#sceneState)
+        : solo
+          ? { action: "speak", speakerId: solo }
+          : null;
+
+    const { executor } = resolveOrchestratorExecutor();
+    if (!executor) return soloFloor ?? defaultSceneDecision(this.scene, this.#sceneState);
+
+    // Solo → the lone character always carries the turn; call the orchestrator only
+    // to fetch a director `beat`, and only when it can be hidden (speculative) or is
+    // explicitly opted into on the hot path.
+    if (solo) {
+      if (!SOLO_CUE_ENABLED) return soloFloor!;
+      if (phase === "final" && !SOLO_CUE_ON_MISS) return soloFloor!;
     }
 
     const request = buildSceneDecisionRequest({
@@ -250,8 +273,6 @@ export class SceneDriver {
       sceneMemory: this.#sceneMemory,
       lastUserMessage: userText,
     });
-    const { executor } = resolveOrchestratorExecutor();
-    if (!executor) return defaultSceneDecision(this.scene, this.#sceneState);
 
     const startedAt = Date.now();
     try {
@@ -259,10 +280,12 @@ export class SceneDriver {
       console.log(
         `[voice-agent] orchestrate[${phase}] ${Date.now() - startedAt}ms → ${decision.action} ${decision.speakerId ?? ""}`.trimEnd(),
       );
-      return decision;
+      // Solo: keep the director's beat/cue but pin the speaker — the orchestrator
+      // can't meaningfully pick anyone else, and the user just addressed them.
+      return solo ? { ...decision, action: "speak", speakerId: solo } : decision;
     } catch (err) {
       console.error("[voice-agent] orchestrate failed", err);
-      return defaultSceneDecision(this.scene, this.#sceneState);
+      return soloFloor ?? defaultSceneDecision(this.scene, this.#sceneState);
     }
   }
 
