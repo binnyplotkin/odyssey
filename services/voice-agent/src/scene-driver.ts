@@ -1,4 +1,4 @@
-import { getCharacterStore, getSceneStore } from "@odyssey/db";
+import { getCharacterStore, getSceneStore, type CharacterRecord } from "@odyssey/db";
 import {
   buildSceneDecisionRequest,
   buildSpeakerTurnRequest,
@@ -36,7 +36,9 @@ export interface SceneSpeakInput {
   characterId: string;
   message: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
-  promptChunk: string;
+  /** Orchestrator direction for this turn (sceneCue + beat). Omitted when there's
+   *  nothing to inject (e.g. a sandbox solo turn before a director cue exists). */
+  promptChunk?: string;
   /** Who's speaking — surfaced to the client so it can label the turn. */
   speaker: { slug: string; name: string };
 }
@@ -75,6 +77,42 @@ export class SceneDriver {
         .resolveOrchestratorScene(sceneId)
         .catch(() => null));
     return scene ? new SceneDriver(scene) : null;
+  }
+
+  /** Synthesize a one-actor scene for a `character-sandbox:<slug>` room, so the
+   *  single-character cell runs through the SAME driver as a multi-character scene
+   *  (it's just the 1-char fastpath). The character's voice + brain are resolved by
+   *  runVoiceStream from the id at speak time, so the scene `voice` field here is
+   *  only a non-empty placeholder. */
+  static fromCharacter(character: CharacterRecord): SceneDriver {
+    const slug = character.slug;
+    const blurb = (character.summary ?? character.title).slice(0, 280);
+    const scene: Scene = {
+      id: `character-sandbox:${slug}`,
+      title: character.title,
+      description: (character.summary ?? character.title).slice(0, 600),
+      characters: [
+        {
+          characterSlug: slug,
+          displayName: character.title,
+          voice: character.voiceId ?? slug,
+          blurb,
+        },
+      ],
+      openingBeat: "The user has just arrived.",
+      defaultAmbience: null,
+    };
+    return new SceneDriver(scene);
+  }
+
+  /** Seed the running transcript with an opening character line (e.g. the greet)
+   *  that had no preceding user turn — so the next turn's history includes it,
+   *  WITHOUT recording the director instruction that prompted it as a user turn. */
+  recordOpening(reply: string): void {
+    const solo = this.#presentRoster()[0];
+    if (!solo || !reply) return;
+    this.#recentTurns.push({ speakerSlug: solo, text: reply });
+    this.#trim();
   }
 
   /**
@@ -155,12 +193,17 @@ export class SceneDriver {
       resolution.speakerSlug;
 
     console.log(`[voice-agent] scene: ${resolution.speakerSlug} speaks`);
+    // Sandbox solo with no director cue → don't inject a stale "Beat: …" line
+    // (preserves the pre-unification single-char floor, which sent no promptChunk).
+    // Once a director cue exists (Phase 3), it flows through unchanged.
+    const sandboxNoCue =
+      this.scene.id.startsWith("character-sandbox:") && !resolution.decision.sceneCue;
     const replyText = await speak(
       {
         characterId: character.id,
         message: turn.message,
         history: turn.history,
-        promptChunk: turn.promptChunk,
+        promptChunk: sandboxNoCue ? undefined : turn.promptChunk,
         speaker: { slug: resolution.speakerSlug, name: displayName },
       },
       `s${Date.now()}`,

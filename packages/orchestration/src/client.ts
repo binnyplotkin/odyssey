@@ -284,10 +284,16 @@ export function buildSpeakerTurnRequest(input: {
     .find((t) => t.speakerSlug !== speakerSlug);
   const beat = input.decision.beat ?? input.sceneState.beat;
   const message = previousTurn?.text ?? beat;
-  const history = input.recentTurns.slice(-RECENT_TURNS_LIMIT).map((turn) => ({
-    role: turn.speakerSlug === speakerSlug ? ("assistant" as const) : ("user" as const),
-    content: turn.text,
-  }));
+  // History is the context BEFORE the turn we're responding to. Exclude the
+  // `previousTurn` we just lifted into `message`, or it's fed twice (here AND as the
+  // appended user message downstream — run-voice-stream `[...history, {message}]`).
+  const history = input.recentTurns
+    .filter((turn) => turn !== previousTurn)
+    .slice(-RECENT_TURNS_LIMIT)
+    .map((turn) => ({
+      role: turn.speakerSlug === speakerSlug ? ("assistant" as const) : ("user" as const),
+      content: turn.text,
+    }));
   const promptChunk = input.decision.sceneCue
     ? `Scene direction (orchestrator): ${input.decision.sceneCue}\nBeat: ${beat}`
     : `Beat: ${beat}`;
