@@ -193,11 +193,14 @@ export class SceneDriver {
       resolution.speakerSlug;
 
     console.log(`[voice-agent] scene: ${resolution.speakerSlug} speaks`);
-    // Sandbox solo with no director cue → don't inject a stale "Beat: …" line
-    // (preserves the pre-unification single-char floor, which sent no promptChunk).
-    // Once a director cue exists (Phase 3), it flows through unchanged.
+    // Sandbox solo with no director direction → don't inject a stale "Direction: …"
+    // line (preserves the pre-unification single-char floor, which sent no
+    // promptChunk). Once the orchestrator supplies a per-turn `beat`/`sceneCue`
+    // (Phase 3), it flows through to the character unchanged.
     const sandboxNoCue =
-      this.scene.id.startsWith("character-sandbox:") && !resolution.decision.sceneCue;
+      this.scene.id.startsWith("character-sandbox:") &&
+      !resolution.decision.beat &&
+      !resolution.decision.sceneCue;
     const replyText = await speak(
       {
         characterId: character.id,

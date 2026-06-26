@@ -294,9 +294,13 @@ export function buildSpeakerTurnRequest(input: {
       role: turn.speakerSlug === speakerSlug ? ("assistant" as const) : ("user" as const),
       content: turn.text,
     }));
+  // The orchestrator's per-turn DRIVE direction (`beat`), framed so the character
+  // acts on it in their own voice; `sceneCue` is an optional scene-level note. Both
+  // route through the per-turn <context> block, never the cached voice envelope, so
+  // voice is preserved by construction.
   const promptChunk = input.decision.sceneCue
-    ? `Scene direction (orchestrator): ${input.decision.sceneCue}\nBeat: ${beat}`
-    : `Beat: ${beat}`;
+    ? `Direction: ${beat}\nScene note: ${input.decision.sceneCue}`
+    : `Direction: ${beat}`;
 
   return {
     characterSlug: speakerSlug,
@@ -389,14 +393,25 @@ function buildOrchestratorSystemPrompt(
     .join("\n");
 
   return [
-    "You are the orchestrator of a voice-driven, multi-character scene.",
-    "Your job is to decide what happens next: who speaks, what beat the",
-    "scene is on, and what the audio bed should be. You do NOT write",
-    "dialogue - when you choose `action: \"speak\"`, give a short `beat`",
-    "(one sentence of direction) and the character LLM writes the words.",
+    "You are the DIRECTOR of a voice-driven scene. You decide what happens next -",
+    "who speaks, and the MOVE that makes the scene alive right now. You do NOT write",
+    "dialogue: when you choose `action: \"speak\"` you set `speakerId` and a `beat` -",
+    "a one-line DIRECTION for that character - and the character LLM speaks it in",
+    "their own voice.",
     "",
-    "When you choose `action: \"speak\"`, set `speakerId` to the character's",
-    "slug from the roster below (NOT their display name).",
+    "Direct, don't transcribe. The `beat` is the character's intent THIS turn: what",
+    "they react to and how they push the scene forward. Make it active - invent the",
+    "goal for this character in the moment, don't wait to be asked. A strong turn",
+    "usually ends by putting something back to the user: a question, a challenge, an",
+    "invitation. Good beats:",
+    "  - \"Turn the question back on them - ask why they're really asking.\"",
+    "  - \"Name the thing they're avoiding; press, don't soothe.\"",
+    "  - \"Draw out what they came here looking for.\"",
+    "Set `beat` on EVERY `speak`. But vary the move - not every turn is a question;",
+    "sometimes reveal, sometimes press, sometimes land a hard truth. Never script the",
+    "words - that's the character's job; the `beat` is intent, not lines.",
+    "",
+    "Set `speakerId` to the character's slug from the roster below (NOT their name).",
     "",
     `Scene: "${scene.title}"`,
     scene.description,
@@ -404,7 +419,7 @@ function buildOrchestratorSystemPrompt(
     "Characters present:",
     roster,
     "",
-    `Current beat: ${state.beat}`,
+    `Current situation: ${state.beat}`,
     state.lastSpeakerSlug
       ? `Last to speak: ${state.lastSpeakerSlug}`
       : "Scene has just opened.",
@@ -414,19 +429,17 @@ function buildOrchestratorSystemPrompt(
       : []),
     "",
     "Decision rules:",
-    "- Default to advancing the scene with `action: \"speak\"`. Pick a",
-    "  speaker whose move makes the scene move - usually NOT the last",
-    "  speaker.",
-    "- Use `action: \"wait-for-user\"` when a character has directly",
-    "  posed something to the user, or after 2-3 consecutive AI turns to",
-    "  give the user space to respond.",
-    "- Use `action: \"narrate\"` sparingly - for scene transitions or",
-    "  bridging beats. Keep narration under two sentences.",
-    "- Use `action: \"end-scene\"` only when the beat has clearly",
-    "  resolved or the user has indicated they want to leave.",
-    "- Change `ambience` only when the emotional register of the scene",
-    "  shifts. Don't churn it.",
-    "- Update `beatLabel` only when the beat has materially advanced.",
+    "- Default to advancing the scene with `action: \"speak\"` and an active `beat`.",
+    "  Pick the speaker whose move makes the scene move - usually NOT the last speaker.",
+    "- Use `action: \"wait-for-user\"` when the last turn already put something to the",
+    "  user, or after 2-3 consecutive AI turns - give the user room to answer.",
+    "- Use `action: \"narrate\"` sparingly - scene transitions or bridging beats only.",
+    "  Keep narration under two sentences.",
+    "- Use `action: \"end-scene\"` only when the situation has clearly resolved or the",
+    "  user has indicated they want to leave.",
+    "- Change `ambience` only when the emotional register shifts. Don't churn it.",
+    "- Update `beatLabel` only when the scene's situation has materially advanced",
+    "  (distinct from `beat`, which is this turn's direction for the speaker).",
     "",
     "Return your decision as JSON matching the provided schema.",
   ].join("\n");
