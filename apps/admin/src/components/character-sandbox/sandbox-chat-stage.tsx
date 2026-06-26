@@ -20,12 +20,10 @@ const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
 const VISIBLE_DISTANCE = 2;
-const WHEEL_ROTATE_THRESHOLD = 96;
+const WHEEL_ROTATE_THRESHOLD = 118;
 const WHEEL_RESET_MS = 280;
-const DRAG_ROTATE_THRESHOLD = 72;
-const HOVER_ROTATE_THRESHOLD = 46;
-const HOVER_ROTATE_COOLDOWN_MS = 130;
-const HOVER_RESET_MS = 320;
+const DRAG_ROTATE_THRESHOLD = 58;
+const DRAG_DEAD_ZONE = 10;
 
 export function SandboxChatStage({
   character,
@@ -51,14 +49,11 @@ export function SandboxChatStage({
   onSaveExample: (characterTurnId: string) => void;
 }) {
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const dragStartYRef = useRef<number | null>(null);
   const dragStartIndexRef = useRef(0);
   const wheelDeltaRef = useRef(0);
   const lastWheelAtRef = useRef(0);
-  const hoverYRef = useRef<number | null>(null);
-  const hoverDeltaRef = useRef(0);
-  const lastHoverAtRef = useRef(0);
-  const lastHoverRotateAtRef = useRef(0);
 
   const carouselTurns = useMemo(
     () => turns.filter((turn) => !turn.inFlight || turn.text.trim().length > 0),
@@ -94,58 +89,34 @@ export function SandboxChatStage({
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (isTextSelectionTarget(event.target)) return;
     dragStartYRef.current = event.clientY;
     dragStartIndexRef.current = clampedFocus;
-    hoverYRef.current = null;
-    hoverDeltaRef.current = 0;
+    setDragging(false);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (dragStartYRef.current !== null) {
-      const delta = event.clientY - dragStartYRef.current;
-      const steps = Math.trunc(delta / DRAG_ROTATE_THRESHOLD);
-      if (steps === 0) return;
-      focusTurn(dragStartIndexRef.current + steps);
-      return;
-    }
-
-    if (event.pointerType !== "mouse" || event.buttons !== 0) return;
-    if (carouselTurns.length <= 1) return;
-    const now = performance.now();
-    if (
-      hoverYRef.current === null ||
-      now - lastHoverAtRef.current > HOVER_RESET_MS
-    ) {
-      hoverYRef.current = event.clientY;
-      hoverDeltaRef.current = 0;
-      lastHoverAtRef.current = now;
-      return;
-    }
-
-    const delta = event.clientY - hoverYRef.current;
-    hoverYRef.current = event.clientY;
-    lastHoverAtRef.current = now;
-    hoverDeltaRef.current += delta;
-    if (Math.abs(hoverDeltaRef.current) < HOVER_ROTATE_THRESHOLD) return;
-    if (now - lastHoverRotateAtRef.current < HOVER_ROTATE_COOLDOWN_MS) return;
-    rotateBy(hoverDeltaRef.current > 0 ? 1 : -1);
-    hoverDeltaRef.current = 0;
-    lastHoverRotateAtRef.current = now;
+    if (dragStartYRef.current === null) return;
+    const delta = event.clientY - dragStartYRef.current;
+    if (Math.abs(delta) < DRAG_DEAD_ZONE) return;
+    event.preventDefault();
+    setDragging(true);
+    const adjustedDelta =
+      delta > 0 ? delta - DRAG_DEAD_ZONE : delta + DRAG_DEAD_ZONE;
+    const steps = Math.trunc(adjustedDelta / DRAG_ROTATE_THRESHOLD);
+    if (steps === 0) return;
+    focusTurn(dragStartIndexRef.current + steps);
   };
 
   const onPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
     dragStartYRef.current = null;
+    setDragging(false);
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
     } catch {
       /* already released */
     }
-  };
-
-  const onPointerLeave = () => {
-    hoverYRef.current = null;
-    hoverDeltaRef.current = 0;
   };
 
   const initial =
@@ -179,7 +150,7 @@ export function SandboxChatStage({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
-        onPointerLeave={onPointerLeave}
+        onPointerLeave={onPointerEnd}
         onKeyDown={(event) => {
           if (event.key === "ArrowUp") {
             event.preventDefault();
@@ -199,8 +170,8 @@ export function SandboxChatStage({
           pointerEvents: "auto",
           perspective: 1100,
           outline: "none",
-          cursor: carouselTurns.length > 1 ? "ns-resize" : "default",
-          touchAction: "none",
+          cursor: carouselTurns.length > 1 ? (dragging ? "grabbing" : "grab") : "default",
+          touchAction: "pan-y",
           overflow: "hidden",
           maskImage:
             "linear-gradient(180deg, transparent 0%, black 18%, black 82%, transparent 100%)",
@@ -334,6 +305,7 @@ function ChatTurn({
           "opacity 180ms ease, transform 180ms ease, filter 180ms ease",
         zIndex: 40 - abs,
         pointerEvents: abs <= 1 ? "auto" : "none",
+        userSelect: abs === 0 ? "text" : "none",
       }}
     >
       <div
@@ -373,6 +345,7 @@ function ChatTurn({
               : "none",
           backdropFilter: "blur(18px) saturate(1.12)",
           padding: abs === 0 ? "14px 16px" : "10px 12px",
+          cursor: abs === 0 ? "auto" : "pointer",
         }}
       >
         <p
@@ -636,4 +609,11 @@ function fmtTimestamp(ms: number): string {
   const m = Math.floor(ms / 60_000);
   const s = Math.floor((ms % 60_000) / 1000);
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function isTextSelectionTarget(target: EventTarget): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(
+    target.closest("p, span, button, input, textarea, a, [data-chat-text]"),
+  );
 }
