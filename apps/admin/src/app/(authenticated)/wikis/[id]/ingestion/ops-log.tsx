@@ -319,7 +319,7 @@ function OpRow({
         {isDone && row.tokens.toLocaleString()}
         {isWriting && row.tokens.toLocaleString()}
         {isQueued && "queued"}
-        {isFailed && "failed"}
+        {isFailed && (row.tokens > 0 ? row.tokens.toLocaleString() : "failed")}
       </span>
     </div>
   );

@@ -24,7 +24,7 @@ import {
 } from "@odyssey/db";
 import { DEFAULT_MODEL, resolveModel, type ModelId } from "./models";
 import { plan } from "./planner";
-import { write } from "./writer";
+import { write, WriterToolUseError } from "./writer";
 import type {
   IngestionEvent,
   IngestionInput,
@@ -217,8 +217,26 @@ export async function* runIngestion(
       if ("error" in result) {
         const msg =
           result.error instanceof Error ? result.error.message : String(result.error);
+        let failedUsage:
+          | { tokens: number; inputTokens: number; outputTokens: number }
+          | null = null;
+        if (result.error instanceof WriterToolUseError) {
+          failedUsage = {
+            tokens: result.error.tokens,
+            inputTokens: result.error.inputTokens,
+            outputTokens: result.error.outputTokens,
+          };
+          totalTokens += failedUsage.tokens;
+          totalInputTokens += failedUsage.inputTokens;
+          totalOutputTokens += failedUsage.outputTokens;
+        }
         opFailures.push(`${result.op.slug}: ${msg}`);
-        yield { type: "op-failed", op: result.op, error: msg };
+        yield {
+          type: "op-failed",
+          op: result.op,
+          error: msg,
+          ...(failedUsage ?? {}),
+        };
         continue;
       }
 

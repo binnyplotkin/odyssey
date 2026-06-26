@@ -289,6 +289,8 @@ export type WikiIngestionViewProps = {
   promptInherited: boolean;
   /** Display name of the character whose prompt is being inherited (or own). */
   characterName: string;
+  /** Optional run id to open directly in the live ingestion monitor. */
+  initialRunId?: string | null;
 };
 
 /* ── Main component ────────────────────────────────────────────── */
@@ -305,6 +307,7 @@ export function WikiIngestionView({
   promptName = null,
   promptInherited,
   characterName,
+  initialRunId = null,
 }: WikiIngestionViewProps) {
   // Prompt label preference:
   //   1. The custom prompt name when the wiki has set one.
@@ -427,13 +430,17 @@ export function WikiIngestionView({
     [model, router, wikiId],
   );
 
-  const activePersistedRun = useMemo(
-    () =>
+  const activePersistedRun = useMemo(() => {
+    const requestedRun = initialRunId
+      ? runs.find((item) => item.id === initialRunId)
+      : null;
+    if (requestedRun) return requestedRun;
+    return (
       runs.find(
         (item) => item.status === "queued" || item.status === "running",
-      ) ?? null,
-    [runs],
-  );
+      ) ?? null
+    );
+  }, [initialRunId, runs]);
 
   useEffect(() => {
     if (!activePersistedRun || run.phase !== "idle") return;
@@ -969,6 +976,7 @@ function deriveOpQueue(events: IngestionEvent[]): OpQueueRow[] {
   // reconcile by slug.
   const planEv = events.find((e) => e.type === "plan-complete");
   const planned: PlanOp[] = planEv?.type === "plan-complete" ? planEv.ops : [];
+  const retryOps = queuedRetryOps(events);
 
   const startedSlugs = new Set<string>();
   const completedBySlug = new Map<
@@ -990,6 +998,8 @@ function deriveOpQueue(events: IngestionEvent[]): OpQueueRow[] {
   const ops =
     planned.length > 0
       ? planned
+      : retryOps.length > 0
+        ? retryOps
       : events
           .filter(
             (e): e is Extract<IngestionEvent, { type: "op-start" }> =>
@@ -1009,13 +1019,38 @@ function deriveOpQueue(events: IngestionEvent[]): OpQueueRow[] {
     }
     const failed = failedBySlug.get(op.slug);
     if (failed) {
-      return { state: "failed", op, tokens: 0, error: failed.error };
+      return { state: "failed", op, tokens: failed.tokens ?? 0, error: failed.error };
     }
     if (startedSlugs.has(op.slug)) {
       return { state: "writing", op, tokens: 0 };
     }
     return { state: "queued", op };
   });
+}
+
+function queuedRetryOps(events: IngestionEvent[]): PlanOp[] {
+  const queuedRetryEv = events.find(
+    (
+      e,
+    ): e is Extract<IngestionEvent, { type: "queued" }> & {
+      retryOps: PlanOp[];
+    } =>
+      e.type === "queued" &&
+      Array.isArray((e as { retryOps?: unknown }).retryOps),
+  );
+  return queuedRetryEv?.retryOps ?? [];
+}
+
+function isPlanOp(value: unknown): value is PlanOp {
+  if (typeof value !== "object" || value === null) return false;
+  const op = value as Partial<PlanOp>;
+  return (
+    (op.action === "create" || op.action === "update" || op.action === "skip") &&
+    typeof op.slug === "string" &&
+    typeof op.type === "string" &&
+    typeof op.title === "string" &&
+    typeof op.rationale === "string"
+  );
 }
 
 function runIdFromEvents(events: IngestionEvent[]): string | null {
@@ -1064,6 +1099,8 @@ function LiveProgress({
     planEv?.type === "plan-complete" ? planEv.contradictionCount : 0;
 
   const queue = deriveOpQueue(run.events);
+  const retryOps = queuedRetryOps(run.events);
+  const isRetryRun = retryOps.length > 0;
   const opsTotal = queue.length;
   const opsDone = queue.filter((r) => r.state === "done").length;
   const writingRows = queue.filter((r) => r.state === "writing");
@@ -1074,7 +1111,13 @@ function LiveProgress({
   const opsUpdate = queue.filter((r) => r.op.action === "update").length;
 
   const tokensUsed = run.events.reduce(
-    (acc, ev) => acc + (ev.type === "op-complete" ? ev.tokens : 0),
+    (acc, ev) =>
+      acc +
+      (ev.type === "op-complete"
+        ? ev.tokens
+        : ev.type === "op-failed"
+          ? (ev.tokens ?? 0)
+          : 0),
     0,
   );
   const elapsedMs = nowMs - run.startedAt;
@@ -1109,6 +1152,10 @@ function LiveProgress({
     currentOpLabel = `${writingRows.length} writers active · ${summarizeActiveSlugs(writingRows)}`;
   } else if (writingRows.length === 1) {
     currentOpLabel = `${writingRows[0].op.action} · ${writingRows[0].op.title}`;
+  } else if (isRetryRun && isLoadingIndex) {
+    currentOpLabel = `retrying ${retryOps.length} failed ${retryOps.length === 1 ? "page" : "pages"} · reading existing pages`;
+  } else if (isRetryRun && isPlanning) {
+    currentOpLabel = `retrying ${retryOps.length} failed ${retryOps.length === 1 ? "page" : "pages"} · preparing writer`;
   } else if (isLoadingIndex) {
     currentOpLabel = "loading context · reading existing pages";
   } else if (isPlanning) {
@@ -1165,15 +1212,21 @@ function LiveProgress({
           }}
         />
         <span style={{ color: T.accent, fontWeight: 500 }}>
-          {isLoadingIndex
-            ? "loading context"
-            : isPlanning
+          {isRetryRun && isLoadingIndex
+            ? "loading retry context"
+            : isRetryRun && isPlanning
+              ? "preparing retry"
+              : isLoadingIndex
+                ? "loading context"
+                : isPlanning
               ? "planning"
               : "ingesting"}
         </span>
         <span style={{ color: T.faded }}>
           {isLoadingIndex || isPlanning
-            ? " · streaming"
+            ? isRetryRun
+              ? ` · ${retryOps.length} failed ${retryOps.length === 1 ? "page" : "pages"} queued`
+              : " · streaming"
             : activeWriterCount > 1
               ? ` · ${activeWriterCount} writers active · ${opsDone} of ${opsTotal || "—"} done`
               : ` · op ${currentIndex >= 0 ? currentIndex + 1 : opsDone || 1} of ${opsTotal || "—"} · streaming`}
@@ -1324,13 +1377,15 @@ function MatterPanel({
   const canvasColor = isLightTheme
     ? lightMatterColor(visualState.color, visualState.phase)
     : visualState.color;
+  const panelHeight = height ?? (run.phase === "idle" ? 420 : 560);
 
   return (
     <div
       data-ingestion-matter-state={isReadyIdle ? "ready" : run.phase}
       style={{
         position: "relative",
-        height: height ?? 420,
+        height: panelHeight,
+        minHeight: run.phase === "idle" ? 360 : 520,
         boxSizing: "border-box",
         overflow: "hidden",
         background: `radial-gradient(circle at 52% 46%, color-mix(in srgb, var(--accent-strong) ${isReadyIdle ? 16 : 10}%, transparent), transparent ${isReadyIdle ? 58 : 54}%)`,
@@ -1479,6 +1534,21 @@ function matterActivationsFromRun(run: RunPhase): MatterActivation[] {
         break;
       case "started":
       case "queued":
+        if (Array.isArray((ev as { retryOps?: unknown }).retryOps)) {
+          const retryOps = (ev as { retryOps: unknown[] }).retryOps.filter(
+            isPlanOp,
+          );
+          retryOps.slice(0, 8).forEach((op, opIndex) => {
+            activations.push({
+              id: `${idBase}:retry:${op.slug}:${opIndex}`,
+              kind: op.type,
+              strength: 0.62,
+              radius: 0.24,
+              durationMs: 4200,
+            });
+          });
+        }
+        break;
       case "loaded-index":
         break;
     }
@@ -1617,9 +1687,13 @@ function sumTokens(events: IngestionEvent[]): {
   let input = 0;
   let output = 0;
   for (const ev of events) {
-    if (ev.type === "plan-complete" || ev.type === "op-complete") {
-      input += ev.inputTokens;
-      output += ev.outputTokens;
+    if (
+      ev.type === "plan-complete" ||
+      ev.type === "op-complete" ||
+      ev.type === "op-failed"
+    ) {
+      input += ev.inputTokens ?? 0;
+      output += ev.outputTokens ?? 0;
     }
   }
   return { input, output, total: input + output };
@@ -1634,6 +1708,8 @@ function deriveFooterTelemetry(
 
   if (run.phase === "live") {
     const queue = deriveOpQueue(run.events);
+    const retryOps = queuedRetryOps(run.events);
+    const isRetryRun = retryOps.length > 0;
     const opsTotal = queue.length;
     const opsDone = queue.filter((r) => r.state === "done").length;
     const writingRows = queue.filter((r) => r.state === "writing");
@@ -1654,7 +1730,9 @@ function deriveFooterTelemetry(
       runningOpNum: isPlanning ? 0 : currentNum,
       runningOpTotal: opsTotal,
       runningOpLabel: isPlanning
-        ? "planning · analyzing context…"
+        ? isRetryRun
+          ? `retrying ${retryOps.length} failed ${retryOps.length === 1 ? "page" : "pages"}…`
+          : "planning · analyzing context…"
         : writingRows.length > 1
           ? `${writingRows.length} writers active`
           : writingRow

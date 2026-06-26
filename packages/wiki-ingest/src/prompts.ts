@@ -167,7 +167,7 @@ export function writerUserMessage(args: {
         .join("\n\n")
     : "(planner did not isolate specific passages — see full source in context)";
   const updateBlock = args.existingBody
-    ? `\n\n## EXISTING BODY (you are UPDATING this page)\n\n${args.existingBody}\n`
+    ? `\n\n## EXISTING BODY EXCERPT (you are UPDATING this page)\n\n${compactExistingBody(args.existingBody)}\n`
     : "";
   return `# Op: ${args.op.action} [[${args.op.slug}]]
 
@@ -187,7 +187,23 @@ ${args.wikiIndexCompact}
 
 ---
 
-Write the full page payload. Call the write_page tool.`;
+Write the full page payload. Call the write_page tool.
+
+Important:
+- The write_page tool input must include every required field: title, summary, body, frontmatter, perspective, and confidence.
+- Do not stop after title and summary.
+- Keep the body concise enough to fit, but include a real markdown body with sourced claims and useful [[slug]] links.
+- For an update, merge the new evidence into the existing body instead of replacing it with a short summary.`;
+}
+
+function compactExistingBody(body: string): string {
+  const trimmed = body.trim();
+  const limit = 5200;
+  if (trimmed.length <= limit) return trimmed;
+
+  const head = trimmed.slice(0, 2600).trimEnd();
+  const tail = trimmed.slice(-1800).trimStart();
+  return `${head}\n\n[...existing body truncated for retry context...]\n\n${tail}`;
 }
 
 /* ── Compact index for the writer (lighter than the planner's) ─── */

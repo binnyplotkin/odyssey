@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import type {
+  WikiIngestionEventRecord,
   WikiIngestionLogRecord,
   WikiPageRecord,
   WikiSourceKind,
@@ -165,6 +166,27 @@ function metadataFiltersFromDraft(
   return filters;
 }
 
+function retryableFailedCount(events: WikiIngestionEventRecord[]): number {
+  const completedSlugs = new Set<string>();
+  const failedSlugs = new Set<string>();
+  for (const event of events) {
+    const payload = asRecord(event.payload);
+    const op = asRecord(payload?.op);
+    const slug = typeof op?.slug === "string" ? op.slug : null;
+    if (!slug) continue;
+    if (event.type === "op-complete") completedSlugs.add(slug);
+    if (event.type === "op-failed") failedSlugs.add(slug);
+  }
+  for (const slug of completedSlugs) failedSlugs.delete(slug);
+  return failedSlugs.size;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 /* ── Props ─────────────────────────────────────────────────────── */
 
 export type WikiSourcesViewProps = {
@@ -174,6 +196,7 @@ export type WikiSourcesViewProps = {
   pages: WikiPageRecord[];
   refs: WikiSourceRefRecord[];
   runs: WikiIngestionLogRecord[];
+  runEvents: Array<{ runId: string; events: WikiIngestionEventRecord[] }>;
   routeBase: string;
   metadataFilters: SourceMetadataFilters;
 };
@@ -190,6 +213,7 @@ export function WikiSourcesView({
   pages,
   refs,
   runs,
+  runEvents,
   routeBase,
   metadataFilters,
 }: WikiSourcesViewProps) {
@@ -237,6 +261,25 @@ export function WikiSourcesView({
     }
     return m;
   }, [runs]);
+
+  const eventsByRun = useMemo(
+    () => new Map(runEvents.map((row) => [row.runId, row.events])),
+    [runEvents],
+  );
+
+  const retryableBySource = useMemo(() => {
+    const out = new Map<string, { runId: string; count: number }>();
+    for (const [sourceId, sourceRuns] of runsBySource) {
+      for (const run of sourceRuns) {
+        const count = retryableFailedCount(eventsByRun.get(run.id) ?? []);
+        if (count > 0) {
+          out.set(sourceId, { runId: run.id, count });
+          break;
+        }
+      }
+    }
+    return out;
+  }, [eventsByRun, runsBySource]);
 
   const bucketCounts = useMemo(() => {
     const c: Record<BucketFilter, number> = {
@@ -304,6 +347,23 @@ export function WikiSourcesView({
 
   function handleOpen(s: WikiSourceRecord) {
     router.push(`${routeBase}/sources/${s.id}`);
+  }
+
+  async function handleRetryFailed(runId: string) {
+    const res = await fetch(`/api/wiki/${wikiId}/ingest/runs/${runId}/retry-failed`, {
+      method: "POST",
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      window.alert(`Retry failed: ${body.slice(0, 300)}`);
+      return;
+    }
+    const body = (await res.json()) as { runId?: string };
+    if (body.runId) {
+      router.push(`${routeBase}/ingestion?run=${body.runId}`);
+      return;
+    }
+    router.refresh();
   }
 
   function updateMetadataDraft(
@@ -380,6 +440,8 @@ export function WikiSourcesView({
               sources={group.sources}
               refsBySource={refsBySource}
               runsBySource={runsBySource}
+              retryableBySource={retryableBySource}
+              onRetryFailed={(runId) => void handleRetryFailed(runId)}
               onOpen={handleOpen}
             />
           ))
@@ -1137,12 +1199,16 @@ function BucketGroup({
   sources,
   refsBySource,
   runsBySource,
+  retryableBySource,
+  onRetryFailed,
   onOpen,
 }: {
   bucket: Bucket;
   sources: WikiSourceRecord[];
   refsBySource: Map<string, number>;
   runsBySource: Map<string, WikiIngestionLogRecord[]>;
+  retryableBySource: Map<string, { runId: string; count: number }>;
+  onRetryFailed: (runId: string) => void;
   onOpen: (s: WikiSourceRecord) => void;
 }) {
   const color = BUCKET_COLOR[bucket];
@@ -1229,6 +1295,8 @@ function BucketGroup({
             source={s}
             refs={refsBySource.get(s.id) ?? 0}
             runs={runsBySource.get(s.id) ?? []}
+            retryable={retryableBySource.get(s.id) ?? null}
+            onRetryFailed={onRetryFailed}
             onOpen={() => onOpen(s)}
           />
         ))}
@@ -1243,11 +1311,15 @@ function SourceRow({
   source,
   refs,
   runs,
+  retryable,
+  onRetryFailed,
   onOpen,
 }: {
   source: WikiSourceRecord;
   refs: number;
   runs: WikiIngestionLogRecord[];
+  retryable: { runId: string; count: number } | null;
+  onRetryFailed: (runId: string) => void;
   onOpen: () => void;
 }) {
   const bucket = KIND_TO_BUCKET[source.kind];
@@ -1356,7 +1428,7 @@ function SourceRow({
       </div>
       <div
         style={{
-          width: 100,
+          width: 150,
           flexShrink: 0,
           textAlign: "right",
           fontFamily: MONO,
@@ -1367,6 +1439,35 @@ function SourceRow({
         {runs.length}
         {failedCount > 0 && (
           <span style={{ color: DANGER, marginLeft: "var(--space-6)" }}>· {failedCount} ✗</span>
+        )}
+        {retryable && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation();
+              onRetryFailed(retryable.runId);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              event.stopPropagation();
+              onRetryFailed(retryable.runId);
+            }}
+            style={{
+              display: "inline-flex",
+              marginLeft: "var(--space-8)",
+              padding: "3px 7px",
+              border: `1px solid color-mix(in srgb, ${DANGER} 45%, transparent)`,
+              color: DANGER,
+              cursor: "pointer",
+              fontSize: 10,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+            }}
+          >
+            Retry {retryable.count}
+          </span>
         )}
       </div>
       <div

@@ -32,7 +32,7 @@ export const listCharacterSummaries = unstable_cache(
     const wikis = getWikisStore();
     return await Promise.all(
       characters.map(async (c): Promise<CharacterSummary> => {
-        const [pages, sources, runs, worldCount, bindings] = await Promise.all(
+        const [legacyPages, legacySources, legacyRuns, worldCount, bindings] = await Promise.all(
           [
             wiki.listPages(c.id),
             wiki.listSources(c.id),
@@ -41,12 +41,29 @@ export const listCharacterSummaries = unstable_cache(
             wikis.listWikisForCharacter(c.id),
           ],
         );
-        const lastRun = runs[0] ?? null;
+        const activeBindings = bindings.filter((binding) => binding.binding.isActive);
+        const [boundPages, boundSources, boundRuns] = await Promise.all([
+          Promise.all(activeBindings.map((binding) => wiki.listPagesForWiki(binding.id))),
+          Promise.all(activeBindings.map((binding) => wiki.listSourcesForWiki(binding.id))),
+          Promise.all(activeBindings.map((binding) => wiki.listIngestionRunsForWiki(binding.id, 1))),
+        ]);
+        const pageCount =
+          legacyPages.length + boundPages.reduce((sum, pages) => sum + pages.length, 0);
+        const sourceCount =
+          legacySources.length +
+          boundSources.reduce((sum, sources) => sum + sources.length, 0);
+        const lastRun =
+          [...legacyRuns, ...boundRuns.flat()]
+            .sort(
+              (a, b) =>
+                new Date(b.finishedAt ?? b.startedAt).getTime() -
+                new Date(a.finishedAt ?? a.startedAt).getTime(),
+            )[0] ?? null;
         // "Live" heuristic: has at least one ingestion + a non-trivial
         // page count. Identical to the heuristic in the page itself
         // before caching was extracted.
         const status: "live" | "draft" =
-          pages.length >= 5 && lastRun?.status === "succeeded"
+          pageCount >= 5 && lastRun?.status === "succeeded"
             ? "live"
             : "draft";
         return {
@@ -60,8 +77,8 @@ export const listCharacterSummaries = unstable_cache(
           brainModel: c.brainModel,
           voiceStyle: c.voiceStyle,
           eraCount: c.eras.length,
-          pageCount: pages.length,
-          sourceCount: sources.length,
+          pageCount,
+          sourceCount,
           worldCount,
           bindingCount: bindings.length,
           lastIngestAt: lastRun?.finishedAt ?? lastRun?.startedAt ?? null,

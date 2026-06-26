@@ -35,6 +35,15 @@ export default async function SourceDetailRoute({
   const sourceRefs = refs.filter((r) => r.sourceId === source.id);
   const activeRun =
     sourceRuns.find((r) => r.id === runParam) ?? sourceRuns[0] ?? null;
+  const runEvents = await Promise.all(
+    sourceRuns.map(async (run) => ({
+      runId: run.id,
+      events: await store.listIngestionEvents(run.id, {
+        afterSeq: 0,
+        limit: 5000,
+      }),
+    })),
+  );
 
   return (
     <WikiSourceDetailView
@@ -44,6 +53,7 @@ export default async function SourceDetailRoute({
       source={source}
       pages={pages}
       runs={sourceRuns}
+      runEvents={runEvents}
       refs={sourceRefs}
       activeRunId={activeRun?.id ?? null}
       routeBase={routeBase}

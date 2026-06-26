@@ -5,9 +5,17 @@ import { WikiIngestionView } from "./wiki-ingestion-view";
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ id: string }>;
+type SearchParams = Promise<{ run?: string }>;
 
-export default async function IngestionTab({ params }: { params: Params }) {
+export default async function IngestionTab({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: SearchParams;
+}) {
   const { id } = await params;
+  const { run: initialRunId = null } = await searchParams;
   const wikis = getWikisStore();
   const wiki = await wikis.getWikiById(id);
   if (!wiki) notFound();
@@ -68,6 +76,7 @@ export default async function IngestionTab({ params }: { params: Params }) {
       promptName={promptName}
       promptInherited={false}
       characterName={character?.title ?? character?.slug ?? wiki.title}
+      initialRunId={initialRunId}
     />
   );
 }

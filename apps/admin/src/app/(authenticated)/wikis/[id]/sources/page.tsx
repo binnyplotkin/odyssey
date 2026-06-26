@@ -29,6 +29,15 @@ export default async function SourcesTab({
     store.listSourceRefsForWiki(wiki.id),
     store.listIngestionRunsForWiki(wiki.id, 100),
   ]);
+  const runEvents = await Promise.all(
+    runs.map(async (run) => ({
+      runId: run.id,
+      events: await store.listIngestionEvents(run.id, {
+        afterSeq: 0,
+        limit: 5000,
+      }),
+    })),
+  );
 
   return (
     <WikiSourcesView
@@ -38,6 +47,7 @@ export default async function SourcesTab({
       pages={pages}
       refs={refs}
       runs={runs}
+      runEvents={runEvents}
       routeBase={routeBase}
       metadataFilters={metadataFilters}
     />

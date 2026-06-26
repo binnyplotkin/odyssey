@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
+  WikiIngestionEventRecord,
   WikiIngestionLogRecord,
   WikiPageRecord,
   WikiPageType,
@@ -83,9 +84,38 @@ type Props = {
   source: WikiSourceRecord;
   pages: WikiPageRecord[];
   runs: WikiIngestionLogRecord[];
+  runEvents: Array<{ runId: string; events: WikiIngestionEventRecord[] }>;
   refs: WikiSourceRefRecord[];
   activeRunId: string | null;
   routeBase: string;
+};
+
+type PlanOpLike = {
+  action?: unknown;
+  slug?: unknown;
+  type?: unknown;
+  title?: unknown;
+  rationale?: unknown;
+  existingPageId?: unknown;
+};
+
+type AttemptedOpRow = {
+  op: PlanOpLike;
+  index: number;
+  state: "saved" | "failed" | "writing" | "queued";
+  page: WikiPageRecord | null;
+  edgesAdded: number;
+  tokens: number;
+  error: string | null;
+};
+
+type RunAttemptSummary = {
+  run: WikiIngestionLogRecord;
+  rows: AttemptedOpRow[];
+  savedCount: number;
+  failedCount: number;
+  plannedCount: number;
+  retryableCount: number;
 };
 
 /* ── Helpers ───────────────────────────────────────────────────── */
@@ -163,6 +193,98 @@ function pagesTouchedByRun(
   return out;
 }
 
+function deriveAttemptedOps(events: WikiIngestionEventRecord[]): AttemptedOpRow[] {
+  const planEvent = events.find((event) => event.type === "plan-complete");
+  const planPayload = asRecord(planEvent?.payload);
+  const planned = Array.isArray(planPayload?.ops)
+    ? planPayload.ops.map(asRecord).filter(isRecord)
+    : [];
+
+  const completedBySlug = new Map<string, WikiIngestionEventRecord>();
+  const failedBySlug = new Map<string, WikiIngestionEventRecord>();
+  const startedSlugs = new Set<string>();
+  for (const event of events) {
+    const payload = asRecord(event.payload);
+    const op = asRecord(payload?.op);
+    const slug = stringVal(op?.slug);
+    if (!slug) continue;
+    if (event.type === "op-start") startedSlugs.add(slug);
+    if (event.type === "op-complete") completedBySlug.set(slug, event);
+    if (event.type === "op-failed") failedBySlug.set(slug, event);
+  }
+
+  const ops =
+    planned.length > 0
+      ? planned
+      : events
+          .filter((event) => event.type === "op-start")
+          .map((event) => asRecord(asRecord(event.payload)?.op))
+          .filter(isRecord);
+
+  return ops.map((op, index) => {
+    const slug = stringVal(op.slug) ?? "";
+    const completed = completedBySlug.get(slug);
+    if (completed) {
+      const payload = asRecord(completed.payload);
+      return {
+        op,
+        index,
+        state: "saved",
+        page: asRecord(payload?.page) as WikiPageRecord | null,
+        edgesAdded: numberVal(payload?.edgesAdded),
+        tokens: numberVal(payload?.tokens),
+        error: null,
+      };
+    }
+    const failed = failedBySlug.get(slug);
+    if (failed) {
+      const payload = asRecord(failed.payload);
+      return {
+        op,
+        index,
+        state: "failed",
+        page: null,
+        edgesAdded: 0,
+        tokens: 0,
+        error: stringVal(payload?.error) ?? "Unknown operation failure.",
+      };
+    }
+    return {
+      op,
+      index,
+      state: startedSlugs.has(slug) ? "writing" : "queued",
+      page: null,
+      edgesAdded: 0,
+      tokens: 0,
+      error: null,
+    };
+  });
+}
+
+function unresolvedFailedOps(rows: AttemptedOpRow[]): AttemptedOpRow[] {
+  return rows.filter((row) => row.state === "failed");
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function isRecord(
+  value: Record<string, unknown> | null,
+): value is Record<string, unknown> {
+  return value !== null;
+}
+
+function stringVal(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function numberVal(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 /* ── Root ──────────────────────────────────────────────────────── */
 
 export function WikiSourceDetailView({
@@ -171,6 +293,7 @@ export function WikiSourceDetailView({
   source,
   pages,
   runs,
+  runEvents,
   refs,
   activeRunId,
   routeBase,
@@ -194,6 +317,38 @@ export function WikiSourceDetailView({
     () => runs.find((r) => r.id === selectedRunId) ?? runs[0] ?? null,
     [runs, selectedRunId],
   );
+  const activeRunEvents = useMemo(
+    () => runEvents.find((row) => row.runId === activeRun?.id)?.events ?? [],
+    [runEvents, activeRun?.id],
+  );
+  const attemptedOps = useMemo(
+    () => deriveAttemptedOps(activeRunEvents),
+    [activeRunEvents],
+  );
+  const failedOps = useMemo(
+    () => unresolvedFailedOps(attemptedOps),
+    [attemptedOps],
+  );
+  const eventsByRun = useMemo(
+    () => new Map(runEvents.map((row) => [row.runId, row.events])),
+    [runEvents],
+  );
+  const runAttempts = useMemo<RunAttemptSummary[]>(
+    () =>
+      runs.map((run) => {
+        const rows = deriveAttemptedOps(eventsByRun.get(run.id) ?? []);
+        const failed = unresolvedFailedOps(rows);
+        return {
+          run,
+          rows,
+          savedCount: rows.filter((row) => row.state === "saved").length,
+          failedCount: failed.length,
+          plannedCount: rows.length,
+          retryableCount: failed.length,
+        };
+      }),
+    [eventsByRun, runs],
+  );
 
   const effects = useMemo(
     () => pagesTouchedByRun(activeRun, refs, pageById),
@@ -207,6 +362,29 @@ export function WikiSourceDetailView({
     router.replace(`${routeBase}/sources/${source.id}?run=${runId}`, {
       scroll: false,
     });
+  }
+
+  async function retryFailedOnlyForRun(runId: string) {
+    const res = await fetch(
+      `/api/wiki/${wikiId}/ingest/runs/${runId}/retry-failed`,
+      { method: "POST" },
+    );
+    if (!res.ok) {
+      const body = await res.text();
+      window.alert(`Retry failed: ${body.slice(0, 300)}`);
+      return;
+    }
+    const body = (await res.json()) as { runId?: string };
+    if (body.runId) {
+      router.push(`${routeBase}/ingestion?run=${body.runId}`);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function retryFailedOnly() {
+    if (!activeRun || failedOps.length === 0) return;
+    await retryFailedOnlyForRun(activeRun.id);
   }
 
   const kindLabel = KIND_LABEL[source.kind];
@@ -302,10 +480,22 @@ export function WikiSourceDetailView({
               activeRunId={activeRun.id}
               onSelect={handleSelectRun}
             />
+            <RunAttemptsOverview
+              attempts={runAttempts}
+              activeRunId={activeRun.id}
+              onSelect={handleSelectRun}
+              onRetryFailedOnly={(runId) => void retryFailedOnlyForRun(runId)}
+            />
             <PipelineHeader run={activeRun} />
-            <InputPane source={source} run={activeRun} />
-            <PromptPane run={activeRun} wikiTitle={wikiTitle} />
-            <OutputPane run={activeRun} effects={effects} />
+            <AttemptedPagesPane
+              run={activeRun}
+              rows={attemptedOps}
+              failedCount={failedOps.length}
+              onRetryFailedOnly={() => void retryFailedOnly()}
+            />
+            <InputPane source={source} run={activeRun} number={2} />
+            <PromptPane run={activeRun} wikiTitle={wikiTitle} number={3} />
+            <OutputPane run={activeRun} effects={effects} number={4} />
             <EffectsPane
               run={activeRun}
               effects={effects}
@@ -316,6 +506,7 @@ export function WikiSourceDetailView({
               )}
               routeBase={routeBase}
               onOpenDiff={handleOpenDiff}
+              number={5}
             />
           </>
         ) : (
@@ -1076,6 +1267,251 @@ function CompactRunRow({
   );
 }
 
+/* ── RunAttemptsOverview ───────────────────────────────────────── */
+
+function RunAttemptsOverview({
+  attempts,
+  activeRunId,
+  onSelect,
+  onRetryFailedOnly,
+}: {
+  attempts: RunAttemptSummary[];
+  activeRunId: string;
+  onSelect: (id: string) => void;
+  onRetryFailedOnly: (id: string) => void;
+}) {
+  if (attempts.length === 0) return null;
+
+  const totalPlanned = attempts.reduce((sum, item) => sum + item.plannedCount, 0);
+  const totalFailed = attempts.reduce((sum, item) => sum + item.failedCount, 0);
+
+  return (
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 0,
+        borderTop: `1px solid ${BORDER}`,
+        borderRight: `1px solid ${BORDER}`,
+        borderBottom: `1px solid ${BORDER}`,
+        borderLeft: `1px solid ${BORDER}`,
+        background: INPUT_BG,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "var(--space-16)",
+          padding: "14px 18px",
+          borderBottom: `1px solid ${DIVIDER}`,
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <span
+            style={{
+              fontFamily: DISPLAY,
+              fontSize: 18,
+              fontWeight: 650,
+              color: FG,
+            }}
+          >
+            Run attempts
+          </span>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: "var(--font-size-xs)",
+              fontWeight: 500,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: TEXT_FADED,
+            }}
+          >
+            {attempts.length} runs · {totalPlanned} planned pages · {totalFailed} failed
+          </span>
+        </div>
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: "var(--font-size-xs)",
+            color: TEXT_MUTED,
+            textAlign: "right",
+          }}
+        >
+          Click a run to view its full attempted page list.
+        </span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        {attempts.map((attempt) => (
+          <RunAttemptRow
+            key={attempt.run.id}
+            attempt={attempt}
+            active={attempt.run.id === activeRunId}
+            onSelect={() => onSelect(attempt.run.id)}
+            onRetryFailedOnly={() => onRetryFailedOnly(attempt.run.id)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RunAttemptRow({
+  attempt,
+  active,
+  onSelect,
+  onRetryFailedOnly,
+}: {
+  attempt: RunAttemptSummary;
+  active: boolean;
+  onSelect: () => void;
+  onRetryFailedOnly: () => void;
+}) {
+  const status = runStatus(attempt.run);
+  const statusColor =
+    status.tone === "fail" ? DANGER : status.tone === "warn" ? WARN : ACCENT;
+  const hasPlannedOps = attempt.plannedCount > 0;
+  const summary = hasPlannedOps
+    ? `${attempt.savedCount}/${attempt.plannedCount} saved · ${attempt.failedCount} failed`
+    : attempt.run.status === "failed"
+      ? "failed before page planning"
+      : "no page operations recorded";
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "100px 120px minmax(0, 1fr) 190px",
+        alignItems: "center",
+        gap: "var(--space-12)",
+        width: "100%",
+        padding: "12px 18px",
+        background: active ? ACCENT_SOFT : "transparent",
+        borderTop: 0,
+        borderRight: 0,
+        borderBottom: `1px solid ${DIVIDER}`,
+        borderLeft: active ? `2px solid ${ACCENT}` : "2px solid transparent",
+        textAlign: "left",
+        cursor: "pointer",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: "var(--font-size-base)",
+          fontWeight: 700,
+          color: active ? ACCENT : TEXT_PRIMARY,
+        }}
+      >
+        {shortRunId(attempt.run.id)}
+      </span>
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: "var(--font-size-sm)",
+          color: TEXT_MUTED,
+        }}
+      >
+        {relative(attempt.run.startedAt)}
+      </span>
+      <span
+        style={{
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-4)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: "var(--font-size-sm)",
+            color: hasPlannedOps ? TEXT_SECONDARY : TEXT_MUTED,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title={attempt.run.errorMessage ?? summary}
+        >
+          {summary}
+        </span>
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: 10.5,
+            fontWeight: 600,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: statusColor,
+          }}
+        >
+          {status.label}
+        </span>
+      </span>
+      <span
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          gap: "var(--space-10)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: "var(--font-size-xs)",
+            color: TEXT_FADED,
+          }}
+        >
+          {active ? "viewing" : "view"}
+        </span>
+        {attempt.retryableCount > 0 && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation();
+              onRetryFailedOnly();
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              event.stopPropagation();
+              onRetryFailedOnly();
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minWidth: 104,
+              padding: "7px 10px",
+              background: DANGER_SOFT,
+              borderTop: `1px solid ${DANGER_RING}`,
+              borderRight: `1px solid ${DANGER_RING}`,
+              borderBottom: `1px solid ${DANGER_RING}`,
+              borderLeft: `1px solid ${DANGER_RING}`,
+              fontFamily: MONO,
+              fontSize: 10.5,
+              fontWeight: 800,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: DANGER,
+              cursor: "pointer",
+            }}
+          >
+            Retry {attempt.retryableCount}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
 /* ── PipelineHeader ────────────────────────────────────────────── */
 
 function PipelineHeader({ run }: { run: WikiIngestionLogRecord }) {
@@ -1245,6 +1681,228 @@ function HeaderDivider() {
   return <div style={{ width: 1, height: 30, background: BORDER }} />;
 }
 
+/* ── AttemptedPagesPane ────────────────────────────────────────── */
+
+function AttemptedPagesPane({
+  run,
+  rows,
+  failedCount,
+  onRetryFailedOnly,
+}: {
+  run: WikiIngestionLogRecord;
+  rows: AttemptedOpRow[];
+  failedCount: number;
+  onRetryFailedOnly: () => void;
+}) {
+  const savedCount = rows.filter((row) => row.state === "saved").length;
+  return (
+    <PaneShell
+      number={1}
+      title="Attempted pages"
+      subtitle={`${savedCount} saved · ${failedCount} failed · ${rows.length} planned`}
+      trailing={
+        failedCount > 0 ? (
+          <button
+            type="button"
+            onClick={onRetryFailedOnly}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "var(--space-8)",
+              padding: "7px 12px",
+              background: DANGER_SOFT,
+              borderTop: `1px solid ${DANGER_RING}`,
+              borderRight: `1px solid ${DANGER_RING}`,
+              borderBottom: `1px solid ${DANGER_RING}`,
+              borderLeft: `1px solid ${DANGER_RING}`,
+              fontFamily: MONO,
+              fontSize: 10.5,
+              fontWeight: 700,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: DANGER,
+              cursor: "pointer",
+            }}
+          >
+            Retry {failedCount} failed only ↻
+          </button>
+        ) : null
+      }
+    >
+      {rows.length === 0 ? (
+        <div
+          style={{
+            padding: "28px 18px",
+            borderTop: `1px dashed ${BORDER_STRONG}`,
+            borderRight: `1px dashed ${BORDER_STRONG}`,
+            borderBottom: `1px dashed ${BORDER_STRONG}`,
+            borderLeft: `1px dashed ${BORDER_STRONG}`,
+            fontFamily: MONO,
+            fontSize: "var(--font-size-sm)",
+          color: TEXT_MUTED,
+          textAlign: "center",
+        }}
+      >
+          No planned page operations were recorded for this run. It failed before
+          ingestion produced page ops, so there are no individual failed pages to
+          retry from this run.
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 0,
+            borderTop: `1px solid ${BORDER}`,
+            borderRight: `1px solid ${BORDER}`,
+            borderBottom: `1px solid ${BORDER}`,
+            borderLeft: `1px solid ${BORDER}`,
+          }}
+        >
+          <AttemptedHeaderRow />
+          {rows.map((row) => (
+            <AttemptedOpRowView
+              key={`${String(row.op.slug ?? row.index)}-${row.index}`}
+              row={row}
+              run={run}
+            />
+          ))}
+        </div>
+      )}
+    </PaneShell>
+  );
+}
+
+function AttemptedHeaderRow() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 0,
+        padding: "10px 18px",
+        background: INPUT_BG,
+        borderBottom: `1px solid ${DIVIDER}`,
+      }}
+    >
+      <ColHead width={56}>#</ColHead>
+      <ColHead width={110}>Status</ColHead>
+      <ColHead width={110}>Action</ColHead>
+      <ColHead flex>Page</ColHead>
+      <ColHead width={90} alignRight>Edges</ColHead>
+      <ColHead width={90} alignRight>Tokens</ColHead>
+    </div>
+  );
+}
+
+function AttemptedOpRowView({
+  row,
+}: {
+  row: AttemptedOpRow;
+  run: WikiIngestionLogRecord;
+}) {
+  const stateColor =
+    row.state === "saved"
+      ? ACCENT
+      : row.state === "failed"
+        ? DANGER
+        : row.state === "writing"
+          ? WARN
+          : TEXT_MUTED;
+  const title =
+    stringVal(row.op.title) ??
+    row.page?.title ??
+    stringVal(row.op.slug) ??
+    "untitled";
+  const slug = stringVal(row.op.slug) ?? row.page?.slug ?? "no slug";
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 0,
+        padding: "13px 18px",
+        borderBottom: `1px solid ${DIVIDER}`,
+        borderLeft: `2px solid ${stateColor}`,
+      }}
+    >
+      <div style={{ width: 56, flexShrink: 0, fontFamily: MONO, color: TEXT_MUTED }}>
+        {String(row.index + 1).padStart(2, "0")}
+      </div>
+      <div
+        style={{
+          width: 110,
+          flexShrink: 0,
+          fontFamily: MONO,
+          fontSize: 10.5,
+          fontWeight: 700,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: stateColor,
+        }}
+      >
+        {row.state}
+      </div>
+      <div
+        style={{
+          width: 110,
+          flexShrink: 0,
+          fontFamily: MONO,
+          fontSize: 10.5,
+          color: TEXT_SECONDARY,
+          textTransform: "uppercase",
+        }}
+      >
+        {stringVal(row.op.action) ?? "op"}
+      </div>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-3)",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: DISPLAY,
+            fontSize: 15,
+            color: FG,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {title}
+        </span>
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: "var(--font-size-sm)",
+            color: row.state === "failed" ? DANGER : TEXT_MUTED,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title={row.error ?? slug}
+        >
+          {row.error ?? slug}
+        </span>
+      </div>
+      <div style={{ width: 90, flexShrink: 0, textAlign: "right", fontFamily: MONO, color: TEXT_SECONDARY }}>
+        {row.state === "saved" ? `+${row.edgesAdded}` : "—"}
+      </div>
+      <div style={{ width: 90, flexShrink: 0, textAlign: "right", fontFamily: MONO, color: TEXT_SECONDARY }}>
+        {row.tokens ? row.tokens.toLocaleString() : "—"}
+      </div>
+    </div>
+  );
+}
+
 /* ── Pane shell + gutter ───────────────────────────────────────── */
 
 function PaneShell({
@@ -1391,9 +2049,11 @@ function PaneShell({
 function InputPane({
   source,
   run,
+  number,
 }: {
   source: WikiSourceRecord;
   run: WikiIngestionLogRecord;
+  number: number;
 }) {
   const totalWords = wordCount(source.content);
   const tokensApprox = Math.round(totalWords * 1.3);
@@ -1403,7 +2063,7 @@ function InputPane({
 
   return (
     <PaneShell
-      number={1}
+      number={number}
       title="Input"
       subtitle="SOURCE CONTENT"
       trailing={
@@ -1519,13 +2179,15 @@ function InputPane({
 function PromptPane({
   run,
   wikiTitle,
+  number,
 }: {
   run: WikiIngestionLogRecord;
   wikiTitle: string;
+  number: number;
 }) {
   return (
     <PaneShell
-      number={2}
+      number={number}
       title="Prompt"
       subtitle="INGESTION CONFIG · WHAT THE MODEL READ"
       trailing={
@@ -1701,15 +2363,17 @@ function PromptPane({
 function OutputPane({
   run,
   effects,
+  number,
 }: {
   run: WikiIngestionLogRecord;
   effects: WikiPageRecord[];
+  number: number;
 }) {
   const success = run.status === "succeeded";
 
   return (
     <PaneShell
-      number={3}
+      number={number}
       title="Output"
       subtitle="MODEL RESPONSE · RUN STATS"
     >
@@ -1864,16 +2528,18 @@ function EffectsPane({
   run,
   effects,
   onOpenDiff,
+  number,
 }: {
   run: WikiIngestionLogRecord;
   effects: WikiPageRecord[];
   refs: WikiSourceRefRecord[];
   routeBase: string;
   onOpenDiff: (pageId: string) => void;
+  number: number;
 }) {
   return (
     <PaneShell
-      number={4}
+      number={number}
       title="Effects"
       subtitle="WHAT WAS WRITTEN TO THE GRAPH"
       showConnector={false}

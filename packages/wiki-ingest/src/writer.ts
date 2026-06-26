@@ -41,6 +41,23 @@ type RawWrite = {
   }>;
 };
 
+export class WriterToolUseError extends Error {
+  readonly tokens: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+
+  constructor(
+    message: string,
+    usage: { tokens: number; inputTokens: number; outputTokens: number },
+  ) {
+    super(message);
+    this.name = "WriterToolUseError";
+    this.tokens = usage.tokens;
+    this.inputTokens = usage.inputTokens;
+    this.outputTokens = usage.outputTokens;
+  }
+}
+
 export async function write(args: {
   model: ModelId;
   characterDomainPrompt: string | null;
@@ -63,21 +80,35 @@ export async function write(args: {
     wikiIndexCompact: renderWikiIndexCompact(args.allPages),
   });
 
-  const result = await call({
-    model: args.model,
-    system,
-    messages: [{ role: "user", content: userMsg }],
-    tools: [WRITE_TOOL],
-    toolChoice: { type: "tool", name: "write_page" },
-    maxTokens: 4096,
-  });
+  const result = await callWriter(args.model, system, userMsg, 8192);
+  let raw = extractToolUse<RawWrite>(result, "write_page");
+  let usage = {
+    tokens: result.tokens,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+  };
 
-  const raw = extractToolUse<RawWrite>(result, "write_page");
-  if (!raw || typeof raw.body !== "string" || typeof raw.title !== "string") {
-    throw new Error(
+  if (!isUsableRawWrite(raw) && result.stopReason === "max_tokens") {
+    const repair = await callWriter(
+      args.model,
+      system,
+      `${userMsg}\n\nThe previous write_page tool output was truncated before all required fields were complete. Retry now with a compact payload. Keep body to 450-700 words, include every required field, and do not produce any extra prose outside the tool call.`,
+      8192,
+    );
+    raw = extractToolUse<RawWrite>(repair, "write_page");
+    usage = {
+      tokens: usage.tokens + repair.tokens,
+      inputTokens: usage.inputTokens + repair.inputTokens,
+      outputTokens: usage.outputTokens + repair.outputTokens,
+    };
+  }
+
+  if (!isUsableRawWrite(raw)) {
+    throw new WriterToolUseError(
       `writer: tool_use missing required fields (title/body); stop=${result.stopReason}; ` +
         `keys=[${Object.keys((raw as object) ?? {}).join(", ")}]; ` +
         `raw=${JSON.stringify(raw).slice(0, 400)}`,
+      usage,
     );
   }
 
@@ -118,10 +149,36 @@ export async function write(args: {
     knowsFuture: raw.knowsFuture ?? false,
     contradictions,
     sourceRefs,
-    tokens: result.tokens,
-    inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
+    tokens: usage.tokens,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
   };
+}
+
+function callWriter(
+  model: ModelId,
+  system: string,
+  userMsg: string,
+  maxTokens: number,
+) {
+  return call({
+    model,
+    system,
+    messages: [{ role: "user", content: userMsg }],
+    tools: [WRITE_TOOL],
+    toolChoice: { type: "tool", name: "write_page" },
+    maxTokens,
+  });
+}
+
+function isUsableRawWrite(value: RawWrite | null | undefined): value is RawWrite {
+  return (
+    !!value &&
+    typeof value.title === "string" &&
+    typeof value.summary === "string" &&
+    typeof value.body === "string" &&
+    value.body.trim().length > 0
+  );
 }
 
 /** Coerce a maybe-array into an array. If the LLM returned an object, wrap it

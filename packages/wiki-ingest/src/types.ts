@@ -180,6 +180,9 @@ export type IngestionEvent =
       type: "op-failed";
       op: PlanOp;
       error: string;
+      tokens?: number;
+      inputTokens?: number;
+      outputTokens?: number;
     }
   | {
       type: "edges-reconciled";
