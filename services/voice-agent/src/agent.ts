@@ -93,6 +93,9 @@ const SPECULATE_ENABLED = process.env.VOICE_AGENT_SPECULATE !== "0";
 const PROACTIVE_ENABLED = process.env.VOICE_AGENT_PROACTIVE === "1";
 const MAX_PROACTIVE = Number(process.env.VOICE_AGENT_MAX_PROACTIVE ?? 2);
 const IDLE_MS = Number(process.env.VOICE_AGENT_IDLE_MS ?? 3500);
+// Persist the live SceneState snapshot after each decision (visible/resumable in
+// /sessions). Fire-and-forget; default off — most useful for real multi-char scenes.
+const PERSIST_SCENE = process.env.VOICE_AGENT_PERSIST_SCENE === "1";
 
 /** base64 Float32 LE PCM (one TTS chunk) → an Int16 mono AudioFrame for the room. */
 function toAudioFrame(pcmBase64: string, sampleRate: number): AudioFrame {
@@ -231,6 +234,15 @@ export default defineAgent({
       `[voice-agent] connected to room "${ctx.room.name}" — scene=${sceneDriver.scene.id} (${roster} character${roster === 1 ? "" : "s"}) session=${sessionId} stt=${STT_MODEL}`,
     );
 
+    // Phase 5: persist the live SceneState after each decision (best-effort).
+    if (PERSIST_SCENE) {
+      sceneDriver.onState((snapshot) => {
+        void sessionStore
+          .updateCurrentScene({ sessionId, currentScene: snapshot })
+          .catch(() => undefined);
+      });
+    }
+
     // User side handled by LiveKit: STT (inference model string) + auto silero VAD
     // + the bundled v1-mini end-of-turn detector. No llm/tts — the brain generates.
     const session = new voice.AgentSession({
@@ -261,6 +273,7 @@ export default defineAgent({
     let userIsSpeaking = false;
     let proactiveCount = 0;
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    let sceneEnded = false;
 
     // Publish turn transcripts over a data channel so the sandbox can render them —
     // the user's FULL turn (grouped, not raw per-pause STT segments) and the
@@ -349,14 +362,14 @@ export default defineAgent({
     };
     const armIdle = () => {
       clearIdle();
-      if (!PROACTIVE_ENABLED) return;
+      if (!PROACTIVE_ENABLED || sceneEnded) return;
       if (userIsSpeaking || speaking) return;
       if (proactiveCount >= MAX_PROACTIVE) return; // bounded → wait for the user
       idleTimer = setTimeout(proactiveTick, IDLE_MS);
     };
     const proactiveTick = () => {
       idleTimer = null;
-      if (userIsSpeaking || speaking) return; // someone already has the floor
+      if (userIsSpeaking || speaking || sceneEnded) return; // someone already has the floor
       turn?.abort(); // supersede any straggler (defensive — barge-in already aborts)
       audioSource.clearQueue();
       turn = new AbortController();
@@ -376,11 +389,21 @@ export default defineAgent({
         });
     };
 
+    // The director may end the scene; we just stop driving (go quiet). Room teardown
+    // is left to the client.
+    const endScene = () => {
+      if (sceneEnded) return;
+      sceneEnded = true;
+      clearIdle();
+      console.log("[voice-agent] scene ended by director — going quiet");
+    };
+
     // Reply at the REAL end of the user's turn (gated by the v1 detector), superseding
     // whatever's in flight. Every room routes through the driver (who speaks + the
     // director cue); a single-character room is just the 1-char fastpath. A real user
     // turn resets the proactive budget; after the character speaks, we arm a follow-up.
     const respond = (text: string) => {
+      if (sceneEnded) return;
       turn?.abort();
       audioSource.clearQueue();
       clearIdle();
@@ -389,13 +412,17 @@ export default defineAgent({
       const signal = turn.signal;
       console.log(`[voice-agent] user: ${text}`);
       publishTurn({ role: "user", id: `u${Date.now()}`, text, final: true });
-      void sceneDriver.drive(text, (input, replyId) => {
-        speaking = true;
-        return speak(input, signal, replyId).finally(() => {
-          speaking = false;
-          armIdle();
+      void sceneDriver
+        .drive(text, (input, replyId) => {
+          speaking = true;
+          return speak(input, signal, replyId).finally(() => {
+            speaking = false;
+            armIdle();
+          });
+        })
+        .then((outcome) => {
+          if (outcome.action === "end-scene") endScene();
         });
-      });
       userSegments = []; // next turn starts a fresh speculation accumulation
     };
     const agent = new BrainAgent(respond);

@@ -1,6 +1,7 @@
 import { getCharacterStore, getSceneStore, type CharacterRecord } from "@odyssey/db";
 import {
   buildSceneDecisionRequest,
+  buildSceneSessionSnapshot,
   buildSpeakerTurnRequest,
   createInitialSceneState,
   defaultSceneDecision,
@@ -9,6 +10,7 @@ import {
   resolveOrchestratorExecutor,
   resolveSceneDecision,
   updateSceneMemory,
+  type SceneSessionSnapshot,
   type SceneTurnForPlanning,
 } from "@odyssey/orchestration";
 import type { OrchestratorDecision, Scene, SceneState } from "@odyssey/types";
@@ -57,6 +59,13 @@ export interface SceneSpeakInput {
 }
 export type SceneSpeakFn = (input: SceneSpeakInput, replyId: string) => Promise<string>;
 
+/** What a drive() turn resolved to — the orchestrator's action, and whether a
+ *  character actually spoke (so the caller can arm a follow-up or stop). */
+export type SceneDriveOutcome = {
+  action: OrchestratorDecision["action"];
+  spoke: boolean;
+};
+
 /**
  * Drives a multi-character SCENE over a LiveKit room. Each user turn it asks the
  * orchestrator who speaks next — IN-PROCESS (no HTTP hop): fastpath when the roster
@@ -76,6 +85,8 @@ export class SceneDriver {
   // during the endpoint hold) + the text it was computed from, so drive() can
   // accept it when the final transcript matches and skip the orchestrate latency.
   #speculation: { basedOnText: string; promise: Promise<OrchestratorDecision> } | null = null;
+  // Optional persistence hook — invoked with a fresh snapshot after every decision.
+  #onState: ((snapshot: SceneSessionSnapshot) => void) | null = null;
 
   private constructor(scene: Scene) {
     this.scene = scene;
@@ -128,6 +139,23 @@ export class SceneDriver {
     this.#trim();
   }
 
+  /** Wire a callback invoked with a fresh scene snapshot after every decision, so the
+   *  caller can persist it (fire-and-forget). Optional — unset = in-memory only. */
+  onState(cb: (snapshot: SceneSessionSnapshot) => void): void {
+    this.#onState = cb;
+  }
+
+  #persistState(): void {
+    if (!this.#onState) return;
+    try {
+      this.#onState(
+        buildSceneSessionSnapshot(this.#sceneState, { sceneMemory: this.#sceneMemory }),
+      );
+    } catch {
+      // best-effort — persistence must never disrupt the turn
+    }
+  }
+
   /**
    * B4: speculatively orchestrate off a partial transcript DURING the endpoint hold,
    * so the decision (speaker + director `beat`) is usually ready when the turn
@@ -144,7 +172,7 @@ export class SceneDriver {
   }
 
   /** One finished user turn → orchestrate → voice the chosen character (if any). */
-  async drive(userText: string, speak: SceneSpeakFn): Promise<void> {
+  async drive(userText: string, speak: SceneSpeakFn): Promise<SceneDriveOutcome> {
     const spec = this.#speculation;
     this.#speculation = null;
 
@@ -177,10 +205,11 @@ export class SceneDriver {
       rawDecision,
     );
     this.#sceneState = resolution.sceneState;
+    this.#persistState();
 
     if (resolution.decision.action !== "speak" || !resolution.speakerSlug) {
       console.log(`[voice-agent] scene: ${resolution.decision.action} (no speaker)`);
-      return;
+      return { action: resolution.decision.action, spoke: false };
     }
 
     const character =
@@ -190,7 +219,7 @@ export class SceneDriver {
       console.warn(
         `[voice-agent] scene: speaker "${resolution.speakerSlug}" did not resolve — skipping turn`,
       );
-      return;
+      return { action: "speak", spoke: false };
     }
 
     const turn = buildSpeakerTurnRequest({
@@ -199,7 +228,7 @@ export class SceneDriver {
       decision: resolution.decision,
       recentTurns: this.#recentTurns,
     });
-    if (!turn) return;
+    if (!turn) return { action: "speak", spoke: false };
 
     const displayName =
       this.scene.characters.find((c) => c.characterSlug === resolution.speakerSlug)?.displayName ??
@@ -227,6 +256,7 @@ export class SceneDriver {
     );
     this.#recentTurns.push({ speakerSlug: resolution.speakerSlug, text: replyText });
     this.#trim();
+    return { action: "speak", spoke: true };
   }
 
   /**
@@ -242,6 +272,7 @@ export class SceneDriver {
       decision,
     );
     this.#sceneState = resolution.sceneState;
+    this.#persistState();
 
     if (resolution.decision.action !== "speak" || !resolution.speakerSlug) {
       console.log(`[voice-agent] proactive: ${resolution.decision.action} (hold)`);
