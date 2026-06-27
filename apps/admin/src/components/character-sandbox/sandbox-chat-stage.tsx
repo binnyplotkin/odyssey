@@ -20,8 +20,9 @@ const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
 const VISIBLE_DISTANCE = 2;
-const WHEEL_ROTATE_THRESHOLD = 118;
+const WHEEL_ROTATE_THRESHOLD = 52;
 const WHEEL_RESET_MS = 280;
+const WHEEL_ROTATE_COOLDOWN_MS = 115;
 const DRAG_ROTATE_THRESHOLD = 58;
 const DRAG_DEAD_ZONE = 10;
 
@@ -54,6 +55,7 @@ export function SandboxChatStage({
   const dragStartIndexRef = useRef(0);
   const wheelDeltaRef = useRef(0);
   const lastWheelAtRef = useRef(0);
+  const lastWheelRotateAtRef = useRef(0);
 
   const carouselTurns = useMemo(
     () => turns.filter((turn) => !turn.inFlight || turn.text.trim().length > 0),
@@ -143,7 +145,9 @@ export function SandboxChatStage({
           lastWheelAtRef.current = now;
           wheelDeltaRef.current += event.deltaY;
           if (Math.abs(wheelDeltaRef.current) < WHEEL_ROTATE_THRESHOLD) return;
+          if (now - lastWheelRotateAtRef.current < WHEEL_ROTATE_COOLDOWN_MS) return;
           rotateBy(wheelDeltaRef.current > 0 ? 1 : -1);
+          lastWheelRotateAtRef.current = now;
           wheelDeltaRef.current = 0;
         }}
         onPointerDown={onPointerDown}
