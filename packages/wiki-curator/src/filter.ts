@@ -3,8 +3,13 @@
  * current moment, unless the page is tagged knowsFuture (e.g. a covenant
  * Abraham was promised but hasn't yet lived through).
  *
+ * Pages can also be marked as curator-only through frontmatter
+ * (`knowledge_accessible: false` or `accessible_to_character: false`). Those
+ * pages remain in the wiki/graph but are withheld from runtime character
+ * context.
+ *
  * Entities, concepts, relationships, voice_identity, timeline, and pages
- * without a timeIndex are always kept — they're not event-bound.
+ * without a timeIndex are otherwise kept — they're not event-bound.
  */
 
 import type { EraConfig, TimeIndex, WikiPageRecord } from "@odyssey/db";
@@ -33,6 +38,11 @@ export function filterByTimeline(
   const filteredSlugs: string[] = [];
 
   for (const p of pages) {
+    if (!isKnowledgeAccessible(p)) {
+      filteredSlugs.push(p.slug);
+      continue;
+    }
+
     if (!p.timeIndex) {
       kept.push(p);
       continue;
@@ -60,4 +70,12 @@ export function filterByTimeline(
   }
 
   return { kept, filteredSlugs };
+}
+
+function isKnowledgeAccessible(page: WikiPageRecord): boolean {
+  const frontmatter = page.frontmatter as Record<string, unknown>;
+  return (
+    frontmatter.knowledge_accessible !== false &&
+    frontmatter.accessible_to_character !== false
+  );
 }
