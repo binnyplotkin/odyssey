@@ -87,6 +87,15 @@ const STT_MODEL = process.env.VOICE_AGENT_STT ?? "deepgram/nova-3";
 // the endpoint hold so the multi-character speaker is usually already chosen when
 // the turn completes (hiding the ~0.5s orchestrate gap). Kill-switch: =0.
 const SPECULATE_ENABLED = process.env.VOICE_AGENT_SPECULATE !== "0";
+// Phase 4: the proactive director loop. Ships DARK (default off). When on, the
+// director may take a turn on its own after the user goes quiet for IDLE_MS, bounded
+// to MAX_PROACTIVE consecutive turns so it never monologues. Barge-in always wins.
+const PROACTIVE_ENABLED = process.env.VOICE_AGENT_PROACTIVE === "1";
+const MAX_PROACTIVE = Number(process.env.VOICE_AGENT_MAX_PROACTIVE ?? 2);
+const IDLE_MS = Number(process.env.VOICE_AGENT_IDLE_MS ?? 3500);
+// Persist the live SceneState snapshot after each decision (visible/resumable in
+// /sessions). Fire-and-forget; default off — most useful for real multi-char scenes.
+const PERSIST_SCENE = process.env.VOICE_AGENT_PERSIST_SCENE === "1";
 
 /** base64 Float32 LE PCM (one TTS chunk) → an Int16 mono AudioFrame for the room. */
 function toAudioFrame(pcmBase64: string, sampleRate: number): AudioFrame {
@@ -174,13 +183,18 @@ export default defineAgent({
     // (e.g. the LiveKit Playground / direct tests).
     const sceneRef = parseSceneFromRoom(ctx.room.name);
     const charRef = sceneRef ? null : parseCharacterFromRoom(ctx.room.name);
-    let sceneDriver: SceneDriver | null = null;
+    // Every room runs through the SAME driver: a `scene-…` room loads a multi-
+    // character scene; a `char-…` (single-character) room is a synthesized one-actor
+    // scene (the 1-char fastpath). One driving path, so the director cues and the
+    // proactive loop apply uniformly.
+    let sceneDriver: SceneDriver;
     let character: CharacterRecord | null = null;
     if (sceneRef) {
-      sceneDriver = await SceneDriver.load(sceneRef.sceneId);
-      if (!sceneDriver) {
+      const loaded = await SceneDriver.load(sceneRef.sceneId);
+      if (!loaded) {
         throw new Error(`scene "${sceneRef.sceneId}" (room "${ctx.room.name}") did not resolve`);
       }
+      sceneDriver = loaded;
     } else {
       const characterRef = charRef?.characterId ?? CHARACTER_ID;
       if (!characterRef) {
@@ -194,6 +208,7 @@ export default defineAgent({
       if (!character) {
         throw new Error(`character "${characterRef}" (from room "${ctx.room.name}") did not resolve`);
       }
+      sceneDriver = SceneDriver.fromCharacter(character);
     }
 
     // Persist to the sandbox's OWN scene_session — the one in the room name, already
@@ -214,13 +229,19 @@ export default defineAgent({
     console.log(
       `[voice-agent] session ${sessionId} (${existingSession ? "reused sandbox session — gradeable" : "created"})`,
     );
+    const roster = sceneDriver.scene.characters.length;
     console.log(
-      `[voice-agent] connected to room "${ctx.room.name}" — ${
-        sceneDriver
-          ? `scene=${sceneDriver.scene.id} (${sceneDriver.scene.characters.length} characters)`
-          : `character=${character!.slug ?? character!.id}`
-      } session=${sessionId} stt=${STT_MODEL}`,
+      `[voice-agent] connected to room "${ctx.room.name}" — scene=${sceneDriver.scene.id} (${roster} character${roster === 1 ? "" : "s"}) session=${sessionId} stt=${STT_MODEL}`,
     );
+
+    // Phase 5: persist the live SceneState after each decision (best-effort).
+    if (PERSIST_SCENE) {
+      sceneDriver.onState((snapshot) => {
+        void sessionStore
+          .updateCurrentScene({ sessionId, currentScene: snapshot })
+          .catch(() => undefined);
+      });
+    }
 
     // User side handled by LiveKit: STT (inference model string) + auto silero VAD
     // + the bundled v1-mini end-of-turn detector. No llm/tts — the brain generates.
@@ -245,6 +266,14 @@ export default defineAgent({
     const outTrack = LocalAudioTrack.createAudioTrack("agent-voice", audioSource);
 
     let turn: AbortController | null = null;
+    // Phase 4 loop state. `turn` is the single shared gate (aborted on barge-in AND on
+    // each new turn). These booleans only gate whether we ARM a follow-up — the abort
+    // is always the same `turn.abort()`.
+    let speaking = false;
+    let userIsSpeaking = false;
+    let proactiveCount = 0;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    let sceneEnded = false;
 
     // Publish turn transcripts over a data channel so the sandbox can render them —
     // the user's FULL turn (grouped, not raw per-pause STT segments) and the
@@ -317,40 +346,83 @@ export default defineAgent({
     // running transcript while the turn is still being held open. Reset each turn.
     let userSegments: string[] = [];
 
-    // Single-character conversation history. The LiveKit AgentSession does NOT thread
-    // prior turns into our brain (we run runVoiceStream ourselves via our own track), so
-    // without this the character is amnesiac turn-to-turn — it can't follow a follow-up
-    // like "what do you mean?". Accumulate {user, assistant} and pass the PRIOR turns
-    // each turn (the current message is passed separately). Scene rooms keep their own
-    // history inside the SceneDriver. Capped so the cached prompt stays bounded.
-    const history: Array<{ role: "user" | "assistant"; content: string }> = [];
-    const HISTORY_CAP = 16;
-    const recordTurn = (userText: string | null, reply: string) => {
-      if (userText) history.push({ role: "user", content: userText });
-      if (reply) history.push({ role: "assistant", content: reply });
-      if (history.length > HISTORY_CAP) history.splice(0, history.length - HISTORY_CAP);
+    // Conversation history lives in the SceneDriver (`#recentTurns`): it pushes both
+    // the user turn and each reply, and threads role-tagged history into every turn —
+    // so single- and multi-character rooms share one store (no agent-side history).
+
+    // Phase 4: proactive loop helpers. `armIdle` schedules a director follow-up after a
+    // turn finishes speaking; the director's own `wait-for-user` (or MAX_PROACTIVE)
+    // decides when to stop. (Mutually recursive with proactiveTick — fine, both are
+    // only called at session runtime, after all consts are initialized.)
+    const clearIdle = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+    };
+    const armIdle = () => {
+      clearIdle();
+      if (!PROACTIVE_ENABLED || sceneEnded) return;
+      if (userIsSpeaking || speaking) return;
+      if (proactiveCount >= MAX_PROACTIVE) return; // bounded → wait for the user
+      idleTimer = setTimeout(proactiveTick, IDLE_MS);
+    };
+    const proactiveTick = () => {
+      idleTimer = null;
+      if (userIsSpeaking || speaking || sceneEnded) return; // someone already has the floor
+      turn?.abort(); // supersede any straggler (defensive — barge-in already aborts)
+      audioSource.clearQueue();
+      turn = new AbortController();
+      const signal = turn.signal;
+      proactiveCount += 1;
+      console.log(`[voice-agent] proactive tick #${proactiveCount}`);
+      void sceneDriver
+        .driveProactive((input, replyId) => {
+          if (signal.aborted) return Promise.resolve("");
+          speaking = true;
+          return speak(input, signal, replyId).finally(() => {
+            speaking = false;
+          });
+        })
+        .then((spoke) => {
+          if (spoke) armIdle(); // chain another bounded follow-up
+        });
+    };
+
+    // The director may end the scene; we just stop driving (go quiet). Room teardown
+    // is left to the client.
+    const endScene = () => {
+      if (sceneEnded) return;
+      sceneEnded = true;
+      clearIdle();
+      console.log("[voice-agent] scene ended by director — going quiet");
     };
 
     // Reply at the REAL end of the user's turn (gated by the v1 detector), superseding
-    // whatever's in flight. SCENE rooms route through the orchestrator (who speaks);
-    // single-character rooms run that one character directly.
+    // whatever's in flight. Every room routes through the driver (who speaks + the
+    // director cue); a single-character room is just the 1-char fastpath. A real user
+    // turn resets the proactive budget; after the character speaks, we arm a follow-up.
     const respond = (text: string) => {
+      if (sceneEnded) return;
       turn?.abort();
       audioSource.clearQueue();
+      clearIdle();
+      proactiveCount = 0;
       turn = new AbortController();
       const signal = turn.signal;
       console.log(`[voice-agent] user: ${text}`);
       publishTurn({ role: "user", id: `u${Date.now()}`, text, final: true });
-      if (sceneDriver) {
-        void sceneDriver.drive(text, (input, replyId) => speak(input, signal, replyId));
-      } else {
-        const prior = [...history];
-        void speak(
-          { characterId: character!.id, message: text, history: prior },
-          signal,
-          `a${Date.now()}`,
-        ).then((reply) => recordTurn(text, reply));
-      }
+      void sceneDriver
+        .drive(text, (input, replyId) => {
+          speaking = true;
+          return speak(input, signal, replyId).finally(() => {
+            speaking = false;
+            armIdle();
+          });
+        })
+        .then((outcome) => {
+          if (outcome.action === "end-scene") endScene();
+        });
       userSegments = []; // next turn starts a fresh speculation accumulation
     };
     const agent = new BrainAgent(respond);
@@ -359,13 +431,13 @@ export default defineAgent({
     // one per pause) extends the running transcript; orchestrate off it NOW so the
     // speaker is usually decided before the turn formally completes. Read-only — we
     // never SPEAK here (that's onUserTurnCompleted), so there's no mid-sentence cut-in.
-    if (sceneDriver && SPECULATE_ENABLED) {
+    if (SPECULATE_ENABLED) {
       session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
         if (!ev.isFinal) return;
         const seg = ev.transcript.trim();
         if (!seg) return;
         userSegments.push(seg);
-        sceneDriver!.speculate(userSegments.join(" "));
+        sceneDriver.speculate(userSegments.join(" "));
       });
     }
 
@@ -375,7 +447,9 @@ export default defineAgent({
     // browser, so this fires on real user speech — not Abraham's own audio echoing
     // back — and the session suppresses it during AEC warmup.
     session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
+      userIsSpeaking = ev.newState === "speaking";
       if (ev.newState === "speaking") {
+        clearIdle(); // the user has the floor — cancel any pending proactive tick
         turn?.abort();
         audioSource.clearQueue();
       }
@@ -403,18 +477,21 @@ export default defineAgent({
     if (process.env.VOICE_AGENT_GREET === "1") {
       turn = new AbortController();
       const greetSignal = turn.signal;
-      if (sceneDriver) {
+      if (sceneRef) {
         console.log("[voice-agent] greet-test: driving one scene turn on join");
         void sceneDriver.drive("Hello? Who's here?", (input, replyId) =>
           speak(input, greetSignal, replyId),
         );
-      } else if (character) {
-        console.log("[voice-agent] greet-test: running a canned brain turn on join");
+      } else {
+        // Single-character opening line: voice the greet directly and seed only the
+        // reply into the driver's transcript — the meta-instruction is NOT recorded as
+        // a user turn (matching the pre-unification single-char greet).
+        console.log("[voice-agent] greet-test: opening line on join");
         void speak(
-          { characterId: character.id, message: "Greet me warmly in one short sentence." },
+          { characterId: character!.id, message: "Greet me warmly in one short sentence." },
           greetSignal,
           `greet${Date.now()}`,
-        ).then((reply) => recordTurn(null, reply)); // seed history so the 1st reply has the greeting
+        ).then((reply) => sceneDriver.recordOpening(reply));
       }
     }
   },

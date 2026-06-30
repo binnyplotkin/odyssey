@@ -201,11 +201,11 @@ describe("@odyssey/orchestration client", () => {
       characterSlug: "ada",
       speakerName: "Ada",
       message: "Ask Ada.",
-      history: [
-        { role: "user", content: "What happened here?" },
-        { role: "user", content: "Ask Ada." },
-      ],
-      promptChunk: "Scene direction (orchestrator): Keep it quiet.\nBeat: Ada responds to the visitor.",
+      // History excludes the turn lifted into `message` ("Ask Ada.") so it isn't fed
+      // twice (here AND as the appended user message downstream).
+      history: [{ role: "user", content: "What happened here?" }],
+      // Director `beat` framed as "Direction:"; `sceneCue` is the optional scene note.
+      promptChunk: "Direction: Ada responds to the visitor.\nScene note: Keep it quiet.",
       voiceSlug: "ada-voice",
     });
   });
