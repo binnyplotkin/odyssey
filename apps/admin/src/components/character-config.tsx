@@ -21,6 +21,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useHeaderContent } from "@/components/header-context";
 import { EditThumbnailOverlay } from "@/components/edit-thumbnail-overlay";
+import { HalftoneIntelligenceIcon } from "@/components/halftone-intelligence-icon";
 import {
   BrainGlyph,
   VoiceGlyph,
@@ -110,6 +111,8 @@ export type ConfigBinding = {
   };
 };
 
+export type ConfigWikiOption = ConfigBinding["wiki"];
+
 export type ConfigVersion = {
   id: string;
   versionNumber: number;
@@ -122,6 +125,7 @@ type Props = {
     pageCount: number;
     entityCount: number;
     bindings: ConfigBinding[];
+    availableWikis: ConfigWikiOption[];
   };
   sessions: {
     rememberedCount: number;
@@ -221,6 +225,9 @@ export function CharacterConfig({
   // paragraph button; closes on Esc, clicking the backdrop, or hitting
   // the Close action.
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Auto-populate overlay — opens from the sidebar header's AI menu.
+  const [autoPopulateOpen, setAutoPopulateOpen] = useState(false);
 
   // Thumbnail state — mirrors the persisted character.image +
   // thumbnailColor. The EditThumbnailOverlay commits to the API and then
@@ -344,6 +351,7 @@ export function CharacterConfig({
       {sidebarOpen && (
         <ConfigSidebar
           character={character}
+          knowledge={knowledge}
           title={title}
           onTitleChange={saveTitle}
           tab={tab}
@@ -387,6 +395,33 @@ export function CharacterConfig({
           chatModels={chatModels}
           voiceModels={voiceModels}
           onOpenPreview={() => setPreviewOpen(true)}
+          onAutoPopulate={() => setAutoPopulateOpen(true)}
+        />
+      )}
+
+      {autoPopulateOpen && (
+        <AutoPopulateOverlay
+          characterId={character.id}
+          title={title}
+          identity={identity}
+          voiceStyle={voiceStyle}
+          directive={directive}
+          bindings={bindings}
+          availableWikis={knowledge.availableWikis}
+          onClose={() => setAutoPopulateOpen(false)}
+          onIdentityChange={(next) => {
+            setIdentity(next);
+            setSavedAt(Date.now());
+          }}
+          onVoiceStyleChange={(next) => {
+            setVoiceStyle(next);
+            setSavedAt(Date.now());
+          }}
+          onDirectiveChange={(next) => {
+            setDirective(next);
+            setSavedAt(Date.now());
+          }}
+          onSnapshotVersion={saveVersion}
         />
       )}
 
@@ -1509,6 +1544,7 @@ function EditableThumbnail({
 
 function ConfigSidebar(props: {
   character: CharacterRecord;
+  knowledge: Props["knowledge"];
   title: string;
   onTitleChange: (next: string) => void | Promise<void>;
   tab: TabKey;
@@ -1534,6 +1570,7 @@ function ConfigSidebar(props: {
   chatModels: ModelOption[];
   voiceModels: ModelOption[];
   onOpenPreview: () => void;
+  onAutoPopulate: () => void;
 }) {
   const tabs: Array<{ key: TabKey; label: string }> = [
     { key: "persona", label: "Persona" },
@@ -1712,29 +1749,78 @@ function ConfigSidebar(props: {
             </span>
           </div>
         </div>
-        <button
-          type="button"
-          aria-label="Sidebar options"
+        <div
           style={{
-            display: "inline-flex",
+            display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            width: 28,
-            height: 28,
-            borderRadius: "var(--radius-pill)",
-            border:
-              "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
-            background: "transparent",
-            color: "var(--text-tertiary)",
-            cursor: "pointer",
-            fontFamily: T.fontMono,
-            fontSize: "var(--font-size-base)",
-            lineHeight: 1,
-            transition: "border-color 120ms ease, background 120ms ease",
+            gap: "var(--space-6)",
+            flexShrink: 0,
           }}
         >
-          ⋯
-        </button>
+          <Menu<string>
+            value=""
+            onChange={(action) => {
+              if (action === "auto-populate") props.onAutoPopulate();
+            }}
+            items={[
+              {
+                value: "auto-populate",
+                label: "Auto populate…",
+                meta: "draft from knowledge",
+              },
+            ]}
+            ariaLabel="AI actions"
+            showChevron={false}
+            align="right"
+            minWidth={260}
+            triggerStyle={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              padding: 0,
+              borderRadius: "var(--radius-pill)",
+              border:
+                "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
+              background: "transparent",
+              transition: "border-color 120ms ease, background 120ms ease",
+            }}
+            renderTrigger={() => (
+              <HalftoneIntelligenceIcon
+                state="idle"
+                size={18}
+                density="compact"
+                intensity={0.75}
+                speedScale={0.7}
+                label="AI actions"
+              />
+            )}
+          />
+          <button
+            type="button"
+            aria-label="Sidebar options"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              borderRadius: "var(--radius-pill)",
+              border:
+                "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
+              background: "transparent",
+              color: "var(--text-tertiary)",
+              cursor: "pointer",
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-base)",
+              lineHeight: 1,
+              transition: "border-color 120ms ease, background 120ms ease",
+            }}
+          >
+            ⋯
+          </button>
+        </div>
       </div>
 
       {/* Tabs — terminal-segment style (shared `TabBar` primitive).
@@ -1801,6 +1887,7 @@ function ConfigSidebar(props: {
           <KnowledgeTab
             characterId={props.character.id}
             bindings={props.bindings}
+            availableWikis={props.knowledge.availableWikis}
             onBindingsChange={props.onBindingsChange}
           />
         )}
@@ -2258,6 +2345,12 @@ const SECTION_INFO: Record<string, SectionInfo> = {
     promptShape:
       "<never>\n  - Do not break character\n  - Do not describe events after his death\n  - Do not use modern English idioms\n</never>",
     footer: "always emitted · checked every turn",
+  },
+  framingGuidance: {
+    what: "Framing is the disclosure stance for when a player presses on whether the character is real (the dramatized-portrayal acknowledgement). Guidance is a free-form escape hatch — what the model should weigh when uncertain. Both compile at the end of the directive block.",
+    promptShape:
+      "<framing>\n  If asked whether you are real, acknowledge\n  this is a dramatized portrayal…\n</framing>\n<guidance>\n  When uncertain, favor the covenant arc…\n</guidance>",
+    footer: "emitted only when authored · deepest position in the directive",
   },
   stageManager: {
     what: "Meta-behavior between turns: how to handle pushback on refused topics, hostile users, and low-confidence moments. Lands in the next pass once the runtime supports it.",
@@ -5246,12 +5339,17 @@ function MetaChip({ children }: { children: React.ReactNode }) {
 function KnowledgeTab({
   characterId,
   bindings,
+  availableWikis,
   onBindingsChange,
 }: {
   characterId: string;
   bindings: ConfigBinding[];
+  availableWikis: ConfigWikiOption[];
   onBindingsChange: (b: ConfigBinding[]) => void;
 }) {
+  const [pendingWikiId, setPendingWikiId] = useState<string | null>(null);
+  const [bindError, setBindError] = useState<string | null>(null);
+
   const updatePriority = useCallback(
     (bindingId: string, priority: BindingPriority) => {
       onBindingsChange(
@@ -5288,7 +5386,53 @@ function KnowledgeTab({
     [bindings, characterId, onBindingsChange],
   );
 
+  const bindableWikis = useMemo(() => {
+    const boundIds = new Set(bindings.map((b) => b.wiki.id));
+    return availableWikis.filter((wiki) => !boundIds.has(wiki.id));
+  }, [availableWikis, bindings]);
+
+  const bindWiki = useCallback(
+    async (wikiId: string) => {
+      const wiki = bindableWikis.find((w) => w.id === wikiId);
+      if (!wiki || pendingWikiId) return;
+
+      setPendingWikiId(wikiId);
+      setBindError(null);
+      try {
+        const res = await fetch(`/api/characters/${characterId}/bindings`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            wikiId,
+            priority: bindings.length === 0 ? "primary" : "secondary",
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          binding?: CharacterKnowledgeBindingRecord;
+          error?: string;
+        };
+        if (!res.ok || !data.binding) {
+          throw new Error(data.error ?? "Could not bind graph.");
+        }
+
+        onBindingsChange([
+          ...bindings,
+          {
+            binding: data.binding,
+            wiki: { ...wiki, characterCount: wiki.characterCount + 1 },
+          },
+        ]);
+      } catch (err) {
+        setBindError(err instanceof Error ? err.message : "Could not bind graph.");
+      } finally {
+        setPendingWikiId(null);
+      }
+    },
+    [bindableWikis, bindings, characterId, onBindingsChange, pendingWikiId],
+  );
+
   const totalFacts = bindings.reduce((n, b) => n + b.wiki.pageCount, 0);
+  const canBind = bindableWikis.length > 0 && !pendingWikiId;
 
   return (
     <>
@@ -5313,27 +5457,57 @@ function KnowledgeTab({
             onActiveChange={(a) => updateActive(binding.id, a)}
           />
         ))}
-        <Link
-          href="/wikis"
-          style={{
+        <Menu<string>
+          value=""
+          onChange={bindWiki}
+          items={bindableWikis.map((wiki) => ({
+            value: wiki.id,
+            label: wiki.title,
+            meta: `${wiki.pageCount} facts`,
+          }))}
+          ariaLabel="Bind knowledge graph"
+          disabled={!canBind}
+          minWidth={360}
+          triggerStyle={{
             ...addButtonStyle,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            textDecoration: "none",
+            opacity: canBind ? 1 : 0.62,
+            cursor: canBind ? "pointer" : "not-allowed",
           }}
-        >
-          <span>+ Bind another graph</span>
+          renderTrigger={() => (
+            <>
+              <span>
+                {pendingWikiId
+                  ? "Binding graph..."
+                  : bindableWikis.length === 0
+                    ? "All library graphs bound"
+                    : "+ Bind another graph"}
+              </span>
+              <span
+                style={{
+                  fontFamily: T.fontMono,
+                  fontSize: "var(--font-size-xs)",
+                  color: T.muted,
+                }}
+              >
+                select from library
+              </span>
+            </>
+          )}
+        />
+        {bindError && (
           <span
             style={{
               fontFamily: T.fontMono,
               fontSize: "var(--font-size-xs)",
-              color: T.muted,
+              color: T.danger,
             }}
           >
-            browse library ↗
+            {bindError}
           </span>
-        </Link>
+        )}
         <span
           style={{
             fontFamily: T.fontMono,
@@ -5726,6 +5900,44 @@ function LimitsTab({
           onAdd={(text) =>
             save({ ...(directive ?? {}), never: [...nevers, text] })
           }
+        />
+      </Section>
+
+      <Section
+        title="Framing & guidance"
+        hint="disclosure stance + escape hatch"
+        status={directive?.framing || directive?.guidance ? "set" : "empty"}
+        info={SECTION_INFO.framingGuidance}
+      >
+        <FieldLabel>disclosure framing</FieldLabel>
+        <textarea
+          value={directive?.framing ?? ""}
+          onChange={(e) => {
+            const framing = e.target.value;
+            const next = { ...(directive ?? {}) };
+            if (framing.trim()) next.framing = framing;
+            else delete next.framing;
+            save(next);
+          }}
+          rows={3}
+          maxLength={2000}
+          placeholder="How they acknowledge being a dramatized portrayal when a player presses on whether they're real…"
+          style={textareaStyle}
+        />
+        <FieldLabel>guidance</FieldLabel>
+        <textarea
+          value={directive?.guidance ?? ""}
+          onChange={(e) => {
+            const guidance = e.target.value;
+            const next = { ...(directive ?? {}) };
+            if (guidance.trim()) next.guidance = guidance;
+            else delete next.guidance;
+            save(next);
+          }}
+          rows={3}
+          maxLength={2000}
+          placeholder="Free-form guidance the model should weigh when uncertain — themes to favor, how to handle ambiguity…"
+          style={textareaStyle}
         />
       </Section>
 
@@ -6748,6 +6960,940 @@ function estimateTokens(
 }
 
 /* ── Shared bits ───────────────────────────────────────────────── */
+
+/* ── Auto-populate overlay ─────────────────────────────────────── */
+
+/**
+ * AI-driven persona drafting. The author supplies direction + knowledge
+ * graphs; the server returns a DRAFT (nothing persisted); each section is
+ * reviewed and accepted here, then applied through the same per-section
+ * routes hand-editing uses — after a version snapshot, so the whole
+ * operation is one restore away from undo.
+ */
+
+type AutoPopulateSectionKey = "identity" | "voice" | "examples" | "limits";
+
+type AutoPopulateDraft = {
+  identity?: CharacterIdentity;
+  voiceStyle?: Pick<
+    CharacterVoiceStyle,
+    "tone" | "decision" | "brevity" | "register" | "voicePrompt"
+  >;
+  exemplars?: NonNullable<CharacterDirective["exemplars"]>;
+  limits?: {
+    refuse?: string[];
+    never?: string[];
+    framing?: string;
+    guidance?: string;
+  };
+};
+
+const AUTO_POPULATE_SECTIONS: Array<{
+  key: AutoPopulateSectionKey;
+  label: string;
+  hint: string;
+}> = [
+  { key: "identity", label: "Identity", hint: "essence · traits · era" },
+  { key: "voice", label: "Voice", hint: "tone · brevity · register" },
+  { key: "examples", label: "Examples", hint: "canonical exchanges" },
+  { key: "limits", label: "Limits", hint: "refusals · rules · framing" },
+];
+
+function AutoPopulateOverlay({
+  characterId,
+  title,
+  identity,
+  voiceStyle,
+  directive,
+  bindings,
+  availableWikis,
+  onClose,
+  onIdentityChange,
+  onVoiceStyleChange,
+  onDirectiveChange,
+  onSnapshotVersion,
+}: {
+  characterId: string;
+  title: string;
+  identity: CharacterIdentity | null;
+  voiceStyle: CharacterVoiceStyle | null;
+  directive: CharacterDirective | null;
+  bindings: ConfigBinding[];
+  availableWikis: ConfigWikiOption[];
+  onClose: () => void;
+  onIdentityChange: (i: CharacterIdentity | null) => void;
+  onVoiceStyleChange: (v: CharacterVoiceStyle | null) => void;
+  onDirectiveChange: (d: CharacterDirective | null) => void;
+  onSnapshotVersion: () => Promise<void>;
+}) {
+  type Phase = "input" | "generating" | "review" | "applying";
+  const [phase, setPhase] = useState<Phase>("input");
+  const [direction, setDirection] = useState("");
+  const [selectedWikiIds, setSelectedWikiIds] = useState<Set<string>>(
+    () => new Set(bindings.map((b) => b.wiki.id)),
+  );
+  const [sections, setSections] = useState<
+    Record<AutoPopulateSectionKey, boolean>
+  >({ identity: true, voice: true, examples: true, limits: true });
+  const [mode, setMode] = useState<"fill" | "overwrite">("fill");
+  const [draft, setDraft] = useState<AutoPopulateDraft | null>(null);
+  const [accepted, setAccepted] = useState<
+    Record<AutoPopulateSectionKey, boolean>
+  >({ identity: true, voice: true, examples: true, limits: true });
+  const [error, setError] = useState<string | null>(null);
+
+  const busy = phase === "generating" || phase === "applying";
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !busy) {
+        e.preventDefault();
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
+
+  // Unbound library graphs listed after the character's own bindings so
+  // the author can pull reference material without binding it first.
+  const wikiRows = useMemo(() => {
+    const boundIds = new Set(bindings.map((b) => b.wiki.id));
+    return [
+      ...bindings.map((b) => ({ wiki: b.wiki, bound: true })),
+      ...availableWikis
+        .filter((w) => !boundIds.has(w.id))
+        .map((wiki) => ({ wiki, bound: false })),
+    ];
+  }, [bindings, availableWikis]);
+
+  const toggleWiki = useCallback((id: string) => {
+    setSelectedWikiIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const generate = useCallback(async () => {
+    setPhase("generating");
+    setError(null);
+    try {
+      const res = await fetch(`/api/characters/${characterId}/auto-populate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          direction: direction.trim() || undefined,
+          wikiIds: [...selectedWikiIds],
+          sections,
+          mode,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        draft?: AutoPopulateDraft;
+        error?: string;
+      };
+      if (!res.ok || !data.draft) {
+        throw new Error(data.error ?? "Generation failed.");
+      }
+      setDraft(data.draft);
+      setAccepted({
+        identity: Boolean(data.draft.identity),
+        voice: Boolean(data.draft.voiceStyle),
+        examples: Boolean(data.draft.exemplars?.length),
+        limits: Boolean(data.draft.limits),
+      });
+      setPhase("review");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed.");
+      setPhase("input");
+    }
+  }, [characterId, direction, selectedWikiIds, sections, mode]);
+
+  const acceptedCount = draft
+    ? AUTO_POPULATE_SECTIONS.filter(
+        (s) => accepted[s.key] && draftHasSection(draft, s.key),
+      ).length
+    : 0;
+
+  const apply = useCallback(async () => {
+    if (!draft) return;
+    setPhase("applying");
+    setError(null);
+    try {
+      // Snapshot first — the whole apply becomes one restore away from undo.
+      await onSnapshotVersion();
+
+      if (accepted.identity && draft.identity) {
+        const res = await fetch(`/api/characters/${characterId}/identity`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ identity: draft.identity }),
+        });
+        if (!res.ok) throw new Error("Failed to save identity.");
+        onIdentityChange(draft.identity);
+      }
+
+      if (accepted.voice && draft.voiceStyle) {
+        // Merge over current so audio-channel fields (reference clip,
+        // prosody, TTS binding) survive a text-channel repopulate.
+        const merged: CharacterVoiceStyle = {
+          ...(voiceStyle ?? {}),
+          ...draft.voiceStyle,
+        };
+        const res = await fetch(`/api/characters/${characterId}/voice-style`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ voiceStyle: merged }),
+        });
+        if (!res.ok) throw new Error("Failed to save voice style.");
+        onVoiceStyleChange(merged);
+      }
+
+      const wantExamples = accepted.examples && !!draft.exemplars?.length;
+      const wantLimits = accepted.limits && !!draft.limits;
+      if (wantExamples || wantLimits) {
+        let next: CharacterDirective = { ...(directive ?? {}) };
+        if (wantExamples) next = { ...next, exemplars: draft.exemplars };
+        if (wantLimits && draft.limits) {
+          next = {
+            ...next,
+            ...(draft.limits.refuse?.length
+              ? {
+                  scope: {
+                    ...(next.scope ?? {}),
+                    refuse: draft.limits.refuse,
+                  },
+                }
+              : {}),
+            ...(draft.limits.never?.length
+              ? { never: draft.limits.never }
+              : {}),
+            ...(draft.limits.framing ? { framing: draft.limits.framing } : {}),
+            ...(draft.limits.guidance
+              ? { guidance: draft.limits.guidance }
+              : {}),
+          };
+        }
+        const res = await fetch(`/api/characters/${characterId}/directive`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ directive: next }),
+        });
+        if (!res.ok) throw new Error("Failed to save directive.");
+        onDirectiveChange(next);
+      }
+
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Apply failed.");
+      setPhase("review");
+    }
+  }, [
+    draft,
+    accepted,
+    characterId,
+    voiceStyle,
+    directive,
+    onSnapshotVersion,
+    onIdentityChange,
+    onVoiceStyleChange,
+    onDirectiveChange,
+    onClose,
+  ]);
+
+  const anySectionSelected = Object.values(sections).some(Boolean);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={busy ? undefined : onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        background: "color-mix(in srgb, var(--background) 70%, transparent)",
+        backdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        padding: "48px 24px",
+        overflow: "auto",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 640,
+          backgroundColor: "var(--background)",
+          backgroundImage: "none",
+          border: `1px solid ${T.border}`,
+          borderRadius: "var(--radius-3xl)",
+          boxShadow: "0 24px 60px var(--shadow, rgba(0,0,0,0.40))",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          maxHeight: "calc(100vh - 96px)",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: "18px 24px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "var(--space-12)",
+            borderBottom: `1px solid ${T.border}`,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-10)",
+              minWidth: 0,
+            }}
+          >
+            <HalftoneIntelligenceIcon
+              state={busy ? "processing" : "thinking"}
+              size={26}
+              density="compact"
+              intensity={busy ? 0.92 : 0.78}
+              label="Auto populate"
+            />
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span
+                style={{
+                  fontFamily: T.fontHeading,
+                  fontSize: "var(--font-size-lg)",
+                  fontWeight: 600,
+                  color: T.fg,
+                }}
+              >
+                Auto populate
+              </span>
+              <span
+                style={{
+                  fontFamily: T.fontMono,
+                  fontSize: "var(--font-size-xs)",
+                  color: T.muted,
+                  letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {phase === "review" || phase === "applying"
+                  ? `draft for ${title} · review before applying`
+                  : `draft persona for ${title}`}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            style={{ ...ghostButtonStyle, opacity: busy ? 0.5 : 1 }}
+          >
+            close
+          </button>
+        </div>
+
+        {/* Body */}
+        <div
+          style={{
+            padding: "20px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-16)",
+            overflowY: "auto",
+          }}
+        >
+          {phase === "generating" ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "var(--space-12)",
+                padding: "48px 0",
+              }}
+            >
+              <HalftoneIntelligenceIcon
+                state="processing"
+                size={64}
+                intensity={0.95}
+                label="Generating persona draft"
+              />
+              <span
+                style={{
+                  fontFamily: T.fontMono,
+                  fontSize: "var(--font-size-xs)",
+                  color: T.muted,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                }}
+              >
+                reading graphs · drafting persona
+              </span>
+            </div>
+          ) : phase === "input" ? (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--space-8)",
+                }}
+              >
+                <FieldLabel>direction</FieldLabel>
+                <textarea
+                  value={direction}
+                  onChange={(e) => setDirection(e.target.value)}
+                  rows={4}
+                  maxLength={4000}
+                  placeholder={`Who is ${title}? What should this portrayal emphasize — themes, arc, emotional core, what to avoid…`}
+                  style={textareaStyle}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--space-8)",
+                }}
+              >
+                <FieldLabel>knowledge graphs</FieldLabel>
+                {wikiRows.length === 0 && (
+                  <EmptyHint>
+                    No graphs in the library yet — generation will lean on
+                    your direction text alone.
+                  </EmptyHint>
+                )}
+                {wikiRows.map(({ wiki, bound }) => {
+                  const checked = selectedWikiIds.has(wiki.id);
+                  return (
+                    <button
+                      key={wiki.id}
+                      type="button"
+                      onClick={() => toggleWiki(wiki.id)}
+                      style={{
+                        ...cardShell,
+                        padding: "10px 14px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "var(--space-10)",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        borderColor: checked ? T.accent : T.border,
+                        background: checked
+                          ? "color-mix(in srgb, var(--accent-strong) 6%, transparent)"
+                          : T.panel,
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: "var(--radius-sm)",
+                          border: `1px solid ${checked ? T.accent : T.borderStrong}`,
+                          background: checked ? T.accent : "transparent",
+                          color: "var(--background)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 11,
+                          lineHeight: 1,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {checked ? "✓" : ""}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: T.fontBody,
+                          fontSize: "var(--font-size-base)",
+                          color: T.fg,
+                          flex: 1,
+                          minWidth: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {wiki.title}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: T.fontMono,
+                          fontSize: "var(--font-size-2xs)",
+                          color: T.muted,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {wiki.pageCount} facts{bound ? " · bound" : " · library"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--space-8)",
+                }}
+              >
+                <FieldLabel>sections</FieldLabel>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "var(--space-6)",
+                  }}
+                >
+                  {AUTO_POPULATE_SECTIONS.map((s) => {
+                    const on = sections[s.key];
+                    return (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() =>
+                          setSections((prev) => ({
+                            ...prev,
+                            [s.key]: !prev[s.key],
+                          }))
+                        }
+                        title={s.hint}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "var(--radius-pill)",
+                          border: `1px solid ${on ? T.accent : T.border}`,
+                          background: on
+                            ? "color-mix(in srgb, var(--accent-strong) 10%, transparent)"
+                            : "transparent",
+                          color: on ? T.accent : T.muted,
+                          fontFamily: T.fontMono,
+                          fontSize: "var(--font-size-xs)",
+                          letterSpacing: "0.10em",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--space-8)",
+                }}
+              >
+                <FieldLabel>mode</FieldLabel>
+                <div style={{ display: "flex", gap: "var(--space-6)" }}>
+                  {(
+                    [
+                      ["fill", "Fill gaps", "keep what's authored, add the rest"],
+                      ["overwrite", "Rework all", "propose fresh values everywhere"],
+                    ] as const
+                  ).map(([value, label, hint]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setMode(value)}
+                      style={{
+                        ...cardShell,
+                        flex: 1,
+                        padding: "10px 14px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                        cursor: "pointer",
+                        textAlign: "left",
+                        borderColor: mode === value ? T.accent : T.border,
+                        background:
+                          mode === value
+                            ? "color-mix(in srgb, var(--accent-strong) 6%, transparent)"
+                            : T.panel,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: T.fontBody,
+                          fontSize: "var(--font-size-base)",
+                          fontWeight: 500,
+                          color: mode === value ? T.fg : T.muted,
+                        }}
+                      >
+                        {label}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: T.fontMono,
+                          fontSize: "var(--font-size-2xs)",
+                          color: T.muted,
+                        }}
+                      >
+                        {hint}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : draft ? (
+            <>
+              {AUTO_POPULATE_SECTIONS.filter((s) =>
+                draftHasSection(draft, s.key),
+              ).map((s) => (
+                <DraftSectionCard
+                  key={s.key}
+                  sectionKey={s.key}
+                  label={s.label}
+                  draft={draft}
+                  hasCurrent={sectionHasCurrentValue(s.key, {
+                    identity,
+                    voiceStyle,
+                    directive,
+                  })}
+                  accepted={accepted[s.key]}
+                  onToggle={() =>
+                    setAccepted((prev) => ({ ...prev, [s.key]: !prev[s.key] }))
+                  }
+                />
+              ))}
+            </>
+          ) : null}
+
+          {error && (
+            <span
+              style={{
+                fontFamily: T.fontMono,
+                fontSize: "var(--font-size-xs)",
+                color: T.danger,
+              }}
+            >
+              {error}
+            </span>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            padding: "14px 24px",
+            borderTop: `1px solid ${T.border}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "var(--space-12)",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              color: T.muted,
+            }}
+          >
+            {phase === "review" || phase === "applying"
+              ? "a version snapshot is saved before anything is applied"
+              : "returns a draft — nothing is saved until you apply"}
+          </span>
+          {phase === "input" || phase === "generating" ? (
+            <button
+              type="button"
+              onClick={generate}
+              disabled={busy || !anySectionSelected}
+              style={{
+                ...primaryButtonStyle,
+                opacity: busy || !anySectionSelected ? 0.55 : 1,
+                cursor: busy || !anySectionSelected ? "not-allowed" : "pointer",
+              }}
+            >
+              {phase === "generating" ? "Generating…" : "Generate draft"}
+            </button>
+          ) : (
+            <div style={{ display: "flex", gap: "var(--space-8)" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(null);
+                  setPhase("input");
+                }}
+                disabled={busy}
+                style={{ ...ghostButtonStyle, opacity: busy ? 0.5 : 1 }}
+              >
+                back
+              </button>
+              <button
+                type="button"
+                onClick={apply}
+                disabled={busy || acceptedCount === 0}
+                style={{
+                  ...primaryButtonStyle,
+                  opacity: busy || acceptedCount === 0 ? 0.55 : 1,
+                  cursor:
+                    busy || acceptedCount === 0 ? "not-allowed" : "pointer",
+                }}
+              >
+                {phase === "applying"
+                  ? "Applying…"
+                  : `Apply ${acceptedCount} ${acceptedCount === 1 ? "section" : "sections"}`}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function draftHasSection(
+  draft: AutoPopulateDraft,
+  key: AutoPopulateSectionKey,
+): boolean {
+  if (key === "identity") return Boolean(draft.identity);
+  if (key === "voice") return Boolean(draft.voiceStyle);
+  if (key === "examples") return Boolean(draft.exemplars?.length);
+  return Boolean(draft.limits);
+}
+
+function sectionHasCurrentValue(
+  key: AutoPopulateSectionKey,
+  current: {
+    identity: CharacterIdentity | null;
+    voiceStyle: CharacterVoiceStyle | null;
+    directive: CharacterDirective | null;
+  },
+): boolean {
+  if (key === "identity") {
+    return Boolean(
+      current.identity?.essence || current.identity?.traits?.length,
+    );
+  }
+  if (key === "voice") {
+    const v = current.voiceStyle;
+    return Boolean(v?.tone?.length || v?.brevity || v?.register || v?.decision);
+  }
+  if (key === "examples") return Boolean(current.directive?.exemplars?.length);
+  const d = current.directive;
+  return Boolean(
+    d?.scope?.refuse?.length || d?.never?.length || d?.framing || d?.guidance,
+  );
+}
+
+function DraftSectionCard({
+  sectionKey,
+  label,
+  draft,
+  hasCurrent,
+  accepted,
+  onToggle,
+}: {
+  sectionKey: AutoPopulateSectionKey;
+  label: string;
+  draft: AutoPopulateDraft;
+  hasCurrent: boolean;
+  accepted: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      style={{
+        ...cardShell,
+        padding: "14px 16px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-10)",
+        borderColor: accepted ? T.accent : T.border,
+        opacity: accepted ? 1 : 0.62,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "var(--space-10)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: "var(--space-8)",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: T.fontHeading,
+              fontSize: "var(--font-size-md)",
+              fontWeight: 600,
+              color: T.fg,
+            }}
+          >
+            {label}
+          </span>
+          <span
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-2xs)",
+              color: hasCurrent ? T.warn : T.muted,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            {hasCurrent ? "replaces current" : "fills empty"}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          style={{
+            ...ghostButtonStyle,
+            borderColor: accepted ? T.accent : T.border,
+            color: accepted ? T.accent : T.muted,
+          }}
+        >
+          {accepted ? "will apply" : "skipped"}
+        </button>
+      </div>
+      <DraftSectionPreview sectionKey={sectionKey} draft={draft} />
+    </div>
+  );
+}
+
+function DraftSectionPreview({
+  sectionKey,
+  draft,
+}: {
+  sectionKey: AutoPopulateSectionKey;
+  draft: AutoPopulateDraft;
+}) {
+  const body: React.CSSProperties = {
+    fontFamily: T.fontBody,
+    fontSize: "var(--font-size-sm)",
+    color: T.fg,
+    lineHeight: 1.55,
+  };
+  const meta: React.CSSProperties = {
+    fontFamily: T.fontMono,
+    fontSize: "var(--font-size-2xs)",
+    color: T.muted,
+    letterSpacing: "0.06em",
+  };
+
+  if (sectionKey === "identity" && draft.identity) {
+    const id = draft.identity;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {id.essence && <span style={{ ...body, fontStyle: "italic" }}>{id.essence}</span>}
+        {id.traits?.map((t) => (
+          <span key={t.name} style={body}>
+            <strong>{t.name}</strong> — {t.description}
+          </span>
+        ))}
+        {(id.era || id.setting) && (
+          <span style={meta}>
+            {[id.era, id.setting].filter(Boolean).join(" · ")}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (sectionKey === "voice" && draft.voiceStyle) {
+    const v = draft.voiceStyle;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <span style={meta}>
+          {[
+            v.tone?.length ? v.tone.join(" · ") : null,
+            v.brevity,
+            v.register
+              ? `formality ${fmtSigned(v.register.formality)} · warmth ${fmtSigned(v.register.warmth)}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join("   ·   ")}
+        </span>
+        {v.decision && <span style={body}>{v.decision}</span>}
+        {v.voicePrompt && (
+          <span style={{ ...body, color: T.muted }}>
+            {truncate(v.voicePrompt, 220)}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (sectionKey === "examples" && draft.exemplars) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {draft.exemplars.map((ex, i) => (
+          <div
+            key={i}
+            style={{ display: "flex", flexDirection: "column", gap: 3 }}
+          >
+            <span style={{ ...body, color: T.muted }}>
+              {truncate(ex.user, 120)}
+            </span>
+            <span style={body}>{truncate(ex.you, 200)}</span>
+            {ex.tags?.length ? (
+              <span style={meta}>{ex.tags.join(", ")}</span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (sectionKey === "limits" && draft.limits) {
+    const l = draft.limits;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {l.refuse?.length ? (
+          <span style={meta}>refuse: {l.refuse.join(" · ")}</span>
+        ) : null}
+        {l.never?.map((rule, i) => (
+          <span key={i} style={body}>
+            {String(i + 1).padStart(2, "0")} {rule}
+          </span>
+        ))}
+        {l.framing && (
+          <span style={{ ...body, color: T.muted }}>
+            framing: {truncate(l.framing, 180)}
+          </span>
+        )}
+        {l.guidance && (
+          <span style={{ ...body, color: T.muted }}>
+            guidance: {truncate(l.guidance, 180)}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function truncate(text: string, max: number): string {
+  const trimmed = text.trim();
+  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max)}…`;
+}
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (

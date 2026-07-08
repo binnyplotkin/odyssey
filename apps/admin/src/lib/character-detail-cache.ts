@@ -8,6 +8,7 @@ import {
 } from "@odyssey/db";
 import type {
   ConfigBinding,
+  ConfigWikiOption,
   ConfigVersion,
 } from "@/components/character-config";
 import { CHARACTERS_LIST_CACHE_TAG } from "./characters-cache";
@@ -75,6 +76,7 @@ export type CharacterDetailPayload = {
     pageCount: number;
     entityCount: number;
     bindings: ConfigBinding[];
+    availableWikis: ConfigWikiOption[];
   };
   versions: ConfigVersion[];
 };
@@ -88,37 +90,30 @@ function buildCachedDetailFetcher(id: string) {
       const wikis = getWikisStore();
       const wikiStore = getWikiStore();
 
-      const [bindingRows, pages, versions] = await Promise.all([
+      const [bindingRows, wikiSummaries, pages, versions] = await Promise.all([
         wikis.listWikisForCharacter(character.id),
+        wikis.listWikiSummaries(),
         wikiStore.listPages(character.id),
         getCharacterVersionStore().listForCharacter(character.id),
       ]);
 
-      // Per-binding counts + icon shape. Cheaper than the cross-wiki
-      // aggregate in listWikiSummaries and avoids loading every wiki
-      // when rendering one character.
-      const counts = await Promise.all(
-        bindingRows.map(async (row) => {
-          const [wikiPages, wikiSources, bindingsForWiki, iconData] =
-            await Promise.all([
-              wikis.listPagesForWiki(row.id),
-              wikis.listSourcesForWiki(row.id),
-              wikis.listBindingsForWiki(row.id),
-              wikis.getIconDataForWiki(row.id),
-            ]);
-          return {
-            wikiId: row.id,
-            pageCount: wikiPages.length,
-            sourceCount: wikiSources.length,
-            characterCount: bindingsForWiki.length,
-            iconData,
-          };
-        }),
+      const availableWikis: ConfigWikiOption[] = await Promise.all(
+        wikiSummaries.map(async (wiki) => ({
+          id: wiki.id,
+          slug: wiki.slug,
+          title: wiki.title,
+          summary: wiki.summary,
+          pageCount: wiki.pageCount,
+          sourceCount: wiki.sourceCount,
+          characterCount: wiki.characterCount,
+          updatedAt: wiki.updatedAt,
+          iconData: await wikis.getIconDataForWiki(wiki.id),
+        })),
       );
-      const countsById = new Map(counts.map((c) => [c.wikiId, c]));
+      const wikisById = new Map(availableWikis.map((wiki) => [wiki.id, wiki]));
 
       const bindings: ConfigBinding[] = bindingRows.map((row) => {
-        const c = countsById.get(row.id);
+        const wiki = wikisById.get(row.id);
         return {
           binding: row.binding,
           wiki: {
@@ -126,11 +121,11 @@ function buildCachedDetailFetcher(id: string) {
             slug: row.slug,
             title: row.title,
             summary: row.summary,
-            pageCount: c?.pageCount ?? 0,
-            sourceCount: c?.sourceCount ?? 0,
-            characterCount: c?.characterCount ?? 1,
+            pageCount: wiki?.pageCount ?? 0,
+            sourceCount: wiki?.sourceCount ?? 0,
+            characterCount: wiki?.characterCount ?? 1,
             updatedAt: row.updatedAt,
-            iconData: c?.iconData ?? { nodes: [], edges: [] },
+            iconData: wiki?.iconData ?? { nodes: [], edges: [] },
           },
         };
       });
@@ -143,6 +138,7 @@ function buildCachedDetailFetcher(id: string) {
           pageCount: pages.length,
           entityCount,
           bindings,
+          availableWikis,
         },
         versions: versions.map((v) => ({
           id: v.id,
