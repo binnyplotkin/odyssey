@@ -1,13 +1,16 @@
-import { getCharacterStore, getSceneStore } from "@odyssey/db";
+import { getCharacterStore, getSceneStore, type CharacterRecord } from "@odyssey/db";
 import {
   buildSceneDecisionRequest,
+  buildSceneSessionSnapshot,
   buildSpeakerTurnRequest,
   createInitialSceneState,
   defaultSceneDecision,
   getScene,
+  PROACTIVE_SILENCE_MARKER,
   resolveOrchestratorExecutor,
   resolveSceneDecision,
   updateSceneMemory,
+  type SceneSessionSnapshot,
   type SceneTurnForPlanning,
 } from "@odyssey/orchestration";
 import type { OrchestratorDecision, Scene, SceneState } from "@odyssey/types";
@@ -19,6 +22,18 @@ const MIN_SPECULATE_CHARS = 8;
  *  turn (and is a prefix of it) — so the speaker was chosen from ~the whole intent,
  *  not a short lead-in that happens to prefix-match. */
 const SPECULATION_COVERAGE = 0.6;
+
+/** Solo scenes get a latency-hidden director cue (Phase 3). =0 restores the 0ms
+ *  single-character fastpath with no per-turn direction. */
+const SOLO_CUE_ENABLED = process.env.VOICE_AGENT_SOLO_CUE !== "0";
+/** On a solo FINAL-turn speculation MISS, pay the orchestrator inline for the cue
+ *  (default off → serve the no-cue floor, zero added hot-path latency). */
+const SOLO_CUE_ON_MISS = process.env.VOICE_AGENT_SOLO_CUE_ON_MISS === "1";
+
+/** What the character "sees" as the latest message on a proactive turn — a state,
+ *  not a request, so they continue in-voice rather than answer a meta-instruction.
+ *  The actual direction rides in the promptChunk (the orchestrator's beat). */
+const PROACTIVE_TURN_MESSAGE = "(The user has gone quiet.)";
 
 /** Lowercase, collapse whitespace, drop trailing punctuation — for prefix matching
  *  a speculated partial against the final transcript. */
@@ -36,11 +51,20 @@ export interface SceneSpeakInput {
   characterId: string;
   message: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
-  promptChunk: string;
+  /** Orchestrator direction for this turn (sceneCue + beat). Omitted when there's
+   *  nothing to inject (e.g. a sandbox solo turn before a director cue exists). */
+  promptChunk?: string;
   /** Who's speaking — surfaced to the client so it can label the turn. */
   speaker: { slug: string; name: string };
 }
 export type SceneSpeakFn = (input: SceneSpeakInput, replyId: string) => Promise<string>;
+
+/** What a drive() turn resolved to — the orchestrator's action, and whether a
+ *  character actually spoke (so the caller can arm a follow-up or stop). */
+export type SceneDriveOutcome = {
+  action: OrchestratorDecision["action"];
+  spoke: boolean;
+};
 
 /**
  * Drives a multi-character SCENE over a LiveKit room. Each user turn it asks the
@@ -61,6 +85,8 @@ export class SceneDriver {
   // during the endpoint hold) + the text it was computed from, so drive() can
   // accept it when the final transcript matches and skip the orchestrate latency.
   #speculation: { basedOnText: string; promise: Promise<OrchestratorDecision> } | null = null;
+  // Optional persistence hook — invoked with a fresh snapshot after every decision.
+  #onState: ((snapshot: SceneSessionSnapshot) => void) | null = null;
 
   private constructor(scene: Scene) {
     this.scene = scene;
@@ -77,22 +103,76 @@ export class SceneDriver {
     return scene ? new SceneDriver(scene) : null;
   }
 
+  /** Synthesize a one-actor scene for a `character-sandbox:<slug>` room, so the
+   *  single-character cell runs through the SAME driver as a multi-character scene
+   *  (it's just the 1-char fastpath). The character's voice + brain are resolved by
+   *  runVoiceStream from the id at speak time, so the scene `voice` field here is
+   *  only a non-empty placeholder. */
+  static fromCharacter(character: CharacterRecord): SceneDriver {
+    const slug = character.slug;
+    const blurb = (character.summary ?? character.title).slice(0, 280);
+    const scene: Scene = {
+      id: `character-sandbox:${slug}`,
+      title: character.title,
+      description: (character.summary ?? character.title).slice(0, 600),
+      characters: [
+        {
+          characterSlug: slug,
+          displayName: character.title,
+          voice: character.voiceId ?? slug,
+          blurb,
+        },
+      ],
+      openingBeat: "The user has just arrived.",
+      defaultAmbience: null,
+    };
+    return new SceneDriver(scene);
+  }
+
+  /** Seed the running transcript with an opening character line (e.g. the greet)
+   *  that had no preceding user turn — so the next turn's history includes it,
+   *  WITHOUT recording the director instruction that prompted it as a user turn. */
+  recordOpening(reply: string): void {
+    const solo = this.#presentRoster()[0];
+    if (!solo || !reply) return;
+    this.#recentTurns.push({ speakerSlug: solo, text: reply });
+    this.#trim();
+  }
+
+  /** Wire a callback invoked with a fresh scene snapshot after every decision, so the
+   *  caller can persist it (fire-and-forget). Optional — unset = in-memory only. */
+  onState(cb: (snapshot: SceneSessionSnapshot) => void): void {
+    this.#onState = cb;
+  }
+
+  #persistState(): void {
+    if (!this.#onState) return;
+    try {
+      this.#onState(
+        buildSceneSessionSnapshot(this.#sceneState, { sceneMemory: this.#sceneMemory }),
+      );
+    } catch {
+      // best-effort — persistence must never disrupt the turn
+    }
+  }
+
   /**
    * B4: speculatively orchestrate off a partial transcript DURING the endpoint hold,
-   * so the speaker is usually already chosen when the turn completes. Fire-and-forget
-   * — drive() decides whether to accept it. No-op for a solo roster (the fastpath has
-   * no orchestrate latency to hide) or for a partial we're already speculating on.
+   * so the decision (speaker + director `beat`) is usually ready when the turn
+   * completes. Fire-and-forget — drive() decides whether to accept it. Solo scenes
+   * speculate too (to fetch a latency-hidden director cue) unless the solo cue is
+   * disabled; no-op for a partial we're already speculating on.
    */
   speculate(partialText: string): void {
     const text = partialText.trim();
     if (text.length < MIN_SPECULATE_CHARS) return;
-    if (this.#presentRoster().length <= 1) return;
+    if (!SOLO_CUE_ENABLED && this.#presentRoster().length <= 1) return;
     if (this.#speculation?.basedOnText === text) return;
     this.#speculation = { basedOnText: text, promise: this.#decide(text, "speculate") };
   }
 
   /** One finished user turn → orchestrate → voice the chosen character (if any). */
-  async drive(userText: string, speak: SceneSpeakFn): Promise<void> {
+  async drive(userText: string, speak: SceneSpeakFn): Promise<SceneDriveOutcome> {
     const spec = this.#speculation;
     this.#speculation = null;
 
@@ -125,10 +205,11 @@ export class SceneDriver {
       rawDecision,
     );
     this.#sceneState = resolution.sceneState;
+    this.#persistState();
 
     if (resolution.decision.action !== "speak" || !resolution.speakerSlug) {
       console.log(`[voice-agent] scene: ${resolution.decision.action} (no speaker)`);
-      return;
+      return { action: resolution.decision.action, spoke: false };
     }
 
     const character =
@@ -138,7 +219,7 @@ export class SceneDriver {
       console.warn(
         `[voice-agent] scene: speaker "${resolution.speakerSlug}" did not resolve — skipping turn`,
       );
-      return;
+      return { action: "speak", spoke: false };
     }
 
     const turn = buildSpeakerTurnRequest({
@@ -147,7 +228,7 @@ export class SceneDriver {
       decision: resolution.decision,
       recentTurns: this.#recentTurns,
     });
-    if (!turn) return;
+    if (!turn) return { action: "speak", spoke: false };
 
     const displayName =
       this.scene.characters.find((c) => c.characterSlug === resolution.speakerSlug)?.displayName ??
@@ -155,18 +236,87 @@ export class SceneDriver {
       resolution.speakerSlug;
 
     console.log(`[voice-agent] scene: ${resolution.speakerSlug} speaks`);
+    // Sandbox solo with no director direction → don't inject a stale "Direction: …"
+    // line (preserves the pre-unification single-char floor, which sent no
+    // promptChunk). Once the orchestrator supplies a per-turn `beat`/`sceneCue`
+    // (Phase 3), it flows through to the character unchanged.
+    const sandboxNoCue =
+      this.scene.id.startsWith("character-sandbox:") &&
+      !resolution.decision.beat &&
+      !resolution.decision.sceneCue;
     const replyText = await speak(
       {
         characterId: character.id,
         message: turn.message,
         history: turn.history,
-        promptChunk: turn.promptChunk,
+        promptChunk: sandboxNoCue ? undefined : turn.promptChunk,
         speaker: { slug: resolution.speakerSlug, name: displayName },
       },
       `s${Date.now()}`,
     );
     this.#recentTurns.push({ speakerSlug: resolution.speakerSlug, text: replyText });
     this.#trim();
+    return { action: "speak", spoke: true };
+  }
+
+  /**
+   * Proactive director turn — fired with NO user utterance (a silence tick). The
+   * director decides whether the scene advances (a character follows up / re-engages
+   * / presses) or holds (`wait-for-user`). Latency is invisible — nobody is waiting.
+   * The silence is NOT recorded as a user turn. Returns true iff a character spoke.
+   */
+  async driveProactive(speak: SceneSpeakFn): Promise<boolean> {
+    const decision = await this.#decide(PROACTIVE_SILENCE_MARKER, "proactive");
+    const resolution = resolveSceneDecision(
+      { scene: this.scene, sceneState: this.#sceneState },
+      decision,
+    );
+    this.#sceneState = resolution.sceneState;
+    this.#persistState();
+
+    if (resolution.decision.action !== "speak" || !resolution.speakerSlug) {
+      console.log(`[voice-agent] proactive: ${resolution.decision.action} (hold)`);
+      return false;
+    }
+
+    const character =
+      (await getCharacterStore().getBySlug(resolution.speakerSlug).catch(() => null)) ??
+      (await getCharacterStore().getById(resolution.speakerSlug).catch(() => null));
+    if (!character) {
+      console.warn(`[voice-agent] proactive: speaker "${resolution.speakerSlug}" did not resolve`);
+      return false;
+    }
+    const displayName =
+      this.scene.characters.find((c) => c.characterSlug === resolution.speakerSlug)?.displayName ??
+      character.title ??
+      resolution.speakerSlug;
+
+    const beat = resolution.decision.beat ?? this.#sceneState.beat;
+    const hasCue = Boolean(resolution.decision.beat || resolution.decision.sceneCue);
+    const directive = resolution.decision.sceneCue
+      ? `Direction: ${beat}\nScene note: ${resolution.decision.sceneCue}`
+      : `Direction: ${beat}`;
+    const history = this.#recentTurns.slice(-RECENT_TURNS_LIMIT).map((turn) => ({
+      role: turn.speakerSlug === resolution.speakerSlug ? ("assistant" as const) : ("user" as const),
+      content: turn.text,
+    }));
+
+    console.log(`[voice-agent] proactive: ${resolution.speakerSlug} follows up`);
+    const replyText = await speak(
+      {
+        characterId: character.id,
+        message: PROACTIVE_TURN_MESSAGE,
+        history,
+        promptChunk: hasCue ? directive : undefined,
+        speaker: { slug: resolution.speakerSlug, name: displayName },
+      },
+      `p${Date.now()}`,
+    );
+    if (replyText) {
+      this.#recentTurns.push({ speakerSlug: resolution.speakerSlug, text: replyText });
+      this.#trim();
+    }
+    return true;
   }
 
   /** Slugs in the roster that are currently present — a real choice needs ≥ 2. */
@@ -185,16 +335,35 @@ export class SceneDriver {
     return final.startsWith(based) && based.length >= final.length * SPECULATION_COVERAGE;
   }
 
-  /** Solo roster → fastpath (no LLM); otherwise the orchestrator LLM, timed so we
-   *  can SEE the turn-driving cost (the gap B4 hides under the hold). The phase tag
-   *  distinguishes a speculative pre-call (under the hold) from a final-turn call. */
-  async #decide(userText: string, phase: "final" | "speculate" = "final"): Promise<OrchestratorDecision> {
+  /** Ask the orchestrator who speaks + the director `beat`. A solo roster used to
+   *  fastpath with no LLM (0ms, no direction); now it also fetches a director cue,
+   *  but only when it's worth it — disabled entirely if SOLO_CUE is off, and on the
+   *  hot path (final) skipped unless a HIT was speculated under the hold (drive()) or
+   *  SOLO_CUE_ON_MISS forces an inline call. The phase tag distinguishes a speculative
+   *  pre-call (under the hold) from a final-turn call. */
+  async #decide(
+    userText: string,
+    phase: "final" | "speculate" | "proactive" = "final",
+  ): Promise<OrchestratorDecision> {
     const present = this.#presentRoster();
-    if (present.length <= 1) {
-      const solo = present[0];
-      return solo
-        ? { action: "speak", speakerId: solo }
-        : defaultSceneDecision(this.scene, this.#sceneState);
+    const solo = present.length <= 1 ? (present[0] ?? null) : null;
+    const soloFloor: OrchestratorDecision | null =
+      present.length === 0
+        ? defaultSceneDecision(this.scene, this.#sceneState)
+        : solo
+          ? { action: "speak", speakerId: solo }
+          : null;
+
+    const { executor } = resolveOrchestratorExecutor();
+    if (!executor) return soloFloor ?? defaultSceneDecision(this.scene, this.#sceneState);
+
+    // Solo → the lone character carries the turn. Reactive solo skips the LLM on the
+    // hot path (the cue rides a speculative HIT) unless opted in. Proactive solo
+    // ALWAYS calls it — no user is waiting, so latency is invisible and the director
+    // gets to choose advance-or-hold.
+    if (solo) {
+      if (phase === "speculate" && !SOLO_CUE_ENABLED) return soloFloor!;
+      if (phase === "final" && (!SOLO_CUE_ENABLED || !SOLO_CUE_ON_MISS)) return soloFloor!;
     }
 
     const request = buildSceneDecisionRequest({
@@ -204,8 +373,6 @@ export class SceneDriver {
       sceneMemory: this.#sceneMemory,
       lastUserMessage: userText,
     });
-    const { executor } = resolveOrchestratorExecutor();
-    if (!executor) return defaultSceneDecision(this.scene, this.#sceneState);
 
     const startedAt = Date.now();
     try {
@@ -213,10 +380,14 @@ export class SceneDriver {
       console.log(
         `[voice-agent] orchestrate[${phase}] ${Date.now() - startedAt}ms → ${decision.action} ${decision.speakerId ?? ""}`.trimEnd(),
       );
-      return decision;
+      // Reactive solo: pin the speaker (the user addressed them). Proactive solo:
+      // respect a `wait-for-user` decision — that's the silence/monologue brake.
+      return solo && phase !== "proactive"
+        ? { ...decision, action: "speak", speakerId: solo }
+        : decision;
     } catch (err) {
       console.error("[voice-agent] orchestrate failed", err);
-      return defaultSceneDecision(this.scene, this.#sceneState);
+      return soloFloor ?? defaultSceneDecision(this.scene, this.#sceneState);
     }
   }
 

@@ -149,11 +149,11 @@ function RunOverview({
           <div style={styles.kicker}>Source snapshot</div>
           <div style={styles.sourceTitle}>{source.title}</div>
           <div style={styles.muted}>
-            {source.kind} · {source.content.length.toLocaleString()} chars ·
+            {source.kind} · {(source.content ?? "").length.toLocaleString()} chars ·
             created {formatDate(source.createdAt)}
           </div>
           <pre style={styles.sourcePreview}>
-            {source.content.slice(0, 1400)}
+            {(source.content ?? "").slice(0, 1400)}
           </pre>
         </div>
       )}

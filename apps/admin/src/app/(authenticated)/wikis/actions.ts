@@ -201,7 +201,18 @@ export async function generateSourceFrontmatter(input: {
   tags: string[];
   sourceText: string;
   existingFrontmatter: string;
-}): Promise<ActionResult<{ frontmatter: string }>> {
+}): Promise<
+  ActionResult<{
+    frontmatter: string;
+    citation: { author: string; year: string; publisher: string; isbn: string };
+    facets: {
+      themes: string[];
+      location: string[];
+      timePeriod: string;
+      participants: string[];
+    };
+  }>
+> {
   const sourceText = input.sourceText.trim();
   if (sourceText.length < 40) {
     return {
@@ -330,10 +341,47 @@ export async function generateSourceFrontmatter(input: {
       return { ok: false, error: parsed.error };
     }
 
-    return { ok: true, data: { frontmatter } };
+    const m = parsed.metadata as Record<string, unknown>;
+    return {
+      ok: true,
+      data: {
+        frontmatter,
+        citation: {
+          author: metaJoin(m.author),
+          year: metaJoin(m.year),
+          publisher: metaJoin(m.publisher),
+          isbn: metaJoin(m.isbn),
+        },
+        facets: {
+          themes: metaArray(m.themes),
+          location: metaArray(m.location),
+          timePeriod: metaJoin(m.time_period),
+          participants: metaArray(m.participants),
+        },
+      },
+    };
   } catch (err: unknown) {
     return { ok: false, error: formatLlmError(err) };
   }
+}
+
+/** Coerce a parsed-YAML value into a single string (arrays joined; numbers stringified). */
+function metaJoin(v: unknown): string {
+  if (Array.isArray(v)) {
+    return v.filter((x) => typeof x === "string").join(", ");
+  }
+  if (typeof v === "string") return v;
+  if (typeof v === "number") return String(v);
+  return "";
+}
+
+/** Coerce a parsed-YAML value into a string array. */
+function metaArray(v: unknown): string[] {
+  if (Array.isArray(v)) {
+    return v.filter((x): x is string => typeof x === "string");
+  }
+  if (typeof v === "string" && v.trim()) return [v.trim()];
+  return [];
 }
 
 function cleanGeneratedYaml(input: unknown): string {
@@ -374,7 +422,7 @@ export async function previewPurgeWikiSource(
       source: {
         title: source.title,
         kind: source.kind,
-        hashPrefix: source.contentHash.slice(0, 8),
+        hashPrefix: (source.contentHash ?? "").slice(0, 8),
       },
       pagesRemoved: impact.pagesRemoved,
       edgesRemoved: impact.edgesRemoved,
@@ -447,7 +495,7 @@ export async function previewPurgeWikiIngestionRun(
       source: {
         title: source.title,
         kind: source.kind,
-        hashPrefix: source.contentHash.slice(0, 8),
+        hashPrefix: (source.contentHash ?? "").slice(0, 8),
       },
       sourceShared,
       pagesRemoved: impact.pagesRemoved,

@@ -471,12 +471,15 @@ const saveWikiPageSchema = z
     note: nullableString,
   })
   .strict();
+const sourceTypeSchema = z.enum(["primary", "secondary", "tertiary"]);
 const createWikiSourceSchema = z
   .object({
     characterId: nullableString,
     wikiId: nullableString,
     title: z.string().trim().min(1),
-    kind: sourceKindSchema,
+    // `kind` is the deprecated legacy classifier; `sourceType` is the tier.
+    kind: sourceKindSchema.optional(),
+    sourceType: sourceTypeSchema.optional(),
     content: z.string().min(1),
     metadata: jsonRecordSchema.optional(),
   })

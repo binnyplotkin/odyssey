@@ -684,6 +684,17 @@ function deriveTailRows(
             detail: `loaded index · ${ev.pageCount} pages · ${ev.edgeCount} edges`,
             tone: "muted",
           };
+        case "survey-complete":
+          return {
+            ts,
+            glyph: "⌕",
+            detail: `survey · ${ev.anatomy}${
+              ev.citedWorks > 0
+                ? ` · ${ev.stubsOrMatches}/${ev.citedWorks} cited works captured`
+                : ""
+            }${ev.excludedSections > 0 ? ` · ${ev.excludedSections} sections excluded` : ""}`,
+            tone: ev.anatomy === "direct" ? "muted" : "neutral",
+          };
         case "planning":
           return { ts, glyph: "···", detail: "planning…", tone: "muted" };
         case "plan-complete":

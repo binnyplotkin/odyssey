@@ -144,12 +144,12 @@ export function MetadataEditor<K extends string>({
             style={inputStyle(titleFocused)}
           />
         </FieldLabel>
-        <FieldLabel label="Kind">
+        <FieldLabel label="Source type">
           <EnumMenu
             value={kind}
             onChange={onKindChange}
             options={kindOptions}
-            ariaLabel="Source kind"
+            ariaLabel="Source type"
           />
         </FieldLabel>
         <FieldLabel label="Tags" trailing="keywords" style={{ gridColumn: "1 / -1" }}>
@@ -496,11 +496,13 @@ function TagsField({
   focused,
   onFocusChange,
   onTagsChange,
+  lowercase = true,
 }: {
   tags: string[];
   focused: boolean;
   onFocusChange: (next: boolean) => void;
   onTagsChange: (next: string[]) => void;
+  lowercase?: boolean;
 }) {
   return (
     <div
@@ -565,7 +567,11 @@ function TagsField({
           </button>
         </span>
       ))}
-      <TagDraftInput tags={tags} onTagsChange={onTagsChange} />
+      <TagDraftInput
+        tags={tags}
+        onTagsChange={onTagsChange}
+        lowercase={lowercase}
+      />
     </div>
   );
 }
@@ -573,16 +579,19 @@ function TagsField({
 function TagDraftInput({
   tags,
   onTagsChange,
+  lowercase = true,
 }: {
   tags: string[];
   onTagsChange: (next: string[]) => void;
+  lowercase?: boolean;
 }) {
   return (
     <input
       onKeyDown={(e) => {
         if (e.key !== "Enter" && e.key !== ",") return;
         e.preventDefault();
-        const raw = e.currentTarget.value.trim().toLowerCase();
+        const trimmed = e.currentTarget.value.trim();
+        const raw = lowercase ? trimmed.toLowerCase() : trimmed;
         if (!raw || tags.includes(raw)) {
           e.currentTarget.value = "";
           return;

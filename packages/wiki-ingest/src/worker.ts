@@ -60,6 +60,11 @@ async function workOne(): Promise<boolean> {
       embed: embedText,
       embedMany: embedTexts,
       embeddingModel: EMBEDDING_MODEL,
+      // Nested-provenance survey — DEFAULT ON (eval-gated 2026-07-07: 12/12
+      // fast + 6/6 e2e, attribution 0.83). Direct sources are classified and
+      // pass through unchanged; citing documents get their bibliography
+      // exploded into stubs + attributed refs. Kill switch: WIKI_INGEST_SURVEY=0.
+      survey: process.env.WIKI_INGEST_SURVEY !== "0",
     })) {
       await wiki.appendIngestionEvent(run.id, ev);
       await wiki.touchIngestionRun(run.id, workerId);

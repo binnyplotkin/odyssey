@@ -32,6 +32,7 @@ export {
   wikiEdgesTable,
   wikiSourcesTable,
   wikiSourceRefsTable,
+  wikiSourceCitationsTable,
   wikiIngestionLogTable,
   characterKnowledgeBindingsTable,
   characterVersionsTable,
@@ -249,6 +250,8 @@ export type {
   CreateSourceInput,
   WikiSourceRefRecord,
   CreateSourceRefInput,
+  WikiSourceCitationRecord,
+  CreateSourceCitationInput,
   IngestionStatus,
   WikiIngestionLogRecord,
   WikiIngestionEventRecord,
@@ -256,3 +259,28 @@ export type {
   FinishIngestionInput,
   ParsedWikilink,
 } from "./wiki-types";
+
+export {
+  SOURCE_METADATA_SCHEMA_VERSION,
+  SOURCE_TYPES,
+  deriveSourceTypeFromKind,
+  deriveIngestionTypeFromKind,
+  deriveKindFromSourceType,
+  readClassifyMetadata,
+  buildStoredSourceMetadata,
+  citationIdentityKey,
+  effectiveTrustForRef,
+} from "./source-metadata";
+export type {
+  IngestionType,
+  SourceType,
+  SourceCitation,
+  SourceFacets,
+  SourceProvenance,
+  AuthoredProvenance,
+  SyntheticProvenance,
+  Provenance,
+  ClassifyMetadata,
+  CreateStubSourceInput,
+  RefTrust,
+} from "./source-metadata";

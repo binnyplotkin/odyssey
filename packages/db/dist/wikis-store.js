@@ -1,0 +1,395 @@
+/**
+ * Wiki + character-binding store.
+ *
+ * Manages the new top-level wikis (shared knowledge resources) plus the
+ * many-to-many `character_knowledge_bindings` between characters and wikis.
+ *
+ * Read/write paths on existing wiki-scoped tables (wiki_pages, wiki_edges,
+ * wiki_sources, wiki_ingestion_log) still live in `wiki-store.ts` and use
+ * the legacy `character_id` column during Phase 2. This store covers the
+ * new wiki-aware surface only: list/create/update wikis, manage bindings,
+ * look up wiki-scoped row counts for the /wikis admin UI.
+ */
+import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { getDb } from "./client";
+import { retryRead } from "./retry";
+import { characterKnowledgeBindingsTable, wikiEdgesTable, wikiIngestionLogTable, wikiPagesTable, wikiSourcesTable, wikisTable, } from "./schema";
+function requireDb() {
+    const db = getDb();
+    if (!db)
+        throw new Error("DATABASE_URL is not configured");
+    return db;
+}
+function toIso(d) {
+    return typeof d === "string" ? d : d.toISOString();
+}
+function normalizeWiki(row) {
+    var _a, _b, _c, _d;
+    return {
+        id: row.id,
+        slug: row.slug,
+        title: row.title,
+        summary: (_a = row.summary) !== null && _a !== void 0 ? _a : null,
+        eras: (_b = row.eras) !== null && _b !== void 0 ? _b : [],
+        ingestionPrompt: (_c = row.ingestionPrompt) !== null && _c !== void 0 ? _c : null,
+        ingestionPromptName: (_d = row.ingestionPromptName) !== null && _d !== void 0 ? _d : null,
+        createdAt: toIso(row.createdAt),
+        updatedAt: toIso(row.updatedAt),
+    };
+}
+function normalizeBinding(row) {
+    return {
+        id: row.id,
+        characterId: row.characterId,
+        wikiId: row.wikiId,
+        priority: row.priority,
+        isActive: row.isActive,
+        createdAt: toIso(row.createdAt),
+        updatedAt: toIso(row.updatedAt),
+    };
+}
+function neonStore() {
+    return {
+        async listWikis() {
+            const db = requireDb();
+            const rows = await retryRead(() => db.select().from(wikisTable).orderBy(asc(wikisTable.title)));
+            return rows.map(normalizeWiki);
+        },
+        async listWikiSummaries() {
+            const db = requireDb();
+            const wikis = await retryRead(() => db.select().from(wikisTable).orderBy(asc(wikisTable.title)));
+            if (wikis.length === 0)
+                return [];
+            // Aggregate counts in parallel. The wiki child tables aren't huge so
+            // this is fine; if it ever becomes hot, replace with a single SQL
+            // grouping over a UNION of (wikiId, kind) rows.
+            const [pageCounts, edgeCounts, sourceCounts, ingestionCounts, charCounts] = await Promise.all([
+                retryRead(() => db
+                    .select({ wikiId: wikiPagesTable.wikiId, n: count() })
+                    .from(wikiPagesTable)
+                    .where(sql `${wikiPagesTable.wikiId} IS NOT NULL`)
+                    .groupBy(wikiPagesTable.wikiId)),
+                retryRead(() => db
+                    .select({ wikiId: wikiEdgesTable.wikiId, n: count() })
+                    .from(wikiEdgesTable)
+                    .where(sql `${wikiEdgesTable.wikiId} IS NOT NULL`)
+                    .groupBy(wikiEdgesTable.wikiId)),
+                retryRead(() => db
+                    .select({ wikiId: wikiSourcesTable.wikiId, n: count() })
+                    .from(wikiSourcesTable)
+                    .where(sql `${wikiSourcesTable.wikiId} IS NOT NULL`)
+                    .groupBy(wikiSourcesTable.wikiId)),
+                retryRead(() => db
+                    .select({ wikiId: wikiIngestionLogTable.wikiId, n: count() })
+                    .from(wikiIngestionLogTable)
+                    .where(sql `${wikiIngestionLogTable.wikiId} IS NOT NULL`)
+                    .groupBy(wikiIngestionLogTable.wikiId)),
+                retryRead(() => db
+                    .select({
+                    wikiId: characterKnowledgeBindingsTable.wikiId,
+                    n: count(),
+                })
+                    .from(characterKnowledgeBindingsTable)
+                    .groupBy(characterKnowledgeBindingsTable.wikiId)),
+            ]);
+            const pageMap = new Map(pageCounts.map((r) => [r.wikiId, r.n]));
+            const edgeMap = new Map(edgeCounts.map((r) => [r.wikiId, r.n]));
+            const sourceMap = new Map(sourceCounts.map((r) => [r.wikiId, r.n]));
+            const ingestionMap = new Map(ingestionCounts.map((r) => [r.wikiId, r.n]));
+            const charMap = new Map(charCounts.map((r) => [r.wikiId, r.n]));
+            return wikis.map((row) => {
+                var _a, _b, _c, _d, _e;
+                return (Object.assign(Object.assign({}, normalizeWiki(row)), { pageCount: (_a = pageMap.get(row.id)) !== null && _a !== void 0 ? _a : 0, edgeCount: (_b = edgeMap.get(row.id)) !== null && _b !== void 0 ? _b : 0, sourceCount: (_c = sourceMap.get(row.id)) !== null && _c !== void 0 ? _c : 0, ingestionCount: (_d = ingestionMap.get(row.id)) !== null && _d !== void 0 ? _d : 0, characterCount: (_e = charMap.get(row.id)) !== null && _e !== void 0 ? _e : 0 }));
+            });
+        },
+        async getWikiById(id) {
+            const db = requireDb();
+            const [row] = await retryRead(() => db
+                .select()
+                .from(wikisTable)
+                .where(eq(wikisTable.id, id))
+                .limit(1));
+            return row ? normalizeWiki(row) : null;
+        },
+        async getWikiBySlug(slug) {
+            const db = requireDb();
+            const [row] = await retryRead(() => db
+                .select()
+                .from(wikisTable)
+                .where(eq(wikisTable.slug, slug))
+                .limit(1));
+            return row ? normalizeWiki(row) : null;
+        },
+        async createWiki(input) {
+            var _a, _b, _c, _d;
+            const db = requireDb();
+            const [row] = await db
+                .insert(wikisTable)
+                .values({
+                slug: input.slug,
+                title: input.title,
+                summary: (_a = input.summary) !== null && _a !== void 0 ? _a : null,
+                eras: (_b = input.eras) !== null && _b !== void 0 ? _b : [],
+                ingestionPrompt: (_c = input.ingestionPrompt) !== null && _c !== void 0 ? _c : null,
+                ingestionPromptName: (_d = input.ingestionPromptName) !== null && _d !== void 0 ? _d : null,
+            })
+                .returning();
+            return normalizeWiki(row);
+        },
+        async updateWiki(id, input) {
+            const db = requireDb();
+            const patch = { updatedAt: new Date() };
+            if (input.title !== undefined)
+                patch.title = input.title;
+            if (input.summary !== undefined)
+                patch.summary = input.summary;
+            if (input.eras !== undefined)
+                patch.eras = input.eras;
+            if (input.ingestionPrompt !== undefined)
+                patch.ingestionPrompt = input.ingestionPrompt;
+            if (input.ingestionPromptName !== undefined)
+                patch.ingestionPromptName = input.ingestionPromptName;
+            const [row] = await db
+                .update(wikisTable)
+                .set(patch)
+                .where(eq(wikisTable.id, id))
+                .returning();
+            return row ? normalizeWiki(row) : null;
+        },
+        async deleteWiki(id) {
+            const db = requireDb();
+            const rows = await db
+                .delete(wikisTable)
+                .where(eq(wikisTable.id, id))
+                .returning({ id: wikisTable.id });
+            return rows.length > 0;
+        },
+        async listBindingsForCharacter(characterId) {
+            const db = requireDb();
+            const rows = await retryRead(() => db
+                .select()
+                .from(characterKnowledgeBindingsTable)
+                .where(eq(characterKnowledgeBindingsTable.characterId, characterId))
+                .orderBy(desc(characterKnowledgeBindingsTable.createdAt)));
+            return rows.map(normalizeBinding);
+        },
+        async listBindingsForWiki(wikiId) {
+            const db = requireDb();
+            const rows = await retryRead(() => db
+                .select()
+                .from(characterKnowledgeBindingsTable)
+                .where(eq(characterKnowledgeBindingsTable.wikiId, wikiId))
+                .orderBy(desc(characterKnowledgeBindingsTable.createdAt)));
+            return rows.map(normalizeBinding);
+        },
+        async getBinding(characterId, wikiId) {
+            const db = requireDb();
+            const [row] = await retryRead(() => db
+                .select()
+                .from(characterKnowledgeBindingsTable)
+                .where(and(eq(characterKnowledgeBindingsTable.characterId, characterId), eq(characterKnowledgeBindingsTable.wikiId, wikiId)))
+                .limit(1));
+            return row ? normalizeBinding(row) : null;
+        },
+        async createBinding(input) {
+            var _a, _b;
+            const db = requireDb();
+            const [row] = await db
+                .insert(characterKnowledgeBindingsTable)
+                .values({
+                characterId: input.characterId,
+                wikiId: input.wikiId,
+                priority: (_a = input.priority) !== null && _a !== void 0 ? _a : "primary",
+                isActive: (_b = input.isActive) !== null && _b !== void 0 ? _b : true,
+            })
+                .returning();
+            return normalizeBinding(row);
+        },
+        async updateBinding(id, input) {
+            const db = requireDb();
+            const patch = { updatedAt: new Date() };
+            if (input.priority !== undefined)
+                patch.priority = input.priority;
+            if (input.isActive !== undefined)
+                patch.isActive = input.isActive;
+            const [row] = await db
+                .update(characterKnowledgeBindingsTable)
+                .set(patch)
+                .where(eq(characterKnowledgeBindingsTable.id, id))
+                .returning();
+            return row ? normalizeBinding(row) : null;
+        },
+        async deleteBinding(id) {
+            const db = requireDb();
+            const rows = await db
+                .delete(characterKnowledgeBindingsTable)
+                .where(eq(characterKnowledgeBindingsTable.id, id))
+                .returning({ id: characterKnowledgeBindingsTable.id });
+            return rows.length > 0;
+        },
+        async listPagesForWiki(wikiId) {
+            const db = requireDb();
+            const rows = await retryRead(() => db
+                .select({
+                id: wikiPagesTable.id,
+                slug: wikiPagesTable.slug,
+                type: wikiPagesTable.type,
+                title: wikiPagesTable.title,
+                summary: wikiPagesTable.summary,
+                updatedAt: wikiPagesTable.updatedAt,
+            })
+                .from(wikiPagesTable)
+                .where(eq(wikiPagesTable.wikiId, wikiId))
+                .orderBy(asc(wikiPagesTable.title)));
+            return rows.map((row) => ({
+                id: row.id,
+                slug: row.slug,
+                type: row.type,
+                title: row.title,
+                summary: row.summary,
+                updatedAt: toIso(row.updatedAt),
+            }));
+        },
+        async listSourcesForWiki(wikiId) {
+            const db = requireDb();
+            const rows = await retryRead(() => db
+                .select({
+                id: wikiSourcesTable.id,
+                title: wikiSourcesTable.title,
+                kind: wikiSourcesTable.kind,
+                contentHash: wikiSourcesTable.contentHash,
+                createdAt: wikiSourcesTable.createdAt,
+            })
+                .from(wikiSourcesTable)
+                .where(eq(wikiSourcesTable.wikiId, wikiId))
+                .orderBy(desc(wikiSourcesTable.createdAt)));
+            return rows.map((row) => ({
+                id: row.id,
+                title: row.title,
+                kind: row.kind,
+                contentHash: row.contentHash,
+                createdAt: toIso(row.createdAt),
+            }));
+        },
+        async listIngestionsForWiki(wikiId, limit = 30) {
+            const db = requireDb();
+            const rows = await retryRead(() => db
+                .select()
+                .from(wikiIngestionLogTable)
+                .where(eq(wikiIngestionLogTable.wikiId, wikiId))
+                .orderBy(desc(wikiIngestionLogTable.startedAt))
+                .limit(limit));
+            return rows.map((row) => ({
+                id: row.id,
+                status: row.status,
+                startedAt: toIso(row.startedAt),
+                finishedAt: row.finishedAt ? toIso(row.finishedAt) : null,
+                pagesCreated: row.pagesCreated,
+                pagesUpdated: row.pagesUpdated,
+                edgesAdded: row.edgesAdded,
+                contradictionsFound: row.contradictionsFound,
+                tokensUsed: row.tokensUsed,
+                model: row.model,
+                sourceId: row.sourceId,
+                errorMessage: row.errorMessage,
+            }));
+        },
+        async countEdgesForWiki(wikiId) {
+            var _a;
+            const db = requireDb();
+            const [row] = await retryRead(() => db
+                .select({ n: count() })
+                .from(wikiEdgesTable)
+                .where(eq(wikiEdgesTable.wikiId, wikiId)));
+            return (_a = row === null || row === void 0 ? void 0 : row.n) !== null && _a !== void 0 ? _a : 0;
+        },
+        async getIconDataForWiki(wikiId, limit = 5) {
+            var _a, _b;
+            const db = requireDb();
+            // Pull pages with cached layout coordinates. Pages without coords
+            // (layout not yet computed) are excluded — better to render a smaller
+            // graph than misplace dots.
+            const pageRows = await retryRead(() => db
+                .select({
+                id: wikiPagesTable.id,
+                x: wikiPagesTable.layoutX,
+                y: wikiPagesTable.layoutY,
+                type: wikiPagesTable.type,
+            })
+                .from(wikiPagesTable)
+                .where(sql `${wikiPagesTable.wikiId} = ${wikiId}
+            and ${wikiPagesTable.layoutX} is not null
+            and ${wikiPagesTable.layoutY} is not null`));
+            if (pageRows.length === 0) {
+                return { nodes: [], edges: [] };
+            }
+            const pagesById = new Map(pageRows.map((p) => [p.id, p]));
+            // All edges within this wiki. We compute degree from the full edge
+            // set (so node prominence reflects the entire graph), then keep
+            // only the edges among the top-N for the rendered icon.
+            const edgeRows = await retryRead(() => db
+                .select({
+                fromPageId: wikiEdgesTable.fromPageId,
+                toPageId: wikiEdgesTable.toPageId,
+                strength: wikiEdgesTable.strength,
+            })
+                .from(wikiEdgesTable)
+                .where(eq(wikiEdgesTable.wikiId, wikiId)));
+            const degree = new Map();
+            for (const e of edgeRows) {
+                if (!pagesById.has(e.fromPageId) || !pagesById.has(e.toPageId))
+                    continue;
+                degree.set(e.fromPageId, ((_a = degree.get(e.fromPageId)) !== null && _a !== void 0 ? _a : 0) + 1);
+                degree.set(e.toPageId, ((_b = degree.get(e.toPageId)) !== null && _b !== void 0 ? _b : 0) + 1);
+            }
+            const ranked = pageRows
+                .map((p) => {
+                var _a;
+                return ({
+                    id: p.id,
+                    x: p.x,
+                    y: p.y,
+                    degree: (_a = degree.get(p.id)) !== null && _a !== void 0 ? _a : 0,
+                    type: p.type,
+                });
+            })
+                // Highest-degree first; stable id tiebreaker keeps renders deterministic.
+                .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id))
+                .slice(0, limit);
+            const kept = new Set(ranked.map((n) => n.id));
+            const edges = edgeRows
+                .filter((e) => kept.has(e.fromPageId) && kept.has(e.toPageId))
+                .map((e) => ({
+                from: e.fromPageId,
+                to: e.toPageId,
+                strength: e.strength,
+            }));
+            return { nodes: ranked, edges };
+        },
+        async listWikisForCharacter(characterId) {
+            const db = requireDb();
+            const PRIORITY_RANK = sql `CASE ${characterKnowledgeBindingsTable.priority}
+        WHEN 'primary' THEN 0
+        WHEN 'secondary' THEN 1
+        WHEN 'reference' THEN 2
+        ELSE 3
+      END`;
+            const rows = await retryRead(() => db
+                .select({
+                binding: characterKnowledgeBindingsTable,
+                wiki: wikisTable,
+            })
+                .from(characterKnowledgeBindingsTable)
+                .innerJoin(wikisTable, eq(wikisTable.id, characterKnowledgeBindingsTable.wikiId))
+                .where(eq(characterKnowledgeBindingsTable.characterId, characterId))
+                .orderBy(PRIORITY_RANK, asc(characterKnowledgeBindingsTable.createdAt)));
+            return rows.map((row) => (Object.assign(Object.assign({}, normalizeWiki(row.wiki)), { binding: normalizeBinding(row.binding) })));
+        },
+    };
+}
+let cached = null;
+export function getWikisStore() {
+    if (!cached)
+        cached = neonStore();
+    return cached;
+}

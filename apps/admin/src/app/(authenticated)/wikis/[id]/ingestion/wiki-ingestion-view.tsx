@@ -11,7 +11,12 @@ import {
   useState,
 } from "react";
 import type { IngestionEvent, ModelId, PlanOp } from "@odyssey/wiki-ingest";
-import type { WikiIngestionLogRecord, WikiSourceRecord } from "@odyssey/db";
+import type {
+  WikiIngestionLogRecord,
+  WikiSourceKind,
+  WikiSourceRecord,
+} from "@odyssey/db";
+import { deriveSourceTypeFromKind } from "@odyssey/db";
 import {
   ASCIIMatterCanvas,
   matterStateFromIngestion,
@@ -21,8 +26,7 @@ import {
 } from "./ascii-matter";
 import { PromptOverlay } from "./prompt-overlay";
 import { MetadataEditor } from "./metadata-editor";
-import { SourceComposer } from "./source-composer";
-import { FrontmatterEditor } from "./frontmatter-editor";
+import { SourceComposer, type PdfUploadState } from "./source-composer";
 import { StickyFooter, type StickyFooterState } from "./sticky-footer";
 import { MissionControl } from "./mission-control";
 import { OpsLog, type OpQueueRow } from "./ops-log";
@@ -30,14 +34,12 @@ import { LiveStream, type ActiveWriteSnapshot } from "./live-stream";
 import { ResolvedSummary } from "./resolved-summary";
 import { FailedRecovery } from "./failed-recovery";
 import { estimateCost } from "@odyssey/wiki-ingest";
-import { classifySource } from "../../../characters/actions";
+import { classifySourceForWiki } from "../../../characters/actions";
 import {
   AdminPageShell,
   AdminSplitLayout,
   adminTokens,
 } from "@/components/admin-ui";
-import { parseSourceFrontmatter } from "@/lib/source-frontmatter";
-import { generateSourceFrontmatter } from "../../actions";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -70,12 +72,7 @@ const T = {
 
 /* ── Types ─────────────────────────────────────────────────────── */
 
-type SourceKind =
-  | "primary"
-  | "commentary"
-  | "annotation"
-  | "transcript"
-  | "reference";
+type SourceType = "primary" | "secondary" | "tertiary";
 
 function estimateTokensFromText(text: string) {
   return Math.round(text.length / 4);
@@ -183,18 +180,16 @@ function lightMatterBaseField(phase: MatterPhase) {
   }
 }
 
-// Dot colors per kind — config consumed by the EnumMenu in MetadataEditor.
-// Each kind gets its own hue so the dropdown reads at a glance.
-const KINDS: { value: SourceKind; label: string; dot: string }[] = [
+// Evidentiary tier (sourceType) options — consumed by the EnumMenu in
+// MetadataEditor. One hue per tier so the dropdown reads at a glance.
+const SOURCE_TYPES: { value: SourceType; label: string; dot: string }[] = [
   { value: "primary", label: "primary", dot: "var(--accent-strong)" },
-  { value: "commentary", label: "commentary", dot: "var(--signal-blue)" },
-  { value: "annotation", label: "annotation", dot: "var(--status-error)" },
-  { value: "transcript", label: "transcript", dot: "var(--warning-amber)" },
-  { value: "reference", label: "reference", dot: "var(--text-placeholder)" },
+  { value: "secondary", label: "secondary", dot: "var(--warning-amber)" },
+  { value: "tertiary", label: "tertiary", dot: "var(--text-placeholder)" },
 ];
 
-function isSourceKind(value: unknown): value is SourceKind {
-  return typeof value === "string" && KINDS.some((k) => k.value === value);
+function isSourceType(value: unknown): value is SourceType {
+  return typeof value === "string" && SOURCE_TYPES.some((t) => t.value === value);
 }
 
 type RunPhase =
@@ -291,6 +286,9 @@ export type WikiIngestionViewProps = {
   characterName: string;
   /** Optional run id to open directly in the live ingestion monitor. */
   initialRunId?: string | null;
+  /** Stored brief of the primary bound character — pre-fills the prompt
+   * generator's "Who is this character?" field. */
+  characterBrief?: string | null;
 };
 
 /* ── Main component ────────────────────────────────────────────── */
@@ -308,6 +306,7 @@ export function WikiIngestionView({
   promptInherited,
   characterName,
   initialRunId = null,
+  characterBrief = null,
 }: WikiIngestionViewProps) {
   // Prompt label preference:
   //   1. The custom prompt name when the wiki has set one.
@@ -328,9 +327,8 @@ export function WikiIngestionView({
   // sibling of the grid, full page width) can read `canRun` / `tokens` and
   // drive the Run action without needing to live inside ComposerCard.
   const [content, setContent] = useState("");
-  const [frontmatter, setFrontmatter] = useState("");
   const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<SourceKind>("primary");
+  const [sourceType, setSourceType] = useState<SourceType>("primary");
   const [tags, setTags] = useState<string[]>([]);
   const [model] = useState<ModelId>("claude-sonnet-4-5");
 
@@ -339,18 +337,9 @@ export function WikiIngestionView({
     [content],
   );
   const effectiveContent = normalizedContent;
-  const frontmatterValidation = useMemo(
-    () => parseSourceFrontmatter(frontmatter),
-    [frontmatter],
-  );
-  const frontmatterError = frontmatterValidation.ok
-    ? null
-    : frontmatterValidation.error;
   const tokens = estimateTokensFromText(effectiveContent);
   const canRun =
-    title.trim().length > 0 &&
-    effectiveContent.trim().length > 20 &&
-    !frontmatterError;
+    title.trim().length > 0 && effectiveContent.trim().length > 20;
 
   const watchRun = useCallback(
     async (runId: string, startedAt: number, signal: AbortSignal) => {
@@ -482,10 +471,8 @@ export function WikiIngestionView({
     try {
       const draft = JSON.parse(raw) as Partial<ComposerDraft>;
       if (typeof draft.content === "string") setContent(draft.content);
-      if (typeof draft.frontmatter === "string")
-        setFrontmatter(draft.frontmatter);
       if (typeof draft.title === "string") setTitle(draft.title);
-      if (isSourceKind(draft.kind)) setKind(draft.kind);
+      if (isSourceType(draft.sourceType)) setSourceType(draft.sourceType);
       if (Array.isArray(draft.tags)) {
         setTags(
           draft.tags.filter((tag): tag is string => typeof tag === "string"),
@@ -516,6 +503,19 @@ export function WikiIngestionView({
 
   const submitRun = useCallback(
     async (payload: ComposerPayload) => {
+      // What actually leaves the composer. Citation/facets are extracted
+      // server-side by the survey stage at ingest, not here.
+      console.debug("[classify-debug] SUBMIT →", {
+        title: payload.title,
+        sourceType: payload.sourceType,
+        tags: payload.tags,
+        contentChars: payload.content.length,
+        consumers: {
+          planner: "title + sourceType + tags + content",
+          survey: "content only (anatomy/bibliography at ingest)",
+          persistedClassify: "sourceType + tags",
+        },
+      });
       const startedAt = Date.now();
       setRun({ phase: "live", runId: null, events: [], startedAt });
 
@@ -636,12 +636,9 @@ export function WikiIngestionView({
               onTitleChange={setTitle}
               content={content}
               onContentChange={setContent}
-              frontmatter={frontmatter}
-              onFrontmatterChange={setFrontmatter}
-              frontmatterError={frontmatterError}
               effectiveContent={effectiveContent}
-              kind={kind}
-              onKindChange={setKind}
+              sourceType={sourceType}
+              onSourceTypeChange={setSourceType}
               tags={tags}
               onTagsChange={setTags}
               model={model}
@@ -693,6 +690,8 @@ export function WikiIngestionView({
         promptVersion={promptVersion}
         promptTokens={promptTokens}
         model={model}
+        sourceType={sourceType}
+        tags={tags}
         projectedCost={estimateCost(model, tokens, Math.round(tokens * 0.4))}
         projectedTokens={tokens}
         projectedPages={Math.max(0, Math.ceil(Math.ceil(tokens / 512) * 0.5))}
@@ -711,14 +710,12 @@ export function WikiIngestionView({
         failedAtOpTotal={footerTelemetry.failedAtOpTotal}
         errorReason={footerTelemetry.errorReason}
         onRun={() => {
-          if (!frontmatterValidation.ok) return;
           window.localStorage.removeItem(draftKey);
           void submitRun({
             title,
-            kind,
+            sourceType,
             tags,
             content: effectiveContent,
-            frontmatter,
             model,
           });
         }}
@@ -744,6 +741,7 @@ export function WikiIngestionView({
         promptName={promptName}
         inheritedFromCharacter={promptInherited}
         characterName={characterName}
+        characterBrief={characterBrief}
         onClose={() => setPromptOpen(false)}
         onPromptSaved={() => router.refresh()}
       />
@@ -755,10 +753,9 @@ export function WikiIngestionView({
 
 type ComposerPayload = {
   title: string;
-  kind: SourceKind;
+  sourceType: SourceType;
   tags: string[];
   content: string;
-  frontmatter: string;
   model: ModelId;
 };
 
@@ -777,12 +774,9 @@ function ComposerCard({
   onTitleChange,
   content,
   onContentChange,
-  frontmatter,
-  onFrontmatterChange,
-  frontmatterError,
   effectiveContent,
-  kind,
-  onKindChange,
+  sourceType,
+  onSourceTypeChange,
   tags,
   onTagsChange,
   model,
@@ -800,30 +794,25 @@ function ComposerCard({
   onTitleChange: (next: string) => void;
   content: string;
   onContentChange: (next: string) => void;
-  frontmatter: string;
-  onFrontmatterChange: (next: string) => void;
-  frontmatterError: string | null;
   effectiveContent: string;
-  kind: SourceKind;
-  onKindChange: (next: SourceKind) => void;
+  sourceType: SourceType;
+  onSourceTypeChange: (next: SourceType) => void;
   tags: string[];
   onTagsChange: (next: string[]) => void;
   model: ModelId;
   tokens: number;
 }) {
-  void wikiId;
+  void characterId;
   // Auto-classification: fires on paste when the form is still pristine.
   // Server action calls Haiku and returns { title, kind, tags }; the user
   // can edit or regenerate.
   const [classifying, setClassifying] = useState(false);
   const [classifiedBy, setClassifiedBy] = useState<"ai" | null>(null);
   const [classifyError, setClassifyError] = useState<string | null>(null);
-  const [frontmatterGenerating, setFrontmatterGenerating] = useState(false);
-  const [frontmatterGenerateError, setFrontmatterGenerateError] =
-    useState<string | null>(null);
   const classifyGenRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sourceSectionRef = useRef<HTMLDivElement | null>(null);
+  const [pdfState, setPdfState] = useState<PdfUploadState>({ status: "idle" });
 
   useEffect(() => {
     if (!onSourceSectionHeightChange) return;
@@ -843,14 +832,15 @@ function ComposerCard({
   }, [onSourceSectionHeightChange]);
 
   function handlePaste() {
-    if (classifying) return;
-    if (title.trim() || tags.length > 0) return;
     // Read the textarea value *after* the browser's default paste lands,
     // so we classify the full pasted text rather than the stale value.
     requestAnimationFrame(() => {
       const rawText = textareaRef.current?.value ?? "";
       const text = normalizeSourceWhitespace(rawText);
-      if (text.trim().length >= 500) void runClassify(text, "auto");
+      if (text.trim().length < 500) return;
+      if (!classifying && !title.trim() && tags.length === 0) {
+        void runClassify(text, "auto");
+      }
     });
   }
 
@@ -858,12 +848,11 @@ function ComposerCard({
     async (text: string, mode: "auto" | "regenerate") => {
       const body = text.trim();
       if (body.length < 80) return;
-      if (!characterId) return;
       const gen = ++classifyGenRef.current;
       setClassifying(true);
       setClassifyError(null);
       try {
-        const res = await classifySource(characterId, body);
+        const res = await classifySourceForWiki(wikiId, body);
         if (gen !== classifyGenRef.current) return;
         if (!res.ok) {
           setClassifyError(res.error);
@@ -875,8 +864,18 @@ function ComposerCard({
           onTitleChange(res.data.title);
         if (mode === "regenerate" || tags.length === 0)
           onTagsChange(res.data.tags);
-        onKindChange(res.data.kind);
+        // Haiku still classifies a legacy `kind`; collapse it to the tier.
+        onSourceTypeChange(
+          deriveSourceTypeFromKind(res.data.kind as WikiSourceKind),
+        );
         setClassifiedBy("ai");
+        console.debug("[classify-debug] auto-classify ←", {
+          mode,
+          title: res.data.title,
+          kind: res.data.kind,
+          sourceType: deriveSourceTypeFromKind(res.data.kind as WikiSourceKind),
+          tags: res.data.tags,
+        });
       } catch (err) {
         if (gen !== classifyGenRef.current) return;
         setClassifyError(err instanceof Error ? err.message : String(err));
@@ -884,38 +883,54 @@ function ComposerCard({
         if (gen === classifyGenRef.current) setClassifying(false);
       }
     },
-    [characterId, title, tags, onTitleChange, onKindChange, onTagsChange],
+    [wikiId, title, tags, onTitleChange, onSourceTypeChange, onTagsChange],
+  );
+
+  const handleSelectPdf = useCallback(
+    async (file: File) => {
+      setPdfState({ status: "extracting", filename: file.name });
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch(`/api/wiki/${wikiId}/extract-pdf`, {
+          method: "POST",
+          body: form,
+        });
+        const data = (await res.json()) as {
+          text?: string;
+          pages?: number;
+          chars?: number;
+          error?: string;
+        };
+        if (!res.ok || !data.text) {
+          setPdfState({
+            status: "error",
+            filename: file.name,
+            error: data.error ?? `HTTP ${res.status}`,
+          });
+          return;
+        }
+        onContentChange(data.text);
+        setPdfState({
+          status: "loaded",
+          filename: file.name,
+          pages: data.pages ?? 0,
+          chars: data.chars ?? data.text.length,
+        });
+        void runClassify(data.text, "auto");
+      } catch (err) {
+        setPdfState({
+          status: "error",
+          filename: file.name,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    [wikiId, onContentChange, runClassify],
   );
 
   const canRun = title.trim().length > 0 && effectiveContent.trim().length > 20;
 
-  async function handleGenerateFrontmatter() {
-    if (frontmatterGenerating) return;
-    setFrontmatterGenerating(true);
-    setFrontmatterGenerateError(null);
-    try {
-      const res = await generateSourceFrontmatter({
-        wikiTitle,
-        sourceTitle: title,
-        tags,
-        sourceText: effectiveContent,
-        existingFrontmatter: frontmatter,
-      });
-      if (!res.ok || !res.data) {
-        setFrontmatterGenerateError(
-          res.ok ? "Metadata generation returned no YAML." : res.error,
-        );
-        return;
-      }
-      onFrontmatterChange(res.data.frontmatter);
-    } catch (err) {
-      setFrontmatterGenerateError(
-        err instanceof Error ? err.message : String(err),
-      );
-    } finally {
-      setFrontmatterGenerating(false);
-    }
-  }
 
   return (
     <div
@@ -933,29 +948,19 @@ function ComposerCard({
           onPaste={handlePaste}
           textareaRef={textareaRef}
           tokens={tokens}
+          onSelectPdf={handleSelectPdf}
+          pdfState={pdfState}
         />
       </div>
 
-      <FrontmatterEditor
-        value={frontmatter}
-        onChange={(next) => {
-          setFrontmatterGenerateError(null);
-          onFrontmatterChange(next);
-        }}
-        error={frontmatterError}
-        generateError={frontmatterGenerateError}
-        generating={frontmatterGenerating}
-        onGenerate={() => void handleGenerateFrontmatter()}
-      />
-
-      {/* Operational stack — metadata stays attached to the ingest surface.
-          Runtime estimates live in the sticky command footer. */}
-      <MetadataEditor<SourceKind>
+      {/* Step 02 — Classify: identity only. Citation + facets are extracted
+          server-side by the survey stage at ingest, not authored here. */}
+      <MetadataEditor<SourceType>
         title={title}
         onTitleChange={onTitleChange}
-        kind={kind}
-        onKindChange={onKindChange}
-        kindOptions={KINDS}
+        kind={sourceType}
+        onKindChange={onSourceTypeChange}
+        kindOptions={SOURCE_TYPES}
         tags={tags}
         onTagsChange={onTagsChange}
         classifying={classifying}
@@ -967,8 +972,6 @@ function ComposerCard({
     </div>
   );
 }
-
-/* ── Live progress (replaces composer during run) ───────────────── */
 
 function deriveOpQueue(events: IngestionEvent[]): OpQueueRow[] {
   // The full op list arrives in plan-complete (or grows as op-starts fire
@@ -1378,6 +1381,9 @@ function MatterPanel({
     ? lightMatterColor(visualState.color, visualState.phase)
     : visualState.color;
   const panelHeight = height ?? (run.phase === "idle" ? 420 : 560);
+  const inactiveMatterColor = isLightTheme
+    ? "rgba(86, 96, 101, 1)"
+    : "rgba(104, 126, 138, 1)";
 
   return (
     <div
@@ -1413,8 +1419,9 @@ function MatterPanel({
           amplitude={visualState.amplitude}
           pulseAt={isReadyIdle ? 1 : visualState.pulseAt}
           color={canvasColor}
+          inactiveColor={inactiveMatterColor}
           neuralColor="var(--accent, #6FBF88)"
-          baseFieldColor={isLightTheme ? "rgba(86, 96, 101, 1)" : undefined}
+          baseFieldColor={inactiveMatterColor}
           baseFieldStrength={
             isLightTheme ? lightMatterBaseField(visualState.phase) : undefined
           }

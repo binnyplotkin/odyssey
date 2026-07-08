@@ -155,7 +155,7 @@ export const WRITE_TOOL: Tool = {
       timeIndex: {
         type: "object",
         description:
-          "For event pages. {era: string (matches character.eras[].key), index: int (ordering within era)}. Null for non-temporal pages.",
+          "For event pages. {era: string (one of the era keys listed in WIKI CONTEXT), index: int (ordering within era)}. Null for non-temporal pages.",
         required: ["era", "index"],
         properties: {
           era: { type: "string" },

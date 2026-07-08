@@ -345,7 +345,7 @@ function SourceRow({
           fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted, lineHeight: "15px",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 640,
         }}>
-          {truncate(source.content, 140)}
+          {truncate(source.content ?? "", 140)}
         </span>
       </div>
 
@@ -366,7 +366,7 @@ function SourceRow({
         width: 56, flexShrink: 0, textAlign: "right",
         fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: T.muted,
       }}>
-        {formatSize(source.content.length)}
+        {formatSize((source.content ?? "").length)}
       </span>
       <span style={{ width: 80, flexShrink: 0, fontFamily: T.fontBody, fontSize: "var(--font-size-sm)", color: T.muted }}>
         {relative(source.createdAt)}
@@ -432,7 +432,7 @@ function SourceDetail(p: {
       <TopBar source={p.source} />
       <TitleBlock source={p.source} tags={tags} />
       {metadata.length > 0 && <MetadataBlock entries={metadata} />}
-      <ContentBlock content={p.source.content} />
+      <ContentBlock content={p.source.content ?? ""} />
       <PagesBackedBlock
         refsByPage={refsByPage}
         pageById={p.pageById}

@@ -23,6 +23,7 @@ import {
   wikiSourcesTable,
   wikisTable,
 } from "./schema";
+import { readClassifyMetadata, shadowKind } from "./source-metadata";
 import type {
   BindingPriority,
   CharacterKnowledgeBindingRecord,
@@ -49,8 +50,10 @@ export type WikiPageSummary = {
 export type WikiSourceSummary = {
   id: string;
   title: string;
-  kind: string;
-  contentHash: string;
+  /** @deprecated nullable during kind→sourceType collapse; unused by consumers. */
+  kind: string | null;
+  /** Null for stub sources (nested provenance) — citation-only, no content. */
+  contentHash: string | null;
   createdAt: string;
 };
 
@@ -446,7 +449,7 @@ function neonStore(): WikisStore {
           .select({
             id: wikiSourcesTable.id,
             title: wikiSourcesTable.title,
-            kind: wikiSourcesTable.kind,
+            metadata: wikiSourcesTable.metadata,
             contentHash: wikiSourcesTable.contentHash,
             createdAt: wikiSourcesTable.createdAt,
           })
@@ -454,13 +457,17 @@ function neonStore(): WikisStore {
           .where(eq(wikiSourcesTable.wikiId, wikiId))
           .orderBy(desc(wikiSourcesTable.createdAt)),
       );
-      return rows.map((row) => ({
-        id: row.id,
-        title: row.title,
-        kind: row.kind,
-        contentHash: row.contentHash,
-        createdAt: toIso(row.createdAt),
-      }));
+      return rows.map((row) => {
+        const metadata =
+          (row.metadata as Record<string, unknown> | null) ?? {};
+        return {
+          id: row.id,
+          title: row.title,
+          kind: shadowKind(readClassifyMetadata({ metadata })),
+          contentHash: row.contentHash,
+          createdAt: toIso(row.createdAt),
+        };
+      });
     },
 
     async listIngestionsForWiki(wikiId, limit = 30) {

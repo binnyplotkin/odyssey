@@ -15,6 +15,7 @@
  */
 
 import {
+  deriveSourceTypeFromKind,
   getWikiStore,
   getWikisStore,
   type SavePageInput,
@@ -22,8 +23,20 @@ import {
   type WikiPageRecord,
   wikiEmbeddingSource,
 } from "@odyssey/db";
+import { loadWikiContext } from "./context";
 import { DEFAULT_MODEL, resolveModel, type ModelId } from "./models";
-import { plan } from "./planner";
+import { plan, PlanTruncatedError } from "./planner";
+import {
+  applyExclusions,
+  attributionsForRef,
+  explodeCitations,
+  resolveExcludeRanges,
+  survey,
+} from "./survey";
+import {
+  ENGINE_INSTRUCTIONS_PLANNER,
+  ENGINE_INSTRUCTIONS_WRITER,
+} from "./prompts";
 import { write, WriterToolUseError } from "./writer";
 import type {
   IngestionEvent,
@@ -37,6 +50,11 @@ import type {
 const PLANNER_CHUNK_CHAR_BUDGET = 24_000;
 const DEFAULT_WRITER_CONCURRENCY = 3;
 const MAX_WRITER_CONCURRENCY = 6;
+/** Above this, the writer falls back to planner passages only — the full
+ * source would dominate the context. ~12k tokens; cheap once prompt-cached. */
+const WRITER_SOURCE_CHAR_BUDGET = 48_000;
+/** Plans below this confidence get a note on the run log (not a gate). */
+const LOW_PLAN_CONFIDENCE = 0.6;
 
 export async function* runIngestion(
   input: IngestionInput,
@@ -70,8 +88,33 @@ export async function* runIngestion(
     return;
   }
 
-  const promptHash = await shortSha(wikiRecord.ingestionPrompt ?? "");
+  // STUB sources (nested provenance) are citation-only — nothing to ingest
+  // until hydrated (P2). Narrows `content` to string for the rest of the run.
+  const sourceContent = source.content;
+  if (sourceContent == null) {
+    yield {
+      type: "failed",
+      error: `source is a citation stub with no content (hydrate it before ingesting): ${input.sourceId}`,
+      tokensUsed: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+    return;
+  }
+
   const sourceTags = extractTags(source.metadata);
+  const wikiContext = await loadWikiContext(wikiRecord);
+  // Version stamp for the run log: covers the FULL prompt surface the models
+  // see (engine instructions, injected wiki context, domain prompt) — not
+  // just the domain prompt, so engine changes are distinguishable in logs.
+  const promptHash = await shortSha(
+    [
+      ENGINE_INSTRUCTIONS_PLANNER,
+      ENGINE_INSTRUCTIONS_WRITER,
+      wikiContext,
+      wikiRecord.ingestionPrompt ?? "",
+    ].join("\n\0\n"),
+  );
 
   // ── Resolve/open the run log row ─────────────────────────────
   const existingRun = input.runId ? await wiki.getIngestionRun(input.runId) : null;
@@ -104,6 +147,8 @@ export async function* runIngestion(
   let totalTokens = 0;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let totalCacheReadTokens = 0;
+  let totalCacheWriteTokens = 0;
   let pagesCreated = 0;
   let pagesUpdated = 0;
   let totalEdgesAdded = 0;
@@ -121,35 +166,118 @@ export async function* runIngestion(
       edgeCount: existingEdges.length,
     };
 
+    const isRetryRun = input.retryOps !== undefined;
+
+    // ── Survey (nested provenance P1, opt-in) ──────────────────
+    // Classify the document's anatomy; explode a citing document's
+    // bibliography into stub sources + citation edges; strip non-content
+    // sections from what the PLANNER sees (the writer keeps the original).
+    let plannerContent = sourceContent;
+    let markerMap = new Map<string, string>();
+    if (input.survey && !isRetryRun) {
+      const surveyed = await survey({
+        model,
+        source: { title: source.title, content: sourceContent },
+      });
+      totalTokens += surveyed.tokens;
+      totalInputTokens += surveyed.inputTokens;
+      totalOutputTokens += surveyed.outputTokens;
+      totalCacheReadTokens += surveyed.cacheReadTokens;
+      totalCacheWriteTokens += surveyed.cacheWriteTokens;
+
+      // Relocate what the composer's Classify tab used to author: the
+      // document's OWN citation + browse facets, filled from the survey.
+      // Additive (never clobbers human input) and best-effort — browse
+      // metadata must never fail an ingestion.
+      try {
+        await wiki.enrichSourceClassify(source.id, {
+          citation: surveyed.selfCitation,
+          facets: surveyed.selfFacets,
+        });
+      } catch (err) {
+        console.warn(
+          `[survey] enrichSourceClassify failed for ${source.id}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+
+      let stubsOrMatches = 0;
+      let skippedThin = 0;
+      let excludedRanges: Array<{ start: number; end: number; reason: string }> = [];
+      if (surveyed.anatomy !== "direct") {
+        const exploded = await explodeCitations({
+          store: wiki,
+          wikiId: wikiRecord.id,
+          carrierId: source.id,
+          bibliography: surveyed.bibliography,
+          content: sourceContent,
+        });
+        markerMap = exploded.markerMap;
+        stubsOrMatches = exploded.stubsOrMatches;
+        skippedThin = exploded.skippedThin;
+        excludedRanges = resolveExcludeRanges(
+          sourceContent,
+          surveyed.excludeSections,
+        );
+        plannerContent = applyExclusions(sourceContent, excludedRanges);
+      }
+
+      yield {
+        type: "survey-complete",
+        anatomy: surveyed.anatomy,
+        citedWorks: surveyed.bibliography.length,
+        stubsOrMatches,
+        skippedThin,
+        markersMapped: markerMap.size,
+        excludedSections: excludedRanges.length,
+        tokens: surveyed.tokens,
+        inputTokens: surveyed.inputTokens,
+        outputTokens: surveyed.outputTokens,
+      };
+    }
+
     // ── Plan ───────────────────────────────────────────────────
     yield { type: "planning" };
 
-    const isRetryRun = input.retryOps !== undefined;
     const retryOps = (input.retryOps ?? []).filter((o) => o.action !== "skip");
     const opPlan = isRetryRun
       ? buildRetryPlan(retryOps)
       : await planChunked({
           model,
           characterDomainPrompt: wikiRecord.ingestionPrompt,
+          wikiContext,
           source: {
             title: source.title,
-            kind: source.kind,
+            sourceType:
+              source.sourceType ?? deriveSourceTypeFromKind(source.kind),
             tags: sourceTags,
-            content: source.content,
+            content: plannerContent,
           },
           existingPages,
         });
     totalTokens += opPlan.tokens;
     totalInputTokens += opPlan.inputTokens;
     totalOutputTokens += opPlan.outputTokens;
+    totalCacheReadTokens += opPlan.cacheReadTokens;
+    totalCacheWriteTokens += opPlan.cacheWriteTokens;
 
     // ── Execute ops (excluding "skip") ─────────────────────────
     const actionableOps = opPlan.ops.filter((o) => o.action !== "skip");
+
+    // Low planner confidence doesn't gate the run (the ops still execute)
+    // but it must not vanish either: it rides the plan-complete event and
+    // lands on the run log so shaky runs are auditable in history.
+    const confidenceNote =
+      opPlan.confidence < LOW_PLAN_CONFIDENCE
+        ? `low plan confidence: ${opPlan.confidence.toFixed(2)}`
+        : undefined;
 
     yield {
       type: "plan-complete",
       opCount: actionableOps.length,
       contradictionCount: opPlan.contradictions.length,
+      confidence: opPlan.confidence,
+      contradictions: opPlan.contradictions,
       tokens: opPlan.tokens,
       inputTokens: opPlan.inputTokens,
       outputTokens: opPlan.outputTokens,
@@ -164,6 +292,15 @@ export async function* runIngestion(
       actionableOps,
     );
     const writerConcurrency = resolveWriterConcurrency(input.writerConcurrency);
+    const writerSourceContent =
+      sourceContent.trim().length <= WRITER_SOURCE_CHAR_BUDGET
+        ? sourceContent
+        : null;
+    // Prompt-cache warm-up: the writers share a cached system prefix
+    // (instructions + source document), but the cache entry only exists once
+    // the first call finishes. Run op 0 solo so ops 1..N hit the cache
+    // instead of all paying the full prefix concurrently.
+    let cacheWarm = actionableOps.length <= 1;
     const inFlight = new Map<number, Promise<WriteTaskResult>>();
     const savedPages: Array<{ op: PlanOp; written: WrittenPage; page: WikiPageRecord }> = [];
     const pagesNeedingEmbedding = new Map<string, WikiPageRecord>();
@@ -177,11 +314,19 @@ export async function* runIngestion(
       const task = write({
         model,
         characterDomainPrompt: wikiRecord.ingestionPrompt,
+        wikiContext,
         op,
-        source: { title: source.title, tags: sourceTags },
+        source: {
+          title: source.title,
+          tags: sourceTags,
+          content: writerSourceContent,
+        },
         existingPage,
         allPages: writerContextPages,
         slugToId: existingSlugToId,
+        plannerContradictions: opPlan.contradictions.filter(
+          (c) => c.slugA === op.slug || c.slugB === op.slug,
+        ),
       })
         .then((written): WriteTaskResult => ({ index, op, existingPage, written }))
         .catch((error: unknown): WriteTaskResult => ({
@@ -194,9 +339,10 @@ export async function* runIngestion(
     };
 
     while (nextOpIndex < actionableOps.length || inFlight.size > 0) {
+      const concurrencyLimit = cacheWarm ? writerConcurrency : 1;
       while (
         nextOpIndex < actionableOps.length &&
-        inFlight.size < writerConcurrency
+        inFlight.size < concurrencyLimit
       ) {
         const op = actionableOps[nextOpIndex];
         yield {
@@ -213,6 +359,9 @@ export async function* runIngestion(
 
       const result = await Promise.race(inFlight.values());
       inFlight.delete(result.index);
+      // First writer call has completed (success or not) — the shared prefix
+      // is cached now, so the rest can fan out at full concurrency.
+      cacheWarm = true;
 
       if ("error" in result) {
         const msg =
@@ -244,6 +393,8 @@ export async function* runIngestion(
       totalTokens += written.tokens;
       totalInputTokens += written.inputTokens;
       totalOutputTokens += written.outputTokens;
+      totalCacheReadTokens += written.cacheReadTokens;
+      totalCacheWriteTokens += written.cacheWriteTokens;
 
       try {
         if (input.dryRun) {
@@ -275,13 +426,25 @@ export async function* runIngestion(
 
         if (written.sourceRefs.length > 0) {
           await wiki.addSourceRefs(
-            written.sourceRefs.map((r) => ({
-              pageId: saveResult.page.id,
-              sourceId: source.id,
-              passage: r.passage,
-              quote: r.quote,
-              relevanceNote: r.relevanceNote,
-            })),
+            written.sourceRefs.flatMap((r) => {
+              const base = {
+                pageId: saveResult.page.id,
+                sourceId: source.id,
+                passage: r.passage,
+                quote: r.quote,
+                relevanceNote: r.relevanceNote,
+              };
+              // Nested provenance: a passage carrying an inline marker
+              // ("[8]") attributes its claim to the cited work. Mechanical
+              // string match against the survey's marker map — no LLM
+              // judgment. Multiple markers → one ref row per attribution.
+              const attributed = attributionsForRef(r, markerMap);
+              if (attributed.length === 0) return [base];
+              return attributed.map((attributedSourceId) => ({
+                ...base,
+                attributedSourceId,
+              }));
+            }),
           );
         }
 
@@ -343,6 +506,7 @@ export async function* runIngestion(
           contradictionsFound: opPlan.contradictions.length,
           tokensUsed: totalTokens,
           errorMessage,
+          notes: confidenceNote,
         });
       }
       yield {
@@ -366,6 +530,8 @@ export async function* runIngestion(
       tokensUsed: totalTokens,
       inputTokens: totalInputTokens,
       outputTokens: totalOutputTokens,
+      cacheReadTokens: totalCacheReadTokens,
+      cacheWriteTokens: totalCacheWriteTokens,
       model,
     };
 
@@ -377,6 +543,7 @@ export async function* runIngestion(
         edgesAdded: totalEdgesAdded,
         contradictionsFound: opPlan.contradictions.length,
         tokensUsed: totalTokens,
+        notes: confidenceNote,
       });
     }
 
@@ -432,6 +599,8 @@ function buildRetryPlan(ops: PlanOp[]): OpPlan {
     tokens: 0,
     inputTokens: 0,
     outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
   };
 }
 
@@ -536,37 +705,112 @@ async function embedChangedPages(args: {
   }
 }
 
-async function planChunked(args: {
+// Exported for tests/evals — the public ingestion path is runIngestion().
+export async function planChunked(args: {
   model: ModelId;
   characterDomainPrompt: string | null;
+  wikiContext: string | null;
   source: {
     title: string;
-    kind: string;
+    sourceType: string;
     tags: string[];
     content: string;
   };
   existingPages: WikiPageRecord[];
 }): Promise<OpPlan> {
   const chunks = splitSourceForPlanning(args.source.content);
-  if (chunks.length <= 1) {
-    return plan(args);
-  }
 
   const plans: OpPlan[] = [];
+  // Cross-chunk slug memory: each chunk sees the slugs earlier chunks
+  // claimed, so the same entity gets the same slug in every chunk instead
+  // of drifting variants that mergeChunkPlans can't reconcile.
+  const plannedSoFar = new Map<string, PlanOp>();
   for (let i = 0; i < chunks.length; i++) {
+    const title =
+      chunks.length > 1
+        ? `${args.source.title} (part ${i + 1} of ${chunks.length})`
+        : args.source.title;
     plans.push(
-      await plan({
-        ...args,
-        source: {
-          ...args.source,
-          title: `${args.source.title} (part ${i + 1} of ${chunks.length})`,
-          content: chunks[i],
-        },
-      }),
+      ...(await planChunkWithSplit(args, chunks[i], title, plannedSoFar, 0)),
     );
   }
 
-  return mergeChunkPlans(plans, args.existingPages);
+  // Single complete plan → return as-is (preserves its exact confidence);
+  // multiple (chunked and/or split) → merge.
+  return plans.length === 1 ? plans[0] : mergeChunkPlans(plans, args.existingPages);
+}
+
+/** Truncation-split depth cap: 24k-char chunks → 12k → 6k. A 6k-char piece
+ * that still overflows the planner budget is pathological — fail loudly. */
+const MAX_PLAN_SPLIT_DEPTH = 2;
+
+/**
+ * Plan one chunk; if the planner's output hits max_tokens (op-dense content —
+ * e.g. a chronology table planning 25+ event pages), split the chunk at a
+ * paragraph boundary and re-plan each half. Slug memory threads through the
+ * recursion so the second half sees the first half's slugs.
+ */
+async function planChunkWithSplit(
+  args: {
+    model: ModelId;
+    characterDomainPrompt: string | null;
+    wikiContext: string | null;
+    source: { title: string; sourceType: string; tags: string[]; content: string };
+    existingPages: WikiPageRecord[];
+  },
+  content: string,
+  title: string,
+  plannedSoFar: Map<string, PlanOp>,
+  depth: number,
+): Promise<OpPlan[]> {
+  try {
+    const chunkPlan = await plan({
+      ...args,
+      source: { ...args.source, title, content },
+      plannedSoFar: Array.from(plannedSoFar.values()),
+    });
+    for (const op of chunkPlan.ops) {
+      if (op.action !== "skip" && !plannedSoFar.has(op.slug)) {
+        plannedSoFar.set(op.slug, op);
+      }
+    }
+    return [chunkPlan];
+  } catch (err) {
+    if (!(err instanceof PlanTruncatedError) || depth >= MAX_PLAN_SPLIT_DEPTH) {
+      throw err;
+    }
+    const mid = findPlanSplitPoint(content);
+    const head = content.slice(0, mid).trim();
+    const tail = content.slice(mid).trim();
+    if (!head || !tail) throw err;
+    console.warn(
+      `[wiki-ingest] planner output truncated on "${title}" (${content.length} chars) — splitting and re-planning`,
+    );
+    return [
+      ...(await planChunkWithSplit(args, head, `${title} (split a)`, plannedSoFar, depth + 1)),
+      ...(await planChunkWithSplit(args, tail, `${title} (split b)`, plannedSoFar, depth + 1)),
+    ];
+  }
+}
+
+/** Nearest paragraph boundary to the midpoint; falls back to line break,
+ * then the raw midpoint. */
+function findPlanSplitPoint(content: string): number {
+  const mid = Math.floor(content.length / 2);
+  const window = Math.floor(content.length / 4);
+  for (const sep of ["\n\n", "\n"]) {
+    const after = content.indexOf(sep, mid);
+    const before = content.lastIndexOf(sep, mid);
+    const candidates = [after, before].filter(
+      (idx) => idx !== -1 && Math.abs(idx - mid) <= window,
+    );
+    if (candidates.length > 0) {
+      return candidates.reduce((best, idx) =>
+        Math.abs(idx - mid) < Math.abs(best - mid) ? idx : best,
+      );
+    }
+  }
+  return mid;
 }
 
 function splitSourceForPlanning(content: string): string[] {
@@ -644,6 +888,8 @@ function mergeChunkPlans(plans: OpPlan[], existingPages: WikiPageRecord[]): OpPl
     tokens: plans.reduce((sum, p) => sum + p.tokens, 0),
     inputTokens: plans.reduce((sum, p) => sum + p.inputTokens, 0),
     outputTokens: plans.reduce((sum, p) => sum + p.outputTokens, 0),
+    cacheReadTokens: plans.reduce((sum, p) => sum + p.cacheReadTokens, 0),
+    cacheWriteTokens: plans.reduce((sum, p) => sum + p.cacheWriteTokens, 0),
   };
 }
 

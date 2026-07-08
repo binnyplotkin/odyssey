@@ -6,6 +6,7 @@
  * time index, contradictions, source refs.
  */
 
+import type { TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import type {
   Contradiction,
   Frontmatter,
@@ -16,6 +17,7 @@ import type {
 import { call, extractToolUse } from "./client";
 import type { ModelId } from "./models";
 import {
+  renderSourceDocument,
   renderWikiIndexCompact,
   writerSystemPrompt,
   writerUserMessage,
@@ -61,23 +63,59 @@ export class WriterToolUseError extends Error {
 export async function write(args: {
   model: ModelId;
   characterDomainPrompt: string | null;
+  /** Rendered Layer-1.5 block (see renderWikiContext). Null skips the layer. */
+  wikiContext?: string | null;
   op: PlanOp;
   source: {
     title: string;
     tags: string[];
+    /** Full source content. Null when over the pipeline's char budget —
+     * the writer then falls back to planner passages only. */
+    content: string | null;
   };
   existingPage: WikiPageRecord | null;
   allPages: WikiPageRecord[];
   /** Known-slug → pageId resolver for contradictions. */
   slugToId: Map<string, string>;
+  /** Planner-flagged contradictions involving this op's slug. */
+  plannerContradictions?: Array<{ slugA: string; slugB: string; note: string }>;
 }): Promise<WrittenPage> {
-  const system = writerSystemPrompt(args.characterDomainPrompt);
+  // System = [instructions+context+domain, source document], with the cache
+  // breakpoint on the last block. The whole prefix (tools + system) is
+  // byte-identical across every writer call in a run, so op 2..N read it
+  // from the prompt cache instead of re-paying the source each time.
+  const instructions = writerSystemPrompt(
+    args.characterDomainPrompt,
+    args.wikiContext,
+  );
+  const hasFullSource =
+    typeof args.source.content === "string" &&
+    args.source.content.trim().length > 0;
+  const system: TextBlockParam[] = hasFullSource
+    ? [
+        { type: "text", text: instructions },
+        {
+          type: "text",
+          text: renderSourceDocument(args.source.title, args.source.content!),
+          cache_control: { type: "ephemeral" },
+        },
+      ]
+    : [
+        {
+          type: "text",
+          text: instructions,
+          cache_control: { type: "ephemeral" },
+        },
+      ];
+
   const userMsg = writerUserMessage({
     op: args.op,
     sourceTitle: args.source.title,
     sourceTags: args.source.tags,
     existingBody: args.existingPage?.body,
     wikiIndexCompact: renderWikiIndexCompact(args.allPages),
+    hasFullSource,
+    plannerContradictions: args.plannerContradictions,
   });
 
   const result = await callWriter(args.model, system, userMsg, 8192);
@@ -86,6 +124,8 @@ export async function write(args: {
     tokens: result.tokens,
     inputTokens: result.inputTokens,
     outputTokens: result.outputTokens,
+    cacheReadTokens: result.cacheReadTokens,
+    cacheWriteTokens: result.cacheWriteTokens,
   };
 
   if (!isUsableRawWrite(raw) && result.stopReason === "max_tokens") {
@@ -100,6 +140,8 @@ export async function write(args: {
       tokens: usage.tokens + repair.tokens,
       inputTokens: usage.inputTokens + repair.inputTokens,
       outputTokens: usage.outputTokens + repair.outputTokens,
+      cacheReadTokens: usage.cacheReadTokens + repair.cacheReadTokens,
+      cacheWriteTokens: usage.cacheWriteTokens + repair.cacheWriteTokens,
     };
   }
 
@@ -152,13 +194,15 @@ export async function write(args: {
     tokens: usage.tokens,
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
+    cacheReadTokens: usage.cacheReadTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
   };
 }
 
 function callWriter(
   model: ModelId,
-  system: string,
-  userMsg: string,
+  system: string | TextBlockParam[],
+  userMsg: string | TextBlockParam[],
   maxTokens: number,
 ) {
   return call({

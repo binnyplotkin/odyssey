@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import {
   getCharacterStore,
   getWikiStore,
+  getWikisStore,
   isValidSlug,
   slugifyTitle,
   type Contradiction,
@@ -39,6 +40,7 @@ export async function createCharacter(input: {
   title: string;
   slug?: string;
   summary?: string;
+  brief?: string;
   ingestionPrompt?: string;
   eras?: EraConfig[];
 }): Promise<ActionResult<{ slug: string }>> {
@@ -67,6 +69,7 @@ export async function createCharacter(input: {
     slug,
     title,
     summary: input.summary?.trim() || undefined,
+    brief: input.brief?.trim() || undefined,
     ingestionPrompt: input.ingestionPrompt?.trim() || undefined,
     eras: normalizedEras,
   });
@@ -334,23 +337,13 @@ function formatClassifyError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export async function classifySource(
-  characterId: string,
-  content: string,
-): Promise<
-  ActionResult<{ title: string; kind: SourceKindClassification; tags: string[] }>
-> {
-  const trimmed = content.trim();
-  if (trimmed.length < 80) {
-    return { ok: false, error: "Content too short to classify." };
-  }
-
-  const character = await getCharacterStore().getById(characterId);
-  if (!character) return { ok: false, error: "Character not found." };
-
-  // Harvest the character's existing tag vocabulary so the model reuses
-  // established tags instead of inventing near-duplicates.
-  const sources = await getWikiStore().listSources(characterId);
+/**
+ * Rank a source list's tag vocabulary by frequency (top 40) so the classifier
+ * reuses established tags instead of inventing near-duplicates.
+ */
+function harvestTagVocabulary(
+  sources: Array<{ metadata?: Record<string, unknown> | null }>,
+): string[] {
   const tagCounts = new Map<string, number>();
   for (const s of sources) {
     const tags = (s.metadata?.tags as string[] | undefined) ?? [];
@@ -360,10 +353,94 @@ export async function classifySource(
       tagCounts.set(norm, (tagCounts.get(norm) ?? 0) + 1);
     }
   }
-  const existingTags = [...tagCounts.entries()]
+  return [...tagCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 40)
     .map(([t]) => t);
+}
+
+/** Optional `<character>` context block to bias the title toward the world. */
+function buildCharacterContext(character: {
+  title: string;
+  summary?: string | null;
+  ingestionPrompt?: string | null;
+}): string {
+  return [
+    `<character>`,
+    `Title: ${character.title}`,
+    character.summary ? `Summary: ${character.summary}` : null,
+    character.ingestionPrompt
+      ? `Ingestion-prompt excerpt: ${character.ingestionPrompt.slice(0, 400)}`
+      : null,
+    `</character>`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * Classify a source text for the composer: short title + evidentiary kind +
+ * 2–5 domain tags. Wiki-first — the character context is an optional bias,
+ * not a requirement, so wikis with no bound character still auto-classify.
+ */
+export async function classifySourceForWiki(
+  wikiId: string,
+  content: string,
+): Promise<
+  ActionResult<{ title: string; kind: SourceKindClassification; tags: string[] }>
+> {
+  const existingTags = harvestTagVocabulary(
+    await getWikiStore().listSourcesForWiki(wikiId),
+  );
+  // If the wiki has a bound character, bias the title toward it — but a
+  // characterless wiki (e.g. William Shakespeare) classifies just fine.
+  let characterContext: string | undefined;
+  try {
+    const bindings = await getWikisStore().listBindingsForWiki(wikiId);
+    const primary =
+      bindings.find((b) => b.isActive && b.priority === "primary") ??
+      bindings.find((b) => b.isActive) ??
+      null;
+    if (primary) {
+      const character = await getCharacterStore().getById(primary.characterId);
+      if (character) characterContext = buildCharacterContext(character);
+    }
+  } catch {
+    // Character context is a nicety; never block classification on it.
+  }
+  return classifyText({ content, existingTags, characterContext });
+}
+
+export async function classifySource(
+  characterId: string,
+  content: string,
+): Promise<
+  ActionResult<{ title: string; kind: SourceKindClassification; tags: string[] }>
+> {
+  const character = await getCharacterStore().getById(characterId);
+  if (!character) return { ok: false, error: "Character not found." };
+  const existingTags = harvestTagVocabulary(
+    await getWikiStore().listSources(characterId),
+  );
+  return classifyText({
+    content,
+    existingTags,
+    characterContext: buildCharacterContext(character),
+  });
+}
+
+async function classifyText(args: {
+  content: string;
+  existingTags: string[];
+  characterContext?: string;
+}): Promise<
+  ActionResult<{ title: string; kind: SourceKindClassification; tags: string[] }>
+> {
+  const trimmed = args.content.trim();
+  if (trimmed.length < 80) {
+    return { ok: false, error: "Content too short to classify." };
+  }
+  const existingTags = args.existingTags;
 
   const snippet =
     trimmed.length <= MAX_CLASSIFY_CHARS
@@ -391,24 +468,14 @@ export async function classifySource(
     "- If the text is a named passage (e.g. \"Genesis 22\"), use that; a short descriptive tail is fine.",
   ].join("\n");
 
-  const characterBlock = [
-    `<character>`,
-    `Title: ${character.title}`,
-    character.summary ? `Summary: ${character.summary}` : null,
-    character.ingestionPrompt
-      ? `Ingestion-prompt excerpt: ${character.ingestionPrompt.slice(0, 400)}`
-      : null,
-    `</character>`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const characterBlock = args.characterContext ?? "";
 
   const vocabBlock = existingTags.length
     ? `<existing-tags>\n${existingTags.join(", ")}\n</existing-tags>`
     : `<existing-tags>\n(none yet — pick fresh tags)\n</existing-tags>`;
 
   const userMessage = [
-    characterBlock,
+    ...(characterBlock ? [characterBlock] : []),
     vocabBlock,
     `<source-text>`,
     snippet,
@@ -542,7 +609,7 @@ export async function previewPurgeSource(
       source: {
         title: source.title,
         kind: source.kind,
-        hashPrefix: source.contentHash.slice(0, 8),
+        hashPrefix: (source.contentHash ?? "").slice(0, 8),
       },
       pagesRemoved: impact.pagesRemoved,
       edgesRemoved: impact.edgesRemoved,
@@ -595,7 +662,7 @@ export async function previewPurgeIngestionRun(
       source: {
         title: source.title,
         kind: source.kind,
-        hashPrefix: source.contentHash.slice(0, 8),
+        hashPrefix: (source.contentHash ?? "").slice(0, 8),
       },
       sourceShared,
       pagesRemoved: impact.pagesRemoved,

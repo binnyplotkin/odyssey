@@ -17,6 +17,28 @@ import {
 import { PLAN_TOOL } from "./tools";
 import type { OpPlan, PlanOp } from "./types";
 
+/** Planner response budget. Dense sources can plan 25+ ops with rationales +
+ * passages; 8k proved too small for table-heavy chunks. Env-overridable so
+ * tests/evals can force the truncation path deterministically. */
+const PLANNER_MAX_TOKENS =
+  Number(process.env.PLANNER_MAX_TOKENS) > 0
+    ? Number(process.env.PLANNER_MAX_TOKENS)
+    : 16_384;
+
+/**
+ * The planner's output hit max_tokens — the plan is incomplete (possibly
+ * unparseable). Callers split the content and re-plan smaller pieces rather
+ * than failing the run (see planChunked in pipeline.ts).
+ */
+export class PlanTruncatedError extends Error {
+  constructor(contentChars: number) {
+    super(
+      `planner output truncated at max_tokens (${PLANNER_MAX_TOKENS}) on ${contentChars} chars of source — content too op-dense for one call`,
+    );
+    this.name = "PlanTruncatedError";
+  }
+}
+
 /** What the plan_operations tool schema emits — raw, pre-resolved. */
 type RawPlan = {
   ops: Array<{
@@ -34,38 +56,55 @@ type RawPlan = {
 export async function plan(args: {
   model: ModelId;
   characterDomainPrompt: string | null;
+  /** Rendered Layer-1.5 block (see renderWikiContext). Null skips the layer. */
+  wikiContext?: string | null;
   source: {
     title: string;
-    kind: string;
+    sourceType: string;
     tags: string[];
     content: string;
   };
   existingPages: WikiPageRecord[];
+  /** Ops planned by earlier chunks of this source — later chunks reuse
+   * these slugs instead of inventing variants (see planChunked). */
+  plannedSoFar?: PlanOp[];
 }): Promise<OpPlan> {
-  const system = plannerSystemPrompt(args.characterDomainPrompt);
+  const system = plannerSystemPrompt(args.characterDomainPrompt, args.wikiContext);
   const userMsg = plannerUserMessage({
     sourceTitle: args.source.title,
-    sourceKind: args.source.kind,
+    sourceType: args.source.sourceType,
     sourceTags: args.source.tags,
     sourceContent: args.source.content,
     wikiIndex: renderWikiIndex(args.existingPages),
+    plannedSoFar: args.plannedSoFar,
   });
 
   const result = await call({
     model: args.model,
-    system,
+    // Cache breakpoint on the system prefix: a no-op for single-call plans,
+    // but chunked plans (planChunked) run sequential calls sharing this
+    // prefix, and chunk 2..N read it at 0.1×.
+    system: [
+      { type: "text", text: system, cache_control: { type: "ephemeral" } },
+    ],
     messages: [{ role: "user", content: userMsg }],
     tools: [PLAN_TOOL],
     toolChoice: { type: "tool", name: "plan_operations" },
-    // Plans with 20+ ops + rationales + passages can stretch past 4k tokens.
-    maxTokens: 8192,
+    // Plans with 20+ ops + rationales + passages can stretch well past 4k
+    // tokens; dense/table-heavy chunks past 8k (see PLANNER_MAX_TOKENS).
+    maxTokens: PLANNER_MAX_TOKENS,
   });
+
+  // Truncated output is incomplete even when it happens to parse — the last
+  // ops are missing or mangled. Typed error so planChunked can split+retry.
+  if (result.stopReason === "max_tokens") {
+    throw new PlanTruncatedError(args.source.content.length);
+  }
 
   const raw = extractToolUse<RawPlan>(result, "plan_operations");
 
-  // Defensive: the tool schema requires `ops`, but if the model hits
-  // max_tokens or produces malformed output the SDK can surface a
-  // partial input. Fail loudly with the actual shape we got.
+  // Defensive: the tool schema requires `ops`, but malformed output can
+  // surface a partial input. Fail loudly with the actual shape we got.
   if (!raw || !Array.isArray(raw.ops)) {
     throw new Error(
       `planner: tool_use missing ops array; stop=${result.stopReason}; ` +
@@ -109,5 +148,7 @@ export async function plan(args: {
     tokens: result.tokens,
     inputTokens: result.inputTokens,
     outputTokens: result.outputTokens,
+    cacheReadTokens: result.cacheReadTokens,
+    cacheWriteTokens: result.cacheWriteTokens,
   };
 }
