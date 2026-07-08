@@ -24,6 +24,12 @@ export type CharacterRecord = {
   slug: string;
   title: string;
   summary: string | null;
+  /**
+   * The world owner's plain-language explanation of who this character is —
+   * identity, world, what shaped them, what they care about. Authored seed
+   * context for generating the ingestion prompt (and future persona layers).
+   */
+  brief: string | null;
   image: string | null;
   /**
    * Named gradient key for the sidebar/canvas thumbnail (e.g. "dune",
@@ -334,6 +340,7 @@ export type CreateCharacterInput = {
   slug: string;
   title: string;
   summary?: string;
+  brief?: string;
   image?: string;
   thumbnailColor?: string;
   eras?: EraConfig[];
@@ -586,9 +593,14 @@ export type WikiSourceRecord = {
   characterId: string;
   wikiId: string | null;
   title: string;
+  /** @deprecated derived legacy shadow of `sourceType`; being retired. */
   kind: WikiSourceKind;
-  content: string;
-  contentHash: string;
+  /** Evidentiary tier — the classifier. Undefined for non-source ingestion types. */
+  sourceType?: "primary" | "secondary" | "tertiary";
+  /** Null for STUB sources (nested provenance) — citation-only, no content
+   * until hydrated (P2). All full sources have content. */
+  content: string | null;
+  contentHash: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -619,7 +631,10 @@ export type CreateSourceInput = {
   characterId?: string | null;
   wikiId?: string | null;
   title: string;
-  kind: WikiSourceKind;
+  /** @deprecated collapsing into `sourceType`; still written to the legacy column. */
+  kind?: WikiSourceKind;
+  /** Evidentiary tier — the classifier replacing `kind`. */
+  sourceType?: "primary" | "secondary" | "tertiary";
   content: string;
   metadata?: Record<string, unknown>;
 };
@@ -628,6 +643,12 @@ export type WikiSourceRefRecord = {
   id: string;
   pageId: string;
   sourceId: string;
+  /**
+   * Nested provenance: where the claim really lives when `sourceId` is a
+   * citing carrier (research report, commentary) that attributed it. Null =
+   * the claim is attributed to the evidence source itself (the common case).
+   */
+  attributedSourceId: string | null;
   passage: string | null;
   quote: string | null;
   relevanceNote: string | null;
@@ -637,9 +658,29 @@ export type WikiSourceRefRecord = {
 export type CreateSourceRefInput = {
   pageId: string;
   sourceId: string;
+  attributedSourceId?: string | null;
   passage?: string;
   quote?: string;
   relevanceNote?: string;
+};
+
+/** Citation edge: carrier (citing document) → cited work (often a stub). */
+export type WikiSourceCitationRecord = {
+  id: string;
+  carrierId: string;
+  citedId: string;
+  marker: string | null;
+  rawCitation: string | null;
+  locator: string | null;
+  createdAt: string;
+};
+
+export type CreateSourceCitationInput = {
+  carrierId: string;
+  citedId: string;
+  marker?: string | null;
+  rawCitation?: string | null;
+  locator?: string | null;
 };
 
 /* ── Ingestion log ─────────────────────────────────────────────── */
@@ -688,6 +729,9 @@ export type FinishIngestionInput = {
   contradictionsFound?: number;
   tokensUsed?: number;
   errorMessage?: string | null;
+  /** Appended run annotations (e.g. low plan confidence). Undefined leaves
+   * the existing notes untouched. */
+  notes?: string | null;
 };
 
 export type WikiIngestionEventRecord = {

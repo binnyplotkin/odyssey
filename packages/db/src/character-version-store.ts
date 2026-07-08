@@ -120,6 +120,8 @@ function normalizeCharacter(row: typeof charactersTable.$inferSelect): Character
     slug: row.slug,
     title: row.title,
     summary: row.summary,
+    // Not versioned (yet): the brief passes through untouched on restore.
+    brief: row.brief,
     image: row.image,
     thumbnailColor: row.thumbnailColor,
     voiceId: row.voiceId ?? null,

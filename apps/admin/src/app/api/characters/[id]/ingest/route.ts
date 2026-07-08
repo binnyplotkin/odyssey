@@ -107,6 +107,8 @@ export async function POST(
           embed: embedText,
           embedMany: embedTexts,
           embeddingModel: EMBEDDING_MODEL,
+          // Nested-provenance survey — default ON (see worker.ts).
+          survey: process.env.WIKI_INGEST_SURVEY !== "0",
         })) {
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(ev)}\n\n`),

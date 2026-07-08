@@ -5,7 +5,16 @@
  * body as the primary operational surface and lets supporting state recede.
  */
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 /* ── Tokens ─────────────────────────────────────────────────── */
 
@@ -59,6 +68,8 @@ export type PromptOverlayProps = {
   promptName: string | null;
   inheritedFromCharacter: boolean;
   characterName: string;
+  /** Stored brief of the primary bound character — pre-fills the generator. */
+  characterBrief?: string | null;
   onClose: () => void;
   /** Fired after a successful save so the parent can refresh server data. */
   onPromptSaved?: () => void;
@@ -80,6 +91,7 @@ export function PromptOverlay({
   promptName: initialPromptName,
   inheritedFromCharacter,
   characterName,
+  characterBrief = null,
   onClose,
   onPromptSaved,
 }: PromptOverlayProps) {
@@ -279,6 +291,13 @@ export function PromptOverlay({
               hasCustomName={hasCustomName}
               displayName={displayName}
               nameDirty={nameDirty}
+            />
+            <GeneratePanel
+              wikiId={wikiId}
+              draft={draft}
+              characterBrief={characterBrief}
+              onInsert={setDraft}
+              defaultOpen={initialPrompt.trim() === ""}
             />
             <EditorCard
               draft={draft}
@@ -676,6 +695,108 @@ function IdentityStrip({
   );
 }
 
+/* ── Prompt markdown (rendered preview) ────────────────────── */
+
+/**
+ * Renders the ingestion prompt's markdown (## sections, bullets, bold slugs)
+ * in the editor's typography. Used for the editor's read view and the
+ * generated-draft preview; clicking the read view flips to the raw textarea.
+ */
+function PromptMarkdown({ text }: { text: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h1: ({ children }) => (
+          <h2 style={promptMdStyles.h2}>{children}</h2>
+        ),
+        h2: ({ children }) => (
+          <h2 style={promptMdStyles.h2}>{children}</h2>
+        ),
+        h3: ({ children }) => (
+          <h3 style={promptMdStyles.h3}>{children}</h3>
+        ),
+        p: ({ children }) => <p style={promptMdStyles.p}>{children}</p>,
+        ul: ({ children }) => <ul style={promptMdStyles.list}>{children}</ul>,
+        ol: ({ children }) => <ol style={promptMdStyles.list}>{children}</ol>,
+        li: ({ children }) => <li style={promptMdStyles.li}>{children}</li>,
+        strong: ({ children }) => (
+          <strong style={{ color: T.fg, fontWeight: 600 }}>{children}</strong>
+        ),
+        code: ({ children }) => (
+          <code style={promptMdStyles.code}>{children}</code>
+        ),
+        blockquote: ({ children }) => (
+          <blockquote style={promptMdStyles.blockquote}>{children}</blockquote>
+        ),
+        hr: () => <hr style={promptMdStyles.hr} />,
+        a: ({ children }) => (
+          <span style={{ color: T.accent }}>{children}</span>
+        ),
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  );
+}
+
+const promptMdStyles: Record<string, CSSProperties> = {
+  h2: {
+    margin: "22px 0 8px",
+    fontFamily: DISPLAY,
+    fontSize: "var(--font-size-lg)",
+    fontWeight: 600,
+    color: T.fg,
+    letterSpacing: "0.01em",
+  },
+  h3: {
+    margin: "16px 0 6px",
+    fontFamily: DISPLAY,
+    fontSize: "var(--font-size-md)",
+    fontWeight: 600,
+    color: T.fg,
+  },
+  p: {
+    margin: "0 0 12px",
+    fontFamily: BODY,
+    fontSize: "var(--font-size-md)",
+    lineHeight: "24px",
+    color: T.text,
+  },
+  list: {
+    margin: "0 0 12px",
+    paddingLeft: 22,
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  li: {
+    fontFamily: BODY,
+    fontSize: "var(--font-size-md)",
+    lineHeight: "22px",
+    color: T.text,
+  },
+  code: {
+    fontFamily: MONO,
+    fontSize: "0.92em",
+    color: T.fg,
+    background: T.accentSoft,
+    borderRadius: 4,
+    padding: "1px 5px",
+  },
+  blockquote: {
+    margin: "0 0 12px",
+    padding: "2px 0 2px 14px",
+    borderLeft: `2px solid ${T.accentLine}`,
+    color: T.muted,
+  },
+  hr: {
+    margin: "18px 0",
+    border: "none",
+    borderTop: `1px solid ${T.divider}`,
+  },
+};
+
 /* ── Editor card ───────────────────────────────────────────── */
 
 function EditorCard({
@@ -720,6 +841,13 @@ function EditorCard({
         ? T.accent
         : T.muted;
   const dirtyComparison = isDirty || diff !== 0;
+  // Rendered-markdown read view by default; click flips to the raw textarea,
+  // blur flips back. Empty prompts go straight to edit (nothing to render).
+  const [editing, setEditing] = useState(draft.trim() === "");
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    if (editing) textareaRef.current?.focus();
+  }, [editing]);
   return (
     <div
       className="ingestion-prompt-editor"
@@ -749,7 +877,9 @@ function EditorCard({
       >
         <span style={{ color: T.fg, fontWeight: 500 }}>Prompt body</span>
         <span style={{ color: T.faded }}>·</span>
-        <span style={{ color: T.muted }}>Markdown</span>
+        <span style={{ color: T.muted }}>
+          {editing ? "Markdown" : "Preview · click to edit"}
+        </span>
         <span style={{ flex: 1 }} />
         <span
           style={{
@@ -769,51 +899,78 @@ function EditorCard({
         </span>
       </div>
 
-      {/* Body */}
-      <div style={{ display: "flex", minHeight: 520, position: "relative" }}>
-        <pre
-          aria-hidden
+      {/* Body — rendered preview by default, raw editor on click */}
+      {editing ? (
+        <div style={{ display: "flex", minHeight: 520, position: "relative" }}>
+          <pre
+            aria-hidden
+            style={{
+              margin: 0,
+              padding: "20px 12px 20px 16px",
+              background: "transparent",
+              borderRight: `1px solid ${T.divider}`,
+              fontFamily: MONO,
+              fontSize: "var(--font-size-base)",
+              lineHeight: "24px",
+              color: T.faded,
+              textAlign: "right",
+              userSelect: "none",
+              minWidth: 50,
+            }}
+          >
+            {Array.from(
+              { length: Math.max(24, lineCount) },
+              (_, i) => i + 1,
+            ).join("\n")}
+          </pre>
+          <textarea
+            ref={textareaRef}
+            className="ingestion-prompt-input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+              if (draft.trim() !== "") setEditing(false);
+            }}
+            spellCheck={false}
+            placeholder="Describe the lens. Tone. Structure. What kind of pages should the engine write?"
+            style={{
+              flex: 1,
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              color: T.fg,
+              fontFamily: BODY,
+              fontSize: "var(--font-size-md)",
+              lineHeight: "24px",
+              padding: "20px 22px",
+              resize: "vertical",
+              minHeight: 520,
+              whiteSpace: "pre-wrap",
+            }}
+          />
+        </div>
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          title="Click to edit"
+          onClick={() => setEditing(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEditing(true);
+            }
+          }}
           style={{
-            margin: 0,
-            padding: "20px 12px 20px 16px",
-            background: "transparent",
-            borderRight: `1px solid ${T.divider}`,
-            fontFamily: MONO,
-            fontSize: "var(--font-size-base)",
-            lineHeight: "24px",
-            color: T.faded,
-            textAlign: "right",
-            userSelect: "none",
-            minWidth: 50,
+            minHeight: 520,
+            padding: "12px 22px 20px",
+            cursor: "text",
+            outline: "none",
           }}
         >
-          {Array.from(
-            { length: Math.max(24, lineCount) },
-            (_, i) => i + 1,
-          ).join("\n")}
-        </pre>
-        <textarea
-          className="ingestion-prompt-input"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          spellCheck={false}
-          placeholder="Describe the lens. Tone. Structure. What kind of pages should the engine write?"
-          style={{
-            flex: 1,
-            border: "none",
-            outline: "none",
-            background: "transparent",
-            color: T.fg,
-            fontFamily: BODY,
-            fontSize: "var(--font-size-md)",
-            lineHeight: "24px",
-            padding: "20px 22px",
-            resize: "vertical",
-            minHeight: 520,
-            whiteSpace: "pre-wrap",
-          }}
-        />
-      </div>
+          <PromptMarkdown text={draft} />
+        </div>
+      )}
 
       {/* Footer */}
       <div
@@ -863,6 +1020,427 @@ function EditorCard({
           {footerLabel}
         </span>
       </div>
+    </div>
+  );
+}
+
+/* ── Generate panel ─────────────────────────────────────────── */
+
+type GenerateResult = {
+  prompt: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+};
+
+/**
+ * Draft the domain lens with one model call. Structure comes from the
+ * engine's meta-prompt; eras + bound characters are injected server-side;
+ * the ONE user input is the character brief ("who is this character?"),
+ * pre-filled from the character record when a stored brief exists. The
+ * draft lands in a preview — Insert copies it into the editor, and the
+ * normal Save flow keeps human approval in the loop.
+ */
+function GeneratePanel({
+  wikiId,
+  draft,
+  characterBrief,
+  onInsert,
+  defaultOpen = false,
+}: {
+  wikiId: string;
+  draft: string;
+  characterBrief: string | null;
+  onInsert: (prompt: string) => void;
+  /** Expanded on mount — true for empty prompts, where generation is the
+   * primary action; collapsed once a prompt exists. */
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [brief, setBrief] = useState(characterBrief ?? "");
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [state, setState] = useState<TestState>("idle");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<GenerateResult | null>(null);
+
+  const canRun = state !== "running";
+
+  const handleGenerate = async () => {
+    if (!canRun) return;
+    setState("running");
+    setError("");
+    try {
+      const res = await fetch(`/api/wiki/${wikiId}/prompt/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(brief.trim() ? { characterBrief: brief.trim() } : {}),
+        }),
+      });
+      const raw = await res.text();
+      let payload: Partial<GenerateResult> & { error?: string } = {};
+      try {
+        payload = raw ? (JSON.parse(raw) as typeof payload) : {};
+      } catch {
+        // non-JSON
+      }
+      if (!res.ok || !payload.prompt) {
+        setError(payload.error ?? `Generation failed (HTTP ${res.status})`);
+        setState("error");
+        return;
+      }
+      setResult({
+        prompt: payload.prompt,
+        model: payload.model ?? "",
+        inputTokens: payload.inputTokens ?? 0,
+        outputTokens: payload.outputTokens ?? 0,
+        totalTokens: payload.totalTokens ?? 0,
+      });
+      setState("idle");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed");
+      setState("error");
+    }
+  };
+
+  const handleInsert = () => {
+    if (!result) return;
+    if (
+      draft.trim().length > 0 &&
+      draft.trim() !== result.prompt.trim() &&
+      !window.confirm(
+        "Replace the current editor draft with the generated prompt?",
+      )
+    ) {
+      return;
+    }
+    onInsert(result.prompt);
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        border: `1px solid color-mix(in srgb, var(--border) 70%, transparent)`,
+        borderRadius: "var(--radius-md)",
+        background: T.card,
+        overflow: "hidden",
+      }}
+    >
+      {/* Header — toggles the panel */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        onMouseEnter={() => setHovered("generate-toggle")}
+        onMouseLeave={() => setHovered(null)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-10)",
+          padding: "12px 18px",
+          border: "none",
+          borderBottom: open ? `1px solid ${T.divider}` : "none",
+          background:
+            hovered === "generate-toggle"
+              ? "var(--sidebar-hover, var(--surface-1))"
+              : "transparent",
+          fontFamily: MONO,
+          fontSize: "var(--font-size-xs)",
+          fontWeight: 500,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+          width: "100%",
+          textAlign: "left",
+          transition: "background 150ms",
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            color: T.muted,
+            display: "inline-block",
+            transform: open ? "rotate(90deg)" : "none",
+            transition: "transform 150ms",
+            fontSize: "var(--font-size-sm)",
+            lineHeight: 1,
+          }}
+        >
+          ▸
+        </span>
+        <span style={{ color: T.fg }}>Generate from context</span>
+        <span style={{ flex: 1, height: 1, background: T.divider }} />
+        {!open && (
+          <span
+            style={{
+              color: T.muted,
+              letterSpacing: "0.08em",
+              textTransform: "none",
+            }}
+          >
+            draft from a character brief
+          </span>
+        )}
+      </button>
+
+      {/* Body */}
+      {open && (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-14)",
+          padding: "18px 20px",
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            color: T.text,
+            fontFamily: BODY,
+            fontSize: "var(--font-size-md)",
+            lineHeight: "20px",
+            maxWidth: 720,
+          }}
+        >
+          Explain who this character is and one model call drafts the domain
+          lens — structure, eras, and bound characters come from the engine.
+          Nothing is saved until you review and Save.
+        </p>
+
+        {/* Character brief — the one user input */}
+        <div
+          className="ingestion-prompt-test-field"
+          style={{
+            display: "flex",
+            alignItems: "stretch",
+            border: `1px solid ${T.inputBorder}`,
+            borderRadius: "var(--radius-md)",
+            background: T.inputBg,
+            overflow: "hidden",
+            transition: "border-color 150ms, box-shadow 150ms",
+          }}
+        >
+          <div
+            style={{
+              width: 90,
+              flexShrink: 0,
+              padding: "14px 14px",
+              borderRight: `1px solid ${T.divider}`,
+              background: "transparent",
+              color: T.muted,
+              fontFamily: MONO,
+              fontSize: "var(--font-size-xs)",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+            }}
+          >
+            Character
+          </div>
+          <textarea
+            className="ingestion-prompt-test-input"
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            placeholder="Who is this character? Their world, what shaped them, what they care about, how they relate to the material this wiki will hold..."
+            rows={6}
+            spellCheck={false}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              color: T.fg,
+              fontFamily: BODY,
+              fontSize: "var(--font-size-base)",
+              lineHeight: "20px",
+              padding: "14px 16px",
+              resize: "vertical",
+            }}
+          />
+        </div>
+
+        {/* Actions */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-12)",
+            paddingTop: "var(--space-4)",
+          }}
+        >
+          <span style={{ flex: 1 }} />
+          <span
+            style={{
+              color: T.faded,
+              fontFamily: MONO,
+              fontSize: "var(--font-size-xs)",
+              letterSpacing: "0.06em",
+            }}
+          >
+            claude-sonnet-4-5 · live model call
+          </span>
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={!canRun}
+            aria-label="Generate draft"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-8)",
+              height: 32,
+              padding: "0 16px",
+              background: canRun ? T.accent : T.accentSoft,
+              border: canRun ? "none" : `1px solid ${T.accentLine}`,
+              borderRadius: "var(--radius-sm)",
+              color: canRun ? T.onAccent : T.accent,
+              fontFamily: MONO,
+              fontSize: "var(--font-size-sm)",
+              fontWeight: 600,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              opacity: canRun ? 1 : 0.55,
+              cursor: canRun ? "pointer" : "not-allowed",
+              transition: "background 150ms, opacity 150ms",
+            }}
+          >
+            {state === "running" ? "▸ Generating…" : "▸ Generate draft"}
+          </button>
+        </div>
+
+        {/* Error */}
+        {state === "error" && error && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-10)",
+              padding: "10px 14px",
+              border: `1px solid color-mix(in srgb, var(--status-error) 36%, transparent)`,
+              borderRadius: "var(--radius-md)",
+              background:
+                "color-mix(in srgb, var(--status-error) 8%, transparent)",
+              fontFamily: MONO,
+              fontSize: "var(--font-size-sm)",
+              color: "var(--status-error)",
+              letterSpacing: "0.04em",
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "var(--status-error)",
+              }}
+            />
+            <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>
+              {error}
+            </span>
+          </div>
+        )}
+
+        {/* Draft preview */}
+        {result && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              border: `1px solid ${T.border}`,
+              borderRadius: "var(--radius-md)",
+              background: T.card,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-10)",
+                padding: "12px 16px",
+                borderBottom: `1px solid ${T.divider}`,
+                fontFamily: MONO,
+                fontSize: "var(--font-size-xs)",
+                fontWeight: 500,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: T.muted,
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: T.accent,
+                }}
+              />
+              <span style={{ color: T.fg }}>Draft</span>
+              <span style={{ flex: 1, height: 1, background: T.divider }} />
+              <span
+                style={{
+                  color: T.faded,
+                  letterSpacing: "0.06em",
+                  textTransform: "none",
+                }}
+              >
+                {result.model}
+                {result.totalTokens > 0 &&
+                  ` · ${result.inputTokens}in + ${result.outputTokens}out tok`}
+              </span>
+              <GhostButton
+                onClick={handleInsert}
+                hovered={hovered === "insert"}
+                onHover={() => setHovered("insert")}
+                onUnhover={() => setHovered(null)}
+              >
+                Insert into editor
+              </GhostButton>
+              <button
+                type="button"
+                onClick={() => setResult(null)}
+                onMouseEnter={() => setHovered("clear-draft")}
+                onMouseLeave={() => setHovered(null)}
+                aria-label="Clear draft"
+                style={{
+                  border: "none",
+                  borderRadius: "var(--radius-sm)",
+                  background:
+                    hovered === "clear-draft"
+                      ? "var(--sidebar-hover, var(--surface-1))"
+                      : "transparent",
+                  color: hovered === "clear-draft" ? T.fg : T.muted,
+                  fontFamily: MONO,
+                  fontSize: "var(--font-size-lg)",
+                  cursor: "pointer",
+                  width: 24,
+                  height: 24,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "background 150ms, color 150ms",
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div
+              style={{
+                padding: "6px 18px 16px",
+                maxHeight: 360,
+                overflow: "auto",
+              }}
+            >
+              <PromptMarkdown text={result.prompt} />
+            </div>
+          </div>
+        )}
+      </div>
+      )}
     </div>
   );
 }

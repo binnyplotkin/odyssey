@@ -88,6 +88,9 @@ export type StickyFooterProps = {
   promptTokens: number;
   model: ModelId;
   embeddings?: string;
+  /* Steer metadata mirrored from Classify (read-only). */
+  sourceType: string;
+  tags: string[];
 
   /* Projected (idle / ready). */
   projectedCost?: number;
@@ -416,8 +419,8 @@ function PipelineChips(props: StickyFooterProps) {
     promptLabel,
     promptVersion,
     promptTokens,
-    model,
-    embeddings,
+    sourceType,
+    tags,
     onEditPrompt,
   } = props;
   const muted = state === "idle";
@@ -434,8 +437,8 @@ function PipelineChips(props: StickyFooterProps) {
   const labelColor = muted ? "var(--text-placeholder)" : "var(--text-tertiary)";
 
   const promptDotColor = muted ? PROMPT_DOT_FADED : PROMPT_DOT;
-  const modelDotColor = muted ? MODEL_DOT_FADED : MODEL_DOT;
-  const embedDotColor = muted ? EMBED_DOT_FADED : EMBED_DOT;
+  const typeDotColor = muted ? MODEL_DOT_FADED : MODEL_DOT;
+  const tagsDotColor = muted ? EMBED_DOT_FADED : EMBED_DOT;
 
   const promptText =
     promptTokens > 0 && (state === "idle" || state === "ready")
@@ -465,20 +468,20 @@ function PipelineChips(props: StickyFooterProps) {
         locked={promptLocked}
       />
       <PipelineSegment
-        label="AI model"
-        value={model}
+        label="Source type ↺"
+        value={sourceType}
         valueColor={valueColor}
         labelColor={labelColor}
-        dotColor={modelDotColor}
+        dotColor={typeDotColor}
         flex="0.9 1 250px"
         locked
       />
       <PipelineSegment
-        label="Embedding"
-        value={embeddings ?? "text-embedding-3-small"}
+        label="Tags ↺"
+        value={tags.length > 0 ? tags.join(" · ") : "—"}
         valueColor={valueColor}
         labelColor={labelColor}
-        dotColor={embedDotColor}
+        dotColor={tagsDotColor}
         flex="1 1 280px"
         locked
         isLast

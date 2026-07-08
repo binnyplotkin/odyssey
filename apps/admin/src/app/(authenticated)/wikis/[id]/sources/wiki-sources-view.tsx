@@ -6,12 +6,12 @@ import { useRouter } from "next/navigation";
 import type {
   WikiIngestionLogRecord,
   WikiPageRecord,
-  WikiSourceKind,
   WikiSourceRecord,
   WikiSourceRefRecord,
   SourceMetadataFilterField,
   SourceMetadataFilters,
 } from "@odyssey/db";
+import { deriveSourceTypeFromKind } from "@odyssey/db";
 import {
   SOURCE_METADATA_FILTER_FIELDS,
   SOURCE_METADATA_FILTER_LABELS,
@@ -48,48 +48,28 @@ const DANGER = "var(--status-error)";
 
 /* ── Buckets ───────────────────────────────────────────────────── */
 
-type Bucket = "primary" | "annotation" | "transcript" | "reference";
+type Bucket = "primary" | "secondary" | "tertiary";
 type BucketFilter = "all" | Bucket;
 
-const KIND_TO_BUCKET: Record<WikiSourceKind, Bucket> = {
-  bible: "primary",
-  primary: "primary",
-  commentary: "annotation",
-  midrash: "annotation",
-  annotation: "annotation",
-  note: "reference",
-  reference: "reference",
-  transcript: "transcript",
-};
+function bucketOf(source: WikiSourceRecord): Bucket {
+  return source.sourceType ?? deriveSourceTypeFromKind(source.kind);
+}
 
 const BUCKET_COLOR: Record<Bucket, string> = {
   primary: "#8FD1CB",
-  annotation: "#F4A3B8",
-  transcript: "#A8C4E8",
-  reference: "#9AA4B2",
+  secondary: "#E0B352",
+  tertiary: "#9AA4B2",
 };
 
 const BUCKET_LABEL: Record<Bucket, string> = {
   primary: "PRIMARY",
-  annotation: "ANNOTATION",
-  transcript: "TRANSCRIPT",
-  reference: "REFERENCE",
+  secondary: "SECONDARY",
+  tertiary: "TERTIARY",
 };
 
-const FILTER_ORDER: BucketFilter[] = [
-  "all",
-  "primary",
-  "annotation",
-  "transcript",
-  "reference",
-];
+const FILTER_ORDER: BucketFilter[] = ["all", "primary", "secondary", "tertiary"];
 
-const BUCKET_ORDER: Bucket[] = [
-  "primary",
-  "annotation",
-  "transcript",
-  "reference",
-];
+const BUCKET_ORDER: Bucket[] = ["primary", "secondary", "tertiary"];
 
 /* ── Helpers ───────────────────────────────────────────────────── */
 
@@ -242,11 +222,10 @@ export function WikiSourcesView({
     const c: Record<BucketFilter, number> = {
       all: sources.length,
       primary: 0,
-      annotation: 0,
-      transcript: 0,
-      reference: 0,
+      secondary: 0,
+      tertiary: 0,
     };
-    for (const s of sources) c[KIND_TO_BUCKET[s.kind]] += 1;
+    for (const s of sources) c[bucketOf(s)] += 1;
     return c;
   }, [sources]);
 
@@ -263,7 +242,7 @@ export function WikiSourcesView({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = sources.filter((s) => {
-      if (filter !== "all" && KIND_TO_BUCKET[s.kind] !== filter) return false;
+      if (filter !== "all" && bucketOf(s) !== filter) return false;
       if (!q) return true;
       const meta = s.metadata as Record<string, unknown>;
       const tags = Array.isArray(meta.tags) ? (meta.tags as string[]) : [];
@@ -280,7 +259,7 @@ export function WikiSourcesView({
     });
     const sortFn = (a: WikiSourceRecord, b: WikiSourceRecord) => {
       if (sort === "title") return a.title.localeCompare(b.title);
-      if (sort === "size") return b.content.length - a.content.length;
+      if (sort === "size") return (b.content ?? "").length - (a.content ?? "").length;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     };
     return list.sort(sortFn);
@@ -289,7 +268,7 @@ export function WikiSourcesView({
   const grouped = useMemo(() => {
     const byBucket = new Map<Bucket, WikiSourceRecord[]>();
     for (const s of filtered) {
-      const b = KIND_TO_BUCKET[s.kind];
+      const b = bucketOf(s);
       const list = byBucket.get(b) ?? [];
       list.push(s);
       byBucket.set(b, list);
@@ -512,7 +491,7 @@ function MetaStrip({
   lastRun: WikiIngestionLogRecord | null;
 }) {
   const totalWords = useMemo(
-    () => sources.reduce((acc, s) => acc + wordCount(s.content), 0),
+    () => sources.reduce((acc, s) => acc + wordCount(s.content ?? ""), 0),
     [sources],
   );
   return (
@@ -531,21 +510,15 @@ function MetaStrip({
       <MetaCell label="PRIMARY" value={String(bucketCounts.primary)} swatch={BUCKET_COLOR.primary} />
       <MetaDivider />
       <MetaCell
-        label="ANNOTATION"
-        value={String(bucketCounts.annotation)}
-        swatch={BUCKET_COLOR.annotation}
+        label="SECONDARY"
+        value={String(bucketCounts.secondary)}
+        swatch={BUCKET_COLOR.secondary}
       />
       <MetaDivider />
       <MetaCell
-        label="TRANSCRIPT"
-        value={String(bucketCounts.transcript)}
-        swatch={BUCKET_COLOR.transcript}
-      />
-      <MetaDivider />
-      <MetaCell
-        label="REFERENCE"
-        value={String(bucketCounts.reference)}
-        swatch={BUCKET_COLOR.reference}
+        label="TERTIARY"
+        value={String(bucketCounts.tertiary)}
+        swatch={BUCKET_COLOR.tertiary}
       />
       <MetaDivider />
       <MetaCell
@@ -1146,7 +1119,7 @@ function BucketGroup({
   onOpen: (s: WikiSourceRecord) => void;
 }) {
   const color = BUCKET_COLOR[bucket];
-  const totalWords = sources.reduce((acc, s) => acc + wordCount(s.content), 0);
+  const totalWords = sources.reduce((acc, s) => acc + wordCount(s.content ?? ""), 0);
 
   return (
     <>
@@ -1250,7 +1223,7 @@ function SourceRow({
   runs: WikiIngestionLogRecord[];
   onOpen: () => void;
 }) {
-  const bucket = KIND_TO_BUCKET[source.kind];
+  const bucket = bucketOf(source);
   const color = BUCKET_COLOR[bucket];
   const meta = source.metadata as Record<string, unknown>;
   const summary =
@@ -1317,16 +1290,47 @@ function SourceRow({
       >
         <span
           style={{
-            fontFamily: DISPLAY,
-            fontSize: 15,
-            fontWeight: 500,
-            color: FG,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-8)",
+            minWidth: 0,
           }}
         >
-          {source.title}
+          <span
+            style={{
+              fontFamily: DISPLAY,
+              fontSize: 15,
+              fontWeight: 500,
+              color: FG,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
+            }}
+          >
+            {source.title}
+          </span>
+          {source.content == null && (
+            <span
+              style={{
+                flexShrink: 0,
+                fontFamily: MONO,
+                fontSize: 9,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "var(--warning-amber)",
+                border:
+                  "1px solid color-mix(in srgb, var(--warning-amber) 40%, transparent)",
+                background:
+                  "color-mix(in srgb, var(--warning-amber) 10%, transparent)",
+                borderRadius: "var(--radius-pill)",
+                padding: "2px 8px",
+              }}
+              title="Citation-only stub — created from a citing document's bibliography; no content until hydrated."
+            >
+              STUB
+            </span>
+          )}
         </span>
         <span
           style={{
@@ -1339,7 +1343,13 @@ function SourceRow({
             whiteSpace: "nowrap",
           }}
         >
-          {secondary || <span style={{ color: TEXT_GHOST }}>no summary</span>}
+          {source.content == null ? (
+            <span style={{ color: TEXT_GHOST }}>
+              citation-only · cited work awaiting hydration
+            </span>
+          ) : (
+            secondary || <span style={{ color: TEXT_GHOST }}>no summary</span>
+          )}
         </span>
       </div>
       <div
@@ -1379,7 +1389,7 @@ function SourceRow({
           color: TEXT_MUTED,
         }}
       >
-        {byteSize(source.content)}
+        {byteSize(source.content ?? "")}
       </div>
       <div
         style={{

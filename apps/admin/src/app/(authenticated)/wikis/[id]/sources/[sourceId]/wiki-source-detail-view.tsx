@@ -7,10 +7,11 @@ import type {
   WikiIngestionLogRecord,
   WikiPageRecord,
   WikiPageType,
-  WikiSourceKind,
+  WikiSourceCitationRecord,
   WikiSourceRecord,
   WikiSourceRefRecord,
 } from "@odyssey/db";
+import { deriveSourceTypeFromKind } from "@odyssey/db";
 import { RunEffectDiffDrawer } from "@/components/run-effect-diff-drawer";
 import {
   PurgeConfirmModal,
@@ -63,16 +64,17 @@ const TYPE_COLOR: Record<WikiPageType, string> = {
   voice_identity: "#F472B6",
 };
 
-const KIND_LABEL: Record<WikiSourceKind, string> = {
-  bible: "PRIMARY · BIBLE",
+const SOURCE_TYPE_LABEL: Record<"primary" | "secondary" | "tertiary", string> = {
   primary: "PRIMARY",
-  commentary: "ANNOTATION · COMMENTARY",
-  midrash: "ANNOTATION · MIDRASH",
-  annotation: "ANNOTATION",
-  note: "REFERENCE · NOTE",
-  reference: "REFERENCE",
-  transcript: "TRANSCRIPT",
+  secondary: "SECONDARY",
+  tertiary: "TERTIARY",
 };
+
+function tierOf(
+  source: WikiSourceRecord,
+): "primary" | "secondary" | "tertiary" {
+  return source.sourceType ?? deriveSourceTypeFromKind(source.kind);
+}
 
 /* ── Props ─────────────────────────────────────────────────────── */
 
@@ -84,6 +86,12 @@ type Props = {
   pages: WikiPageRecord[];
   runs: WikiIngestionLogRecord[];
   refs: WikiSourceRefRecord[];
+  /** Citation edges where THIS source is the carrier (it cites these works). */
+  cites: WikiSourceCitationRecord[];
+  /** Citation edges where THIS source is the cited work (carriers citing it). */
+  citedBy: WikiSourceCitationRecord[];
+  /** id → title across the wiki's sources, for rendering edges + attributions. */
+  sourceTitles: Record<string, string>;
   activeRunId: string | null;
   routeBase: string;
 };
@@ -172,6 +180,9 @@ export function WikiSourceDetailView({
   pages,
   runs,
   refs,
+  cites,
+  citedBy,
+  sourceTitles,
   activeRunId,
   routeBase,
 }: Props) {
@@ -209,7 +220,7 @@ export function WikiSourceDetailView({
     });
   }
 
-  const kindLabel = KIND_LABEL[source.kind];
+  const kindLabel = SOURCE_TYPE_LABEL[tierOf(source)];
 
   const searchParams = useSearchParams();
   const effectPageIds = useMemo(() => effects.map((p) => p.id), [effects]);
@@ -286,6 +297,16 @@ export function WikiSourceDetailView({
         refs={refs}
       />
 
+      {(cites.length > 0 || citedBy.length > 0) && (
+        <CitationsPane
+          isStub={source.content == null}
+          cites={cites}
+          citedBy={citedBy}
+          sourceTitles={sourceTitles}
+          routeBase={routeBase}
+        />
+      )}
+
       <main
         style={{
           display: "flex",
@@ -314,6 +335,7 @@ export function WikiSourceDetailView({
                   effects.some((p) => p.id === r.pageId) &&
                   r.sourceId === source.id,
               )}
+              sourceTitles={sourceTitles}
               routeBase={routeBase}
               onOpenDiff={handleOpenDiff}
             />
@@ -342,6 +364,204 @@ export function WikiSourceDetailView({
         onConfirm={confirmPurge}
       />
     </div>
+  );
+}
+
+/* ── CitationsPane — nested provenance (carrier ↔ cited works) ──── */
+
+function CitationsPane({
+  isStub,
+  cites,
+  citedBy,
+  sourceTitles,
+  routeBase,
+}: {
+  isStub: boolean;
+  cites: WikiSourceCitationRecord[];
+  citedBy: WikiSourceCitationRecord[];
+  sourceTitles: Record<string, string>;
+  routeBase: string;
+}) {
+  // Group carrier edges by cited work — one row per work, all its markers.
+  const citedWorks = useMemo(() => {
+    const byWork = new Map<string, { markers: string[]; rawCitation: string | null }>();
+    for (const edge of cites) {
+      const entry = byWork.get(edge.citedId) ?? { markers: [], rawCitation: null };
+      if (edge.marker) entry.markers.push(edge.marker);
+      // Prefer a real bibliography entry over the mechanical apparatus line.
+      if (edge.rawCitation && !edge.rawCitation.startsWith("[apparatus]")) {
+        entry.rawCitation = edge.rawCitation;
+      } else if (!entry.rawCitation) {
+        entry.rawCitation = edge.rawCitation;
+      }
+      byWork.set(edge.citedId, entry);
+    }
+    return Array.from(byWork.entries());
+  }, [cites]);
+
+  const carriers = useMemo(() => {
+    const ids = new Set(citedBy.map((e) => e.carrierId));
+    return Array.from(ids);
+  }, [citedBy]);
+
+  return (
+    <section
+      style={{
+        margin: "24px 32px 0",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-12)",
+      }}
+    >
+      {citedBy.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            flexWrap: "wrap",
+            gap: "var(--space-8)",
+            padding: "12px 16px",
+            borderRadius: "var(--radius-md)",
+            border: `1px solid ${WARN_RING}`,
+            background: WARN_SOFT,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 10,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: WARN,
+            }}
+          >
+            {isStub ? "citation-only stub" : "cited work"}
+          </span>
+          <span style={{ fontFamily: BODY, fontSize: 13, color: TEXT_SECONDARY }}>
+            {isStub
+              ? "No content yet — known only through the document(s) citing it:"
+              : "Cited by:"}
+          </span>
+          {carriers.map((carrierId) => (
+            <Link
+              key={carrierId}
+              href={`${routeBase}/sources/${carrierId}`}
+              style={{
+                fontFamily: BODY,
+                fontSize: 13,
+                color: ACCENT,
+                textDecoration: "none",
+                borderBottom: `1px solid ${ACCENT_RING}`,
+              }}
+            >
+              {sourceTitles[carrierId] ?? "unknown source"}
+            </Link>
+          ))}
+          {isStub && (
+            <span style={{ fontFamily: MONO, fontSize: 11, color: TEXT_FADED }}>
+              · ingest the real document to hydrate
+            </span>
+          )}
+        </div>
+      )}
+
+      {citedWorks.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            borderRadius: "var(--radius-md)",
+            border: `1px solid ${BORDER}`,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: "var(--space-8)",
+              padding: "10px 16px",
+              borderBottom: `1px solid ${DIVIDER}`,
+              background: INPUT_BG,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: MONO,
+                fontSize: 10,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: TEXT_MUTED,
+              }}
+            >
+              cites
+            </span>
+            <span style={{ fontFamily: MONO, fontSize: 11, color: TEXT_FADED }}>
+              {citedWorks.length} works · claims in this document attribute to
+              them
+            </span>
+          </div>
+          {citedWorks.map(([citedId, work]) => (
+            <div
+              key={citedId}
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                gap: "var(--space-10)",
+                padding: "9px 16px",
+                borderBottom: `1px solid ${DIVIDER}`,
+              }}
+            >
+              <span
+                style={{
+                  flexShrink: 0,
+                  width: 120,
+                  fontFamily: MONO,
+                  fontSize: 10,
+                  color: TEXT_FADED,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={work.markers.join(" ")}
+              >
+                {work.markers.length > 0 ? work.markers.slice(0, 4).join(" ") : "—"}
+                {work.markers.length > 4 ? ` +${work.markers.length - 4}` : ""}
+              </span>
+              <Link
+                href={`${routeBase}/sources/${citedId}`}
+                style={{
+                  fontFamily: BODY,
+                  fontSize: 13,
+                  color: TEXT_PRIMARY,
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {sourceTitles[citedId] ?? "unknown source"}
+              </Link>
+              {work.rawCitation && (
+                <span
+                  style={{
+                    fontFamily: MONO,
+                    fontSize: 10,
+                    color: TEXT_GHOST,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    minWidth: 0,
+                  }}
+                >
+                  {work.rawCitation.slice(0, 90)}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -717,8 +937,8 @@ function MetaStrip({
   lastRun: WikiIngestionLogRecord | null;
   refs: WikiSourceRefRecord[];
 }) {
-  const words = wordCount(source.content);
-  const size = byteSize(source.content);
+  const words = wordCount(source.content ?? "");
+  const size = byteSize(source.content ?? "");
 
   const lastIngested = lastRun
     ? `${relative(lastRun.startedAt)} · ${shortRunId(lastRun.id)}`
@@ -739,7 +959,7 @@ function MetaStrip({
         flexWrap: "wrap",
       }}
     >
-      <MetaCell label="KIND" value={source.kind.toUpperCase()} accent />
+      <MetaCell label="SOURCE TYPE" value={tierOf(source).toUpperCase()} accent />
       <MetaDivider />
       <MetaCell label="WORDS" value={words.toLocaleString()} />
       <MetaDivider />
@@ -1395,9 +1615,9 @@ function InputPane({
   source: WikiSourceRecord;
   run: WikiIngestionLogRecord;
 }) {
-  const totalWords = wordCount(source.content);
+  const totalWords = wordCount(source.content ?? "");
   const tokensApprox = Math.round(totalWords * 1.3);
-  const excerpt = source.content.slice(0, 1600);
+  const excerpt = (source.content ?? "").slice(0, 1600);
   const parsedMetadata = getSourceParsedMetadata(source);
   const hasParsedMetadata = Object.keys(parsedMetadata).length > 0;
 
@@ -1475,7 +1695,7 @@ function InputPane({
         }}
       >
         {excerpt}
-        {source.content.length > excerpt.length && "\n…"}
+        {(source.content ?? "").length > excerpt.length && "\n…"}
       </pre>
       <div
         style={{
@@ -1496,7 +1716,7 @@ function InputPane({
             color: TEXT_MUTED,
           }}
         >
-          SOURCE {source.kind.toUpperCase()} · {byteSize(source.content)}
+          SOURCE {tierOf(source).toUpperCase()} · {byteSize(source.content ?? "")}
         </span>
         <span
           style={{
@@ -1863,14 +2083,32 @@ function StatDivider() {
 function EffectsPane({
   run,
   effects,
+  refs,
+  sourceTitles,
   onOpenDiff,
 }: {
   run: WikiIngestionLogRecord;
   effects: WikiPageRecord[];
   refs: WikiSourceRefRecord[];
+  sourceTitles: Record<string, string>;
   routeBase: string;
   onOpenDiff: (pageId: string) => void;
 }) {
+  // Nested provenance: per page, the cited works its refs attribute to
+  // (claims that really live in a work this document cites, not here).
+  const attributedByPage = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const r of refs) {
+      if (!r.attributedSourceId) continue;
+      const title = sourceTitles[r.attributedSourceId];
+      if (!title) continue;
+      const list = m.get(r.pageId) ?? [];
+      if (!list.includes(title)) list.push(title);
+      m.set(r.pageId, list);
+    }
+    return m;
+  }, [refs, sourceTitles]);
+
   return (
     <PaneShell
       number={4}
@@ -1933,6 +2171,7 @@ function EffectsPane({
             <EffectRow
               key={page.id}
               page={page}
+              attributedTo={attributedByPage.get(page.id) ?? []}
               onOpenDiff={onOpenDiff}
             />
           ))}
@@ -2041,9 +2280,12 @@ function ColHead({
 
 function EffectRow({
   page,
+  attributedTo,
   onOpenDiff,
 }: {
   page: WikiPageRecord;
+  /** Titles of cited works this page's refs attribute claims to. */
+  attributedTo: string[];
   onOpenDiff: (pageId: string) => void;
 }) {
   const typeColor = TYPE_COLOR[page.type];
@@ -2164,6 +2406,56 @@ function EffectRow({
           >
             {page.slug} · {page.summary ?? ""}
           </span>
+          {attributedTo.length > 0 && (
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "var(--space-6)",
+                marginTop: 2,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: MONO,
+                  fontSize: 9,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: TEXT_FADED,
+                }}
+              >
+                per
+              </span>
+              {attributedTo.slice(0, 3).map((title) => (
+                <span
+                  key={title}
+                  style={{
+                    fontFamily: MONO,
+                    fontSize: 10,
+                    color: TEXT_SECONDARY,
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: "var(--radius-pill)",
+                    padding: "1px 8px",
+                    maxWidth: 260,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={`Claims on this page attribute to: ${title}`}
+                >
+                  {title}
+                </span>
+              ))}
+              {attributedTo.length > 3 && (
+                <span
+                  style={{ fontFamily: MONO, fontSize: 10, color: TEXT_FADED }}
+                >
+                  +{attributedTo.length - 3} more
+                </span>
+              )}
+            </span>
+          )}
         </div>
         <div
           style={{

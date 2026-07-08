@@ -1,6 +1,12 @@
 "use client";
 
-import { type ClipboardEvent, type Ref } from "react";
+import { useRef, type ChangeEvent, type ClipboardEvent, type Ref } from "react";
+
+export type PdfUploadState =
+  | { status: "idle" }
+  | { status: "extracting"; filename: string }
+  | { status: "loaded"; filename: string; pages: number; chars: number }
+  | { status: "error"; filename: string; error: string };
 
 /**
  * Source composer — Section 01 of the wiki ingestion flow.
@@ -52,6 +58,11 @@ export type SourceComposerProps = {
 
   /** Eyebrow override — defaults to `source`. */
   stepLabel?: string;
+
+  /** When provided, shows an "Upload PDF" control; called with the picked file. */
+  onSelectPdf?: (file: File) => void;
+  /** Upload/extract status, rendered as a file chip. */
+  pdfState?: PdfUploadState;
 };
 
 export function SourceComposer({
@@ -62,8 +73,19 @@ export function SourceComposer({
   tokens,
   maxTokens = 120_000,
   stepLabel = "source",
+  onSelectPdf,
+  pdfState,
 }: SourceComposerProps) {
   const tokenCeiling = `${Math.round(maxTokens / 1000)}k`;
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const extracting = pdfState?.status === "extracting";
+
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Reset so re-selecting the same file re-fires onChange.
+    e.target.value = "";
+    if (file && onSelectPdf) onSelectPdf(file);
+  }
 
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: "var(--space-14)" }}>
@@ -72,7 +94,7 @@ export function SourceComposer({
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "flex-start",
+          justifyContent: "space-between",
         }}
       >
         <span
@@ -86,6 +108,40 @@ export function SourceComposer({
         >
           {stepLabel}
         </span>
+        {onSelectPdf && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              onChange={handleFileChange}
+              style={{ display: "none" }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={extracting}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "5px 12px",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--control-border)",
+                background: "var(--control-bg)",
+                color: "var(--text-secondary)",
+                fontFamily: FONT_MONO,
+                fontSize: "var(--font-size-xs)",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor: extracting ? "default" : "pointer",
+                opacity: extracting ? 0.6 : 1,
+              }}
+            >
+              {extracting ? "Extracting…" : "↑ Upload PDF"}
+            </button>
+          </>
+        )}
       </header>
 
       <div
@@ -118,6 +174,58 @@ export function SourceComposer({
         >
           {tokens.toLocaleString()} / ~{tokenCeiling} tokens
         </span>
+
+        {pdfState && pdfState.status !== "idle" && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 18px",
+              borderBottom: "1px solid var(--border-subtle)",
+            }}
+          >
+            <span
+              aria-hidden
+              style={{ fontFamily: FONT_MONO, color: ACCENT }}
+            >
+              ▤
+            </span>
+            <span
+              style={{
+                fontFamily: FONT_BODY,
+                fontSize: "var(--font-size-sm)",
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                maxWidth: "46%",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {pdfState.filename}
+            </span>
+            <span
+              style={{
+                fontFamily: FONT_MONO,
+                fontSize: "var(--font-size-xs)",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color:
+                  pdfState.status === "error"
+                    ? "var(--status-error)"
+                    : "var(--text-tertiary)",
+              }}
+            >
+              {pdfState.status === "extracting" && "extracting…"}
+              {pdfState.status === "loaded" &&
+                `text extracted · ${pdfState.pages} ${
+                  pdfState.pages === 1 ? "page" : "pages"
+                } · ~${Math.round(pdfState.chars / 1000)}k chars`}
+              {pdfState.status === "error" && `failed — ${pdfState.error}`}
+            </span>
+          </div>
+        )}
 
         <div
           style={{

@@ -13,9 +13,27 @@ import { parseSourceFrontmatter } from "@/lib/source-frontmatter";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type SourceType = "primary" | "secondary" | "tertiary";
+
 type IngestBody = {
   title: string;
-  kind: WikiSourceKind;
+  /** @deprecated collapsing into `sourceType`; still accepted for back-compat. */
+  kind?: WikiSourceKind;
+  sourceType?: SourceType;
+  /** Structured citation from the Classify tab; merged into frontmatter → classify.citation. */
+  citation?: {
+    author?: string;
+    year?: number | string;
+    publisher?: string;
+    isbn?: string;
+  };
+  /** Structured About facets from the Classify tab; merged into frontmatter → classify.facets. */
+  facets?: {
+    themes?: string[];
+    location?: string[];
+    timePeriod?: string;
+    participants?: string[];
+  };
   tags?: string[];
   content: string;
   frontmatter?: string;
@@ -32,6 +50,12 @@ const ACCEPTED_KINDS = new Set<WikiSourceKind>([
   "primary",
   "annotation",
   "reference",
+]);
+
+const VALID_SOURCE_TYPES = new Set<SourceType>([
+  "primary",
+  "secondary",
+  "tertiary",
 ]);
 
 export async function POST(
@@ -51,8 +75,14 @@ export async function POST(
   if (body.frontmatter != null && typeof body.frontmatter !== "string") {
     return jsonError(400, "frontmatter must be a YAML string");
   }
-  if (!body.kind || !ACCEPTED_KINDS.has(body.kind)) {
+  if (body.sourceType != null && !VALID_SOURCE_TYPES.has(body.sourceType)) {
+    return jsonError(400, `invalid sourceType "${body.sourceType}"`);
+  }
+  if (body.kind != null && !ACCEPTED_KINDS.has(body.kind)) {
     return jsonError(400, `invalid kind "${body.kind}"`);
+  }
+  if (body.sourceType == null && body.kind == null) {
+    return jsonError(400, "sourceType (or legacy kind) is required");
   }
   if (body.model && !isKnownModel(body.model)) {
     return jsonError(400, `unknown model "${body.model}"`);
@@ -86,13 +116,17 @@ export async function POST(
     wikiId: wikiRecord.id,
     title: body.title.trim(),
     kind: body.kind,
+    sourceType: body.sourceType,
     content: sourceContent,
     metadata: {
       tags: (body.tags ?? [])
         .filter((t) => typeof t === "string" && t.trim())
         .map((t) => t.trim()),
       frontmatterRaw: frontmatter.raw,
-      frontmatter: frontmatter.metadata,
+      frontmatter: mergeFacets(
+        mergeCitation(frontmatter.metadata, body.citation),
+        body.facets,
+      ),
       ...(body.notes?.trim() ? { notes: body.notes.trim() } : {}),
     },
   });
@@ -224,13 +258,41 @@ async function resumeDuplicateSource(args: {
   }
 
   const latestRun = runs[0];
-  if (latestRun) {
+  if (latestRun?.status === "succeeded") {
     return ingestRunResponse({
       run: latestRun,
       sourceId: args.source.id,
       duplicateSourceId: args.source.id,
       reused: true,
-      alreadyIngested: latestRun.status === "succeeded",
+      alreadyIngested: true,
+    });
+  }
+
+  // The source exists but its most recent run ended without success and left no
+  // retryable ops behind — it died at a pre-op step (load / survey / plan), so
+  // the op-retry loop above found nothing to resume. Echoing that dead run
+  // would strand the source forever (every re-Run just replays the old error),
+  // so enqueue a FRESH full run instead. Active queued/running runs and
+  // op-level failures were already handled above, so this is only reached for
+  // terminal non-success states (failed / cancelled).
+  if (latestRun) {
+    const freshRun = await args.wiki.startIngestion({
+      wikiId: args.wikiId,
+      sourceId: args.source.id,
+      model: latestRun.model ?? args.model,
+      status: "queued",
+      notes: `resume duplicate source; fresh run after pre-op ${latestRun.status} of ${latestRun.id}`,
+    });
+    await args.wiki.appendIngestionEvent(freshRun.id, {
+      type: "queued",
+      runId: freshRun.id,
+      model: freshRun.model,
+    });
+    return ingestRunResponse({
+      run: freshRun,
+      sourceId: args.source.id,
+      duplicateSourceId: args.source.id,
+      reused: false,
     });
   }
 
@@ -352,6 +414,36 @@ function isPlanOp(value: unknown): value is PlanOp {
 
 function sha256Hex(input: string): string {
   return createHash("sha256").update(input).digest("hex");
+}
+
+/** Fold structured Classify citation fields into the parsed frontmatter (structured wins). */
+function mergeCitation(
+  frontmatter: Record<string, unknown>,
+  citation: IngestBody["citation"],
+): Record<string, unknown> {
+  if (!citation) return frontmatter;
+  const merged = { ...frontmatter };
+  if (citation.author?.trim()) merged.author = citation.author.trim();
+  const year =
+    typeof citation.year === "string" ? Number(citation.year) : citation.year;
+  if (typeof year === "number" && Number.isFinite(year)) merged.year = year;
+  if (citation.publisher?.trim()) merged.publisher = citation.publisher.trim();
+  if (citation.isbn?.trim()) merged.isbn = citation.isbn.trim();
+  return merged;
+}
+
+/** Fold structured About facets into frontmatter (→ classify.facets on ingest). */
+function mergeFacets(
+  frontmatter: Record<string, unknown>,
+  facets: IngestBody["facets"],
+): Record<string, unknown> {
+  if (!facets) return frontmatter;
+  const merged = { ...frontmatter };
+  if (facets.themes?.length) merged.themes = facets.themes;
+  if (facets.location?.length) merged.location = facets.location;
+  if (facets.timePeriod?.trim()) merged.time_period = facets.timePeriod.trim();
+  if (facets.participants?.length) merged.participants = facets.participants;
+  return merged;
 }
 
 function jsonError(status: number, message: string) {

@@ -12,7 +12,7 @@
  * `rebuildEdges(characterId)` is the safety valve for when drift shows up.
  */
 
-import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "./client";
 import { retryRead } from "./retry";
 import {
@@ -21,6 +21,7 @@ import {
   wikiIngestionLogTable,
   wikiPagesTable,
   wikiPageVersionsTable,
+  wikiSourceCitationsTable,
   wikiSourceRefsTable,
   wikiSourcesTable,
   characterKnowledgeBindingsTable,
@@ -52,12 +53,27 @@ import type {
   WikiSourceKind,
   WikiSourceRecord,
   WikiSourceRefRecord,
+  WikiSourceCitationRecord,
+  CreateSourceCitationInput,
 } from "./wiki-types";
 import {
   cachedEdgesForWiki,
   cachedPagesForWiki,
   invalidateWikiGraphCache,
 } from "./wiki-graph-cache";
+import {
+  buildStoredSourceMetadata,
+  citationIdentityKey,
+  deriveKindFromSourceType,
+  deriveSourceTypeFromKind,
+  readClassifyMetadata,
+  shadowKind,
+  SOURCE_METADATA_SCHEMA_VERSION,
+  type ClassifyMetadata,
+  type CreateStubSourceInput,
+  type SourceCitation,
+  type SourceFacets,
+} from "./source-metadata";
 
 /* ── Helpers ────────────────────────────────────────────────────── */
 
@@ -135,29 +151,61 @@ function sourceMetadataFilterConditions(
   return conditions;
 }
 
+/**
+ * Where each snake_case filter field lives in the typed `classify` block.
+ * Facets were promoted (and camelCased); world-specific keys stay in `extra`.
+ * Filtering prefers the typed path and falls back to the legacy `frontmatter`
+ * blob so pre-migration rows (no `classify`) keep filtering correctly.
+ */
+const FIELD_CLASSIFY_PATH: Record<string, readonly [string, string]> = {
+  themes: ["facets", "themes"],
+  location: ["facets", "location"],
+  time_period: ["facets", "timePeriod"],
+  participants: ["facets", "participants"],
+  character_focus: ["facets", "characterFocus"],
+  canonicality: ["extra", "canonicality"],
+  knowledge_accessible: ["extra", "knowledge_accessible"],
+  speaker: ["extra", "speaker"],
+  chronological_order: ["extra", "chronological_order"],
+};
+
+function sourceMetadataJson(field: string): SQL {
+  const legacy = sql`jsonb_extract_path(${wikiSourcesTable.metadata}, 'frontmatter', ${field})`;
+  const path = FIELD_CLASSIFY_PATH[field];
+  if (!path) return legacy;
+  return sql`COALESCE(jsonb_extract_path(${wikiSourcesTable.metadata}, 'classify', ${path[0]}, ${path[1]}), ${legacy})`;
+}
+
+function sourceMetadataText(field: string): SQL {
+  const legacy = sql`jsonb_extract_path_text(${wikiSourcesTable.metadata}, 'frontmatter', ${field})`;
+  const path = FIELD_CLASSIFY_PATH[field];
+  if (!path) return legacy;
+  return sql`COALESCE(jsonb_extract_path_text(${wikiSourcesTable.metadata}, 'classify', ${path[0]}, ${path[1]}), ${legacy})`;
+}
+
 function sourceMetadataValueCondition(
   field: string,
   value: string | boolean | number,
 ): SQL | null {
   if (typeof value === "boolean" || typeof value === "number") {
-    return sql`jsonb_extract_path(${wikiSourcesTable.metadata}, 'frontmatter', ${field}) = ${JSON.stringify(value)}::jsonb`;
+    return sql`${sourceMetadataJson(field)} = ${JSON.stringify(value)}::jsonb`;
   }
 
   const trimmed = value.trim();
   if (!trimmed) return null;
 
   if (field === "chronological_order" && /^-?\d+(?:\.\d+)?$/.test(trimmed)) {
-    return sql`jsonb_extract_path(${wikiSourcesTable.metadata}, 'frontmatter', ${field}) = ${trimmed}::jsonb`;
+    return sql`${sourceMetadataJson(field)} = ${trimmed}::jsonb`;
   }
 
-  const scalarMatch = sql`lower(jsonb_extract_path_text(${wikiSourcesTable.metadata}, 'frontmatter', ${field})) = lower(${trimmed})`;
+  const scalarMatch = sql`lower(${sourceMetadataText(field)}) = lower(${trimmed})`;
   if (!ARRAY_SOURCE_METADATA_FIELDS.has(field)) return scalarMatch;
 
   return sql`(
     ${scalarMatch}
     OR (
-      jsonb_typeof(jsonb_extract_path(${wikiSourcesTable.metadata}, 'frontmatter', ${field})) = 'array'
-      AND jsonb_extract_path(${wikiSourcesTable.metadata}, 'frontmatter', ${field}) @> ${JSON.stringify([trimmed])}::jsonb
+      jsonb_typeof(${sourceMetadataJson(field)}) = 'array'
+      AND ${sourceMetadataJson(field)} @> ${JSON.stringify([trimmed])}::jsonb
     )
   )`;
 }
@@ -532,17 +580,68 @@ function normalizeEdge(
 function normalizeSource(
   row: typeof wikiSourcesTable.$inferSelect,
 ): WikiSourceRecord {
+  // The `kind` column is dropped; `WikiSourceRecord.kind` is a derived legacy
+  // shadow (see shadowKind). Real classifier is metadata.classify.sourceType.
+  const metadata = (row.metadata as Record<string, unknown> | null) ?? {};
+  const classify = readClassifyMetadata({ metadata });
+  const provenance = classify.provenance;
+  const sourceType =
+    provenance.ingestionType === "source" ? provenance.sourceType : undefined;
+  const kind = shadowKind(classify);
   return {
     id: row.id,
     characterId: row.characterId ?? "",
     wikiId: row.wikiId ?? null,
     title: row.title,
-    kind: row.kind as WikiSourceKind,
+    kind,
+    sourceType,
+    // Null for STUB sources (nested provenance) — citation-only until hydrated.
     content: row.content,
     contentHash: row.contentHash,
-    metadata: (row.metadata as Record<string, unknown> | null) ?? {},
+    metadata,
     createdAt: requireIso(row.createdAt),
     updatedAt: requireIso(row.updatedAt),
+  };
+}
+
+/**
+ * Identity scan for a cited work within a wiki. O(N) over the wiki's sources —
+ * wikis hold tens of sources today; promote the identity key to an indexed
+ * column if this ever shows up in traces.
+ */
+async function findSourceByCitationImpl(
+  wikiId: string,
+  citation: SourceCitation,
+): Promise<WikiSourceRecord | null> {
+  const key = citationIdentityKey(citation);
+  if (!key) return null;
+  const db = requireDb();
+  const rows = await retryRead(() =>
+    db
+      .select()
+      .from(wikiSourcesTable)
+      .where(eq(wikiSourcesTable.wikiId, wikiId)),
+  );
+  for (const row of rows) {
+    const metadata = (row.metadata as Record<string, unknown> | null) ?? {};
+    const p = readClassifyMetadata({ metadata }).provenance;
+    if (p.ingestionType !== "source" || !p.citation) continue;
+    if (citationIdentityKey(p.citation) === key) return normalizeSource(row);
+  }
+  return null;
+}
+
+function normalizeSourceCitation(
+  row: typeof wikiSourceCitationsTable.$inferSelect,
+): WikiSourceCitationRecord {
+  return {
+    id: row.id,
+    carrierId: row.carrierId,
+    citedId: row.citedId,
+    marker: row.marker,
+    rawCitation: row.rawCitation,
+    locator: row.locator,
+    createdAt: requireIso(row.createdAt),
   };
 }
 
@@ -553,6 +652,7 @@ function normalizeSourceRef(
     id: row.id,
     pageId: row.pageId,
     sourceId: row.sourceId,
+    attributedSourceId: row.attributedSourceId ?? null,
     passage: row.passage,
     quote: row.quote,
     relevanceNote: row.relevanceNote,
@@ -976,7 +1076,36 @@ export interface WikiStore {
 
   // Sources
   createSource(input: CreateSourceInput): Promise<WikiSourceRecord>;
+  /**
+   * Create a citation-only STUB source (nested provenance): no content until
+   * hydrated (P2). Dedupes first — if a source in this wiki already matches
+   * the citation's identity (`citationIdentityKey`), returns it instead of
+   * creating. Throws if the citation is too thin to identify (junk-stub guard).
+   */
+  createStubSource(input: CreateStubSourceInput): Promise<WikiSourceRecord>;
+  /**
+   * Find a source in this wiki whose citation identity matches — hard
+   * identifier (isbn/doi/url) first, else normalized author+year+title.
+   * Matches stubs AND hydrated/full sources (a commentary citing
+   * already-ingested scripture should attribute to the real source).
+   */
+  findSourceByCitation(
+    wikiId: string,
+    citation: SourceCitation,
+  ): Promise<WikiSourceRecord | null>;
   getSource(id: string): Promise<WikiSourceRecord | null>;
+  /**
+   * Fill in a source's OWN citation + browse facets from the survey stage
+   * (the document's self-identity, not its bibliography). Additive only:
+   * existing citation fields / non-empty facets are never overwritten, so a
+   * value a human already set wins over the model's. Citation is only merged
+   * for `ingestionType: "source"` provenance. Returns the updated record, or
+   * null if the source is gone or nothing changed.
+   */
+  enrichSourceClassify(
+    id: string,
+    patch: { citation?: SourceCitation; facets?: SourceFacets },
+  ): Promise<WikiSourceRecord | null>;
   findSourceByHash(
     characterId: string,
     contentHash: string,
@@ -1010,6 +1139,14 @@ export interface WikiStore {
     pagesRemoved: number;
     edgesRemoved: number;
   }>;
+
+  // Source citations (nested provenance: carrier → cited edges)
+  /** Insert citation edges; duplicates (same carrier+cited+marker) are ignored. */
+  addSourceCitations(edges: CreateSourceCitationInput[]): Promise<void>;
+  listCitationsForCarrier(
+    carrierId: string,
+  ): Promise<WikiSourceCitationRecord[]>;
+  listCitationsForCited(citedId: string): Promise<WikiSourceCitationRecord[]>;
 
   // Source refs
   addSourceRefs(refs: CreateSourceRefInput[]): Promise<void>;
@@ -1818,21 +1955,76 @@ function neonStore(): WikiStore {
       const db = requireDb();
       const contentHash = await sha256Hex(input.content);
       const now = new Date();
+      // `sourceType` is the classifier (stored in metadata.classify). The legacy
+      // `kind` column is no longer written; `kind` here only seeds the metadata
+      // read below (facets/extra come from frontmatter, sourceType is overridden).
+      const sourceType =
+        input.sourceType ??
+        (input.kind ? deriveSourceTypeFromKind(input.kind) : "secondary");
+      const kind = input.kind ?? deriveKindFromSourceType(sourceType);
       const [row] = await db
         .insert(wikiSourcesTable)
         .values({
           characterId: input.characterId ?? null,
           wikiId: input.wikiId ?? null,
           title: input.title,
-          kind: input.kind,
+          // `kind` column is intentionally not written (kind→sourceType collapse) → null.
+          // The classifier lives in metadata.classify.provenance.sourceType.
           content: input.content,
           contentHash,
-          metadata: input.metadata ?? {},
+          metadata: buildStoredSourceMetadata(kind, input.metadata, {
+            sourceType,
+          }),
           createdAt: now,
           updatedAt: now,
         })
         .returning();
       return normalizeSource(row);
+    },
+
+    async createStubSource(input) {
+      const key = citationIdentityKey(input.citation);
+      if (!key) {
+        // Junk-stub guard (spec): a citation must be identifiable —
+        // (author|identifier) + title — to become a stub.
+        throw new Error(
+          "createStubSource: citation too thin to identify (needs identifier, or author + title)",
+        );
+      }
+      const existing = await findSourceByCitationImpl(input.wikiId, input.citation);
+      if (existing) return existing;
+
+      const db = requireDb();
+      const now = new Date();
+      const classify: ClassifyMetadata = {
+        schemaVersion: SOURCE_METADATA_SCHEMA_VERSION,
+        provenance: {
+          ingestionType: "source",
+          sourceType: input.sourceType,
+          citation: input.citation,
+          hydration: "stub",
+        },
+        facets: {},
+        tags: input.tags ?? [],
+        extra: {},
+      };
+      const [row] = await db
+        .insert(wikiSourcesTable)
+        .values({
+          wikiId: input.wikiId,
+          title: input.title,
+          content: null,
+          contentHash: null,
+          metadata: { classify },
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+      return normalizeSource(row);
+    },
+
+    async findSourceByCitation(wikiId, citation) {
+      return findSourceByCitationImpl(wikiId, citation);
     },
 
     async getSource(id) {
@@ -1845,6 +2037,74 @@ function neonStore(): WikiStore {
           .limit(1),
       );
       return row ? normalizeSource(row) : null;
+    },
+
+    async enrichSourceClassify(id, patch) {
+      const db = requireDb();
+      const [row] = await retryRead(() =>
+        db
+          .select()
+          .from(wikiSourcesTable)
+          .where(eq(wikiSourcesTable.id, id))
+          .limit(1),
+      );
+      if (!row) return null;
+
+      const metadata = (row.metadata as Record<string, unknown> | null) ?? {};
+      const classify = readClassifyMetadata({ metadata });
+      let changed = false;
+
+      // Citation: additive fill, source provenance only. A human-set field wins.
+      if (patch.citation && classify.provenance.ingestionType === "source") {
+        const current = classify.provenance.citation ?? {};
+        const merged: SourceCitation = { ...current };
+        for (const key of ["author", "year", "title", "publisher", "edition"] as const) {
+          if (merged[key] === undefined && patch.citation[key] !== undefined) {
+            (merged as Record<string, unknown>)[key] = patch.citation[key];
+            changed = true;
+          }
+        }
+        const idIn = patch.citation.identifier;
+        if (idIn) {
+          const idOut = { ...(merged.identifier ?? {}) };
+          for (const key of ["isbn", "doi", "url"] as const) {
+            if (idOut[key] === undefined && idIn[key] !== undefined) {
+              idOut[key] = idIn[key];
+              changed = true;
+            }
+          }
+          if (Object.keys(idOut).length) merged.identifier = idOut;
+        }
+        classify.provenance.citation = merged;
+      }
+
+      // Facets: only fill keys that are absent/empty — never clobber human input.
+      if (patch.facets) {
+        const f = classify.facets;
+        for (const key of ["themes", "location", "participants", "characterFocus"] as const) {
+          const incoming = patch.facets[key];
+          if ((!f[key] || f[key]!.length === 0) && incoming && incoming.length) {
+            f[key] = incoming;
+            changed = true;
+          }
+        }
+        if (!f.timePeriod && patch.facets.timePeriod) {
+          f.timePeriod = patch.facets.timePeriod;
+          changed = true;
+        }
+      }
+
+      if (!changed) return normalizeSource(row);
+
+      const [updated] = await db
+        .update(wikiSourcesTable)
+        .set({
+          metadata: { ...metadata, classify },
+          updatedAt: new Date(),
+        })
+        .where(eq(wikiSourcesTable.id, id))
+        .returning();
+      return updated ? normalizeSource(updated) : null;
     },
 
     async findSourceByHash(characterId, contentHash) {
@@ -1915,6 +2175,51 @@ function neonStore(): WikiStore {
 
     /* ── Source refs ─────────────────────────────────────── */
 
+    /* ── Source citations (nested provenance) ─────────────── */
+
+    async addSourceCitations(edges) {
+      if (edges.length === 0) return;
+      const db = requireDb();
+      const now = new Date();
+      await db
+        .insert(wikiSourceCitationsTable)
+        .values(
+          edges.map((e) => ({
+            carrierId: e.carrierId,
+            citedId: e.citedId,
+            marker: e.marker ?? null,
+            rawCitation: e.rawCitation ?? null,
+            locator: e.locator ?? null,
+            createdAt: now,
+          })),
+        )
+        .onConflictDoNothing();
+    },
+
+    async listCitationsForCarrier(carrierId) {
+      const db = requireDb();
+      const rows = await retryRead(() =>
+        db
+          .select()
+          .from(wikiSourceCitationsTable)
+          .where(eq(wikiSourceCitationsTable.carrierId, carrierId))
+          .orderBy(asc(wikiSourceCitationsTable.createdAt)),
+      );
+      return rows.map(normalizeSourceCitation);
+    },
+
+    async listCitationsForCited(citedId) {
+      const db = requireDb();
+      const rows = await retryRead(() =>
+        db
+          .select()
+          .from(wikiSourceCitationsTable)
+          .where(eq(wikiSourceCitationsTable.citedId, citedId))
+          .orderBy(asc(wikiSourceCitationsTable.createdAt)),
+      );
+      return rows.map(normalizeSourceCitation);
+    },
+
     async addSourceRefs(refs) {
       if (refs.length === 0) return;
       const db = requireDb();
@@ -1923,6 +2228,7 @@ function neonStore(): WikiStore {
         refs.map((r) => ({
           pageId: r.pageId,
           sourceId: r.sourceId,
+          attributedSourceId: r.attributedSourceId ?? null,
           passage: r.passage ?? null,
           quote: r.quote ?? null,
           relevanceNote: r.relevanceNote ?? null,
@@ -1960,6 +2266,7 @@ function neonStore(): WikiStore {
             id: wikiSourceRefsTable.id,
             pageId: wikiSourceRefsTable.pageId,
             sourceId: wikiSourceRefsTable.sourceId,
+            attributedSourceId: wikiSourceRefsTable.attributedSourceId,
             passage: wikiSourceRefsTable.passage,
             quote: wikiSourceRefsTable.quote,
             relevanceNote: wikiSourceRefsTable.relevanceNote,
@@ -1977,6 +2284,7 @@ function neonStore(): WikiStore {
         id: r.id,
         pageId: r.pageId,
         sourceId: r.sourceId,
+        attributedSourceId: r.attributedSourceId ?? null,
         passage: r.passage,
         quote: r.quote,
         relevanceNote: r.relevanceNote,
@@ -1992,6 +2300,7 @@ function neonStore(): WikiStore {
             id: wikiSourceRefsTable.id,
             pageId: wikiSourceRefsTable.pageId,
             sourceId: wikiSourceRefsTable.sourceId,
+            attributedSourceId: wikiSourceRefsTable.attributedSourceId,
             passage: wikiSourceRefsTable.passage,
             quote: wikiSourceRefsTable.quote,
             relevanceNote: wikiSourceRefsTable.relevanceNote,
@@ -2009,6 +2318,7 @@ function neonStore(): WikiStore {
         id: r.id,
         pageId: r.pageId,
         sourceId: r.sourceId,
+        attributedSourceId: r.attributedSourceId ?? null,
         passage: r.passage,
         quote: r.quote,
         relevanceNote: r.relevanceNote,
@@ -2131,6 +2441,7 @@ function neonStore(): WikiStore {
           contradictionsFound: result.contradictionsFound ?? 0,
           tokensUsed: result.tokensUsed ?? 0,
           errorMessage: result.errorMessage ?? null,
+          ...(result.notes !== undefined ? { notes: result.notes } : {}),
           heartbeatAt: new Date(),
         })
         .where(eq(wikiIngestionLogTable.id, id))

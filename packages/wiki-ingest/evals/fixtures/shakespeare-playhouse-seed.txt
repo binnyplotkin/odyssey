@@ -1,0 +1,49 @@
+Shakespeare and the Elizabethan Playhouse: Stage, Company, and City
+
+Introduction
+
+The commercial theatre that shaped William Shakespeare's career did not exist when he was born in 1564. It was built, almost from nothing, in the two decades that followed — a purpose-made industry of playhouses, sharers, and licensed companies clustered on the fringes of London. To understand Shakespeare the working dramatist, rather than the disembodied author of the plays, is to understand the physical and commercial machinery he wrote for [1]. This brief surveys three linked structures: the playhouses themselves, the acting company he belonged to, and the London geography that made both possible.
+
+The First Playhouses
+
+Before 1576 there were no dedicated theatre buildings in England. Plays were performed in inn-yards, guildhalls, great chambers, and the courtyards of noble houses, wherever a troupe could raise a temporary stage and pass a hat [2]. The decisive break came when James Burbage, a joiner turned player, leased land in Shoreditch, north of the city wall, and erected a large timber amphitheatre he called, simply, the Theatre. Its rival, the Curtain, opened nearby within a year. For the first time, a company could charge admission at a fixed door to a structure designed for nothing but performance [1].
+
+The design of these amphitheatres was remarkably consistent. A polygonal frame of oak enclosed an open yard; three tiers of roofed galleries ringed the yard for those who paid more; and a raised stage thrust out into the standing crowd, backed by a tiring-house from which actors entered [3]. A penny bought a place in the yard among the "groundlings"; a second penny bought a gallery seat; a third, a cushioned place with a better view. The architecture was egalitarian in access and steeply hierarchical in comfort — a paying cross-section of the whole city [3].
+
+The Move to Bankside
+
+The playhouses sat outside the jurisdiction of the City of London for a reason. The Lord Mayor and aldermen were consistently hostile to the theatres, blaming them for spreading plague, drawing apprentices from their work, and gathering unruly crowds [2]. Companies therefore built in the "liberties" — districts beyond the city's control — chiefly Shoreditch to the north and, increasingly, Bankside on the south bank of the Thames. Bankside already housed the bear-baiting rings and the brothels; the playhouses joined a well-established zone of licensed pleasure [4].
+
+The most famous relocation is also the most dramatic. When the lease on the Theatre's land expired and negotiations with the landlord collapsed, the Burbages took extraordinary action. In the winter of 1598 they dismantled the Theatre timber by timber, carried the frame across the frozen Thames, and re-erected it on Bankside as a new playhouse: the Globe [5]. The building that would host the first performances of Hamlet, Othello, and King Lear was, quite literally, the recycled bones of Shoreditch's first amphitheatre [5].
+
+The Lord Chamberlain's Men
+
+Shakespeare's fortune was bound not to a building but to a company. In 1594 the leading players regrouped under the patronage of the Lord Chamberlain, and Shakespeare became one of the sharers of the newly formed Lord Chamberlain's Men [6]. A sharer was not a salaried employee but a part-owner: he held a fraction of the company's stock, bore a fraction of its costs, and drew a fraction of its profits. This is the crucial fact of Shakespeare's economic life — he owned a piece of the enterprise he wrote for, and later a piece of the Globe itself [6].
+
+The company was stable in an unstable trade. Its principal tragedian was Richard Burbage, James's son, for whom Shakespeare wrote his greatest tragic roles; its clowns, first Will Kemp and later Robert Armin, shaped the comic writing to their very different gifts [7]. When James I came to the throne in 1603, the company was taken under royal patronage and renamed the King's Men — an extraordinary elevation that made Shakespeare's troupe, in effect, servants of the crown [6]. Few playwrights have written for so settled a body of colleagues over so long a career.
+
+Repertory and the Working Week
+
+A London company did not run one play for a season; it ran a rotating repertory, changing the offering almost daily and mounting new plays continuously [7]. A leading actor might hold dozens of parts in active memory at once. Plays were bought outright from their authors, often for a few pounds, and became the company's property; this is why Shakespeare, uniquely among his peers, saw so little urgency in printing his own work — the plays belonged to the King's Men, and their value lay on the stage, not the page [8]. The pressure of this system on a resident dramatist was relentless and, for Shakespeare, evidently generative.
+
+Conclusion
+
+The plays we read as literature were, in their own moment, the products of a specific industry: timber amphitheatres in the liberties, a shareholding company of players, and a city that pushed its theatres to the margins even as it filled them. Shakespeare's genius is inseparable from these conditions. He wrote for a known stage, a known company, and a known audience, and the machinery of the Elizabethan playhouse is written into the plays themselves.
+
+References
+
+[1] Gurr, Andrew. The Shakespearean Stage, 1574–1642. 4th ed. Cambridge: Cambridge University Press, 2009.
+
+[2] Chambers, E. K. The Elizabethan Stage. 4 vols. Oxford: Clarendon Press, 1923.
+
+[3] Gurr, Andrew, and Mariko Ichikawa. Staging in Shakespeare's Theatres. Oxford: Oxford University Press, 2000.
+
+[4] Bowsher, Julian, and Pat Miller. The Rose and the Globe — Playhouses of Shakespeare's Bankside. London: Museum of London Archaeology, 2009.
+
+[5] Berry, Herbert. "The Globe Bewitched and El Hombre Fiel." Medieval and Renaissance Drama in England 1 (1984): 211–230.
+
+[6] Gurr, Andrew. The Shakespeare Company, 1594–1642. Cambridge: Cambridge University Press, 2004.
+
+[7] Henslowe, Philip. Henslowe's Diary. Edited by R. A. Foakes. 2nd ed. Cambridge: Cambridge University Press, 2002.
+
+[8] Blayney, Peter W. M. "The Publication of Playbooks." In A New History of Early English Drama, edited by John D. Cox and David Scott Kastan, 383–422. New York: Columbia University Press, 1997.

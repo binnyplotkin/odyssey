@@ -7,6 +7,14 @@
  */
 
 export { runIngestion } from "./pipeline";
+export { loadWikiContext } from "./context";
+export { renderWikiContext } from "./prompts";
+export type { WikiIngestContext } from "./prompts";
+export { generateIngestionPrompt } from "./generate";
+export type {
+  GenerateIngestionPromptArgs,
+  GeneratedIngestionPrompt,
+} from "./generate";
 export {
   MODELS,
   DEFAULT_MODEL,
@@ -26,3 +34,20 @@ export type {
 } from "./types";
 export { call, extractToolUse } from "./client";
 export type { CallOptions, CallResult } from "./client";
+
+export {
+  survey,
+  explodeCitations,
+  resolveExcludeRanges,
+  applyExclusions,
+  attributionsForRef,
+  extractMarkerApparatus,
+  normalizeUrl,
+} from "./survey";
+export type {
+  SurveyAnatomy,
+  SurveyBibliographyEntry,
+  SurveyExcludeSection,
+  SurveyResult,
+  ExplodeResult,
+} from "./survey";

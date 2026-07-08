@@ -286,6 +286,10 @@ export const charactersTable = pgTable(
     slug: text("slug").notNull().unique(),              // immutable, used in URLs + wikilinks
     title: text("title").notNull(),                     // human-facing; renameable
     summary: text("summary"),                           // short one-liner
+    // The world owner's plain-language explanation of who this character is —
+    // identity, world, what shaped them, what they care about. Authored seed
+    // context for generating the ingestion prompt (and future persona layers).
+    brief: text("brief"),
     image: text("image"),                               // avatar URL; null falls back to initial
     // Named gradient key from the AvatarGradient registry (e.g. "dune",
     // "mint"). When `image` is set the uploaded image wins. When both
@@ -676,9 +680,13 @@ export const wikiSourcesTable = pgTable("wiki_sources", {
   // The wiki this source belongs to. Nullable during migration.
   wikiId: text("wiki_id").references(() => wikisTable.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
-  kind: text("kind").notNull(),                          // bible | commentary | midrash | note | transcript
-  content: text("content").notNull(),
-  contentHash: text("content_hash").notNull(),           // detect changes on re-ingest
+  // `kind` column removed (kind→sourceType collapse); the classifier lives in
+  // metadata.classify.provenance.sourceType. WikiSourceRecord.kind is a derived shadow.
+  // Nullable for STUB sources (nested provenance): citation-only rows exploded
+  // from a carrier's bibliography — no content until hydrated (P2). Stubs
+  // dedupe by citation identity, not content hash.
+  content: text("content"),
+  contentHash: text("content_hash"),                     // detect changes on re-ingest; null for stubs
   metadata: jsonb("metadata").notNull().default({}),     // { author, translation, url, … }
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -691,6 +699,11 @@ export const wikiSourceRefsTable = pgTable(
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     pageId: text("page_id").notNull().references(() => wikiPagesTable.id, { onDelete: "cascade" }),
     sourceId: text("source_id").notNull().references(() => wikiSourcesTable.id, { onDelete: "cascade" }),
+    // Nested provenance: where the claim REALLY lives, when the evidence
+    // (sourceId) is a citing carrier that attributed it — e.g. a research
+    // report citing Schoenbaum. Evidence and attribution are separate facts;
+    // losing the attributed source degrades attribution, never evidence.
+    attributedSourceId: text("attributed_source_id").references(() => wikiSourcesTable.id, { onDelete: "set null" }),
     passage: text("passage"),                            // e.g. "Gen 18:1-15"
     quote: text("quote"),                                // snippet pulled from source
     relevanceNote: text("relevance_note"),               // why this passage informs this page
@@ -699,6 +712,31 @@ export const wikiSourceRefsTable = pgTable(
   (t) => [
     index("wiki_source_refs_page_idx").on(t.pageId),
     index("wiki_source_refs_source_idx").on(t.sourceId),
+    index("wiki_source_refs_attributed_idx").on(t.attributedSourceId),
+  ],
+);
+
+/**
+ * Citation edges: carrier → cited work (nested provenance). A carrier is a
+ * citing document (research report, commentary); the cited side is usually a
+ * STUB source until hydrated. Join table (not a column) because many carriers
+ * can cite one work, and hydrated sources later gain their own edges.
+ */
+export const wikiSourceCitationsTable = pgTable(
+  "wiki_source_citations",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    carrierId: text("carrier_id").notNull().references(() => wikiSourcesTable.id, { onDelete: "cascade" }),
+    citedId: text("cited_id").notNull().references(() => wikiSourcesTable.id, { onDelete: "cascade" }),
+    marker: text("marker"),                              // "[8]" — the carrier's inline marker
+    rawCitation: text("raw_citation"),                   // verbatim bibliography entry
+    locator: text("locator"),                            // page/section within the cited work
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("wiki_source_citations_carrier_idx").on(t.carrierId),
+    index("wiki_source_citations_cited_idx").on(t.citedId),
+    uniqueIndex("wiki_source_citations_unique_idx").on(t.carrierId, t.citedId, t.marker),
   ],
 );
 

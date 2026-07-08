@@ -1,0 +1,209 @@
+William Shakespeare
+Executive summary
+William Shakespeare is unusually well documented for an early modern playwright in institutional records but poorly documented in personal records. We have parish registers, court papers, property deeds, company accounts, title pages, dedications, and his will; we do not have letters written by him, diaries, literary manuscripts in his hand, or school records. The result is a biography built from hard documentary points separated by interpretive gaps. [1]
+The firmest biographical facts are these: he was baptized at Holy Trinity, Stratford-upon-Avon, on 26 April 1564; married Anne Hathaway in late November 1582; had three children, Susanna, and the twins Hamnet and Judith; became by the mid-1590s a leading member of the Lord Chamberlain’s Men; prospered as actor, playwright, and shareholder; invested heavily in Stratford property; died at Stratford on 23 April 1616 according to the monument and was buried there on 25 April. His exact birth date, education in detail, movements in the “lost years,” and cause of death remain uncertain. [2]
+His career was institutional rather than solitary. The evidence places him inside a commercial theater ecology of sharers, actors, printers, patrons, censors, and court performance. He was not merely “the author” of texts; he was a working theater professional whose fortunes were entwined with the Lord Chamberlain’s Men and, after 1603, the King’s Men, the Globe, Blackfriars, and the book trade. [3]
+The best-supported inferences about his personality are that he was commercially shrewd, status-conscious, professionally collaborative, and socially embedded in both Stratford and London. Those inferences rest on the Quiney letter, the Bellott v. Mountjoy depositions, the tithes and property transactions, the coat-of-arms pursuit, and the will naming family, neighbors, and theatrical “fellows.” More intimate claims about his emotions, marriage, sexuality, or private beliefs remain speculative. [4]
+On controversies, the broad scholarly consensus remains that the man from Stratford wrote the works attributed to Shakespeare, though many scholars now also accept collaboration on some plays, especially parts of the Henry VI plays and some late works. The major unresolved issues concern chronology, collaboration, religion, the “lost years,” and how far biographers may legitimately infer inner life from sparse evidence. [5]
+Sources and method
+This report prioritizes primary documentation and documentary scholarship: parish registers, marriage papers, legal and property records, company accounts, early printed quartos and folios, dedications, contemporary commentary, and Shakespeare’s will. The single best open-access aggregation of such evidence is Shakespeare Documented, convened by the Folger Shakespeare Library with partner repositories including the British Library, the Shakespeare Birthplace Trust, and The National Archives. It assembles known manuscript and print references to Shakespeare and his works and is therefore the most reliable base for factual reconstruction. [6]
+Methodologically, Shakespeare biography is constrained by the archive itself. Barbara Mowat and Paul Werstine’s Folger essay is blunt: the records let us sketch a life, but not inhabit it fully. School attendance cannot be proved because records do not survive; the “lost years” remain undocumented; many later legends are unsupported; and the temptation to overread literary texts as autobiography must be resisted. This caution is not a defect of scholarship but a condition of the evidence. [7]
+That problem helps explain why major biographies differ so sharply in tone and method. Some remain documentary and conservative; others reconstruct lived experience more imaginatively from context. The table below compares several of the most influential modern biographies and biography-adjacent works.
+Work
+Publication framing
+Methodological center
+Best use
+Main caution
+Samuel Schoenbaum, William Shakespeare: A Documentary Life
+Described by its publisher as a classic documentary life covering four centuries of scholarship. [8]
+Documentary accumulation, archival sobriety
+Best starting point for hard evidence
+Less vivid about inner life because it deliberately limits conjecture
+Park Honan, Shakespeare: A Life
+OUP describes it as aiming to tell virtually all that can be factually known or reasonably speculated. [9]
+Balanced narrative, cautious inference
+Strong general scholarly life
+Still necessarily works with thin evidence
+Stephen Greenblatt, Will in the World
+Positioned by Greenblatt and reviewers as a contextual reconstruction of how Shakespeare “became Shakespeare.” [10]
+New Historicist reconstruction from context and works
+Brilliant on imaginative and cultural formation
+Frequently criticized for speculative leaps beyond the documents
+Katherine Duncan-Jones, Shakespeare: An Ungentle Life
+Bloomsbury presents it as a major biography showing Shakespeare amid disease, debt, competition, p
+
+ination. The city around 1600 was a fast-growing metropolis of roughly 100,000 people, crowded with courtiers, merchants, artisans, laborers, actors, refugees, beggars, thieves, and spies. It was multilingual, commercially energetic, socially stratified, and repeatedly hit by plague. Mowat and Werstine emphasize the importance of London as England’s governmental and economic center; the British Library’s overview stresses its demographic diversity and continental connections. Shakespeare’s works repeatedly register this urban pressure: trade, ambition, crowding, law, debt, performance, and the jostle of ranks. [50]
+The social background was one of intense mobility and anxiety. The “middling sort” was gaining economic and political leverage, and families like the Shakespeares exemplify that world: artisanal in origin, civically ambitious, aspirational toward gentility. The pursuit of a coat of arms for John Shakespeare in 1596, later inherited by William, is not incidental vanity; it is evidence of the social logic of the age. Shakespeare’s own rise from glover’s son to gentleman-playwright-landowner fits this broader Tudor-Stuart pattern of upward movement through commerce, office, law, and service. [51]
+Religion is central to Shakespeare’s world and frustratingly elusive in Shakespeare himself. England after the Elizabethan Settlement expected outward conformity to the Church of England, but vestiges of Catholic culture, recusant networks, Puritan activism, and theological controversy persisted. Robert Bearman’s analysis of Susanna Hall’s 1606 citation for failure to receive communion shows how local religious records must be read contextually and with caution, especially after the Gunpowder Plot heightened scrutiny. Scholarly overviews of Shakespeare and religion therefore increasingly reject simplistic labels such as “secret Catholic” or “settled Protestant.” The evidence shows a family and milieu deeply entangled in England’s confessional tensions, but not a stable confessional biography. [52]
+Politics entered the theater both directly and indirectly. Commercial companies required licensing from the Master of the Revels; politically sensitive material could be altered or suppressed. One striking example is the omission from early printings of Richard II of the deposition scene, whose representation of the fall of a monarch made it especially charged in the 1590s. Shakespeare’s histories and tragedies repeatedly engage succession, rebellion, counsel, kingship, and state violence, but always within a system where outright direct commentary could be dangerous. [53]
+The Jacobean transition intensified these pressures. James I’s accession in 1603 brought the King’s Men under royal protection and changed the horizon of Shakespeare’s theater. James’s interests in kingship, union, witchcraft, and British history help explain why plays such as Macbeth and King Lear speak so insistently to divided kingdoms, sovereign vulnerability, and unstable legitimacy. James Shapiro’s contextual work on 1606 is particularly persuasive in showing how plague, the Gunpowder Plot, and debates over British union created the dark political weather in which Lear, Macbeth, and Antony and Cleopatra were written. This should not be reduced to crude one-to-one allegory, but it does confirm that Shakespeare was a writer acutely responsive to public events. [54]
+Personality and social networks
+The safest route into Shakespeare’s personality is through the social uses of documents. The records do not give us private confession, but they do show what kinds of relationships he maintained, how others approached him, and what patterns recur across economic, legal, and professional life. The resulting picture is not intimate, but it is substantial. [13]
+The only surviving letter addressed to Shakespeare is Richard Quiney’s 1598 request that he help secure a loan of £30 in London. Whatever the precise mechanism envisioned, the letter shows that Shakespeare was considered financially solvent, well connected, and creditworthy in the capital. That is a revealing data point. By the late 1590s, he was not merely a playwright earning fees; he was somebody to whom a Stratford associate could appeal for substantial financial assistance or brokerage. [55]
+The Bellott v. Mountjoy depositions of 1612 reveal a different side of his interpersonal life. They place Shakespeare as a lodger in the household of the French Huguenot tiremaker Christopher Mountjoy on Silver Street and show that he had been involved in persuading Stephen Bellott to marry Mountjoy’s daughter Mary. This gives rare documentary access to Shakespeare in ordinary social space: living with immigrant artisans, acting as intermediary in a marriage negotiation, and navigating an urban domestic network outside the theater. It suggests not cloistered genius but embedded urban sociability. [56]
+His will, by contrast, is the richest surviving index of his mature social world. It names family members, sons-in-law, neighbors, local friends, legal professionals, and theatrical colleagues. The bequests of mourning-ring money to Richard Burbage, John Heminges, and Henry Condell call them “my ffellowes,” a term that confirms enduring professional identity with the King’s Men to the end of his life. The same instrument names Hamnet Sadler, the Nash family, Thomas Russell, Francis Collins, and others, showing a network spread across theater, law, kinship, and Stratford civic life. [57]
+The legal and property papers suggest a person who was strategically attentive to income and status. Shakespeare bought New Place, invested heavily in Stratford tithes, sold malt on credit, joined litigation to protect revenue streams, and pursued heraldic gentility through his father’s arms. None of this means he was miserly, still less that he lacked generosity. It does mean that the documentary Shakespeare is not bohemian. He appears repeatedly as an investor, creditor, litigant, and householder, some
+
+Primary sources
+Shakespeare, William. Venus and Adonis (entered 1593; printed 1593). Dedication to Henry Wriothesley; Shakespeare calls it the “first heire of my inuention.” Shakespeare Documented, Folger Shakespeare Library. DOI/URL: https://shakespearedocumented.folger.edu/resource/document/venus-and-adonis-first-edition [73]
+Shakespeare, William. The Rape of Lucrece (1594). First edition and contextual note on the Southampton dedication. Shakespeare Documented. URL: https://shakespearedocumented.folger.edu/plays-poetry/lucrece [74]
+Shakespeare, William. Shake-speares Sonnets (1609). First edition with discussion of earlier manuscript circulation. Shakespeare Documented. DOI/URL: https://shakespearedocumented.folger.edu/resource/document/sonnets-first-edition [75]
+Holy Trinity Church parish register. Records of Shakespeare’s baptism, children’s baptisms, Hamnet’s burial, and Shakespeare’s burial. Shakespeare Documented. URL: https://shakespearedocumented.folger.edu/resource/document/parish-register-holy-trinity-church [20]
+Marriage bond for William Shakespeare and Anne Hathaway (28 Nov 1582). Shakespeare Documented. URL: https://shakespearedocumented.folger.edu/resource/document/shakespeare-marriage-bond [76]
+Entry in the Bishop’s register concerning the marriage of William Shakespeare and Anne Hathaway (27 Nov 1582). Shakespeare Documented. URL: https://shakespearedocumented.folger.edu/resource/document/entry-bishops-register-concerning-marriage-william-shakespeare-and-anne-hathaway [77]
+Greenes, groats-worth of witte (1592). Earliest known printed allusion to Shakespeare as a playwright. Shakespeare Documented. DOI/URL: https://shakespearedocumented.folger.edu/resource/document/greenes-groats-worth-witte-first-printed-allusion-shakespeare-playwright [24]
+Meres, Francis. Palladis Tamia (1598). Early printed assessment of Shakespeare’s plays and poetry; first known notice of the sonnets. Shakespeare Documented. DOI/URL: https://shakespearedocumented.folger.edu/resource/document/palladis-tamia-one-earliest-printed-assessments-shakespeares-works-and-first [46]
+Quiney, Richard. Letter to William Shakespeare (1598). Only surviving letter addressed to Shakespeare. Shakespeare Documented. URL: https://shakespearedocumented.folger.edu/resource/document/only-surviving-letter-shakespeare-letter-richard-quiney-asking-shakespeares [55]
+Bellott v. Mountjoy depositions (1612). Key evidence for Shakespeare’s lodgings and social role in the Mountjoy household. Shakespeare Documented. URL: https://shakespearedocumented.folger.edu/resource/document/bellott-v-mountjoy-first-set-depositions-bellotts-behalf-including-shakespeares [78]
+Shakespeare, William. Last will and testament (25 Mar 1616; proved 22 Jun 1616). Original and registered copies. Shakespeare Documented / The National Archives. URL: https://shakespearedocumented.folger.edu/resource/document/william-shakespeares-last-will-and-testament-original-copy-including-three [32]
+First Folio, Mr. William Shakespeares Comedies, Histories, &amp; Tragedies (1623). Introductory matter and actors list referenced via Shakespeare Documented and Folger resources. URLs: https://shakespearedocumented.folger.edu/resource/17th-century-legacies and https://www.folger.edu/explore/shakespeare-in-print/publishing-shakespeare/ [79]
+Major biographies
+Schoenbaum, Samuel. William Shakespeare: A Documentary Life. Oxford University Press, 1975; compact edition summarized by Google Books and publisher notices. URL: https://books.google.com/books/about/William_Shakespeare.html?id=-6VS_J9lVlYC [80]
+Honan, Park. Shakespeare: A Life. Oxford University Press, 1998. OUP product page. URL: https://global.oup.com/academic/product/shakespeare-a-life-9780192825278 [81]
+Greenblatt, Stephen. Will in the World: How Shakespeare Became Shakespeare. W. W. Norton, 2004/2005. Author page and scholarly review context. URLs: https://stephengreenblatt.scholars.harvard.edu/will-world-how-shakespeare-became-shakespeare and https://www.tandfonline.com/doi/full/10.1080/17450910500135792 [82]
+Duncan-Jones, Katherine. Shakespeare: An Ungentle Life. Arden Shakespeare / Bloomsbury, 2001; updated paperback 2014. URL: https://www.bloomsbury.com/us/shakespeare-an-ungentle-life-9781408138069/ [83]
+Shapiro, James. 1599: A Year in the Life of William Shakespeare. Faber and Faber / HarperCollins, 2005. Metadata and reception summary. URL: https://en.wikipedia.org/wiki/1599%3A_A_Year_in_the_Life_of_William_Shakespeare [84]
+Mowat, Barbara A., and Paul Werstine. “Shakespeare’s Life: From the Folger Shakespeare Editions.” Folger Shakespeare Library. Though not a monograph, it is a concise critical biography used heavily in scholarship and teaching. URL: https://www.folger.edu/explore/shakespeares-works/shakespeares-life-from-the-folger-shakespeare-editions/ [7]
+Scholarly articles and chapters
+Leigh, R. John, et al. “A Scientific Approach to the Shakespeare Authorship Question.” SAGE Open 9, no. 1 (2019). DOI page: https://journals.sagepub.com/doi/10.1177/2158244018823465 [85]
+Cox, John D. “Shakespeare and Religion.” Religions 9, no. 11 (2018): 343. DOI/URL: https://www.mdpi.com/2077-1444/9/11/343 [86]
+Hamlin, Hannibal, ed. The Cambridge Companion to Shakespeare and Religion (chapter metadata for biography and belief). Cambridge University Press, 2019. URL: https://www.cambridge.org/core/books/cambridge-companion-to-shakespeare-and-religion/shakespeare-biography-and-belief/8EB059F85284E867554BD8C36CF7E139 [87]
+“Authorship Controversy.” In The Cambridge Guide to the Worlds of Shakespeare. Cambridge University Press. URL: https://www.cambridge.org/core/books/cambridge-guide-to-the-worlds-of-shakespeare/authorship-controversy/AF554A00EE8EC4E8DEA9990D20E7EED3 [88]
+“Fantasies of Shakespearean Authorship.” In Shakespeare Beyond Doubt. Cambridge University Press. URL: https://www.cambridge.org/core/product/FFE4D33FC6926598A7D26C1155075A6C [89]
+Cummings, Brian. “Shakespeare, Biography, and Anti-Biography.” PDF hosted by Folgerpedia, 2014. URL: https://folgerpedia.folger.edu/mediawiki/media/images_pedia_folgerpedia_upgradetest/2/2e/Cummings_ShakespeareBiography.pdf [90]
+Lee, James, and Jason Lee. “Shakespeare’s Tragic Social Network; or Why All the World’s a Stage.” Digital Humanities Quarterly 11, no. 2 (2017). PDF. URL: https://dhq-static.digitalhumanities.org/pdf/000289.pdf [91]
+McLuskie, Kathleen. “Review of Stephen Greenblatt, Will in the World.” Shakespeare 1, no. 2 (2005). URL: https://www.tandfonline.com/doi/full/10.1080/17450910500135792 [92]
+Reputable open-access online resources
+Shakespeare Documented, Folger Shakespeare Library. Core open-access documentary archive. URL: https://shakespearedocumented.folger.edu/ [93]
+Folger Shakespeare Library, “Shakespeare’s life.” URL: https://www.folger.edu/explore/shakespeares-life/ [94]
+Folger Shakespeare Library, “Publishing Shakespeare.” URL: https://www.folger.edu/explore/shakespeare-in-print/publishing-shakespeare/ [95]
+Folger Shakespeare Library, “The Publication of Shakespeare’s Plays.” URL: https://www.folger.edu/explore/shakespeares-works/the-publication-of-shakespeares-plays-from-the-folger-shakespeare-editions/ [96]
+Shakespeare Birthplace Trust, “William Shakespeare Biography.” URL: https://www.shakespeare.org.uk/explore-shakespeare/shakespedia/william-shakespeare/william-shakespeare-biography/ [97]
+Shakespeare Birthplace Trust, “Shakespeare’s Lost Years.” URL: https://www.shakespeare.org.uk/explore-shakespeare/shakespedia/william-shakespeare/shakespeares-lost-years/ [98]
+British Library, “Shakespeare’s life.” URL: https://www.britishlibrary.cn/en/articles/shakespeares-life/ [99]
+British Library, “Shakespeare’s London.” URL: https://www.britishlibrary.cn/en/articles/shakespeares-london/ [100]
+Royal Shakespeare Company, “Shakespeare’s life and times.” URL: https://www.rsc.org.uk/shakespeares-life-and-times [101]
+Internet Shakespeare Editions, facsimile and reference resources. URL: https://internetshakespeare.uvic.ca/ [102]
+The National Archives, research guide to wills before 1858, relevant to Shakespeare’s probate context. URL: https://www.nationalarchives.gov.uk/help-with-your-research/research-guides/wills-or-administrations-before-1858/ [103]
+[1] [14] [63] [65] [94] https://www.folger.edu/explore/shakespeares-life/
+https://www.folger.edu/explore/shakespeares-life/
+[2] [20] [34] https://shakespearedocumented.folger.edu/resource/document/parish-register-holy-trinity-church
+https://shakespearedocumented.folger.edu/resource/document/parish-register-holy-trinity-church
+[3] [40] [59] https://shakespearedocumented.folger.edu/resource/playwright-actor-shareholder
+https://shakespearedocumented.folger.edu/resource/playwright-actor-shareholder
+[4] [55] [60] Letter from Richard Quiney to William Shakespeare
+https://shakespearedocumented.folger.edu/resource/document/only-surviving-letter-shakespeare-letter-richard-quiney-asking-shakespeares?utm_source=chatgpt.com
+[5] [7] [15] [70] [72] https://www.folger.edu/explore/shakespeares-works/shakespeares-life-from-the-folger-shakespeare-editions/
+https://www.folger.edu/explore/shakespeares-works/shakespeares-life-from-the-folger-shakespeare-editions/
+[6] [93] Shakespeare Documented
+https://shakespearedocumented.folger.edu/?utm_source=chatgpt.com
+[8] [80] https://books.google.com/books/about/William_Shakespeare.html?id=-6VS_J9lVlYC
+https://books.google.com/books/about/William_Shakespeare.html?id=-6VS_J9lVlYC
+[9] [81] https://global.oup.com/academic/product/shakespeare-a-life-9780192825278
+https://global.oup.com/academic/product/shakespeare-a-life-9780192825278
+[10] [82] https://stephengreenblatt.scholars.harvard.edu/will-world-how-shakespeare-became-shakespeare
+https://stephengreenblatt.scholars.harvard.edu/will-world-how-shakespeare-became-shakespeare
+[11] [83] https://www.bloomsbury.com/us/shakespeare-an-ungentle-life-9781408138069/
+https://www.bloomsbury.com/us/shakespeare-an-ungentle-life-9781408138069/
+[12] [84] https://en.wikipedia.org/wiki/1599%3A_A_Year_in_the_Life_of_William_Shakespeare
+https://en.wikipedia.org/wiki/1599%3A_A_Year_in_the_Life_of_William_Shakespeare
+[13] https://shakespearedocumented.folger.edu/resource/family-legal-property-records?page=12
+https://shakespearedocumented.folger.edu/resource/family-legal-property-records?page=12
+[16] [21] https://shakespearedocumented.folger.edu/highlights/unesco-memory-world-item
+https://shakespearedocumented.folger.edu/highlights/unesco-memory-world-item
+[17] [66] [98] https://www.shakespeare.org.uk/explore-shakespeare/shakespedia/william-shakespeare/shakespeares-lost-years/
+https://www.shakespeare.org.uk/explore-shakespeare/shakespedia/william-shakespeare/shakespeares-lost-years/
+[18] [23] [25] https://shakespearedocumented.folger.edu/highlights/manuscript-mention-shakespeare-his-lifetime
+https://shakespearedocumented.folger.edu/highlights/manuscript-mention-shakespeare-his-lifetime
+[19] [57] [64] https://shakespearedocumented.folger.edu/resource/document/william-shakespeares-last-will-and-testament-original-copy-including-three
+https://shakespearedocumented.folger.edu/resource/document/william-shakespeares-last-will-and-testament-original-copy-including-three
+[22] https://shakespearedocumented.folger.edu/resource/family-legal-property-records/shakespeares-family?page=6
+https://shakespearedocumented.folger.edu/resource/family-legal-property-records/shakespeares-family?page=6
+[24] [35] [61] https://shakespearedocumented.folger.edu/resource/document/greenes-groats-worth-witte-first-printed-allusion-shakespeare-playwright
+https://shakespearedocumented.folger.edu/resource/document/greenes-groats-worth-witte-first-printed-allusion-shakespeare-playwright
+[26] https://shakespearedocumented.folger.edu/resource/document/grant-arms-john-shakespeare-draft-1
+https://shakespearedocumented.folger.edu/resource/document/grant-arms-john-shakespeare-draft-1
+[27] [31] https://shakespearedocumented.folger.edu/timeline-shakespeares-life
+https://shakespearedocumented.folger.edu/timeline-shakespeares-life
+[28] [49] https://shakespearedocumented.folger.edu/resource/playwright-actor-shareholder/shakespeares-company
+https://shakespearedocumented.folger.edu/resource/playwright-actor-shareholder/shakespeares-company
+[29] [30] https://shakespearedocumented.folger.edu/people/hall-john-1575-1635
+https://shakespearedocumented.folger.edu/people/hall-john-1575-1635
+[32] William Shakespeare&#39;s last will and testament: original copy ...
+https://shakespearedocumented.folger.edu/resource/document/william-shakespeares-last-will-and-testament-original-copy-including-three?utm_source=chatgpt.com
+[33] Shakespeare&#39;s family
+https://shakespearedocumented.folger.edu/resource/family-legal-property-records/shakespeares-family?page=10&amp;utm_source=chatgpt.com
+[36] [67] https://shakespearedocumented.folger.edu/resource/document/works-benjamin-jonson-shakespeare-included-two-cast-lists
+https://shakespearedocumented.folger.edu/resource/document/works-benjamin-jonson-shakespeare-included-two-cast-lists
+[37] [42] https://shakespearedocumented.folger.edu/resource?page=8
+https://shakespearedocumented.folger.edu/resource?page=8
+[38] [44] https://shakespearedocumented.folger.edu/resource/document/titus-andronicus-first-edition-only-surviving-copy-shakespeare-s-first-printed
+https://shakespearedocumented.folger.edu/resource/document/titus-andronicus-first-edition-only-surviving-copy-shakespeare-s-first-printed
+[39] [46] https://shakespearedocumented.folger.edu/resource/document/palladis-tamia-one-earliest-printed-assessments-shakespeares-works-and-first
+https://shakespearedocumented.folger.edu/resource/document/palladis-tamia-one-earliest-printed-assessments-shakespeares-works-and-first
+[41] [95] https://www.folger.edu/explore/shakespeare-in-print/publishing-shakespeare/
+https://www.folger.edu/explore/shakespeare-in-print/publishing-shakespeare/
+[43] https://shakespearedocumented.folger.edu/categories/shakespeare-poet?page=1
+https://shakespearedocumented.folger.edu/categories/shakespeare-poet?page=1
+[45] https://shakespearedocumented.folger.edu/plays-poetry/loves-labors-lost
+https://shakespearedocumented.folger.edu/plays-poetry/loves-labors-lost
+[47] [75] https://shakespearedocumented.folger.edu/resource/document/sonnets-first-edition
+https://shakespearedocumented.folger.edu/resource/document/sonnets-first-edition
+[48] [69] https://shakespearedocumented.folger.edu/resource/17th-century-legacies?page=3
+https://shakespearedocumented.folger.edu/resource/17th-century-legacies?page=3
+[50] [100] https://www.britishlibrary.cn/en/articles/shakespeares-london/
+https://www.britishlibrary.cn/en/articles/shakespeares-london/
+[51] https://internetshakespeare.uvic.ca/Library/SLT/history/elizabeth/middleclass.html
+https://internetshakespeare.uvic.ca/Library/SLT/history/elizabeth/middleclass.html
+[52] https://shakespearedocumented.folger.edu/resource/document/susanna-william-shakespeare-s-daughter-cited-local-church-court-her-failure
+https://shakespearedocumented.folger.edu/resource/document/susanna-william-shakespeare-s-daughter-cited-local-church-court-her-failure
+[53] https://internetshakespeare.uvic.ca/Library/SLT/literature/publishing/censorship.html
+https://internetshakespeare.uvic.ca/Library/SLT/literature/publishing/censorship.html
+[54] https://www.folger.edu/podcasts/shakespeare-unlimited/shapiro-year-of-lear/
+https://www.folger.edu/podcasts/shakespeare-unlimited/shapiro-year-of-lear/
+[56] [78] Bellott v. Mountjoy: First set of depositions, on Bellott&#39;s behalf ...
+https://shakespearedocumented.folger.edu/resource/document/bellott-v-mountjoy-first-set-depositions-bellotts-behalf-including-shakespeares?utm_source=chatgpt.com
+[58] https://shakespearedocumented.folger.edu/resource/document/assignment-ralph-hubaud-ipsley-esquire-william-shakespeare-stratford-upon-avon
+https://shakespearedocumented.folger.edu/resource/document/assignment-ralph-hubaud-ipsley-esquire-william-shakespeare-stratford-upon-avon
+[62] [68] https://www.folger.edu/explore/shakespeares-works/henry-viii/appendix-on-authorship/
+https://www.folger.edu/explore/shakespeares-works/henry-viii/appendix-on-authorship/
+[71] https://shakespeare.folger.edu/downloads/pdf/king-lear_PDF_FolgerShakespeare.pdf
+https://shakespeare.folger.edu/downloads/pdf/king-lear_PDF_FolgerShakespeare.pdf
+[73] https://shakespearedocumented.folger.edu/resource/document/venus-and-adonis-first-edition
+https://shakespearedocumented.folger.edu/resource/document/venus-and-adonis-first-edition
+[74] https://shakespearedocumented.folger.edu/plays-poetry/lucrece
+https://shakespearedocumented.folger.edu/plays-poetry/lucrece
+[76] https://shakespearedocumented.folger.edu/resource/document/shakespeare-marriage-bond
+https://shakespearedocumented.folger.edu/resource/document/shakespeare-marriage-bond
+[77] https://shakespearedocumented.folger.edu/resource/document/entry-bishops-register-concerning-marriage-william-shakespeare-and-anne-hathaway
+https://shakespearedocumented.folger.edu/resource/document/entry-bishops-register-concerning-marriage-william-shakespeare-and-anne-hathaway
+[79] https://shakespearedocumented.folger.edu/resource/17th-century-legacies
+https://shakespearedocumented.folger.edu/resource/17th-century-legacies
+[85] https://journals.sagepub.com/doi/10.1177/2158244018823465
+https://journals.sagepub.com/doi/10.1177/2158244018823465
+[86] https://www.mdpi.com/2077-1444/9/11/343
+https://www.mdpi.com/2077-1444/9/11/343
+[87] https://www.cambridge.org/core/books/cambridge-companion-to-shakespeare-and-religion/shakespeare-biography-and-belief/8EB059F85284E867554BD8C36CF7E139
+https://www.cambridge.org/core/books/cambridge-companion-to-shakespeare-and-religion/shakespeare-biography-and-belief/8EB059F85284E867554BD8C36CF7E139
+[88] https://www.cambridge.org/core/books/cambridge-guide-to-the-worlds-of-shakespeare/authorship-controversy/AF554A00EE8EC4E8DEA9990D20E7EED3
+https://www.cambridge.org/core/books/cambridge-guide-to-the-worlds-of-shakespeare/authorship-controversy/AF554A00EE8EC4E8DEA9990D20E7EED3
+[89] https://www.cambridge.org/core/product/FFE4D33FC6926598A7D26C1155075A6C
+https://www.cambridge.org/core/product/FFE4D33FC6926598A7D26C1155075A6C
+[90] https://folgerpedia.folger.edu/mediawiki/media/images_pedia_folgerpedia_upgradetest/2/2e/Cummings_ShakespeareBiography.pdf
+https://folgerpedia.folger.edu/mediawiki/media/images_pedia_folgerpedia_upgradetest/2/2e/Cummings_ShakespeareBiography.pdf
+[91] https://dhq-static.digitalhumanities.org/pdf/000289.pdf
+https://dhq-static.digitalhumanities.org/pdf/000289.pdf
+[92] https://www.tandfonline.com/doi/full/10.1080/17450910500135792
+https://www.tandfonline.com/doi/full/10.1080/17450910500135792
+[96] https://www.folger.edu/explore/shakespeares-works/the-publication-of-shakespeares-plays-from-the-folger-shakespeare-editions/
+https://www.folger.edu/explore/shakespeares-works/the-publication-of-shakespeares-plays-from-the-folger-shakespeare-editions/
+[97] https://www.shakespeare.org.uk/explore-shakespeare/shakespedia/william-shakespeare/william-shakespeare-biography/
+https://www.shakespeare.org.uk/explore-shakespeare/shakespedia/william-shakespeare/william-shakespeare-biography/
+[99] https://www.britishlibrary.cn/en/articles/shakespeares-life/
+https://www.britishlibrary.cn/en/articles/shakespeares-life/
+[101] https://www.rsc.org.uk/shakespeares-life-and-times
+https://www.rsc.org.uk/shakespeares-life-and-times
+[102] https://internetshakespeare.uvic.ca/Library/facsimile/
+https://internetshakespeare.uvic.ca/Library/facsimile/
+[103] Wills and administrations before 1858
+https://www.nationalarchives.gov.uk/help-with-your-research/research-guides/wills-or-administrations-before-1858/?utm_source=chatgpt.com

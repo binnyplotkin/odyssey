@@ -68,6 +68,7 @@ export default async function IngestionTab({ params }: { params: Params }) {
       promptName={promptName}
       promptInherited={false}
       characterName={character?.title ?? character?.slug ?? wiki.title}
+      characterBrief={character?.brief ?? null}
     />
   );
 }

@@ -14,7 +14,8 @@
  *      respawn at a random edge.
  *
  * Rendering is one of:
- *   strokes  — short line segment in velocity direction (default)
+ *   dots     — crisp point particles
+ *   strokes  — short line segment in velocity direction
  *   halftone — filled circle sized by mask density + speed
  *   ascii    — glyph from density ramp
  *   fog      — soft alpha blob
@@ -298,6 +299,8 @@ export type ASCIIMatterCanvasProps = {
   maxAttractors?: number;
   /** Hex/rgb/hsl base color for matter. Default platform mint accent. */
   color?: string;
+  /** Optional color for resting/low-activity dots. Omit to use `color`. */
+  inactiveColor?: string;
   /** Optional canvas background color. Omit for a transparent canvas. */
   backgroundColor?: string | null;
   /** Optional color for the quiet source-field dots behind active matter. */
@@ -338,6 +341,9 @@ export type ASCIIMatterCanvasProps = {
 
 const RAMP = [" ", ".", ":", "+", "*", "#", "@", "0", "1"];
 const MODE_CROSSFADE_MS = 900;
+const DOT_MODE_TRAIL_FLOOR = 0.085;
+const DOT_BASE_SIZE = 1.65;
+const DOT_INACTIVE_ALPHA_BOOST = 1.35;
 const DEFAULT_ATTRACTOR_IMAGE = "/attractor.png";
 const MASK_FLOOR = 0.06;
 const INVISIBLE_RESPAWN_FRAMES = 55;
@@ -916,6 +922,7 @@ function renderStrokes(
   radius: number,
   rgb: string,
   weight: number,
+  _inactiveRgb?: string,
 ) {
   if (weight < 0.02) return;
   // Two batches: dim (slow) and bright (fast). One stroke call each.
@@ -983,6 +990,7 @@ function renderHalftone(
   radius: number,
   rgb: string,
   weight: number,
+  _inactiveRgb?: string,
 ) {
   if (weight < 0.02) return;
   const buckets = [
@@ -1024,6 +1032,7 @@ function renderAscii(
   radius: number,
   rgb: string,
   weight: number,
+  _inactiveRgb?: string,
 ) {
   if (weight < 0.02) return;
   const glyphBuckets = Array.from(
@@ -1163,6 +1172,7 @@ function renderFog(
   radius: number,
   rgb: string,
   weight: number,
+  _inactiveRgb?: string,
 ) {
   if (weight < 0.02) return;
   const sprite = getFogSprite(rgb);
@@ -1193,6 +1203,7 @@ function renderDots(
   radius: number,
   rgb: string,
   weight: number,
+  inactiveRgb?: string,
 ) {
   if (weight < 0.02) return;
   // Intensity for a particle = its mask × (base + speed contribution).
@@ -1203,9 +1214,12 @@ function renderDots(
   const alphas = [1.0, 0.65, 0.35, 0.15];
   // Skip ranges so each particle is drawn in exactly one bucket.
   const hi = [Infinity, thresholds[0], thresholds[1], thresholds[2]];
+  const baseRgb = inactiveRgb ?? rgb;
+  const inactiveAlphaBoost = inactiveRgb ? DOT_INACTIVE_ALPHA_BOOST : 1;
 
   for (let b = 0; b < 4; b++) {
-    ctx.fillStyle = `rgba(${rgb},${(alphas[b] * weight).toFixed(3)})`;
+    const alpha = Math.min(1, alphas[b] * weight * inactiveAlphaBoost);
+    ctx.fillStyle = `rgba(${baseRgb},${alpha.toFixed(3)})`;
     const lo = thresholds[b];
     const hiB = hi[b];
     for (let i = 0; i < particles.length; i++) {
@@ -1215,8 +1229,41 @@ function renderDots(
       if (intensity < lo || intensity >= hiB) continue;
       const x = centerX + p.cx * radius;
       const y = centerY + p.cy * radius;
-      // 1.2px square, sub-pixel offset for sharp anti-aliased edge.
-      ctx.fillRect(x - 0.6, y - 0.6, 1.2, 1.2);
+      // Small square, sub-pixel offset for a crisp point-field edge.
+      ctx.fillRect(
+        x - DOT_BASE_SIZE / 2,
+        y - DOT_BASE_SIZE / 2,
+        DOT_BASE_SIZE,
+        DOT_BASE_SIZE,
+      );
+    }
+  }
+
+  if (!inactiveRgb) return;
+
+  // Activity overlay: color is reserved for particles that are actually
+  // moving or locally activated, so the quiet structure reads as gray.
+  const activeBuckets = [
+    { min: 0.34, alpha: 0.72, size: DOT_BASE_SIZE * 1.18 },
+    { min: 0.2, alpha: 0.46, size: DOT_BASE_SIZE * 1.04 },
+  ];
+  for (let b = 0; b < activeBuckets.length; b++) {
+    const bucket = activeBuckets[b];
+    const hiActive = b === 0 ? Infinity : activeBuckets[b - 1].min;
+    ctx.fillStyle = `rgba(${rgb},${(bucket.alpha * weight).toFixed(3)})`;
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      if (p.mask <= 0) continue;
+      const activity = Math.max(p.speed * 4.8, p.activation);
+      if (activity < bucket.min || activity >= hiActive) continue;
+      const x = centerX + p.cx * radius;
+      const y = centerY + p.cy * radius;
+      ctx.fillRect(
+        x - bucket.size / 2,
+        y - bucket.size / 2,
+        bucket.size,
+        bucket.size,
+      );
     }
   }
 }
@@ -1388,6 +1435,7 @@ export function ASCIIMatterCanvas({
   particleCount = 3500,
   maxAttractors = 220,
   color = "rgba(140,231,210,1)",
+  inactiveColor,
   backgroundColor = null,
   baseFieldColor,
   neuralColor = "var(--accent, #6FBF88)",
@@ -1595,6 +1643,9 @@ export function ASCIIMatterCanvas({
     resize();
 
     const rgb = resolveCssColorToRgb(canvas, color);
+    const inactiveRgb = inactiveColor
+      ? resolveCssColorToRgb(canvas, inactiveColor)
+      : undefined;
     const baseFieldRgb = resolveCssColorToRgb(canvas, baseFieldColor ?? color);
     const neuralRgb = resolveCssColorToRgb(
       canvas,
@@ -1644,6 +1695,10 @@ export function ASCIIMatterCanvas({
         brightness: ov.brightness ?? baseParams.brightness,
         trail: ov.trail ?? baseParams.trail,
       };
+      const activeTrail =
+        modeRef.current === "dots"
+          ? Math.max(params.trail, DOT_MODE_TRAIL_FLOOR)
+          : params.trail;
       const e = Math.max(0, Math.min(1, energyRef.current));
       const phaseNow = phaseRef.current;
       const amp = Math.max(0, Math.min(1, ampRef.current));
@@ -1660,13 +1715,13 @@ export function ASCIIMatterCanvas({
       if (bgRgb) {
         // Optional opaque mode: fade trails toward the supplied background.
         ctx.globalCompositeOperation = "source-over";
-        ctx.fillStyle = `rgba(${bgRgb},${params.trail.toFixed(3)})`;
+        ctx.fillStyle = `rgba(${bgRgb},${activeTrail.toFixed(3)})`;
         ctx.fillRect(0, 0, width, height);
       } else {
         // Default transparent mode: subtract alpha so the page background
         // and overlays show through wherever particles are absent.
         ctx.globalCompositeOperation = "destination-out";
-        ctx.fillStyle = `rgba(0,0,0,${params.trail.toFixed(3)})`;
+        ctx.fillStyle = `rgba(0,0,0,${activeTrail.toFixed(3)})`;
         ctx.fillRect(0, 0, width, height);
       }
       ctx.globalCompositeOperation = "source-over";
@@ -1814,7 +1869,16 @@ export function ASCIIMatterCanvas({
         );
       }
       if (modeBlend >= 1) {
-        renderTo(ctx, particles, cx, cy, radius, rgb, params.brightness);
+        renderTo(
+          ctx,
+          particles,
+          cx,
+          cy,
+          radius,
+          rgb,
+          params.brightness,
+          inactiveRgb,
+        );
       } else {
         renderFrom(
           ctx,
@@ -1824,6 +1888,7 @@ export function ASCIIMatterCanvas({
           radius,
           rgb,
           params.brightness * (1 - modeBlend),
+          inactiveRgb,
         );
         renderTo(
           ctx,
@@ -1833,6 +1898,7 @@ export function ASCIIMatterCanvas({
           radius,
           rgb,
           params.brightness * modeBlend,
+          inactiveRgb,
         );
       }
       if (neuralEnabled) {
@@ -1871,7 +1937,7 @@ export function ASCIIMatterCanvas({
             pulse: +pulseEnvRef.current.toFixed(3),
             attract: +attractStrength.toFixed(3),
             curl: +curlStrength.toFixed(3),
-            trail: params.trail,
+            trail: activeTrail,
             particles: total,
             // Particles actually eligible to paint in the current mode.
             // All production modes include the slow population now.
@@ -1906,6 +1972,7 @@ export function ASCIIMatterCanvas({
   }, [
     particles,
     color,
+    inactiveColor,
     backgroundColor,
     baseFieldColor,
     neuralColor,

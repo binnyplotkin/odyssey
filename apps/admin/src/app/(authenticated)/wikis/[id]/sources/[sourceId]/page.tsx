@@ -22,12 +22,16 @@ export default async function SourceDetailRoute({
   const routeBase = `/wikis/${wiki.id}`;
 
   const store = getWikiStore();
-  const [source, pages, runs, refs] = await Promise.all([
-    store.getSource(sourceId),
-    store.listPagesForWiki(wiki.id),
-    store.listIngestionRunsForWiki(wiki.id, 100),
-    store.listSourceRefsForWiki(wiki.id),
-  ]);
+  const [source, pages, runs, refs, cites, citedBy, allSources] =
+    await Promise.all([
+      store.getSource(sourceId),
+      store.listPagesForWiki(wiki.id),
+      store.listIngestionRunsForWiki(wiki.id, 100),
+      store.listSourceRefsForWiki(wiki.id),
+      store.listCitationsForCarrier(sourceId),
+      store.listCitationsForCited(sourceId),
+      store.listSourcesForWiki(wiki.id),
+    ]);
 
   if (!source || source.wikiId !== wiki.id) notFound();
 
@@ -35,6 +39,11 @@ export default async function SourceDetailRoute({
   const sourceRefs = refs.filter((r) => r.sourceId === source.id);
   const activeRun =
     sourceRuns.find((r) => r.id === runParam) ?? sourceRuns[0] ?? null;
+
+  // id → title for rendering citation edges + attributed refs.
+  const sourceTitles = Object.fromEntries(
+    allSources.map((s) => [s.id, s.title]),
+  );
 
   return (
     <WikiSourceDetailView
@@ -45,6 +54,9 @@ export default async function SourceDetailRoute({
       pages={pages}
       runs={sourceRuns}
       refs={sourceRefs}
+      cites={cites}
+      citedBy={citedBy}
+      sourceTitles={sourceTitles}
       activeRunId={activeRun?.id ?? null}
       routeBase={routeBase}
     />

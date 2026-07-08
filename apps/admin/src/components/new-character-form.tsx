@@ -34,6 +34,7 @@ export function NewCharacterForm() {
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
   const [summary, setSummary] = useState("");
+  const [brief, setBrief] = useState("");
   const [ingestionPrompt, setIngestionPrompt] = useState("");
   const [eras, setEras] = useState<EraConfig[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +84,7 @@ export function NewCharacterForm() {
     e.preventDefault();
     setError(null);
     start(async () => {
-      const res = await createCharacter({ title, slug, summary, ingestionPrompt, eras });
+      const res = await createCharacter({ title, slug, summary, brief, ingestionPrompt, eras });
       if (!res.ok) setError(res.error);
       // On success the server action redirects; no further state needed.
     });
@@ -141,6 +142,38 @@ export function NewCharacterForm() {
             />
           </Field>
         </div>
+      </div>
+
+      <div style={{
+        background: T.panel, border: `1px solid ${T.border}`,
+        borderRadius: "var(--radius-2xl)", overflow: "clip",
+      }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{
+            fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", fontWeight: 500, color: T.muted,
+            letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "var(--space-4)",
+          }}>
+            Who is this character? · optional
+          </div>
+          <div style={{ fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.muted, lineHeight: 1.55 }}>
+            Explain them in your own words — their world, what shaped them, what
+            they care about. Seeds the generated ingestion prompt, so writing it
+            here means you never have to hand-craft the prompt below.
+          </div>
+        </div>
+
+        <textarea
+          value={brief}
+          onChange={(e) => setBrief(e.target.value)}
+          placeholder="e.g. Abraham is the first patriarch of Genesis, called from Ur to Canaan on a divine promise. He is defined by covenant faith tested by long waiting — the promise of a son against decades of childlessness..."
+          rows={6}
+          style={{
+            width: "100%", border: "none", outline: "none", resize: "vertical",
+            padding: "16px 20px", background: "transparent",
+            fontFamily: T.fontBody, fontSize: "var(--font-size-base)", color: T.fg, lineHeight: "22px",
+            boxSizing: "border-box",
+          }}
+        />
       </div>
 
       <div style={{

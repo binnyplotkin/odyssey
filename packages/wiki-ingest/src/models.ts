@@ -39,6 +39,9 @@ export const MODELS = {
     context: 200_000,
     inPerMTok: 1,
     outPerMTok: 5,
+    // Caveat: Haiku's prompt-cache minimum is 4096 tokens (vs 1024 on
+    // Sonnet/Opus) — verified live 2026-07-07: a ~3.9k-token writer prefix
+    // cached on Sonnet but was silently skipped on Haiku.
     supportsCaching: true,
     label: "Claude Haiku 4.5",
   },
@@ -62,15 +65,21 @@ export function resolveModel(id?: string): ModelId {
   return id;
 }
 
-/** Estimate $ cost for a run given token split. Cheap heuristic, not billing. */
+/** Estimate $ cost for a run given token split. Cheap heuristic, not billing.
+ * Cache tokens are EXCLUDED from Anthropic's input_tokens: reads bill at
+ * 0.1× and writes at 1.25× of the input rate. Pass them when available. */
 export function estimateCost(
   modelId: ModelId,
   inputTokens: number,
   outputTokens: number,
+  cacheReadTokens = 0,
+  cacheWriteTokens = 0,
 ): number {
   const m = MODELS[modelId];
   return (
     (inputTokens / 1_000_000) * m.inPerMTok +
-    (outputTokens / 1_000_000) * m.outPerMTok
+    (outputTokens / 1_000_000) * m.outPerMTok +
+    (cacheReadTokens / 1_000_000) * m.inPerMTok * 0.1 +
+    (cacheWriteTokens / 1_000_000) * m.inPerMTok * 1.25
   );
 }

@@ -50,6 +50,9 @@ export type OpPlan = {
   inputTokens: number;
   /** Output tokens consumed by the planner call. */
   outputTokens: number;
+  /** Prompt-cache tokens (excluded from inputTokens; read = 0.1× cost). */
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
 };
 
 /* ── Writer output ─────────────────────────────────────────────── */
@@ -82,6 +85,9 @@ export type WrittenPage = {
   inputTokens: number;
   /** Output tokens consumed by this writer call. */
   outputTokens: number;
+  /** Prompt-cache tokens (excluded from inputTokens; read = 0.1× cost). */
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
 };
 
 /* ── Pipeline input/output ─────────────────────────────────────── */
@@ -110,6 +116,14 @@ export type IngestionInput = {
   /** Optional replay list for recovery runs. When present, planner is skipped
    * and only these failed operations are executed against the current wiki. */
   retryOps?: PlanOp[];
+  /**
+   * Nested provenance (P1): run the Survey stage before planning. Citing
+   * documents get their bibliography exploded into stub sources + citation
+   * edges, non-content sections excluded from planning, and refs whose
+   * passages carry inline markers attributed to the cited works.
+   * Default OFF until the survey eval golden set gates it (spec step 5).
+   */
+  survey?: boolean;
 };
 
 export type IngestionResult = {
@@ -126,6 +140,10 @@ export type IngestionResult = {
   inputTokens: number;
   /** Output tokens consumed across all model calls in the run. */
   outputTokens: number;
+  /** Prompt-cache tokens across the run (optional: absent on old payloads).
+   * Excluded from inputTokens; reads bill at 0.1×, writes at 1.25×. */
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
   model: string;
 };
 
@@ -147,11 +165,31 @@ export type IngestionEvent =
     }
   | { type: "started"; runId: string; model: string }
   | { type: "loaded-index"; pageCount: number; edgeCount: number }
+  | {
+      /** Nested provenance: the Survey stage's verdict (only when enabled). */
+      type: "survey-complete";
+      anatomy: "direct" | "citing" | "mixed";
+      citedWorks: number;
+      stubsOrMatches: number;
+      skippedThin: number;
+      /** Distinct inline markers resolvable to cited works (LLM + apparatus). */
+      markersMapped?: number;
+      excludedSections: number;
+      tokens: number;
+      inputTokens: number;
+      outputTokens: number;
+    }
   | { type: "planning" }
   | {
       type: "plan-complete";
       opCount: number;
       contradictionCount: number;
+      /** Planner's rough confidence in the plan (0–1). Runs below the
+       * pipeline's threshold also get a note on the run log. */
+      confidence?: number;
+      /** The flagged pairs behind contradictionCount. Optional: absent on
+       *  payloads persisted before 2026-07-07. */
+      contradictions?: Array<{ slugA: string; slugB: string; note: string }>;
       tokens: number;
       inputTokens: number;
       outputTokens: number;

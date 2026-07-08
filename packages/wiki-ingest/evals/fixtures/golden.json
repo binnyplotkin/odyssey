@@ -1,0 +1,52 @@
+{
+  "shakespeare": {
+    "file": "shakespeare-report.txt",
+    "anatomy": "citing",
+    "minBibliography": 25,
+    "expectedWorks": [
+      "Documentary Life",
+      "Shakespeare: A Life",
+      "Will in the World",
+      "Ungentle Life",
+      "1599",
+      "parish register",
+      "Marriage bond",
+      "Venus and Adonis",
+      "Rape of Lucrece",
+      "Sonnets",
+      "First Folio",
+      "Palladis Tamia"
+    ],
+    "expectedPrimaryWorks": ["parish register", "Marriage bond", "First Folio"],
+    "excludeMinResolved": 1,
+    "excludeMinChars": 5000
+  },
+  "genesisDirect": {
+    "file": "genesis-direct.txt",
+    "anatomy": "direct",
+    "maxBibliography": 0
+  },
+  "commentary": {
+    "file": "commentary-cited.txt",
+    "anatomy": ["citing", "mixed"],
+    "expectedWorks": [
+      { "marker": "[1]", "title": "Genesis: Translation and Commentary", "author": "Alter" },
+      { "marker": "[2]", "title": "Commentary on the Torah", "author": "Rashi" },
+      { "marker": "[3]", "title": "Genesis: Introduction, Translation, and Notes", "author": "Speiser" },
+      { "marker": "[4]", "title": "The JPS Torah Commentary: Genesis", "author": "Sarna" },
+      { "marker": "[5]", "title": "Genesis: A Commentary", "author": "von Rad" }
+    ]
+  },
+  "markerRetention": {
+    "file": "shakespeare-report.txt",
+    "window": { "start": 16500, "chars": 6000 },
+    "gate": 0.95
+  },
+  "e2e": {
+    "file": "shakespeare-report-e2e.txt",
+    "minStubs": 25,
+    "minCitationEdges": 25,
+    "minPages": 5,
+    "attributionGate": 0.8
+  }
+}
