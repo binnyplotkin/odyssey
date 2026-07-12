@@ -10,6 +10,7 @@ export default defineConfig({
       "packages/wiki-curator/src/**/*.test.ts",
       "packages/orchestration/src/**/*.test.ts",
       "apps/admin/src/**/*.test.ts",
+      "services/voice-agent/src/**/*.test.ts",
     ],
   },
   resolve: {

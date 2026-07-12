@@ -49,6 +49,7 @@ import { BackgroundVoiceCancellation } from "@livekit/noise-cancellation-node";
 import { type CharacterRecord, getCharacterStore, getSceneSessionStore } from "@odyssey/db";
 import { runVoiceStream } from "@odyssey/voice-pipeline";
 import { SceneDriver } from "./scene-driver";
+import { WorldAudioChannel } from "./world-audio";
 
 // --- Railway healthcheck: the agents worker doesn't serve HTTP itself, so expose
 // a tiny /healthz on its own port. embedderReady flips when bge is resident.
@@ -96,6 +97,13 @@ const IDLE_MS = Number(process.env.VOICE_AGENT_IDLE_MS ?? 3500);
 // Persist the live SceneState snapshot after each decision (visible/resumable in
 // /sessions). Fire-and-forget; default off — most useful for real multi-char scenes.
 const PERSIST_SCENE = process.env.VOICE_AGENT_PERSIST_SCENE === "1";
+// Phase 2 (scene audio): publish a second "world-audio" track carrying the looping
+// ambience bed (SceneState.ambience → sound library asset). Default ON — scenes
+// without a default bed stay silent, so the only audible change is authored beds.
+// Kill-switch: =0. Gains are dB relative to the ingest-normalized assets.
+const WORLD_AUDIO_ENABLED = process.env.VOICE_AGENT_WORLD_AUDIO !== "0";
+const WORLD_GAIN_DB = Number(process.env.VOICE_AGENT_WORLD_GAIN_DB ?? -12);
+const WORLD_DUCK_DB = Number(process.env.VOICE_AGENT_WORLD_DUCK_DB ?? -12);
 
 /** base64 Float32 LE PCM (one TTS chunk) → an Int16 mono AudioFrame for the room. */
 function toAudioFrame(pcmBase64: string, sampleRate: number): AudioFrame {
@@ -234,14 +242,25 @@ export default defineAgent({
       `[voice-agent] connected to room "${ctx.room.name}" — scene=${sceneDriver.scene.id} (${roster} character${roster === 1 ? "" : "s"}) session=${sessionId} stt=${STT_MODEL}`,
     );
 
-    // Phase 5: persist the live SceneState after each decision (best-effort).
-    if (PERSIST_SCENE) {
-      sceneDriver.onState((snapshot) => {
+    // Phase 2 (scene audio): the world-audio channel executes the SceneDriver's
+    // ambience decisions on a second published track. Constructed up front (cheap —
+    // nothing is published until the first bed lands); wired below via onState.
+    const worldAudio = WORLD_AUDIO_ENABLED
+      ? new WorldAudioChannel(ctx.room, { masterGainDb: WORLD_GAIN_DB, duckDb: WORLD_DUCK_DB })
+      : null;
+    if (worldAudio) worldAudio.prefetch([sceneDriver.scene.defaultAmbience]);
+
+    // onState is a single-callback slot on the driver — one subscription fans out to
+    // both consumers: the world-audio bed follows SceneState.ambience on every
+    // decision, and Phase 5 persistence stays behind its flag.
+    sceneDriver.onState((snapshot) => {
+      if (worldAudio) void worldAudio.setBed(snapshot.sceneState.ambience);
+      if (PERSIST_SCENE) {
         void sessionStore
           .updateCurrentScene({ sessionId, currentScene: snapshot })
           .catch(() => undefined);
-      });
-    }
+      }
+    });
 
     // User side handled by LiveKit: STT (inference model string) + auto silero VAD
     // + the bundled v1-mini end-of-turn detector. No llm/tts — the brain generates.
@@ -380,8 +399,10 @@ export default defineAgent({
         .driveProactive((input, replyId) => {
           if (signal.aborted) return Promise.resolve("");
           speaking = true;
+          worldAudio?.setDucked(true);
           return speak(input, signal, replyId).finally(() => {
             speaking = false;
+            worldAudio?.setDucked(false);
           });
         })
         .then((spoke) => {
@@ -415,8 +436,10 @@ export default defineAgent({
       void sceneDriver
         .drive(text, (input, replyId) => {
           speaking = true;
+          worldAudio?.setDucked(true);
           return speak(input, signal, replyId).finally(() => {
             speaking = false;
+            worldAudio?.setDucked(false);
             armIdle();
           });
         })
@@ -452,6 +475,9 @@ export default defineAgent({
         clearIdle(); // the user has the floor — cancel any pending proactive tick
         turn?.abort();
         audioSource.clearQueue();
+        // Agent is now instantly silent — bring the bed back without waiting
+        // for the aborted speak()'s finally to land.
+        worldAudio?.setDucked(false);
       }
     });
 
@@ -469,6 +495,14 @@ export default defineAgent({
       new TrackPublishOptions({ source: TrackSource.SOURCE_MICROPHONE }),
     );
     console.log("[voice-agent] session started — listening (own output track)");
+
+    // Start the scene's opening bed (SceneState.ambience initializes to the scene's
+    // defaultAmbience; later decisions flow through onState). Lazy — publishes the
+    // world-audio track only when a bed actually exists.
+    if (worldAudio) {
+      void worldAudio.setBed(sceneDriver.scene.defaultAmbience);
+      ctx.addShutdownCallback(() => worldAudio.close());
+    }
 
     // DIAGNOSTIC (gated): on join, drive ONE turn from a canned user message so the
     // smoke client can verify the loop WITHOUT STT — a scene room exercises the full
