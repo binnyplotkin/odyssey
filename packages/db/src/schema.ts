@@ -481,6 +481,71 @@ export const voiceExtractionAttemptsTable = pgTable(
   ],
 );
 
+// ── Audio assets (global sound library) ───────────────────────────────
+//
+// Reusable sounds — ambience beds, one-shot effects — referenced by scene
+// `audio` nodes (refId) the same way character nodes reference `characters`.
+// Two blobs per asset in Supabase storage:
+//   sound-sources    — the original upload (or generated mp3), private
+//   sound-processed  — canonical 48 kHz mono s16 WAV, private. The ingest
+//                      transcode happens client-side (Web Audio) so the
+//                      runtime hot path (Phase 2 WorldAudioChannel) reads
+//                      frames with zero decode work.
+//
+// `slug` doubles as the runtime track id: SceneState.ambience and
+// OrchestratorDecision.ambience/sfx key on this string.
+//
+// Status lifecycle:
+//   uploaded   — source in storage, processed WAV not yet ingested
+//   ready      — processed WAV present; usable by scenes
+//   failed     — ingest error; statusError holds the message
+export const audioAssetsTable = pgTable(
+  "audio_assets",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    // LLM-facing description — what the director reads in the audio roster
+    // (e.g. "low desert wind, sparse, lonely"). Written for the model, not
+    // marketing copy.
+    description: text("description"),
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    // Whether the asset is intended to loop seamlessly (ambience beds).
+    loopable: boolean("loopable").notNull().default(false),
+    // How the asset entered the library.
+    //   upload          — user-uploaded file
+    //   elevenlabs_sfx  — generated via the ElevenLabs sound-generation API
+    source: text("source").notNull().default("upload"),
+    // Prompt used for generated sounds; null for uploads.
+    generationPrompt: text("generation_prompt"),
+    status: text("status").notNull().default("uploaded"),
+    statusError: text("status_error"),
+    // Path within the sound-sources bucket (original bytes as received).
+    sourcePath: text("source_path"),
+    // Path within the sound-processed bucket (canonical 48k mono s16 WAV).
+    processedPath: text("processed_path"),
+    durationS: real("duration_s"),
+    sampleRate: integer("sample_rate"),
+    // Loudness metrics measured during ingest (dBFS). RMS-based for now;
+    // proper LUFS deferred.
+    rmsDb: real("rms_db"),
+    peakDb: real("peak_db"),
+    license: text("license"),
+    attribution: text("attribution"),
+    // Soft-delete, same semantics as voices: list queries hide archived
+    // rows; scene nodes already referencing the asset keep working.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+    updatedBy: text("updated_by").references(() => usersTable.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("audio_assets_status_idx").on(t.status),
+    index("audio_assets_archived_at_idx").on(t.archivedAt),
+  ],
+);
+
 // ── Character versions (named snapshots of full config state) ───────
 //
 // One row per saved version. Version numbers are monotonic per character

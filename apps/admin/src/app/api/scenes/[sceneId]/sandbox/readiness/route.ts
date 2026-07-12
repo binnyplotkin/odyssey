@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
 import { join } from "path";
-import { getSceneSessionStore, getVoiceStore } from "@odyssey/db";
+import { getAudioAssetStore, getSceneSessionStore, getVoiceStore } from "@odyssey/db";
 import { resolveScene, resolveSpeakerCharacter } from "@/lib/scene-orchestration";
 
 export const runtime = "nodejs";
@@ -49,7 +49,7 @@ export async function GET(
         : "Scene prompt and opening beat are required before rehearsal.",
     });
 
-  checks.push(ambienceTrackCheck(scene.defaultAmbience));
+  checks.push(await ambienceTrackCheck(scene.defaultAmbience));
 
   checks.push({
     id: "scene.cast",
@@ -183,7 +183,9 @@ async function narratorVoiceCheck(
   };
 }
 
-function ambienceTrackCheck(trackId: string | null): SceneSandboxReadinessCheck {
+async function ambienceTrackCheck(
+  trackId: string | null,
+): Promise<SceneSandboxReadinessCheck> {
   if (!trackId) {
     return {
       id: "scene.ambience.track",
@@ -191,6 +193,32 @@ function ambienceTrackCheck(trackId: string | null): SceneSandboxReadinessCheck 
       group: "definition",
       status: "ready",
       summary: "No default ambience track is configured.",
+    };
+  }
+
+  // Library-first: the runtime track id is an audio_assets slug. Legacy
+  // ids that predate the library fall back to the public-file check.
+  const asset = await getAudioAssetStore()
+    .getBySlug(trackId)
+    .catch(() => null);
+  if (asset) {
+    if (asset.status === "ready" && asset.processedPath) {
+      return {
+        id: "scene.ambience.track",
+        label: "Ambience track",
+        group: "definition",
+        status: "ready",
+        summary: `Default ambience "${asset.name}" is ready in the sound library.`,
+        detail: `/api/sounds/by-slug/${trackId}/stream`,
+      };
+    }
+    return {
+      id: "scene.ambience.track",
+      label: "Ambience track",
+      group: "definition",
+      status: "warning",
+      summary: `Default ambience "${asset.name}" is in the library but not processed yet (status: ${asset.status}). Run Process on /sounds.`,
+      detail: `/sounds`,
     };
   }
 

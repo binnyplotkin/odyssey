@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSceneStore, getSceneGraphStore } from "@odyssey/db";
+import { getAudioAssetStore, getSceneStore, getSceneGraphStore } from "@odyssey/db";
 import { invalidateScenesList } from "@/lib/scenes-cache";
 
 type ActionResult<T = undefined> =
@@ -78,28 +78,34 @@ export async function addCharacterToScene(
   }
 }
 
-export async function addAmbienceToScene(
+export async function addAudioToScene(
   sceneId: string,
   input: {
-    label: string;
-    trackId: string;
-    description?: string | null;
+    assetId: string;
+    role: "bed" | "oneshot";
     isDefault?: boolean;
+    triggerHint?: string | null;
   },
 ): Promise<ActionResult<{ nodeId: string }>> {
-  const trackId = input.trackId.trim();
-  if (!trackId) return { ok: false, error: "Track ID is required." };
+  const assetId = input.assetId.trim();
+  if (!assetId) return { ok: false, error: "Pick a sound from the library." };
 
   try {
+    const asset = await getAudioAssetStore().getById(assetId);
+    if (!asset) return { ok: false, error: "Sound not found in the library." };
+
     const node = await getSceneGraphStore().createNode({
       sceneId,
-      kind: "ambience",
-      label: input.label.trim() || trackId,
-      summary: input.description?.trim() || null,
+      kind: "audio",
+      refId: asset.id,
+      label: asset.name,
+      summary: asset.description,
       data: {
-        trackId,
-        ...(input.description?.trim() ? { description: input.description.trim() } : {}),
-        ...(input.isDefault ? { isDefault: true } : {}),
+        role: input.role,
+        ...(input.isDefault && input.role === "bed" ? { isDefault: true } : {}),
+        ...(input.triggerHint?.trim()
+          ? { triggerHint: input.triggerHint.trim() }
+          : {}),
       },
     });
     revalidatePath(`/scenes/${sceneId}`);
@@ -109,7 +115,7 @@ export async function addAmbienceToScene(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to add ambience.",
+      error: error instanceof Error ? error.message : "Failed to add audio.",
     };
   }
 }

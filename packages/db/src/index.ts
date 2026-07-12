@@ -18,6 +18,7 @@ export {
   voicesTable,
   voicePreviewsTable,
   voiceExtractionAttemptsTable,
+  audioAssetsTable,
   scenesTable,
   sceneNodesTable,
   sceneEdgesTable,
@@ -96,6 +97,17 @@ export type {
   BoundCharacterPreview,
 } from "./voice-store";
 
+export { getAudioAssetStore } from "./audio-asset-store";
+export type {
+  AudioAssetStore,
+  AudioAssetRecord,
+  AudioAssetStatus,
+  AudioAssetSource,
+  CreateAudioAssetInput,
+  UpdateAudioAssetInput,
+  ListAudioAssetsOptions,
+} from "./audio-asset-store";
+
 export { getCharacterVersionStore } from "./character-version-store";
 export type {
   CharacterVersionStore,
@@ -163,6 +175,7 @@ export {
   placeDataSchema,
   eventDataSchema,
   ambienceDataSchema,
+  audioDataSchema,
 } from "./scene-graph-store";
 export type {
   SceneGraphStore,
@@ -176,6 +189,7 @@ export type {
   SceneEdgeKind,
   CharacterNodeData,
   AmbienceNodeData,
+  AudioNodeData,
 } from "./scene-graph-store";
 
 export { getSceneStore } from "./scene-store";
