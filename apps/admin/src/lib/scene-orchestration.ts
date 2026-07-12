@@ -2,6 +2,7 @@ import {
   getCharacterStore,
   getSceneStore,
   getVoiceStore,
+  soundDesignToSceneSounds,
   type CharacterRecord,
 } from "@odyssey/db";
 import { type Scene } from "@odyssey/types";
@@ -41,6 +42,7 @@ export async function resolveScene(sceneId: string): Promise<Scene | null> {
     : null;
   const displayName = character.title?.trim() || character.slug;
   const summary = character.summary?.trim();
+  const sounds = soundDesignToSceneSounds(character.soundDesign);
 
   return {
     id: sceneId,
@@ -62,28 +64,21 @@ export async function resolveScene(sceneId: string): Promise<Scene | null> {
       },
     ],
     openingBeat: `${displayName} is ready in the sandbox and waiting for the user to begin.`,
-    // sm-sound: the character's bound sandbox bed (null = silence). Mirrors
-    // SceneDriver.fromCharacter — including the minimal one-bed roster so
-    // ambience decisions validate against it.
-    defaultAmbience: character.soundDesign?.ambienceSlug ?? null,
-    ...(character.soundDesign?.ambienceSlug
-      ? {
-          sounds: [
-            {
-              slug: character.soundDesign.ambienceSlug,
-              name: character.soundDesign.ambienceSlug,
-              description: null,
-              role: "bed" as const,
-              ...(typeof character.soundDesign.gainDb === "number"
-                ? { gainDb: character.soundDesign.gainDb }
-                : {}),
-              loopable: true,
-            },
-          ],
-        }
-      : {}),
+    // sm-sound: the character-canvas sound nodes, mapped to the director
+    // roster exactly as in SceneDriver.fromCharacter (beds + one-shots).
+    defaultAmbience: defaultCharacterBedSlug(character),
+    ...(sounds.length > 0 ? { sounds } : {}),
     narratorVoice: "fable",
   };
+}
+
+/** The character's opening bed: the default-flagged bed, else the first bed. */
+export function defaultCharacterBedSlug(character: CharacterRecord): string | null {
+  const sounds = character.soundDesign?.sounds ?? [];
+  return (
+    (sounds.find((s) => s.role === "bed" && s.isDefault) ??
+      sounds.find((s) => s.role === "bed"))?.slug ?? null
+  );
 }
 
 /**

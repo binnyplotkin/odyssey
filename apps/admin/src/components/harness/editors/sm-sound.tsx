@@ -36,13 +36,29 @@ type Props = {
 };
 
 export function SMSound({ character }: Props) {
-  const initial = useMemo(
-    () => ({
-      ambienceSlug: character.soundDesign?.ambienceSlug ?? null,
-      gainDb: character.soundDesign?.gainDb ?? 0,
-    }),
-    [character.soundDesign],
-  );
+  // This editor is a quick-bind surface for the DEFAULT BED only. The
+  // full node list (one-shots, positions) lives on the character canvas;
+  // saves here rewrite the default-bed entry and pass every other entry
+  // through untouched. Note: the harness layout provides soundDesign in
+  // the canonical list shape (character-store normalizes legacy rows).
+  const otherSounds = useMemo(() => {
+    const all = character.soundDesign?.sounds ?? [];
+    const defaultBed =
+      all.find((s) => s.role === "bed" && s.isDefault) ??
+      all.find((s) => s.role === "bed");
+    return all.filter((s) => s !== defaultBed);
+  }, [character.soundDesign]);
+
+  const initial = useMemo(() => {
+    const all = character.soundDesign?.sounds ?? [];
+    const defaultBed =
+      all.find((s) => s.role === "bed" && s.isDefault) ??
+      all.find((s) => s.role === "bed");
+    return {
+      ambienceSlug: defaultBed?.slug ?? null,
+      gainDb: defaultBed?.gainDb ?? 0,
+    };
+  }, [character.soundDesign]);
 
   const [ambienceSlug, setAmbienceSlug] = useState<string | null>(initial.ambienceSlug);
   const [gainDb, setGainDb] = useState<number>(initial.gainDb);
@@ -75,11 +91,22 @@ export function SMSound({ character }: Props) {
   const onSave = useCallback(async () => {
     setSave({ status: "saving" });
     try {
-      const soundDesign: CharacterSoundDesign | null = ambienceSlug
-        ? {
-            ambienceSlug,
-            ...(gainDb !== 0 ? { gainDb } : {}),
-          }
+      const asset = ambienceSlug ? sounds.find((s) => s.slug === ambienceSlug) : null;
+      const bedEntry = ambienceSlug
+        ? [
+            {
+              slug: ambienceSlug,
+              role: "bed" as const,
+              name: asset?.name ?? ambienceSlug,
+              description: asset?.description ?? null,
+              ...(gainDb !== 0 ? { gainDb } : {}),
+              isDefault: true,
+            },
+          ]
+        : [];
+      const nextSounds = [...bedEntry, ...otherSounds];
+      const soundDesign: CharacterSoundDesign | null = nextSounds.length
+        ? { sounds: nextSounds }
         : null;
       const res = await fetch(`/api/characters/${character.id}/sound-design`, {
         method: "POST",
@@ -98,7 +125,7 @@ export function SMSound({ character }: Props) {
         message: err instanceof Error ? err.message : "save failed",
       });
     }
-  }, [ambienceSlug, gainDb, character.id]);
+  }, [ambienceSlug, gainDb, character.id, sounds, otherSounds]);
 
   return (
     <div
@@ -280,9 +307,10 @@ export function SMSound({ character }: Props) {
           color: "var(--text-quaternary)",
         }}
       >
-        Channel-level controls (world master gain, duck depth under the voice) are
-        host env vars on the voice agent — VOICE_AGENT_WORLD_GAIN_DB /
-        VOICE_AGENT_WORLD_DUCK_DB.
+        This binds the DEFAULT BED only. One-shots (and node layout) are placed on
+        the character page canvas. Channel-level controls (world master gain, duck
+        depth under the voice) are host env vars on the voice agent —
+        VOICE_AGENT_WORLD_GAIN_DB / VOICE_AGENT_WORLD_DUCK_DB.
       </p>
     </div>
   );

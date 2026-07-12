@@ -1,4 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
+import type { SceneSound } from "@odyssey/types";
 import { getDb } from "./client";
 import { retryRead } from "./retry";
 import { charactersTable, sceneNodesTable } from "./schema";
@@ -49,6 +50,56 @@ function isRecoverableCharacterReadError(error: unknown) {
   return message.includes("Failed query:");
 }
 
+/**
+ * Fold the legacy single-bed shape ({ambienceSlug, gainDb}) into the
+ * canonical `sounds` list so every reader sees one shape. Rows written
+ * before the character-canvas sound nodes carry the legacy fields; all
+ * writers now emit the list. Name falls back to the slug — legacy rows
+ * never snapshotted asset metadata.
+ */
+export function normalizeSoundDesign(
+  raw: CharacterSoundDesign | null,
+): CharacterSoundDesign | null {
+  if (!raw) return null;
+  if (raw.sounds?.length) return { sounds: raw.sounds };
+  const slug = raw.ambienceSlug?.trim();
+  if (!slug) return null;
+  return {
+    sounds: [
+      {
+        slug,
+        role: "bed",
+        name: slug,
+        description: null,
+        ...(typeof raw.gainDb === "number" ? { gainDb: raw.gainDb } : {}),
+        isDefault: true,
+      },
+    ],
+  };
+}
+
+/**
+ * Map a character's placed sounds to the orchestrator `Scene.sounds`
+ * roster shape (the director's audio menu). Names/descriptions come from
+ * the bind-time snapshots on each entry; beds are loopable by definition.
+ * Used by the scene-less synthesis paths (SceneDriver.fromCharacter, the
+ * admin character-sandbox resolveScene).
+ */
+export function soundDesignToSceneSounds(
+  soundDesign: CharacterSoundDesign | null,
+): SceneSound[] {
+  const normalized = normalizeSoundDesign(soundDesign);
+  return (normalized?.sounds ?? []).map((s) => ({
+    slug: s.slug,
+    name: s.name,
+    description: s.description,
+    role: s.role,
+    ...(s.triggerHint ? { triggerHint: s.triggerHint } : {}),
+    ...(typeof s.gainDb === "number" ? { gainDb: s.gainDb } : {}),
+    loopable: s.role === "bed",
+  }));
+}
+
 function normalize(row: typeof charactersTable.$inferSelect): CharacterRecord {
   return {
     id: row.id,
@@ -65,7 +116,7 @@ function normalize(row: typeof charactersTable.$inferSelect): CharacterRecord {
     brainModel: (row.brainModel as CharacterBrainModel | null) ?? null,
     directive: (row.directive as CharacterDirective | null) ?? null,
     voiceId: row.voiceId ?? null,
-    soundDesign: (row.soundDesign as CharacterSoundDesign | null) ?? null,
+    soundDesign: normalizeSoundDesign(row.soundDesign as CharacterSoundDesign | null),
     voiceSettings: (row.voiceSettings as VoiceSettingsOverride | null) ?? null,
     createdAt: row.createdAt instanceof Date ? toIso(row.createdAt) : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? toIso(row.updatedAt) : String(row.updatedAt),

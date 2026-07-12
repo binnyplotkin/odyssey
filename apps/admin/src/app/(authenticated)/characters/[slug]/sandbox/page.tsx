@@ -9,6 +9,7 @@ import {
   type CharacterVoiceStyle,
 } from "@odyssey/db";
 import { DEFAULT_CHAT_MODEL } from "@/lib/model-registry";
+import { defaultCharacterBedSlug } from "@/lib/scene-orchestration";
 import { CharacterSandbox } from "@/components/character-sandbox";
 
 export const dynamic = "force-dynamic";
@@ -66,9 +67,9 @@ export default async function SandboxPage({ params }: { params: Params }) {
     voiceSlug: boundVoice?.slug ?? null,
     voiceName: boundVoice?.name ?? null,
     voiceProvider: boundVoice?.provider ?? null,
-    // sm-sound: the bound sandbox bed (audio_assets slug) — seeds the
-    // session snapshot's SceneState.ambience.
-    ambienceSlug: character.soundDesign?.ambienceSlug ?? null,
+    // sm-sound: the character's opening bed (audio_assets slug) — seeds
+    // the session snapshot's SceneState.ambience.
+    ambienceSlug: defaultCharacterBedSlug(character),
   };
 
   const sandboxBindings: SandboxBinding[] = bindings.map((b) => ({
