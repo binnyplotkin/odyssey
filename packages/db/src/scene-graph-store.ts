@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDb } from "./client";
 import { retryRead } from "./retry";
 import {
+  audioAssetsTable,
   charactersTable,
   sceneEdgesTable,
   sceneNodesTable,
@@ -14,7 +15,11 @@ import {
  * is backed by a library (ref_id required) or native to the scene.
  */
 
-export const NODE_KINDS = ["character", "place", "event", "ambience"] as const;
+// "ambience" is legacy — replaced by the library-backed "audio" kind
+// (refId → audio_assets). Kept in the registry for read tolerance on
+// rows the conversion script hasn't touched; the editors no longer
+// create it.
+export const NODE_KINDS = ["character", "place", "event", "ambience", "audio"] as const;
 export type NodeKind = (typeof NODE_KINDS)[number];
 
 export const behaviorTriggerSchema = z
@@ -64,14 +69,37 @@ export const ambienceDataSchema = z
 
 export type AmbienceNodeData = z.infer<typeof ambienceDataSchema>;
 
+// Library-backed sound placement. Asset-level facts (description, tags,
+// loopable) live on audio_assets; node data is placement-level only:
+// why this sound is in THIS scene and how the director should use it.
+export const audioDataSchema = z
+  .object({
+    // bed = looping ambience (exclusive per scene at runtime);
+    // oneshot = sfx the director can cue on a decision.
+    role: z.enum(["bed", "oneshot"]),
+    // Authoring hint surfaced to the director ("when the fire is
+    // mentioned", "when tension breaks").
+    triggerHint: z.string().trim().min(1).optional(),
+    // Opening bed for the scene (beds only; first-by-createdAt wins if
+    // several are flagged).
+    isDefault: z.boolean().optional(),
+    // Per-scene gain trim in dB applied on top of the asset's
+    // normalized level.
+    gainDb: z.number().min(-24).max(12).optional(),
+  })
+  .strict();
+
+export type AudioNodeData = z.infer<typeof audioDataSchema>;
+
 const dataSchemasByKind = {
   character: characterDataSchema,
   place: placeDataSchema,
   event: eventDataSchema,
   ambience: ambienceDataSchema,
+  audio: audioDataSchema,
 } as const satisfies Record<NodeKind, z.ZodTypeAny>;
 
-const kindsRequiringRef = new Set<NodeKind>(["character"]);
+const kindsRequiringRef = new Set<NodeKind>(["character", "audio"]);
 
 function validateNodeData(kind: NodeKind, data: unknown): Record<string, unknown> {
   const schema = dataSchemasByKind[kind];
@@ -285,6 +313,19 @@ function neonStore(): SceneGraphStore {
             .limit(1),
         );
         if (!c) throw new Error(`character ${input.refId} not found`);
+      }
+
+      if (input.kind === "audio" && input.refId) {
+        const db = requireDb();
+        const refId = input.refId;
+        const [a] = await retryRead(() =>
+          db
+            .select({ id: audioAssetsTable.id })
+            .from(audioAssetsTable)
+            .where(eq(audioAssetsTable.id, refId))
+            .limit(1),
+        );
+        if (!a) throw new Error(`audio asset ${input.refId} not found`);
       }
 
       const db = requireDb();

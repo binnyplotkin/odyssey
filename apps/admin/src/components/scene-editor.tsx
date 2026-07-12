@@ -20,10 +20,11 @@ import "@xyflow/react/dist/style.css";
 import type {
   SceneGraphPayload,
   SceneLibraryCharacter,
+  SceneLibrarySound,
   SceneRosterEntry,
 } from "@/app/(authenticated)/scenes/[sceneId]/page";
 import {
-  addAmbienceToScene,
+  addAudioToScene,
   addCharacterToScene,
   archiveScene,
   removeSceneNode,
@@ -73,6 +74,7 @@ type SceneEditorProps = {
   roster: SceneRosterEntry[];
   graph: SceneGraphPayload;
   libraryCharacters: SceneLibraryCharacter[];
+  librarySounds: SceneLibrarySound[];
 };
 
 type SceneNodeData = {
@@ -88,6 +90,7 @@ type GraphNodeData = {
   type: "graph";
   node: SceneGraphPayload["nodes"][number];
   character: SceneLibraryCharacter | null;
+  sound: SceneLibrarySound | null;
   voiceOptions: PickerVoice[];
 };
 
@@ -103,6 +106,7 @@ export function SceneEditor({
   roster,
   graph,
   libraryCharacters,
+  librarySounds,
 }: SceneEditorProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -140,6 +144,12 @@ export function SceneEditor({
     for (const character of libraryCharacters) map.set(character.id, character);
     return map;
   }, [libraryCharacters]);
+
+  const soundById = useMemo(() => {
+    const map = new Map<string, SceneLibrarySound>();
+    for (const sound of librarySounds) map.set(sound.id, sound);
+    return map;
+  }, [librarySounds]);
 
   const rosterCharacterIds = useMemo(
     () => new Set(graphNodes.filter((n) => n.kind === "character" && n.refId).map((n) => n.refId!)),
@@ -207,10 +217,15 @@ export function SceneEditor({
     [router, scene.id],
   );
 
-  const addAmbience = useCallback(
-    (input: { label: string; trackId: string; description?: string; isDefault?: boolean }) => {
+  const addAudio = useCallback(
+    (input: {
+      assetId: string;
+      role: "bed" | "oneshot";
+      isDefault?: boolean;
+      triggerHint?: string;
+    }) => {
       start(async () => {
-        await addAmbienceToScene(scene.id, input);
+        await addAudioToScene(scene.id, input);
         router.refresh();
       });
     },
@@ -287,6 +302,7 @@ export function SceneEditor({
         nodes={graphNodes}
         edges={graph.edges}
         characterById={characterById}
+        soundById={soundById}
         voiceOptions={voiceOptions}
         onSelectionChange={(id) => {
           setSelectedNodeId(id);
@@ -309,6 +325,11 @@ export function SceneEditor({
               ? characterById.get(selectedGraphNode.refId) ?? null
               : null
           }
+          selectedSound={
+            selectedGraphNode?.kind === "audio" && selectedGraphNode.refId
+              ? soundById.get(selectedGraphNode.refId) ?? null
+              : null
+          }
           scene={{
             title,
             prompt,
@@ -319,6 +340,7 @@ export function SceneEditor({
           }}
           rosterCount={roster.length}
           addableCharacters={addableCharacters}
+          librarySounds={librarySounds}
           voiceOptions={voiceOptions}
           onSceneChange={{
             setTitle,
@@ -330,7 +352,7 @@ export function SceneEditor({
             saveConfig,
           }}
           onAddCharacter={addCharacter}
-          onAddAmbience={addAmbience}
+          onAddAudio={addAudio}
           onRemoveCharacter={removeCharacter}
           onNodeSaved={updateLocalNode}
         />
@@ -415,6 +437,7 @@ function SceneCanvas({
   nodes,
   edges,
   characterById,
+  soundById,
   voiceOptions,
   onSelectionChange,
   onNodePositionChange,
@@ -424,6 +447,7 @@ function SceneCanvas({
   nodes: SceneGraphPayload["nodes"];
   edges: SceneGraphPayload["edges"];
   characterById: Map<string, SceneLibraryCharacter>;
+  soundById: Map<string, SceneLibrarySound>;
   voiceOptions: PickerVoice[];
   onSelectionChange: (id: string | null) => void;
   onNodePositionChange: (
@@ -443,6 +467,10 @@ function SceneCanvas({
           node.kind === "character" && node.refId
             ? characterById.get(node.refId) ?? null
             : null,
+        sound:
+          node.kind === "audio" && node.refId
+            ? soundById.get(node.refId) ?? null
+            : null,
         voiceOptions,
       },
       draggable: true,
@@ -459,7 +487,7 @@ function SceneCanvas({
       },
       ...graphFlowNodes,
     ];
-  }, [characterById, nodes, scene, voiceOptions]);
+  }, [characterById, soundById, nodes, scene, voiceOptions]);
 
   const [flowNodes, setFlowNodes, onNodesChange] =
     useNodesState<FlowNode<SceneFlowData>>(initialNodes);
@@ -637,6 +665,56 @@ function SceneGraphNode({
       />
     );
   }
+  if (node.kind === "audio") {
+    const role = asString(node.data.role) || "bed";
+    const isDefault = node.data.isDefault === true;
+    const triggerHint = asString(node.data.triggerHint);
+    return (
+      <div
+        style={{
+          width: 320,
+          padding: "var(--space-16)",
+          borderRadius: "var(--radius-xl)",
+          border: selected
+            ? "1.5px solid color-mix(in srgb, var(--accent-strong) 55%, transparent)"
+            : "1px solid var(--border-subtle)",
+          background: "var(--background)",
+          boxShadow: selected
+            ? "0 0 0 3px color-mix(in srgb, var(--accent-strong) 12%, transparent)"
+            : "none",
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-10)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-8)" }}>
+          <span style={kickerStyle}>audio · {role}</span>
+          {isDefault && <span style={{ ...kickerStyle, color: T.accent }}>default</span>}
+        </div>
+        <strong
+          style={{
+            color: T.fg,
+            fontFamily: T.fontHeading,
+            fontSize: "var(--font-size-lg)",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {data.sound?.name ?? node.label}
+        </strong>
+        <span style={{ color: T.accent, fontFamily: T.fontMono, fontSize: "var(--font-size-sm)" }}>
+          {data.sound?.slug ?? node.refId ?? "missing asset"}
+          {data.sound && data.sound.status !== "ready" && " · needs processing"}
+        </span>
+        <p style={{ margin: 0, color: T.muted, lineHeight: "19px" }}>
+          {triggerHint
+            ? `Cue: ${triggerHint}`
+            : data.sound?.description ||
+              node.summary ||
+              (role === "bed" ? "Looped background bed." : "One-shot effect.")}
+        </p>
+      </div>
+    );
+  }
   if (node.kind === "ambience") {
     const trackId = asString(node.data.trackId);
     const isDefault = node.data.isDefault === true;
@@ -724,13 +802,15 @@ function SceneInspector({
   saved,
   selectedNode,
   selectedCharacter,
+  selectedSound,
   scene,
   rosterCount,
   addableCharacters,
+  librarySounds,
   voiceOptions,
   onSceneChange,
   onAddCharacter,
-  onAddAmbience,
+  onAddAudio,
   onRemoveCharacter,
   onNodeSaved,
 }: {
@@ -739,6 +819,7 @@ function SceneInspector({
   saved: boolean;
   selectedNode: SceneGraphPayload["nodes"][number] | null;
   selectedCharacter: SceneLibraryCharacter | null;
+  selectedSound: SceneLibrarySound | null;
   scene: {
     title: string;
     prompt: string;
@@ -749,6 +830,7 @@ function SceneInspector({
   };
   rosterCount: number;
   addableCharacters: SceneLibraryCharacter[];
+  librarySounds: SceneLibrarySound[];
   voiceOptions: PickerVoice[];
   onSceneChange: {
     setTitle: (next: string) => void;
@@ -760,11 +842,11 @@ function SceneInspector({
     saveConfig: (event?: FormEvent) => void;
   };
   onAddCharacter: (characterId: string) => void;
-  onAddAmbience: (input: {
-    label: string;
-    trackId: string;
-    description?: string;
+  onAddAudio: (input: {
+    assetId: string;
+    role: "bed" | "oneshot";
     isDefault?: boolean;
+    triggerHint?: string;
   }) => void;
   onRemoveCharacter: (nodeId: string) => void;
   onNodeSaved: (
@@ -780,6 +862,7 @@ function SceneInspector({
           pending={pending}
           node={selectedNode}
           character={selectedCharacter}
+          sound={selectedSound}
           onRemoveCharacter={onRemoveCharacter}
           onNodeSaved={onNodeSaved}
         />
@@ -790,10 +873,11 @@ function SceneInspector({
           scene={scene}
           rosterCount={rosterCount}
           addableCharacters={addableCharacters}
+          librarySounds={librarySounds}
           voiceOptions={voiceOptions}
           onSceneChange={onSceneChange}
           onAddCharacter={onAddCharacter}
-          onAddAmbience={onAddAmbience}
+          onAddAudio={onAddAudio}
         />
       )}
     </AdminRightRail>
@@ -806,10 +890,11 @@ function SceneSettingsInspector({
   scene,
   rosterCount,
   addableCharacters,
+  librarySounds,
   voiceOptions,
   onSceneChange,
   onAddCharacter,
-  onAddAmbience,
+  onAddAudio,
 }: {
   pending: boolean;
   saved: boolean;
@@ -823,6 +908,7 @@ function SceneSettingsInspector({
   };
   rosterCount: number;
   addableCharacters: SceneLibraryCharacter[];
+  librarySounds: SceneLibrarySound[];
   voiceOptions: PickerVoice[];
   onSceneChange: {
     setTitle: (next: string) => void;
@@ -834,31 +920,30 @@ function SceneSettingsInspector({
     saveConfig: (event?: FormEvent) => void;
   };
   onAddCharacter: (characterId: string) => void;
-  onAddAmbience: (input: {
-    label: string;
-    trackId: string;
-    description?: string;
+  onAddAudio: (input: {
+    assetId: string;
+    role: "bed" | "oneshot";
     isDefault?: boolean;
+    triggerHint?: string;
   }) => void;
 }) {
-  const [ambienceTrackId, setAmbienceTrackId] = useState("");
-  const [ambienceLabel, setAmbienceLabel] = useState("");
-  const [ambienceDescription, setAmbienceDescription] = useState("");
-  const [ambienceDefault, setAmbienceDefault] = useState(false);
+  const [audioAssetId, setAudioAssetId] = useState("");
+  const [audioRole, setAudioRole] = useState<"bed" | "oneshot">("bed");
+  const [audioDefault, setAudioDefault] = useState(false);
+  const [audioTriggerHint, setAudioTriggerHint] = useState("");
 
-  const addAmbience = () => {
-    const trackId = ambienceTrackId.trim();
-    if (!trackId) return;
-    onAddAmbience({
-      trackId,
-      label: ambienceLabel.trim() || trackId,
-      description: ambienceDescription.trim(),
-      isDefault: ambienceDefault,
+  const addAudio = () => {
+    if (!audioAssetId) return;
+    onAddAudio({
+      assetId: audioAssetId,
+      role: audioRole,
+      isDefault: audioRole === "bed" ? audioDefault : false,
+      triggerHint: audioTriggerHint.trim() || undefined,
     });
-    setAmbienceTrackId("");
-    setAmbienceLabel("");
-    setAmbienceDescription("");
-    setAmbienceDefault(false);
+    setAudioAssetId("");
+    setAudioRole("bed");
+    setAudioDefault(false);
+    setAudioTriggerHint("");
   };
 
   return (
@@ -936,42 +1021,57 @@ function SceneSettingsInspector({
           ))}
         </select>
       </Field>
-      <Field label="Add ambience">
+      <Field label="Add audio">
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+          <select
+            value={audioAssetId}
+            onChange={(event) => setAudioAssetId(event.target.value)}
+            disabled={pending || librarySounds.length === 0}
+            style={{ ...inputStyle, cursor: "pointer" }}
+          >
+            <option value="" disabled>
+              {librarySounds.length === 0
+                ? "Sound library is empty — add sounds at /sounds"
+                : "Pick a sound from the library"}
+            </option>
+            {librarySounds.map((sound) => (
+              <option key={sound.id} value={sound.id}>
+                {sound.name}
+                {sound.status !== "ready" ? " (needs processing)" : ""}
+              </option>
+            ))}
+          </select>
+          <select
+            value={audioRole}
+            onChange={(event) => setAudioRole(event.target.value as "bed" | "oneshot")}
+            style={{ ...inputStyle, cursor: "pointer" }}
+          >
+            <option value="bed">bed — looping ambience</option>
+            <option value="oneshot">one-shot — cueable effect</option>
+          </select>
           <input
-            value={ambienceTrackId}
-            onChange={(event) => setAmbienceTrackId(event.target.value)}
-            placeholder="Track ID, e.g. tent-evening"
+            value={audioTriggerHint}
+            onChange={(event) => setAudioTriggerHint(event.target.value)}
+            placeholder="Cue hint for the director, optional"
             style={inputStyle}
           />
-          <input
-            value={ambienceLabel}
-            onChange={(event) => setAmbienceLabel(event.target.value)}
-            placeholder="Label, optional"
-            style={inputStyle}
-          />
-          <textarea
-            value={ambienceDescription}
-            onChange={(event) => setAmbienceDescription(event.target.value)}
-            rows={2}
-            placeholder="Description, optional"
-            style={textareaStyle}
-          />
-          <label style={checkboxRowStyle}>
-            <input
-              type="checkbox"
-              checked={ambienceDefault}
-              onChange={(event) => setAmbienceDefault(event.target.checked)}
-            />
-            Default background bed
-          </label>
+          {audioRole === "bed" && (
+            <label style={checkboxRowStyle}>
+              <input
+                type="checkbox"
+                checked={audioDefault}
+                onChange={(event) => setAudioDefault(event.target.checked)}
+              />
+              Default background bed
+            </label>
+          )}
           <AdminButton
             type="button"
             variant="secondary"
-            disabled={pending || !ambienceTrackId.trim()}
-            onClick={addAmbience}
+            disabled={pending || !audioAssetId}
+            onClick={addAudio}
           >
-            Add ambience
+            Add audio
           </AdminButton>
         </div>
       </Field>
@@ -985,6 +1085,7 @@ function GraphNodeInspector({
   pending,
   node,
   character,
+  sound,
   onRemoveCharacter,
   onNodeSaved,
 }: {
@@ -992,6 +1093,7 @@ function GraphNodeInspector({
   pending: boolean;
   node: SceneGraphPayload["nodes"][number];
   character: SceneLibraryCharacter | null;
+  sound: SceneLibrarySound | null;
   onRemoveCharacter: (nodeId: string) => void;
   onNodeSaved: (
     nodeId: string,
@@ -1012,12 +1114,22 @@ function GraphNodeInspector({
     asString(node.data.description),
   );
   const [isDefaultAmbience, setIsDefaultAmbience] = useState(node.data.isDefault === true);
+  const [audioRole, setAudioRole] = useState<"bed" | "oneshot">(
+    asString(node.data.role) === "oneshot" ? "oneshot" : "bed",
+  );
+  const [audioTriggerHint, setAudioTriggerHint] = useState(
+    asString(node.data.triggerHint),
+  );
+  const [audioGainDb, setAudioGainDb] = useState(
+    typeof node.data.gainDb === "number" ? String(node.data.gainDb) : "",
+  );
   const [saved, setSaved] = useState(false);
   const [saving, startSaving] = useTransition();
 
   const saveNode = (event?: FormEvent) => {
     event?.preventDefault();
     setSaved(false);
+    const parsedGain = Number(audioGainDb);
     const nextData =
       node.kind === "character"
         ? compactObject({
@@ -1034,6 +1146,19 @@ function GraphNodeInspector({
               description: ambienceDescription,
               isDefault: isDefaultAmbience,
             })
+        : node.kind === "audio"
+          ? {
+              role: audioRole,
+              ...(audioTriggerHint.trim()
+                ? { triggerHint: audioTriggerHint.trim() }
+                : {}),
+              ...(audioRole === "bed" && isDefaultAmbience
+                ? { isDefault: true }
+                : {}),
+              ...(audioGainDb.trim() && Number.isFinite(parsedGain)
+                ? { gainDb: parsedGain }
+                : {}),
+            }
         : node.data;
 
     startSaving(async () => {
@@ -1056,13 +1181,24 @@ function GraphNodeInspector({
   return (
     <form onSubmit={saveNode} style={inspectorFormStyle}>
       <InspectorHeader
-	        eyebrow={node.kind}
-	        title={label}
-	        meta={character ? character.slug : asString(node.data.trackId) || (node.refId ?? "native node")}
+	        eyebrow={node.kind === "audio" ? `audio · ${audioRole}` : node.kind}
+	        title={sound?.name ?? label}
+	        meta={
+	          character
+	            ? character.slug
+	            : sound
+	              ? sound.slug
+	              : asString(node.data.trackId) || (node.refId ?? "native node")
+	        }
 	      />
       {character && (
         <Link href={`/characters/${character.slug}`} style={subtleLinkStyle}>
           open character
+        </Link>
+      )}
+      {node.kind === "audio" && (
+        <Link href="/sounds" style={subtleLinkStyle}>
+          open sound library
         </Link>
       )}
       <Field label="Label">
@@ -1150,15 +1286,71 @@ function GraphNodeInspector({
 	          </label>
 	        </>
 	      )}
+	      {node.kind === "audio" && (
+	        <>
+	          {sound?.description && (
+	            <p
+	              style={{
+	                margin: 0,
+	                color: T.muted,
+	                fontFamily: T.fontBody,
+	                fontSize: "var(--font-size-base)",
+	                lineHeight: "19px",
+	              }}
+	            >
+	              {sound.description}
+	            </p>
+	          )}
+	          <Field label="Role">
+	            <select
+	              value={audioRole}
+	              onChange={(event) =>
+	                setAudioRole(event.target.value as "bed" | "oneshot")
+	              }
+	              style={{ ...inputStyle, cursor: "pointer" }}
+	            >
+	              <option value="bed">bed — looping ambience</option>
+	              <option value="oneshot">one-shot — cueable effect</option>
+	            </select>
+	          </Field>
+	          <Field label="Cue hint (what the director reads)">
+	            <input
+	              value={audioTriggerHint}
+	              onChange={(event) => setAudioTriggerHint(event.target.value)}
+	              placeholder="e.g. when the fire is mentioned"
+	              style={inputStyle}
+	            />
+	          </Field>
+	          <Field label="Gain trim (dB, −24…+12)">
+	            <input
+	              value={audioGainDb}
+	              onChange={(event) => setAudioGainDb(event.target.value)}
+	              placeholder="0"
+	              inputMode="decimal"
+	              style={inputStyle}
+	            />
+	          </Field>
+	          {audioRole === "bed" && (
+	            <label style={checkboxRowStyle}>
+	              <input
+	                type="checkbox"
+	                checked={isDefaultAmbience}
+	                onChange={(event) => setIsDefaultAmbience(event.target.checked)}
+	              />
+	              Default background bed
+	            </label>
+	          )}
+	        </>
+	      )}
 	      <InspectorFooter pending={pending || saving} saved={saved} label="Save node" />
-	      {(node.kind === "character" || node.kind === "ambience") && (
+	      {(node.kind === "character" || node.kind === "ambience" || node.kind === "audio") && (
 	        <button
 	          type="button"
 	          onClick={() => onRemoveCharacter(node.id)}
 	          disabled={pending || saving}
 	          style={dangerButtonStyle}
 	        >
-	          {node.kind === "ambience" ? "Remove ambience" : "Remove from scene"}
+	          Remove from scene
 	        </button>
 	      )}
     </form>

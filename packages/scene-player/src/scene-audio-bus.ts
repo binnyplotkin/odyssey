@@ -211,10 +211,25 @@ export class SceneAudioBus {
   }
 
   private fadeInNewAmbience(trackId: string): void {
-    const el = new Audio(`/ambience/${trackId}.mp3`);
+    // Track ids are sound-library slugs served by the admin API; legacy
+    // ids that predate the library fall back to the public mp3 path.
+    const el = new Audio(`/api/sounds/by-slug/${trackId}/stream`);
     el.loop = true;
     el.volume = 0;
     this.ambienceEl = el;
+    el.onerror = () => {
+      if (this.ambienceEl !== el) return;
+      const fallback = new Audio(`/ambience/${trackId}.mp3`);
+      fallback.loop = true;
+      // Skip the crossfade for the fallback — the error usually fires
+      // before the ramp has moved, and a rare legacy track popping in at
+      // bed volume beats it staying inaudible.
+      fallback.volume = AMBIENCE_VOLUME;
+      this.ambienceEl = fallback;
+      fallback.play().catch((err) => {
+        console.warn("[scene-audio-bus] ambience fallback play blocked", err);
+      });
+    };
     el.play().catch((err) => {
       // Autoplay may be blocked if start() wasn't called from a user
       // gesture. Surface but don't throw — the rest of the bus still works.

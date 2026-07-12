@@ -3,7 +3,7 @@ import type { Scene, SceneCharacter, SceneDefinition, SceneRecord } from "@odyss
 import { sceneDefinitionSchema } from "@odyssey/types";
 import { getDb } from "./client";
 import { retryRead } from "./retry";
-import { charactersTable, scenesTable } from "./schema";
+import { audioAssetsTable, charactersTable, scenesTable } from "./schema";
 import { getSceneGraphStore, type SceneNodeRecord } from "./scene-graph-store";
 
 /* ── Shape ─────────────────────────────────────────────────────────── */
@@ -72,15 +72,40 @@ function normalizeRow(row: typeof scenesTable.$inferSelect): SceneRecord {
 }
 
 export function selectDefaultAmbienceTrackId(
-  nodes: Array<Pick<SceneNodeRecord, "kind" | "data" | "createdAt" | "id">>,
+  nodes: Array<
+    Pick<SceneNodeRecord, "kind" | "data" | "createdAt" | "id" | "refId">
+  >,
   fallback?: string | null,
+  /** refId → audio_assets.slug, for library-backed `audio` nodes. The
+   * asset slug IS the runtime track id. */
+  audioSlugByRefId?: Map<string, string>,
 ): string | null {
+  const byCreation = (
+    a: Pick<SceneNodeRecord, "createdAt" | "id">,
+    b: Pick<SceneNodeRecord, "createdAt" | "id">,
+  ) => {
+    const byCreatedAt = a.createdAt.localeCompare(b.createdAt);
+    return byCreatedAt === 0 ? a.id.localeCompare(b.id) : byCreatedAt;
+  };
+
+  // Library-backed audio beds win over legacy ambience nodes.
+  const defaultAudioNode = nodes
+    .filter(
+      (n) =>
+        n.kind === "audio" &&
+        n.data.role === "bed" &&
+        n.data.isDefault === true &&
+        n.refId,
+    )
+    .sort(byCreation)[0];
+  if (defaultAudioNode?.refId) {
+    const slug = audioSlugByRefId?.get(defaultAudioNode.refId)?.trim();
+    if (slug) return slug;
+  }
+
   const defaultAmbienceNode = nodes
     .filter((n) => n.kind === "ambience" && n.data.isDefault === true)
-    .sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt);
-      return byCreatedAt === 0 ? a.id.localeCompare(b.id) : byCreatedAt;
-    })[0];
+    .sort(byCreation)[0];
   const trackId =
     typeof defaultAmbienceNode?.data.trackId === "string"
       ? defaultAmbienceNode.data.trackId.trim()
@@ -178,12 +203,31 @@ function neonStore(): SceneStore {
       const graph = await getSceneGraphStore().getGraph(id);
       const characterNodes = graph.nodes.filter((n) => n.kind === "character" && n.refId);
       if (characterNodes.length === 0) return null;
+
+      const db = requireDb();
+
+      // Resolve library-backed audio nodes to asset slugs (the runtime
+      // track id) so the default-bed selector can consider them.
+      const audioRefIds = graph.nodes
+        .filter((n) => n.kind === "audio" && n.refId)
+        .map((n) => n.refId!)
+        .filter((x, i, arr) => arr.indexOf(x) === i);
+      const audioSlugByRefId = new Map<string, string>();
+      if (audioRefIds.length > 0) {
+        const audioRows = await retryRead(() =>
+          db
+            .select({ id: audioAssetsTable.id, slug: audioAssetsTable.slug })
+            .from(audioAssetsTable)
+            .where(inArray(audioAssetsTable.id, audioRefIds)),
+        );
+        for (const row of audioRows) audioSlugByRefId.set(row.id, row.slug);
+      }
+
       const defaultAmbienceTrackId = selectDefaultAmbienceTrackId(
         graph.nodes,
         record.definition.defaultAmbience,
+        audioSlugByRefId,
       );
-
-      const db = requireDb();
       const charIds = characterNodes.map((n) => n.refId).filter((x): x is string => !!x);
       const charRows = await retryRead(() =>
         db

@@ -5,7 +5,12 @@ import type {
   SceneEdgeRecord,
   SceneNodeRecord,
 } from "@odyssey/db";
-import { getCharacterStore, getSceneGraphStore, getSceneStore } from "@odyssey/db";
+import {
+  getAudioAssetStore,
+  getCharacterStore,
+  getSceneGraphStore,
+  getSceneStore,
+} from "@odyssey/db";
 import { SceneEditor } from "@/components/scene-editor";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +38,18 @@ export type SceneGraphPayload = {
   edges: SceneEdgeRecord[];
 };
 
+/** Compact audio-asset row for the canvas "add audio" picker + node
+ * hydration. Slug doubles as the runtime track id. */
+export type SceneLibrarySound = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  loopable: boolean;
+  status: string;
+  durationS: number | null;
+};
+
 export default async function SceneDetailPage({
   params,
 }: {
@@ -43,9 +60,10 @@ export default async function SceneDetailPage({
   const scene = await getSceneStore().getSceneById(sceneId);
   if (!scene) notFound();
 
-  const [graph, library] = await Promise.all([
+  const [graph, library, soundLibrary] = await Promise.all([
     getSceneGraphStore().getGraph(sceneId),
     getCharacterStore().list(),
+    getAudioAssetStore().list(),
   ]);
 
   const roster: SceneRosterEntry[] = graph.nodes
@@ -64,6 +82,16 @@ export default async function SceneDetailPage({
     voiceId: c.voiceId,
   }));
 
+  const librarySounds: SceneLibrarySound[] = soundLibrary.map((a) => ({
+    id: a.id,
+    slug: a.slug,
+    name: a.name,
+    description: a.description,
+    loopable: a.loopable,
+    status: a.status,
+    durationS: a.durationS,
+  }));
+
   return (
     <SceneEditor
       scene={{
@@ -78,6 +106,7 @@ export default async function SceneDetailPage({
       roster={roster}
       graph={graph}
       libraryCharacters={libraryCharacters}
+      librarySounds={librarySounds}
     />
   );
 }
