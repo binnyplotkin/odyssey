@@ -41,6 +41,7 @@ export default async function HarnessLayout({
     voiceStyle: character.voiceStyle,
     brainModel: character.brainModel,
     directive: character.directive,
+    soundDesign: character.soundDesign,
   };
 
   return (

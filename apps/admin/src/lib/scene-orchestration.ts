@@ -62,7 +62,26 @@ export async function resolveScene(sceneId: string): Promise<Scene | null> {
       },
     ],
     openingBeat: `${displayName} is ready in the sandbox and waiting for the user to begin.`,
-    defaultAmbience: null,
+    // sm-sound: the character's bound sandbox bed (null = silence). Mirrors
+    // SceneDriver.fromCharacter — including the minimal one-bed roster so
+    // ambience decisions validate against it.
+    defaultAmbience: character.soundDesign?.ambienceSlug ?? null,
+    ...(character.soundDesign?.ambienceSlug
+      ? {
+          sounds: [
+            {
+              slug: character.soundDesign.ambienceSlug,
+              name: character.soundDesign.ambienceSlug,
+              description: null,
+              role: "bed" as const,
+              ...(typeof character.soundDesign.gainDb === "number"
+                ? { gainDb: character.soundDesign.gainDb }
+                : {}),
+              loopable: true,
+            },
+          ],
+        }
+      : {}),
     narratorVoice: "fable",
   };
 }

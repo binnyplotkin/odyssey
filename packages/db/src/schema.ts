@@ -345,6 +345,11 @@ export const charactersTable = pgTable(
     // identity) is never overrideable here — only the performance knobs.
     // Shape: see VoiceSettingsOverride in voice-store.ts.
     voiceSettings: jsonb("voice_settings"),
+    // sm-sound (Sound design): the character's sandbox soundscape — an
+    // ambience bed bound by audio_assets SLUG (+ gain trim in dB). Used
+    // only when the character runs outside a scene (character sandbox /
+    // char-… rooms); scene-placed beds win. Shape: CharacterSoundDesign.
+    soundDesign: jsonb("sound_design"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

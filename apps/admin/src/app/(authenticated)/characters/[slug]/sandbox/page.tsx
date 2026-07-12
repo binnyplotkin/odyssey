@@ -29,6 +29,8 @@ export type SandboxCharacter = {
   voiceSlug: string | null;
   voiceName: string | null;
   voiceProvider: string | null;
+  /** sm-sound: the character's bound sandbox ambience bed (audio_assets slug). */
+  ambienceSlug: string | null;
 };
 
 export type SandboxBinding = {
@@ -64,6 +66,9 @@ export default async function SandboxPage({ params }: { params: Params }) {
     voiceSlug: boundVoice?.slug ?? null,
     voiceName: boundVoice?.name ?? null,
     voiceProvider: boundVoice?.provider ?? null,
+    // sm-sound: the bound sandbox bed (audio_assets slug) — seeds the
+    // session snapshot's SceneState.ambience.
+    ambienceSlug: character.soundDesign?.ambienceSlug ?? null,
   };
 
   const sandboxBindings: SandboxBinding[] = bindings.map((b) => ({

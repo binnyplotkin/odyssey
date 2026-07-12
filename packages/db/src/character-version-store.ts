@@ -30,6 +30,7 @@ import type {
   CharacterIdentity,
   CharacterBrainModel,
   CharacterRecord,
+  CharacterSoundDesign,
   CharacterVoiceStyle,
   EraConfig,
 } from "./wiki-types";
@@ -125,6 +126,8 @@ function normalizeCharacter(row: typeof charactersTable.$inferSelect): Character
     image: row.image,
     thumbnailColor: row.thumbnailColor,
     voiceId: row.voiceId ?? null,
+    // Not versioned: the sandbox sound binding passes through on restore.
+    soundDesign: (row.soundDesign as CharacterSoundDesign | null) ?? null,
     voiceSettings: (row.voiceSettings as VoiceSettingsOverride | null) ?? null,
     eras: (row.eras as EraConfig[]) ?? [],
     ingestionPrompt: row.ingestionPrompt,

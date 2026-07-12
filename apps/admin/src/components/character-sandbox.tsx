@@ -339,6 +339,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       characterSlug: character.slug,
       mode: launchMode,
       activeModel,
+      ambienceSlug: character.ambienceSlug ?? null,
     }).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
       setSessionError(message);
@@ -2911,12 +2912,14 @@ async function createSandboxSceneSession(input: {
   characterSlug: string;
   mode: SandboxMode;
   activeModel: string;
+  ambienceSlug: string | null;
 }): Promise<string> {
   const id = crypto.randomUUID();
   const sceneId = buildSandboxSceneId(input.characterSlug);
   const currentScene = buildInitialSandboxSceneSnapshot(
     sceneId,
     input.characterSlug,
+    input.ambienceSlug,
   );
   const res = await fetch("/api/scene-sessions", {
     method: "POST",
@@ -2986,6 +2989,10 @@ function buildSandboxSceneId(characterSlug: string): string {
 function buildInitialSandboxSceneSnapshot(
   sceneId: string,
   characterSlug: string,
+  // sm-sound: the character's bound sandbox bed (audio_assets slug) —
+  // seeds SceneState.ambience so the session state matches what the
+  // voice agent actually plays in char-… rooms. Null = silence.
+  ambienceSlug: string | null,
 ) {
   return {
     version: 1 as const,
@@ -2994,7 +3001,7 @@ function buildInitialSandboxSceneSnapshot(
       sceneId,
       beat: "The sandbox session is open and waiting for the user to begin.",
       presentCharacterSlugs: [characterSlug],
-      ambience: null,
+      ambience: ambienceSlug,
       lastSpeakerSlug: null,
       turnIndex: 0,
     },
