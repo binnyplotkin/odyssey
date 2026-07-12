@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   getAudioAssetStore,
   getCharacterStore,
+  type CharacterSceneSound,
   type CharacterSoundDesign,
 } from "@odyssey/db";
 import { invalidateCharactersList } from "@/lib/characters-cache";
@@ -14,17 +15,29 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/characters/:id/sound-design
  *
- * Saves the sm-sound (Sound design) layer: the character's sandbox
- * soundscape — an ambience bed bound by audio_assets SLUG + a gain trim.
- * The slug is verified against the library (must exist and be ready) so
- * a binding can never point at a sound that won't play.
+ * Saves the character's sandbox soundscape — the sound nodes placed on the
+ * character canvas (a looping bed + cueable one-shots), each bound to an
+ * audio_assets row by SLUG. Every slug is verified against the library
+ * (must exist and be ready) so a binding can never point at a sound that
+ * won't play. At most one bed keeps `isDefault` (first wins).
  *
- * Pass `{ soundDesign: null }` to clear (sandbox goes silent).
+ * Pass `{ soundDesign: null }` (or an empty `sounds` list) to clear —
+ * the sandbox goes silent.
  */
 
-const SoundDesignSchema = z.object({
-  ambienceSlug: z.string().trim().min(1).max(80).optional(),
+const SceneSoundSchema = z.object({
+  slug: z.string().trim().min(1).max(80),
+  role: z.enum(["bed", "oneshot"]),
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(600).nullable(),
   gainDb: z.number().min(-24).max(12).optional(),
+  triggerHint: z.string().trim().min(1).max(200).optional(),
+  isDefault: z.boolean().optional(),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
+});
+
+const SoundDesignSchema = z.object({
+  sounds: z.array(SceneSoundSchema).max(16),
 });
 
 type Body = {
@@ -44,7 +57,7 @@ export async function POST(
     return jsonError(400, "Invalid JSON body.");
   }
 
-  // Explicit null = clear the binding.
+  // Explicit null = clear all sound nodes.
   if (body.soundDesign === null) {
     const updated = await getCharacterStore().update(id, { soundDesign: null });
     if (!updated) return jsonError(404, "character not found");
@@ -58,30 +71,40 @@ export async function POST(
     return jsonError(400, `invalid sound design: ${parsed.error.message}`);
   }
 
-  // A bound slug must resolve to a READY library asset — never persist a
-  // binding that can't play.
-  if (parsed.data.ambienceSlug) {
-    const asset = await getAudioAssetStore().getBySlug(parsed.data.ambienceSlug);
-    if (!asset) {
-      return jsonError(400, `sound "${parsed.data.ambienceSlug}" is not in the library`);
-    }
+  // Every bound slug must resolve to a READY library asset.
+  const slugs = [...new Set(parsed.data.sounds.map((s) => s.slug))];
+  const store = getAudioAssetStore();
+  for (const slug of slugs) {
+    const asset = await store.getBySlug(slug);
+    if (!asset) return jsonError(400, `sound "${slug}" is not in the library`);
     if (asset.status !== "ready") {
       return jsonError(
         400,
-        `sound "${parsed.data.ambienceSlug}" is not processed yet (status: ${asset.status})`,
+        `sound "${slug}" is not processed yet (status: ${asset.status})`,
       );
     }
   }
 
-  // Strip empty sub-fields so the persisted shape stays tight.
-  const cleaned: CharacterSoundDesign = {};
-  if (parsed.data.ambienceSlug) cleaned.ambienceSlug = parsed.data.ambienceSlug;
-  if (parsed.data.gainDb !== undefined && parsed.data.gainDb !== 0) {
-    cleaned.gainDb = parsed.data.gainDb;
-  }
+  // Tighten: strip empties per entry; only beds may hold isDefault, and
+  // only the first flagged bed keeps it.
+  let defaultSeen = false;
+  const sounds: CharacterSceneSound[] = parsed.data.sounds.map((s) => {
+    const isDefault = s.role === "bed" && s.isDefault === true && !defaultSeen;
+    if (isDefault) defaultSeen = true;
+    return {
+      slug: s.slug,
+      role: s.role,
+      name: s.name,
+      description: s.description,
+      ...(s.gainDb !== undefined && s.gainDb !== 0 ? { gainDb: s.gainDb } : {}),
+      ...(s.triggerHint ? { triggerHint: s.triggerHint } : {}),
+      ...(isDefault ? { isDefault: true } : {}),
+      ...(s.position ? { position: s.position } : {}),
+    };
+  });
 
   const updated = await getCharacterStore().update(id, {
-    soundDesign: Object.keys(cleaned).length ? cleaned : null,
+    soundDesign: sounds.length ? { sounds } : null,
   });
   if (!updated) return jsonError(404, "character not found");
 

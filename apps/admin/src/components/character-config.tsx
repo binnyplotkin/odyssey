@@ -33,6 +33,7 @@ import type {
   CharacterIdentity,
   CharacterBrainModel,
   CharacterRecord,
+  CharacterSceneSound,
   CharacterVoiceStyle,
   CharacterKnowledgeBindingRecord,
   BindingPriority,
@@ -57,6 +58,10 @@ import {
   VoiceLibraryPicker,
   type PickerVoice,
 } from "@/components/voice-library-picker";
+import {
+  SoundLibraryPicker,
+  type PickerSound,
+} from "@/components/sound-library-picker";
 
 /* ── Tokens ────────────────────────────────────────────────────── */
 
@@ -218,8 +223,51 @@ export function CharacterConfig({
   const [savedAt, setSavedAt] = useState<number>(Date.now());
   // Sidebar is gated on canvas selection — the character node starts
   // selected, so the sidebar shows on first paint. Clicking the canvas
-  // empty space deselects and hides it; clicking the node brings it back.
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // empty space deselects and hides it; clicking a node brings it back.
+  // Which node drives WHAT the sidebar shows: the character node opens the
+  // config tabs; a sound node opens the sound inspector.
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>("character");
+
+  // Sound nodes (sm-sound canvas placements). Character-store normalizes
+  // legacy single-bed bindings into the `sounds` list, so this is always
+  // the canonical shape.
+  const [sounds, setSounds] = useState<CharacterSceneSound[]>(
+    character.soundDesign?.sounds ?? [],
+  );
+  const [soundOptions, setSoundOptions] = useState<PickerSound[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/sounds")
+      .then((r) => r.json())
+      .then((data: { sounds: PickerSound[] }) => {
+        if (cancelled) return;
+        setSoundOptions((data.sounds ?? []).filter((s) => s.status === "ready"));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Single write path for sound-node mutations (add / edit / move /
+  // delete): local state updates synchronously, the POST is fire-and-
+  // forget best-effort (the row is re-read on next load).
+  const saveSounds = useCallback(
+    (next: CharacterSceneSound[]) => {
+      setSounds(next);
+      setSavedAt(Date.now());
+      void fetch(`/api/characters/${character.id}/sound-design`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          soundDesign: next.length ? { sounds: next } : null,
+        }),
+      }).catch(() => {});
+    },
+    [character.id],
+  );
+  // Drag ends fire per-node but rapidly during layout fiddling — coalesce.
+  const saveSoundsDebounced = useDebouncedSave(saveSounds, 600);
 
   // Prompt preview overlay state. Opens from the sidebar footer's
   // paragraph button; closes on Esc, clicking the backdrop, or hitting
@@ -329,7 +377,7 @@ export function CharacterConfig({
         minHeight: "calc(100vh - 48px)",
       }}
     >
-      {/* Main column — infinite canvas with the character node */}
+      {/* Main column — infinite canvas with the character + sound nodes */}
       <CanvasArea
         character={character}
         identity={identity}
@@ -343,12 +391,57 @@ export function CharacterConfig({
         initial={initial}
         knowledge={knowledge}
         sessions={sessions}
-        onSelectionChange={setSidebarOpen}
+        sounds={sounds}
+        soundOptions={soundOptions}
+        onAddSound={(entry) => {
+          // Selection stays with React Flow — the new node appears on the
+          // canvas; clicking it opens the inspector.
+          saveSounds([...sounds, entry]);
+        }}
+        onSoundPositionChange={(index, position) => {
+          const next = sounds.map((s, i) => (i === index ? { ...s, position } : s));
+          setSounds(next);
+          saveSoundsDebounced(next);
+        }}
+        onSelectionChange={setSelectedNodeId}
         onSelectTab={setTab}
       />
 
-      {/* Right config sidebar — gated on canvas selection */}
-      {sidebarOpen && (
+      {/* Right rail — sound inspector when a sound node is selected */}
+      {selectedNodeId?.startsWith("sound:") &&
+        sounds[Number(selectedNodeId.slice("sound:".length))] && (
+          <SoundNodeSidebar
+            key={selectedNodeId}
+            sound={sounds[Number(selectedNodeId.slice("sound:".length))]!}
+            soundOptions={soundOptions}
+            hasOtherDefaultBed={sounds.some(
+              (s, i) =>
+                i !== Number(selectedNodeId.slice("sound:".length)) &&
+                s.role === "bed" &&
+                s.isDefault,
+            )}
+            onChange={(next) => {
+              const index = Number(selectedNodeId.slice("sound:".length));
+              saveSounds(
+                sounds.map((s, i) => {
+                  if (i === index) return next;
+                  // Only one default bed — flagging this one clears the rest.
+                  return next.isDefault && s.role === "bed" && s.isDefault
+                    ? { ...s, isDefault: undefined }
+                    : s;
+                }),
+              );
+            }}
+            onRemove={() => {
+              const index = Number(selectedNodeId.slice("sound:".length));
+              saveSounds(sounds.filter((_, i) => i !== index));
+              setSelectedNodeId(null);
+            }}
+          />
+        )}
+
+      {/* Right config sidebar — gated on character-node selection */}
+      {selectedNodeId === "character" && (
         <ConfigSidebar
           character={character}
           knowledge={knowledge}
@@ -839,9 +932,21 @@ type CharacterNodeData = {
   onSelectTab: (t: TabKey) => void;
 };
 
+type SoundNodeData = {
+  sound: CharacterSceneSound;
+};
+
+type ConfigFlowData = CharacterNodeData | SoundNodeData;
+
 const nodeTypes: NodeTypes = {
   character: CharacterNode,
+  sound: SoundNode,
 };
+
+/** Fan sound nodes out to the right of the character card. */
+function defaultSoundPosition(index: number): { x: number; y: number } {
+  return { x: 380, y: -180 + index * 190 };
+}
 
 function CanvasArea({
   character,
@@ -856,6 +961,10 @@ function CanvasArea({
   initial,
   knowledge,
   sessions,
+  sounds,
+  soundOptions,
+  onAddSound,
+  onSoundPositionChange,
   onSelectionChange,
   onSelectTab,
 }: {
@@ -871,77 +980,84 @@ function CanvasArea({
   initial: string;
   knowledge: Props["knowledge"];
   sessions: Props["sessions"];
-  onSelectionChange: (anySelected: boolean) => void;
+  sounds: CharacterSceneSound[];
+  soundOptions: PickerSound[];
+  onAddSound: (entry: CharacterSceneSound) => void;
+  onSoundPositionChange: (index: number, position: { x: number; y: number }) => void;
+  onSelectionChange: (selectedNodeId: string | null) => void;
   onSelectTab: (t: TabKey) => void;
 }) {
-  // Single character node, centered and selected by default so the config
-  // sidebar shows on first load. Position is hardcoded for now — persistence
-  // is a follow-up once there are more nodes worth remembering.
-  const [nodes, setNodes, onNodesChange] = useNodesState<
-    FlowNode<CharacterNodeData>
-  >([
-    {
-      id: "character",
-      type: "character",
-      position: { x: -280, y: -180 },
-      selected: true,
-      data: {
-        character,
-        identity,
-        voiceStyle,
-        voiceId,
-        voiceOptions,
-        brainModel,
-        bindings,
-        gradient,
-        image,
-        initial,
-        onSelectTab,
-      },
-      draggable: true,
-    },
-  ]);
+  const characterData: CharacterNodeData = useMemo(
+    () => ({
+      character,
+      identity,
+      voiceStyle,
+      voiceId,
+      voiceOptions,
+      brainModel,
+      bindings,
+      gradient,
+      image,
+      initial,
+      onSelectTab,
+    }),
+    [
+      character,
+      identity,
+      voiceStyle,
+      voiceId,
+      voiceOptions,
+      brainModel,
+      bindings,
+      gradient,
+      image,
+      initial,
+      onSelectTab,
+    ],
+  );
 
-  // Keep node data in sync as the user edits identity / voice / etc. The
-  // node's `selected` + `position` are managed by React Flow via
-  // onNodesChange; we only ever rewrite `data`.
+  // Character node (selected on first paint so the sidebar shows) + one
+  // node per placed sound. Sound positions persist on the entry itself.
+  const initialNodes = useMemo<FlowNode<ConfigFlowData>[]>(
+    () => [
+      {
+        id: "character",
+        type: "character",
+        position: { x: -280, y: -180 },
+        selected: true,
+        data: characterData,
+        draggable: true,
+      },
+      ...sounds.map((sound, index) => ({
+        id: `sound:${index}`,
+        type: "sound",
+        position: sound.position ?? defaultSoundPosition(index),
+        data: { sound } satisfies SoundNodeData,
+        draggable: true,
+      })),
+    ],
+    [characterData, sounds],
+  );
+
+  const [nodes, setNodes, onNodesChange] =
+    useNodesState<FlowNode<ConfigFlowData>>(initialNodes);
+
+  // Re-sync on data changes, preserving React Flow-managed selection and
+  // in-flight drag positions (same pattern as the scene editor's canvas).
   useEffect(() => {
-    setNodes((prev) =>
-      prev.map((n) =>
-        n.id === "character"
-          ? {
-              ...n,
-              data: {
-                character,
-                identity,
-                voiceStyle,
-                voiceId,
-                voiceOptions,
-                brainModel,
-                bindings,
-                gradient,
-                image,
-                initial,
-                onSelectTab,
-              },
-            }
-          : n,
-      ),
-    );
-  }, [
-    setNodes,
-    character,
-    identity,
-    voiceStyle,
-    voiceId,
-    voiceOptions,
-    brainModel,
-    bindings,
-    gradient,
-    image,
-    initial,
-    onSelectTab,
-  ]);
+    setNodes((prev) => {
+      const selected = new Set(prev.filter((n) => n.selected).map((n) => n.id));
+      const positionById = new Map(prev.map((n) => [n.id, n.position]));
+      return initialNodes.map((node) => ({
+        ...node,
+        selected: selected.size === 0 ? node.id === "character" : selected.has(node.id),
+        position: positionById.get(node.id) ?? node.position,
+      }));
+    });
+  }, [initialNodes, setNodes]);
+
+  // Floating "+" — add-sound popover state.
+  const [addOpen, setAddOpen] = useState(false);
 
   return (
     <div
@@ -957,8 +1073,12 @@ function CanvasArea({
           nodes={nodes}
           onNodesChange={onNodesChange}
           onSelectionChange={({ nodes: selected }) =>
-            onSelectionChange(selected.length > 0)
+            onSelectionChange(selected[0]?.id ?? null)
           }
+          onNodeDragStop={(_, node) => {
+            if (!node.id.startsWith("sound:")) return;
+            onSoundPositionChange(Number(node.id.slice("sound:".length)), node.position);
+          }}
           nodeTypes={nodeTypes}
           fitView
           fitViewOptions={{ padding: 0.4, maxZoom: 1, minZoom: 0.6 }}
@@ -988,7 +1108,404 @@ function CanvasArea({
           />
         </ReactFlow>
       </ReactFlowProvider>
+
+      {/* Floating "+" — adds nodes to the canvas (sounds today). Absolute
+          top-right of the canvas area, clear of the Controls (bottom-left)
+          and outside the sidebar (a sibling flex column). */}
+      <AddNodeButton
+        open={addOpen}
+        onToggle={() => setAddOpen((v) => !v)}
+        soundOptions={soundOptions}
+        hasDefaultBed={sounds.some((s) => s.role === "bed" && s.isDefault)}
+        onAdd={(entry) => {
+          setAddOpen(false);
+          onAddSound(entry);
+        }}
+      />
     </div>
+  );
+}
+
+/* ── Floating add button + popover ─────────────────────────────── */
+
+function AddNodeButton({
+  open,
+  onToggle,
+  soundOptions,
+  hasDefaultBed,
+  onAdd,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  soundOptions: PickerSound[];
+  hasDefaultBed: boolean;
+  onAdd: (entry: CharacterSceneSound) => void;
+}) {
+  const [role, setRole] = useState<"bed" | "oneshot">("bed");
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 16,
+        right: 16,
+        zIndex: 10,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: "var(--space-8)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={open ? "Close add panel" : "Add node"}
+        title="Add a sound node"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 40,
+          height: 40,
+          borderRadius: "var(--radius-pill)",
+          border: `1px solid ${open ? "var(--accent-strong)" : "var(--border)"}`,
+          background: open ? "var(--accent-strong)" : "var(--material-card)",
+          color: open ? "var(--background)" : "var(--text-secondary)",
+          cursor: "pointer",
+          boxShadow: "var(--elevation-panel)",
+          transition: "background 120ms ease, transform 120ms ease",
+          transform: open ? "rotate(45deg)" : "none",
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          style={{
+            width: 340,
+            padding: "var(--space-14)",
+            borderRadius: "var(--radius-xl)",
+            background: "var(--background)",
+            border: "1px solid var(--border)",
+            boxShadow: "var(--elevation-panel)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-12)",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-2xs)",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: T.muted,
+            }}
+          >
+            add sound node
+          </span>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as "bed" | "oneshot")}
+            style={{
+              padding: "8px 10px",
+              borderRadius: "var(--radius-md)",
+              background: "var(--control-bg)",
+              border: "1px solid var(--control-border)",
+              color: T.fg,
+              fontFamily: T.fontBody,
+              fontSize: "var(--font-size-md)",
+              cursor: "pointer",
+            }}
+          >
+            <option value="bed">bed — looping ambience</option>
+            <option value="oneshot">one-shot — cueable effect</option>
+          </select>
+          <SoundLibraryPicker
+            currentSlug={null}
+            sounds={soundOptions}
+            onChange={(slug) => {
+              if (!slug) return;
+              const asset = soundOptions.find((s) => s.slug === slug);
+              if (!asset) return;
+              onAdd({
+                slug: asset.slug,
+                role,
+                name: asset.name,
+                description: asset.description,
+                // First bed placed becomes the opening bed by default.
+                ...(role === "bed" && !hasDefaultBed ? { isDefault: true } : {}),
+              });
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Sound node card ───────────────────────────────────────────── */
+
+function SoundNode({ data, selected }: NodeProps<FlowNode<SoundNodeData>>) {
+  const { sound } = data;
+  return (
+    <div
+      style={{
+        width: 280,
+        padding: "var(--space-16)",
+        borderRadius: "var(--radius-xl)",
+        border: selected
+          ? "1.5px solid color-mix(in srgb, var(--accent-strong) 55%, transparent)"
+          : "1px solid var(--border-subtle)",
+        background: "var(--background)",
+        boxShadow: selected
+          ? "0 0 0 3px color-mix(in srgb, var(--accent-strong) 12%, transparent)"
+          : "none",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-8)",
+        position: "relative",
+        zIndex: 1,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-8)" }}>
+        <span
+          style={{
+            fontFamily: T.fontMono,
+            fontSize: "var(--font-size-2xs)",
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: T.muted,
+          }}
+        >
+          sound · {sound.role}
+        </span>
+        {sound.isDefault && (
+          <span
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-2xs)",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: T.accent,
+            }}
+          >
+            default
+          </span>
+        )}
+      </div>
+      <strong
+        style={{
+          color: T.fg,
+          fontFamily: T.fontHeading,
+          fontSize: "var(--font-size-lg)",
+          overflowWrap: "anywhere",
+        }}
+      >
+        {sound.name}
+      </strong>
+      <span style={{ color: T.accent, fontFamily: T.fontMono, fontSize: "var(--font-size-sm)" }}>
+        {sound.slug}
+        {typeof sound.gainDb === "number" && sound.gainDb !== 0
+          ? ` · ${sound.gainDb > 0 ? "+" : ""}${sound.gainDb} dB`
+          : ""}
+      </span>
+      <p style={{ margin: 0, color: T.muted, lineHeight: "18px", fontSize: "var(--font-size-sm)" }}>
+        {sound.triggerHint
+          ? `Cue: ${sound.triggerHint}`
+          : sound.description ??
+            (sound.role === "bed" ? "Looping background bed." : "One-shot effect.")}
+      </p>
+    </div>
+  );
+}
+
+/* ── Sound node sidebar (inspector) ────────────────────────────── */
+
+function SoundNodeSidebar({
+  sound,
+  soundOptions,
+  hasOtherDefaultBed,
+  onChange,
+  onRemove,
+}: {
+  sound: CharacterSceneSound;
+  soundOptions: PickerSound[];
+  hasOtherDefaultBed: boolean;
+  onChange: (next: CharacterSceneSound) => void;
+  onRemove: () => void;
+}) {
+  const labelStyle: React.CSSProperties = {
+    fontFamily: T.fontMono,
+    fontSize: "var(--font-size-sm)",
+    letterSpacing: "0.10em",
+    color: T.muted,
+  };
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "9px 12px",
+    background: "var(--control-bg)",
+    border: "1px solid var(--control-border)",
+    borderRadius: "var(--radius-md)",
+    color: T.fg,
+    fontFamily: T.fontBody,
+    fontSize: "var(--font-size-md)",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  return (
+    <AdminRightRail width={480}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <span
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-2xs)",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: T.muted,
+            }}
+          >
+            sound · {sound.role}
+          </span>
+          <h2
+            style={{
+              margin: 0,
+              color: T.fg,
+              fontFamily: T.fontHeading,
+              fontSize: "var(--font-size-xl)",
+              fontWeight: 600,
+              overflowWrap: "anywhere",
+            }}
+          >
+            {sound.name}
+          </h2>
+          <span style={{ ...labelStyle, color: T.muted }}>{sound.slug}</span>
+        </div>
+
+        <SoundLibraryPicker
+          currentSlug={sound.slug}
+          sounds={soundOptions}
+          onChange={(slug) => {
+            if (!slug) return; // "no sound" here = remove; use the button below
+            const asset = soundOptions.find((s) => s.slug === slug);
+            if (!asset) return;
+            onChange({
+              ...sound,
+              slug: asset.slug,
+              name: asset.name,
+              description: asset.description,
+            });
+          }}
+        />
+
+        <label style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <span style={labelStyle}>role</span>
+          <select
+            value={sound.role}
+            onChange={(e) => {
+              const role = e.target.value as "bed" | "oneshot";
+              onChange({
+                ...sound,
+                role,
+                // isDefault only means something on beds.
+                ...(role === "oneshot" ? { isDefault: undefined } : {}),
+              });
+            }}
+            style={{ ...inputStyle, cursor: "pointer" }}
+          >
+            <option value="bed">bed — looping ambience</option>
+            <option value="oneshot">one-shot — cueable effect</option>
+          </select>
+        </label>
+
+        <label style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <span style={labelStyle}>cue hint (what the director reads)</span>
+          <input
+            value={sound.triggerHint ?? ""}
+            onChange={(e) =>
+              onChange({
+                ...sound,
+                triggerHint: e.target.value.trim() ? e.target.value : undefined,
+              })
+            }
+            placeholder="e.g. when the fire shifts"
+            style={inputStyle}
+          />
+        </label>
+
+        <label style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <span style={labelStyle}>
+            gain trim ·{" "}
+            <span style={{ color: T.fg }}>
+              {(sound.gainDb ?? 0) > 0 ? `+${sound.gainDb}` : sound.gainDb ?? 0} dB
+            </span>
+          </span>
+          <input
+            type="range"
+            min={-24}
+            max={12}
+            step={1}
+            value={sound.gainDb ?? 0}
+            onChange={(e) => {
+              const gainDb = Number(e.target.value);
+              onChange({ ...sound, gainDb: gainDb === 0 ? undefined : gainDb });
+            }}
+          />
+        </label>
+
+        {sound.role === "bed" && (
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-8)",
+              fontFamily: T.fontBody,
+              fontSize: "var(--font-size-md)",
+              color: T.muted,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={sound.isDefault === true}
+              onChange={(e) =>
+                onChange({ ...sound, isDefault: e.target.checked ? true : undefined })
+              }
+            />
+            Default background bed
+            {hasOtherDefaultBed && sound.isDefault !== true && (
+              <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)" }}>
+                (replaces the current default)
+              </span>
+            )}
+          </label>
+        )}
+
+        <button
+          type="button"
+          onClick={onRemove}
+          style={{
+            alignSelf: "flex-start",
+            padding: "8px 16px",
+            borderRadius: "var(--radius-md)",
+            background: T.dangerSoft,
+            border: "1px solid color-mix(in srgb, var(--status-error) 30%, transparent)",
+            color: T.danger,
+            fontFamily: T.fontBody,
+            fontSize: "var(--font-size-md)",
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          Remove sound
+        </button>
+      </div>
+    </AdminRightRail>
   );
 }
 

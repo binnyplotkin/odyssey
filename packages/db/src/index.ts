@@ -74,7 +74,11 @@ export type {
   CreateContextSummaryInput,
 } from "./admin-agent-store";
 
-export { getCharacterStore } from "./character-store";
+export {
+  getCharacterStore,
+  normalizeSoundDesign,
+  soundDesignToSceneSounds,
+} from "./character-store";
 export type { CharacterStore } from "./character-store";
 
 export { getVoiceStore, VOICE_STATUS_FROM_ATTEMPT } from "./voice-store";
@@ -233,6 +237,7 @@ export type {
   IdentityTrait,
   CharacterVoiceStyle,
   CharacterSoundDesign,
+  CharacterSceneSound,
   CharacterBrainModel,
   CharacterDirective,
   CreateCharacterInput,

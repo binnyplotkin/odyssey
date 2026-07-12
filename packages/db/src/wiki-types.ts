@@ -287,20 +287,48 @@ export type CharacterVoiceStyle = {
 };
 
 /**
- * The sm-sound (Sound design) shape — the character's sandbox soundscape.
- * `ambienceSlug` binds an audio_assets row by SLUG (the runtime track id
- * used by SceneState.ambience and the world-audio channel), mirroring how
- * voiceId binds a voice. Only applies when the character runs OUTSIDE a
- * scene (character sandbox / char-… rooms) — a real scene's placed beds
- * always win, structurally, because fromCharacter is only used scene-less.
+ * One sound placed on the character's canvas — the character-scoped twin
+ * of a scene `audio` node. Binds an audio_assets row by SLUG (the runtime
+ * track id used by SceneState.ambience / decision.sfx and the world-audio
+ * channel).
  *
- * Every field is optional so partial drafts still compile.
+ * `name`/`description` are snapshots taken from the library at bind time
+ * so the SYNC `SceneDriver.fromCharacter()` can build the director's
+ * audio roster without a DB join; the canvas refreshes them on every save.
  */
-export type CharacterSoundDesign = {
-  /** audio_assets.slug of the looping ambience bed. */
-  ambienceSlug?: string;
+export type CharacterSceneSound = {
+  slug: string;
+  /** bed = looping ambience (decision.ambience); oneshot = effect (decision.sfx). */
+  role: "bed" | "oneshot";
+  name: string;
+  description: string | null;
   /** Gain trim in dB (−24…+12) on top of the asset's normalized level. */
   gainDb?: number;
+  /** Authoring hint surfaced to the director ("when the fire shifts…"). */
+  triggerHint?: string;
+  /** Beds only: the opening bed for the sandbox. */
+  isDefault?: boolean;
+  /** Canvas placement on the character page. */
+  position?: { x: number; y: number };
+};
+
+/**
+ * The sm-sound (Sound design) shape — the character's sandbox soundscape.
+ * Only applies when the character runs OUTSIDE a scene (character sandbox
+ * / char-… rooms) — a real scene's placed sounds always win, structurally,
+ * because fromCharacter is only used scene-less.
+ *
+ * `sounds` is the canonical shape (character-canvas sound nodes). The
+ * top-level `ambienceSlug`/`gainDb` are the LEGACY single-bed binding —
+ * still readable; character-store.normalize() folds them into `sounds`
+ * on load, and all writers emit the list shape.
+ */
+export type CharacterSoundDesign = {
+  /** @deprecated legacy single-bed binding — normalized into `sounds` on read. */
+  ambienceSlug?: string;
+  /** @deprecated legacy gain for `ambienceSlug` — normalized into `sounds` on read. */
+  gainDb?: number;
+  sounds?: CharacterSceneSound[];
 };
 
 /**
