@@ -312,15 +312,61 @@ export function buildSpeakerTurnRequest(input: {
   };
 }
 
+/**
+ * Validate the decision's audio cues against the scene's roster
+ * (Scene.sounds). Only engages when a roster exists — legacy scenes
+ * (static registry, character sandboxes) keep free-string behavior.
+ * Invalid cues are dropped, never fatal: an hallucinated sound id
+ * shouldn't cost the turn.
+ */
+function sanitizeAudioCues(
+  scene: Scene,
+  decision: OrchestratorDecision,
+): { decision: OrchestratorDecision; notes: string[] } {
+  if (!scene.sounds) return { decision, notes: [] };
+  const notes: string[] = [];
+  const sanitized = { ...decision };
+
+  const bedSlugs = new Set(
+    scene.sounds.filter((s) => s.role === "bed").map((s) => s.slug),
+  );
+  // An ambience id must be a roster bed; dropping the field keeps the
+  // current bed playing. (Nulls never reach here — the strict schema makes
+  // the model emit null for every unused field, so nulls are stripped
+  // upstream and mean "no change".)
+  if (typeof sanitized.ambience === "string" && !bedSlugs.has(sanitized.ambience)) {
+    notes.push(`ambience-not-in-roster:${sanitized.ambience}`);
+    delete sanitized.ambience;
+  }
+
+  if (sanitized.sfx?.length) {
+    const oneshotSlugs = new Set(
+      scene.sounds.filter((s) => s.role === "oneshot").map((s) => s.slug),
+    );
+    const kept = sanitized.sfx.filter((cue) => oneshotSlugs.has(cue.id));
+    const dropped = sanitized.sfx.filter((cue) => !oneshotSlugs.has(cue.id));
+    if (dropped.length > 0) {
+      notes.push(`sfx-not-in-roster:${dropped.map((c) => c.id).join(",")}`);
+      sanitized.sfx = kept;
+    }
+  }
+
+  return { decision: sanitized, notes };
+}
+
 function applyDecision(
   input: {
     scene: Scene;
     sceneState: SceneState;
   },
-  decision: OrchestratorDecision,
+  rawDecision: OrchestratorDecision,
   speakerSlug: string | null,
   meta?: { degraded?: boolean; reason?: string },
 ): SceneDecisionResolution {
+  const { decision, notes } = sanitizeAudioCues(input.scene, rawDecision);
+  const reason =
+    [meta?.reason, ...notes].filter(Boolean).join("; ") || undefined;
+
   const nextState: SceneState = {
     ...input.sceneState,
     beat: decision.beatLabel ?? input.sceneState.beat,
@@ -348,12 +394,12 @@ function applyDecision(
           nextSceneState: nextState,
           decision,
           ...(meta?.degraded ? { degraded: meta.degraded } : {}),
-          ...(meta?.reason ? { reason: meta.reason } : {}),
+          ...(reason ? { reason } : {}),
         },
       },
     ],
     degraded: meta?.degraded ?? false,
-    reason: meta?.reason,
+    reason,
   };
 }
 
@@ -424,6 +470,7 @@ function buildOrchestratorSystemPrompt(
       ? `Last to speak: ${state.lastSpeakerSlug}`
       : "Scene has just opened.",
     state.ambience ? `Current ambience: ${state.ambience}` : "No ambience playing.",
+    ...buildSoundsBlock(scene),
     ...(sceneMemory.length
       ? ["", "Scene memory (older context, oldest to newest):", ...sceneMemory.map((m) => `  - ${m}`)]
       : []),
@@ -438,11 +485,41 @@ function buildOrchestratorSystemPrompt(
     "- Use `action: \"end-scene\"` only when the situation has clearly resolved or the",
     "  user has indicated they want to leave.",
     "- Change `ambience` only when the emotional register shifts. Don't churn it.",
+    ...(scene.sounds?.length
+      ? [
+          "- `ambience` must be one of the bed ids above (or null for silence).",
+          "- Cue `sfx` sparingly - a one-shot lands hardest at a real moment (a",
+          "  revelation, an arrival, the world reacting). Use only the one-shot ids",
+          "  above. `at: \"now\"` plays before the speaker; `at: \"with-speaker\"`",
+          "  layers under them. Most turns need no sfx.",
+        ]
+      : []),
     "- Update `beatLabel` only when the scene's situation has materially advanced",
     "  (distinct from `beat`, which is this turn's direction for the speaker).",
     "",
     "Return your decision as JSON matching the provided schema.",
   ].join("\n");
+}
+
+/** The director's audio roster — only rendered when the scene has placed
+ *  sounds (Scene.sounds). Beds are cued via `ambience`, one-shots via
+ *  `sfx`. Descriptions are the LLM-facing text authored on the asset;
+ *  cue hints are scene-level authoring on the node. */
+function buildSoundsBlock(scene: Scene): string[] {
+  if (!scene.sounds?.length) return [];
+  const beds = scene.sounds.filter((s) => s.role === "bed");
+  const oneshots = scene.sounds.filter((s) => s.role === "oneshot");
+  const line = (s: NonNullable<Scene["sounds"]>[number]) => {
+    const desc = s.description?.trim() || s.name;
+    const hint = s.triggerHint ? ` (cue: ${s.triggerHint})` : "";
+    return `  - id="${s.slug}" - ${desc}${hint}`;
+  };
+  return [
+    "",
+    "Sounds available (cue by id):",
+    ...(beds.length ? ["  beds (for `ambience`):", ...beds.map(line)] : []),
+    ...(oneshots.length ? ["  one-shots (for `sfx`):", ...oneshots.map(line)] : []),
+  ];
 }
 
 /** Sentinel passed as `lastUserMessage` when the orchestrator is consulted with no

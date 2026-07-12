@@ -23,6 +23,25 @@ export const sceneCharacterSchema = z.object({
   blurb: z.string().min(1).max(280),
 });
 
+// A sound placed in the scene (hydrated from a library-backed `audio`
+// scene-graph node). This is the director's audio roster: `slug` is the
+// cueable id (doubles as the runtime track id), `description` is the
+// LLM-facing text authored on the asset, `triggerHint` the scene-level
+// cue authored on the node.
+export const sceneSoundSchema = z.object({
+  slug: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().nullable(),
+  // bed = looping ambience (cued via decision.ambience);
+  // oneshot = effect (cued via decision.sfx).
+  role: z.enum(["bed", "oneshot"]),
+  triggerHint: z.string().optional(),
+  // Per-scene gain trim in dB, applied on top of the asset's
+  // ingest-normalized level.
+  gainDb: z.number().optional(),
+  loopable: z.boolean(),
+});
+
 export const sceneSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -43,9 +62,15 @@ export const sceneSchema = z.object({
   // narrator pick — clear, mid-range, distinct from any character voice.
   // Optional; if absent, narration is skipped silently.
   narratorVoice: z.string().optional(),
+  // The scene's placed sounds (ready library assets only). Optional —
+  // static registry scenes and character sandboxes carry none; the
+  // director's "Sounds available" block and ambience/sfx validation only
+  // engage when this is present.
+  sounds: z.array(sceneSoundSchema).optional(),
 });
 
 export type SceneCharacter = z.infer<typeof sceneCharacterSchema>;
+export type SceneSound = z.infer<typeof sceneSoundSchema>;
 export type Scene = z.infer<typeof sceneSchema>;
 
 // ── Scene DB record (the `scenes` table) ─────────────────────────────

@@ -248,19 +248,51 @@ export default defineAgent({
     const worldAudio = WORLD_AUDIO_ENABLED
       ? new WorldAudioChannel(ctx.room, { masterGainDb: WORLD_GAIN_DB, duckDb: WORLD_DUCK_DB })
       : null;
-    if (worldAudio) worldAudio.prefetch([sceneDriver.scene.defaultAmbience]);
+    // Per-slug placement facts from the scene's audio roster (Phase 3):
+    // the per-scene gain trim authored on the node. Empty for legacy scenes.
+    const soundBySlug = new Map(
+      (sceneDriver.scene.sounds ?? []).map((s) => [s.slug, s]),
+    );
+    // Warm the whole roster (beds + one-shots) so cues at runtime are
+    // zero-fetch; fall back to just the default bed for legacy scenes.
+    if (worldAudio) {
+      worldAudio.prefetch(
+        sceneDriver.scene.sounds?.map((s) => s.slug) ?? [
+          sceneDriver.scene.defaultAmbience,
+        ],
+      );
+    }
 
     // onState is a single-callback slot on the driver — one subscription fans out to
     // both consumers: the world-audio bed follows SceneState.ambience on every
     // decision, and Phase 5 persistence stays behind its flag.
     sceneDriver.onState((snapshot) => {
-      if (worldAudio) void worldAudio.setBed(snapshot.sceneState.ambience);
+      if (worldAudio) {
+        const bedSlug = snapshot.sceneState.ambience;
+        void worldAudio.setBed(bedSlug, {
+          gainDb: bedSlug ? soundBySlug.get(bedSlug)?.gainDb : undefined,
+        });
+      }
       if (PERSIST_SCENE) {
         void sessionStore
           .updateCurrentScene({ sessionId, currentScene: snapshot })
           .catch(() => undefined);
       }
     });
+
+    // Phase 3: the director's sfx cues (already roster-validated by
+    // resolveSceneDecision). Fired before the speaker's turn — "now" cues
+    // precede the voice; "with-speaker" cues park until first audio.
+    if (worldAudio) {
+      sceneDriver.onSfx((cues) => {
+        for (const cue of cues) {
+          void worldAudio.playOneShot(cue.id, {
+            at: cue.at,
+            gainDb: soundBySlug.get(cue.id)?.gainDb,
+          });
+        }
+      });
+    }
 
     // User side handled by LiveKit: STT (inference model string) + auto silero VAD
     // + the bundled v1-mini end-of-turn detector. No llm/tts — the brain generates.
@@ -348,6 +380,8 @@ export default defineAgent({
             }
           } else if (ev.event === "first-audio") {
             console.log(`[voice-agent] first audio ${(ev.data as { latencyMs: number }).latencyMs}ms`);
+            // The speaker just became audible — release any with-speaker sfx.
+            worldAudio?.flushSpeakerCues();
           } else if (ev.event === "error") {
             console.error("[voice-agent] pipeline error", ev.data);
           }
@@ -500,7 +534,10 @@ export default defineAgent({
     // defaultAmbience; later decisions flow through onState). Lazy — publishes the
     // world-audio track only when a bed actually exists.
     if (worldAudio) {
-      void worldAudio.setBed(sceneDriver.scene.defaultAmbience);
+      const openingBed = sceneDriver.scene.defaultAmbience;
+      void worldAudio.setBed(openingBed, {
+        gainDb: openingBed ? soundBySlug.get(openingBed)?.gainDb : undefined,
+      });
       ctx.addShutdownCallback(() => worldAudio.close());
     }
 

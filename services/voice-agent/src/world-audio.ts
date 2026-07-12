@@ -44,6 +44,9 @@ const QUEUE_MS = 400; // short buffer → duck/crossfade audible within ~½s
 const CROSSFADE_MS = 600; // matches the browser SceneAudioBus bed crossfade
 const DUCK_ATTACK_MS = 150;
 const DUCK_RELEASE_MS = 400;
+// with-speaker cues wait for the speaker's first audio frame; if the turn
+// dies first, fire anyway after this long rather than leak into the next turn.
+const SPEAKER_CUE_TIMEOUT_MS = 5_000;
 
 /* ── Pure helpers (exported for tests) ────────────────────────────── */
 
@@ -146,6 +149,18 @@ type Deck = {
   bed: BedSamples;
   position: number;
   ramp: GainRamp;
+  /** Per-scene gain trim (linear) from the audio node's gainDb. */
+  trim: number;
+};
+
+/** A playing one-shot: no loop, no ramp — plays once at its gain and is
+ * dropped when the samples run out. Deliberately NOT ducked: one-shots
+ * are cued to land with/around the voice. */
+type OneShotVoice = {
+  samples: Int16Array;
+  position: number;
+  gain: number;
+  slug: string;
 };
 
 export type WorldAudioOptions = {
@@ -173,6 +188,13 @@ export class WorldAudioChannel {
   #requestedSlug: string | null = null;
   #duck = new GainRamp(1);
 
+  #oneShots: OneShotVoice[] = [];
+  /** `at:"with-speaker"` cues parked until the speaker's first audio frame
+   * (flushSpeakerCues), with a fallback timer so a failed turn doesn't
+   * leak them into the next one. */
+  #pendingSpeakerCues: Array<{ slug: string; gainDb?: number }> = [];
+  #pendingFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Promise-cache so concurrent requests for the same slug (prefetch +
   // initial setBed + the first onState all race at session start) share
   // one download instead of three.
@@ -189,7 +211,7 @@ export class WorldAudioChannel {
 
   /** Switch the ambience bed. `null` fades to silence. Same slug = no-op
    * (the orchestrator restates ambience on most decisions — don't churn). */
-  async setBed(slug: string | null): Promise<void> {
+  async setBed(slug: string | null, opts: { gainDb?: number } = {}): Promise<void> {
     if (this.#closed) return;
     const next = slug?.trim() || null;
     if (next === this.#activeSlug) return;
@@ -197,7 +219,7 @@ export class WorldAudioChannel {
 
     let bed: BedSamples | null = null;
     if (next) {
-      bed = await this.#loadBed(next);
+      bed = await this.#loadSound(next);
       if (!bed) return; // warned inside — keep the current bed playing
       if (this.#requestedSlug !== next) return; // superseded while fetching
       if (this.#activeSlug === next) return; // a concurrent call already applied it
@@ -212,7 +234,12 @@ export class WorldAudioChannel {
     if (bed) {
       const ramp = new GainRamp(0);
       ramp.setTarget(1, CROSSFADE_MS);
-      this.#active = { bed, position: 0, ramp };
+      this.#active = {
+        bed,
+        position: 0,
+        ramp,
+        trim: dbToLinear(opts.gainDb ?? 0),
+      };
     } else {
       this.#active = null;
     }
@@ -225,11 +252,74 @@ export class WorldAudioChannel {
     }
   }
 
+  /**
+   * Cue a one-shot effect (decision.sfx). `at:"now"` plays immediately;
+   * `at:"with-speaker"` parks until flushSpeakerCues() — the moment the
+   * speaker's first audio frame lands — with a fallback timer so a failed
+   * turn can't leak the cue into the next one.
+   */
+  async playOneShot(
+    slug: string,
+    opts: { at?: "now" | "with-speaker"; gainDb?: number } = {},
+  ): Promise<void> {
+    if (this.#closed) return;
+    if (opts.at === "with-speaker") {
+      this.#pendingSpeakerCues.push({ slug, gainDb: opts.gainDb });
+      if (this.#pendingFlushTimer) clearTimeout(this.#pendingFlushTimer);
+      this.#pendingFlushTimer = setTimeout(
+        () => this.flushSpeakerCues("timeout"),
+        SPEAKER_CUE_TIMEOUT_MS,
+      );
+      // Warm the cache while we wait for the speaker.
+      void this.#loadSound(slug);
+      return;
+    }
+
+    const sound = await this.#loadSound(slug);
+    if (!sound || this.#closed) return;
+    this.#oneShots.push({
+      samples: sound.samples,
+      position: 0,
+      gain: dbToLinear(opts.gainDb ?? 0),
+      slug,
+    });
+    console.log(`[world-audio] sfx "${slug}" (now)`);
+    await this.#ensurePublished();
+    this.#startPump();
+  }
+
+  /** Promote parked `with-speaker` cues to playing. Called by the agent on
+   * the speaker's first audio frame (or by the fallback timer). */
+  flushSpeakerCues(cause: "speaker" | "timeout" = "speaker"): void {
+    if (this.#pendingFlushTimer) {
+      clearTimeout(this.#pendingFlushTimer);
+      this.#pendingFlushTimer = null;
+    }
+    const cues = this.#pendingSpeakerCues;
+    if (cues.length === 0) return;
+    this.#pendingSpeakerCues = [];
+    for (const cue of cues) {
+      void (async () => {
+        const sound = await this.#loadSound(cue.slug);
+        if (!sound || this.#closed) return;
+        this.#oneShots.push({
+          samples: sound.samples,
+          position: 0,
+          gain: dbToLinear(cue.gainDb ?? 0),
+          slug: cue.slug,
+        });
+        console.log(`[world-audio] sfx "${cue.slug}" (with-speaker, ${cause})`);
+        await this.#ensurePublished();
+        this.#startPump();
+      })();
+    }
+  }
+
   /** Fire-and-forget cache warm (scene load). */
   prefetch(slugs: Array<string | null | undefined>): void {
     for (const slug of slugs) {
       const s = slug?.trim();
-      if (s) void this.#loadBed(s);
+      if (s) void this.#loadSound(s);
     }
   }
 
@@ -244,6 +334,9 @@ export class WorldAudioChannel {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
+    if (this.#pendingFlushTimer) clearTimeout(this.#pendingFlushTimer);
+    this.#pendingSpeakerCues = [];
+    this.#oneShots = [];
     this.#wake?.();
     try {
       this.#source?.clearQueue();
@@ -257,10 +350,10 @@ export class WorldAudioChannel {
 
   /* ── Internals ──────────────────────────────────────────────── */
 
-  #loadBed(slug: string): Promise<BedSamples | null> {
+  #loadSound(slug: string): Promise<BedSamples | null> {
     const cached = this.#cache.get(slug);
     if (cached) return cached;
-    const loading = this.#fetchBed(slug);
+    const loading = this.#fetchSound(slug);
     this.#cache.set(slug, loading);
     // Failed loads are evicted so a later decision can retry (e.g. the
     // asset finishes processing mid-session).
@@ -270,7 +363,7 @@ export class WorldAudioChannel {
     return loading;
   }
 
-  async #fetchBed(slug: string): Promise<BedSamples | null> {
+  async #fetchSound(slug: string): Promise<BedSamples | null> {
     try {
       const asset = await getAudioAssetStore().getBySlug(slug);
       if (!asset || asset.status !== "ready" || !asset.processedPath) {
@@ -334,8 +427,8 @@ export class WorldAudioChannel {
   async #pump(): Promise<void> {
     const frameSamples = Math.round((FRAME_MS / 1000) * SAMPLE_RATE);
     while (!this.#closed) {
-      if (!this.#active && !this.#retiring) {
-        // Idle: nothing audible. Park until the next setBed.
+      if (!this.#active && !this.#retiring && this.#oneShots.length === 0) {
+        // Idle: nothing audible. Park until the next setBed / one-shot.
         await new Promise<void>((resolve) => {
           this.#wake = resolve;
         });
@@ -353,29 +446,41 @@ export class WorldAudioChannel {
     const out = new Int16Array(frameSamples);
     const active = this.#active;
     const retiring = this.#retiring;
+    const oneShots = this.#oneShots;
 
     for (let i = 0; i < frameSamples; i += 1) {
-      let mix = 0;
+      // Beds loop and duck under the voice.
+      let bedMix = 0;
       if (active) {
-        mix += active.bed.samples[active.position]! * active.ramp.next();
+        bedMix +=
+          active.bed.samples[active.position]! * active.ramp.next() * active.trim;
         active.position = (active.position + 1) % active.bed.samples.length;
       }
       if (retiring) {
-        mix += retiring.bed.samples[retiring.position]! * retiring.ramp.next();
+        bedMix +=
+          retiring.bed.samples[retiring.position]! *
+          retiring.ramp.next() *
+          retiring.trim;
         retiring.position = (retiring.position + 1) % retiring.bed.samples.length;
       }
-      mix *= this.#duck.next() * this.#masterGain;
+      // One-shots play once, un-ducked — they're cued to land with the voice.
+      let fxMix = 0;
+      for (const shot of oneShots) {
+        if (shot.position < shot.samples.length) {
+          fxMix += shot.samples[shot.position]! * shot.gain;
+          shot.position += 1;
+        }
+      }
+      const mix = (bedMix * this.#duck.next() + fxMix) * this.#masterGain;
       out[i] = Math.max(-0x8000, Math.min(0x7fff, Math.round(mix)));
     }
 
-    // Drop the retiring deck once its fade-out lands.
+    // Drop finished one-shots and the retiring deck once its fade lands.
+    if (oneShots.length > 0) {
+      this.#oneShots = oneShots.filter((s) => s.position < s.samples.length);
+    }
     if (retiring && retiring.ramp.settled && retiring.ramp.value === 0) {
       this.#retiring = null;
-    }
-    // Fully faded to silence with nothing incoming → let the pump idle
-    // after this frame (checked at the top of the loop).
-    if (!this.#active && !this.#retiring) {
-      // no-op: loop condition handles it
     }
     return new AudioFrame(out, SAMPLE_RATE, 1, frameSamples);
   }
