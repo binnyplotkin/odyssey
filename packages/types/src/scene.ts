@@ -21,6 +21,26 @@ export const sceneCharacterSchema = z.object({
   // One-line description for the orchestrator's roster prompt: archetype,
   // relationship to others in the scene, what they want.
   blurb: z.string().min(1).max(280),
+  // ── Authored intention (hydrated from the scene-graph character node's
+  // data; absent for registry scenes and character sandboxes). The
+  // director writes `beat`s in service of these; the speaker sees their
+  // own agenda in the per-turn context.
+  /** What this character is in the scene: "host", "witness", "antagonist"… */
+  roleInScene: z.string().min(1).optional(),
+  /** What they WANT here — the goal the director drives them toward. */
+  motivations: z.string().min(1).max(400).optional(),
+  /** Their resting emotional state: "guarded", "hopeful"… */
+  emotionalBaseline: z.string().min(1).optional(),
+  /** Condition → behavior pairs the director (and character) can act on. */
+  behaviorTriggers: z
+    .array(
+      z.object({
+        condition: z.string().min(1),
+        behavior: z.string().min(1),
+      }),
+    )
+    .max(6)
+    .optional(),
 });
 
 // A sound placed in the scene (hydrated from a library-backed `audio`
@@ -67,6 +87,13 @@ export const sceneSchema = z.object({
   // director's "Sounds available" block and ambience/sfx validation only
   // engage when this is present.
   sounds: z.array(sceneSoundSchema).optional(),
+  // What the scene is driving toward — the director's authored destination
+  // ("The promise of a son is spoken — and met with Sarah's laughter").
+  // Distinct from openingBeat (where it starts) and beat (this turn).
+  objective: z.string().min(1).max(400).optional(),
+  // How hard the director presses toward goals. Absent = balanced (the
+  // current default behavior).
+  drive: z.enum(["gentle", "balanced", "insistent"]).optional(),
 });
 
 export type SceneCharacter = z.infer<typeof sceneCharacterSchema>;
@@ -105,6 +132,9 @@ export const sceneDefinitionSchema = z.object({
   openingBeat: z.string().default(""),
   defaultAmbience: z.string().nullable().default(null),
   narratorVoiceId: z.string().nullable().default(null),
+  // Authored intention on the scene root (see sceneSchema.objective/drive).
+  objective: z.string().nullable().default(null),
+  drive: z.enum(["gentle", "balanced", "insistent"]).nullable().default(null),
 });
 
 export const sceneRecordSchema = z.object({

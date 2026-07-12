@@ -58,6 +58,27 @@ const sceneWithSounds: Scene = {
   ],
 };
 
+// The authored-intention variant: character goals + triggers, a scene
+// objective, and an insistent drive.
+const sceneWithIntent: Scene = {
+  ...scene,
+  id: "test-scene-intent",
+  objective: "Ada admits what the machine really measured.",
+  drive: "insistent",
+  characters: [
+    {
+      ...scene.characters[0], // ada
+      roleInScene: "reluctant witness",
+      motivations: "protect the lab's secret while learning what the user knows",
+      emotionalBaseline: "guarded",
+      behaviorTriggers: [
+        { condition: "the machine is mentioned", behavior: "deflect with a question" },
+      ],
+    },
+    scene.characters[1], // turing — no intention authored
+  ],
+};
+
 describe("@odyssey/orchestration client", () => {
   it("creates initial scene state", () => {
     expect(createInitialSceneState(scene)).toEqual({
@@ -283,6 +304,57 @@ describe("@odyssey/orchestration client", () => {
     expect(result.sceneState.ambience).toBe("free-string-bed");
     expect(result.decision.sfx).toEqual([{ id: "anything", at: "now" }]);
     expect(result.reason).toBeUndefined();
+  });
+
+  it("renders authored intention in the director prompt (and omits it for plain scenes)", () => {
+    const request = buildSceneDecisionRequest({
+      scene: sceneWithIntent,
+      sceneState: createInitialSceneState(sceneWithIntent),
+    });
+    const system = request.messages[0].content;
+    expect(system).toContain("This scene is driving toward: Ada admits what the machine really measured.");
+    expect(system).toContain("wants: protect the lab's secret while learning what the user knows");
+    expect(system).toContain("role: reluctant witness");
+    expect(system).toContain("baseline: guarded");
+    expect(system).toContain("will: deflect with a question (when the machine is mentioned)");
+    expect(system).toContain("Write `beat`s in service of what the speaker WANTS");
+    expect(system).toContain("Press actively");
+
+    const plain = buildSceneDecisionRequest({
+      scene,
+      sceneState: createInitialSceneState(scene),
+    });
+    const plainSystem = plain.messages[0].content;
+    expect(plainSystem).not.toContain("driving toward");
+    expect(plainSystem).not.toContain("wants:");
+    expect(plainSystem).not.toContain("Press actively");
+    expect(plainSystem).not.toContain("Follow the user's lead");
+  });
+
+  it("threads the speaker's agenda into the turn directive", () => {
+    const state = createInitialSceneState(sceneWithIntent);
+    const request = buildSpeakerTurnRequest({
+      scene: sceneWithIntent,
+      sceneState: state,
+      decision: { action: "speak", speakerId: "ada", beat: "Deflect, then probe." },
+      recentTurns: [{ speakerSlug: "user", text: "What did the machine measure?" }],
+    });
+    expect(request?.promptChunk).toBe(
+      [
+        "Direction: Deflect, then probe.",
+        "Your agenda in this scene: protect the lab's secret while learning what the user knows",
+        "When the machine is mentioned: deflect with a question",
+      ].join("\n"),
+    );
+
+    // No authored intention → directive is just the direction (current behavior).
+    const plainRequest = buildSpeakerTurnRequest({
+      scene,
+      sceneState: createInitialSceneState(scene),
+      decision: { action: "speak", speakerId: "ada", beat: "Answer plainly." },
+      recentTurns: [{ speakerSlug: "user", text: "Hello?" }],
+    });
+    expect(plainRequest?.promptChunk).toBe("Direction: Answer plainly.");
   });
 
   it("builds a speaker turn request", () => {

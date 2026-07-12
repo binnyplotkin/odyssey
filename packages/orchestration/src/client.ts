@@ -4,6 +4,7 @@ import {
   sceneStateSchema,
   type OrchestratorDecision,
   type Scene,
+  type SceneCharacter,
   type SceneState,
 } from "@odyssey/types";
 
@@ -295,12 +296,15 @@ export function buildSpeakerTurnRequest(input: {
       content: turn.text,
     }));
   // The orchestrator's per-turn DRIVE direction (`beat`), framed so the character
-  // acts on it in their own voice; `sceneCue` is an optional scene-level note. Both
-  // route through the per-turn <context> block, never the cached voice envelope, so
-  // voice is preserved by construction.
-  const promptChunk = input.decision.sceneCue
-    ? `Direction: ${beat}\nScene note: ${input.decision.sceneCue}`
-    : `Direction: ${beat}`;
+  // acts on it in their own voice; `sceneCue` is an optional scene-level note;
+  // the speaker's authored agenda rides along so the character knows what THEY
+  // want here. All route through the per-turn <context> block, never the cached
+  // voice envelope, so voice is preserved by construction.
+  const promptChunk = buildDirectiveChunk({
+    beat,
+    sceneCue: input.decision.sceneCue,
+    speaker: character,
+  });
 
   return {
     characterSlug: speakerSlug,
@@ -352,6 +356,29 @@ function sanitizeAudioCues(
   }
 
   return { decision: sanitized, notes };
+}
+
+/**
+ * The per-turn directive injected into the speaker's <context> block:
+ * the director's `beat`, the optional scene note, and the speaker's own
+ * authored agenda (scene-node intention). Shared by the reactive path
+ * (buildSpeakerTurnRequest) and the proactive path (SceneDriver) so the
+ * two never drift.
+ */
+export function buildDirectiveChunk(input: {
+  beat: string;
+  sceneCue?: string;
+  speaker?: Pick<SceneCharacter, "motivations" | "behaviorTriggers">;
+}): string {
+  const lines = [`Direction: ${input.beat}`];
+  if (input.sceneCue) lines.push(`Scene note: ${input.sceneCue}`);
+  if (input.speaker?.motivations) {
+    lines.push(`Your agenda in this scene: ${input.speaker.motivations}`);
+  }
+  for (const t of (input.speaker?.behaviorTriggers ?? []).slice(0, 3)) {
+    lines.push(`When ${t.condition}: ${t.behavior}`);
+  }
+  return lines.join("\n");
 }
 
 function applyDecision(
@@ -433,10 +460,27 @@ function buildOrchestratorSystemPrompt(
   state: SceneState,
   sceneMemory: string[],
 ): string {
-  const roster = scene.characters
-    .filter((c) => state.presentCharacterSlugs.includes(c.characterSlug))
-    .map((c) => `  - slug="${c.characterSlug}" name="${c.displayName}" - ${c.blurb}`)
+  const present = scene.characters.filter((c) =>
+    state.presentCharacterSlugs.includes(c.characterSlug),
+  );
+  const roster = present
+    .map((c) => {
+      const lines = [`  - slug="${c.characterSlug}" name="${c.displayName}" - ${c.blurb}`];
+      // Authored intention (scene-node data). Kept to compact sub-lines so
+      // a 4-character roster stays token-tight.
+      const facts = [
+        c.motivations ? `wants: ${c.motivations}` : null,
+        c.roleInScene ? `role: ${c.roleInScene}` : null,
+        c.emotionalBaseline ? `baseline: ${c.emotionalBaseline}` : null,
+      ].filter(Boolean);
+      if (facts.length) lines.push(`      ${facts.join("   ")}`);
+      for (const t of c.behaviorTriggers ?? []) {
+        lines.push(`      will: ${t.behavior} (when ${t.condition})`);
+      }
+      return lines.join("\n");
+    })
     .join("\n");
+  const anyIntent = present.some((c) => c.motivations || c.behaviorTriggers?.length);
 
   return [
     "You are the DIRECTOR of a voice-driven scene. You decide what happens next -",
@@ -461,6 +505,7 @@ function buildOrchestratorSystemPrompt(
     "",
     `Scene: "${scene.title}"`,
     scene.description,
+    ...(scene.objective ? [`This scene is driving toward: ${scene.objective}`] : []),
     "",
     "Characters present:",
     roster,
@@ -478,6 +523,23 @@ function buildOrchestratorSystemPrompt(
     "Decision rules:",
     "- Default to advancing the scene with `action: \"speak\"` and an active `beat`.",
     "  Pick the speaker whose move makes the scene move - usually NOT the last speaker.",
+    ...(anyIntent
+      ? [
+          "- Write `beat`s in service of what the speaker WANTS (their `wants:` line)",
+          "  and what the scene is driving toward - intention first, reaction second.",
+          "  Honor `will:` triggers when their condition is live in the dialogue.",
+        ]
+      : []),
+    ...(scene.drive === "gentle"
+      ? [
+          "- Follow the user's lead - let them set the pace; press only when invited.",
+        ]
+      : scene.drive === "insistent"
+        ? [
+            "- Press actively - characters pursue their goals even against user",
+            "  resistance; don't wait to be asked.",
+          ]
+        : []),
     "- Use `action: \"wait-for-user\"` when the last turn already put something to the",
     "  user, or after 2-3 consecutive AI turns - give the user room to answer.",
     "- Use `action: \"narrate\"` sparingly - scene transitions or bridging beats only.",
