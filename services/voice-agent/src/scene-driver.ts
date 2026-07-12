@@ -13,7 +13,7 @@ import {
   type SceneSessionSnapshot,
   type SceneTurnForPlanning,
 } from "@odyssey/orchestration";
-import type { OrchestratorDecision, Scene, SceneState } from "@odyssey/types";
+import type { OrchestratorDecision, Scene, SceneState, SfxCue } from "@odyssey/types";
 
 const RECENT_TURNS_LIMIT = 6;
 /** Don't speculate off a stray opener ("uh", "so") — wait for some real intent. */
@@ -87,6 +87,7 @@ export class SceneDriver {
   #speculation: { basedOnText: string; promise: Promise<OrchestratorDecision> } | null = null;
   // Optional persistence hook — invoked with a fresh snapshot after every decision.
   #onState: ((snapshot: SceneSessionSnapshot) => void) | null = null;
+  #onSfx: ((cues: SfxCue[]) => void) | null = null;
 
   private constructor(scene: Scene) {
     this.scene = scene;
@@ -143,6 +144,22 @@ export class SceneDriver {
    *  caller can persist it (fire-and-forget). Optional — unset = in-memory only. */
   onState(cb: (snapshot: SceneSessionSnapshot) => void): void {
     this.#onState = cb;
+  }
+
+  /** Wire a callback invoked with the decision's (roster-validated) sfx cues,
+   *  fired BEFORE the speaker's turn so `at:"now"` cues truly precede the voice.
+   *  Optional — unset = sfx decisions are ignored (e.g. non-LiveKit hosts). */
+  onSfx(cb: (cues: SfxCue[]) => void): void {
+    this.#onSfx = cb;
+  }
+
+  #emitSfx(cues: SfxCue[] | undefined): void {
+    if (!this.#onSfx || !cues?.length) return;
+    try {
+      this.#onSfx(cues);
+    } catch {
+      // best-effort — audio must never disrupt the turn
+    }
   }
 
   #persistState(): void {
@@ -206,6 +223,7 @@ export class SceneDriver {
     );
     this.#sceneState = resolution.sceneState;
     this.#persistState();
+    this.#emitSfx(resolution.decision.sfx);
 
     if (resolution.decision.action !== "speak" || !resolution.speakerSlug) {
       console.log(`[voice-agent] scene: ${resolution.decision.action} (no speaker)`);
@@ -273,6 +291,7 @@ export class SceneDriver {
     );
     this.#sceneState = resolution.sceneState;
     this.#persistState();
+    this.#emitSfx(resolution.decision.sfx);
 
     if (resolution.decision.action !== "speak" || !resolution.speakerSlug) {
       console.log(`[voice-agent] proactive: ${resolution.decision.action} (hold)`);

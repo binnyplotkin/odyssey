@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import type { Scene, SceneCharacter, SceneDefinition, SceneRecord } from "@odyssey/types";
+import type { Scene, SceneCharacter, SceneDefinition, SceneRecord, SceneSound } from "@odyssey/types";
 import { sceneDefinitionSchema } from "@odyssey/types";
 import { getDb } from "./client";
 import { retryRead } from "./retry";
@@ -206,28 +206,69 @@ function neonStore(): SceneStore {
 
       const db = requireDb();
 
-      // Resolve library-backed audio nodes to asset slugs (the runtime
-      // track id) so the default-bed selector can consider them.
-      const audioRefIds = graph.nodes
-        .filter((n) => n.kind === "audio" && n.refId)
+      // Resolve library-backed audio nodes to their assets — the slug map
+      // feeds the default-bed selector; the full rows feed the director's
+      // audio roster (Scene.sounds).
+      const audioNodes = graph.nodes.filter((n) => n.kind === "audio" && n.refId);
+      const audioRefIds = audioNodes
         .map((n) => n.refId!)
         .filter((x, i, arr) => arr.indexOf(x) === i);
-      const audioSlugByRefId = new Map<string, string>();
+      const audioAssetByRefId = new Map<
+        string,
+        { slug: string; name: string; description: string | null; loopable: boolean; status: string }
+      >();
       if (audioRefIds.length > 0) {
         const audioRows = await retryRead(() =>
           db
-            .select({ id: audioAssetsTable.id, slug: audioAssetsTable.slug })
+            .select({
+              id: audioAssetsTable.id,
+              slug: audioAssetsTable.slug,
+              name: audioAssetsTable.name,
+              description: audioAssetsTable.description,
+              loopable: audioAssetsTable.loopable,
+              status: audioAssetsTable.status,
+            })
             .from(audioAssetsTable)
             .where(inArray(audioAssetsTable.id, audioRefIds)),
         );
-        for (const row of audioRows) audioSlugByRefId.set(row.id, row.slug);
+        for (const row of audioRows) audioAssetByRefId.set(row.id, row);
       }
+      const audioSlugByRefId = new Map(
+        [...audioAssetByRefId].map(([refId, asset]) => [refId, asset.slug]),
+      );
 
       const defaultAmbienceTrackId = selectDefaultAmbienceTrackId(
         graph.nodes,
         record.definition.defaultAmbience,
         audioSlugByRefId,
       );
+
+      // The director's audio roster: one entry per placed audio node whose
+      // asset is ready (never offer a sound that can't play). Placement-
+      // level fields (role, triggerHint, gainDb) come from the node data;
+      // identity fields from the asset.
+      const sounds: SceneSound[] = audioNodes
+        .map((node) => {
+          const asset = audioAssetByRefId.get(node.refId!);
+          if (!asset || asset.status !== "ready") return null;
+          const role = node.data.role === "oneshot" ? "oneshot" : "bed";
+          const triggerHint =
+            typeof node.data.triggerHint === "string" && node.data.triggerHint.trim()
+              ? node.data.triggerHint.trim()
+              : undefined;
+          const gainDb =
+            typeof node.data.gainDb === "number" ? node.data.gainDb : undefined;
+          return {
+            slug: asset.slug,
+            name: asset.name,
+            description: asset.description,
+            role,
+            ...(triggerHint ? { triggerHint } : {}),
+            ...(gainDb !== undefined ? { gainDb } : {}),
+            loopable: asset.loopable,
+          } satisfies SceneSound;
+        })
+        .filter((s): s is SceneSound => !!s);
       const charIds = characterNodes.map((n) => n.refId).filter((x): x is string => !!x);
       const charRows = await retryRead(() =>
         db
@@ -266,6 +307,7 @@ function neonStore(): SceneStore {
         openingBeat: record.definition.openingBeat || "Scene opens.",
         defaultAmbience: defaultAmbienceTrackId,
         narratorVoice: record.definition.narratorVoiceId ?? undefined,
+        ...(sounds.length > 0 ? { sounds } : {}),
       };
     },
   };

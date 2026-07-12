@@ -34,6 +34,30 @@ const scene: Scene = {
   ],
 };
 
+// The Phase-3 roster variant: same cast, plus placed sounds the director
+// can cue (a bed + a one-shot).
+const sceneWithSounds: Scene = {
+  ...scene,
+  id: "test-scene-sounds",
+  sounds: [
+    {
+      slug: "room-tone",
+      name: "Room tone",
+      description: "Low room hum, unremarkable.",
+      role: "bed",
+      loopable: true,
+    },
+    {
+      slug: "glass-shatter",
+      name: "Glass shatter",
+      description: "A glass breaks nearby.",
+      role: "oneshot",
+      triggerHint: "when something breaks",
+      loopable: false,
+    },
+  ],
+};
+
 describe("@odyssey/orchestration client", () => {
   it("creates initial scene state", () => {
     expect(createInitialSceneState(scene)).toEqual({
@@ -178,6 +202,87 @@ describe("@odyssey/orchestration client", () => {
       degraded: true,
       reason: "unknown-speaker:nobody",
     });
+  });
+
+  it("renders the audio roster in the director prompt (and omits it for legacy scenes)", () => {
+    const request = buildSceneDecisionRequest({
+      scene: sceneWithSounds,
+      sceneState: createInitialSceneState(sceneWithSounds),
+    });
+    const system = request.messages[0].content;
+    expect(system).toContain("Sounds available (cue by id):");
+    expect(system).toContain('id="room-tone"');
+    expect(system).toContain('id="glass-shatter"');
+    expect(system).toContain("(cue: when something breaks)");
+    expect(system).toContain("`ambience` must be one of the bed ids above");
+
+    const legacy = buildSceneDecisionRequest({
+      scene,
+      sceneState: createInitialSceneState(scene),
+    });
+    expect(legacy.messages[0].content).not.toContain("Sounds available");
+  });
+
+  it("keeps the current bed when the director cues a non-roster ambience", () => {
+    const initial = createInitialSceneState(sceneWithSounds);
+    const result = resolveSceneDecision(
+      { scene: sceneWithSounds, sceneState: initial },
+      { action: "speak", speakerId: "ada", beat: "Ada answers.", ambience: "hallucinated-bed" },
+    );
+
+    expect(result.degraded).toBe(false); // the turn itself still lands
+    expect(result.sceneState.ambience).toBe("room-tone"); // unchanged
+    expect(result.reason).toBe("ambience-not-in-roster:hallucinated-bed");
+
+    // `ambience: null` means "no change", NOT silence — the strict JSON
+    // schema forces the model to emit null for every unused field, so
+    // nulls are stripped before parsing (stripNullOptionalDecisionFields).
+    const noChange = resolveSceneDecision(
+      { scene: sceneWithSounds, sceneState: initial },
+      { action: "wait-for-user", ambience: null },
+    );
+    expect(noChange.sceneState.ambience).toBe("room-tone");
+    expect(noChange.reason).toBeUndefined();
+  });
+
+  it("filters sfx cues to roster one-shots", () => {
+    const initial = createInitialSceneState(sceneWithSounds);
+    const result = resolveSceneDecision(
+      { scene: sceneWithSounds, sceneState: initial },
+      {
+        action: "speak",
+        speakerId: "ada",
+        beat: "Ada reacts to the crash.",
+        sfx: [
+          { id: "glass-shatter", at: "now" },
+          { id: "not-a-sound", at: "with-speaker" },
+          { id: "room-tone", at: "now" }, // a bed is not cueable as sfx
+        ],
+      },
+    );
+
+    expect(result.decision.sfx).toEqual([{ id: "glass-shatter", at: "now" }]);
+    expect(result.reason).toBe("sfx-not-in-roster:not-a-sound,room-tone");
+    // The sanitized decision is what lands in the persisted event too.
+    expect(
+      (result.events[0].payload as { decision: { sfx: unknown } }).decision.sfx,
+    ).toEqual([{ id: "glass-shatter", at: "now" }]);
+  });
+
+  it("passes audio cues through untouched for legacy scenes without a roster", () => {
+    const initial = createInitialSceneState(scene);
+    const result = resolveSceneDecision(
+      { scene, sceneState: initial },
+      {
+        action: "speak",
+        speakerId: "ada",
+        ambience: "free-string-bed",
+        sfx: [{ id: "anything", at: "now" }],
+      },
+    );
+    expect(result.sceneState.ambience).toBe("free-string-bed");
+    expect(result.decision.sfx).toEqual([{ id: "anything", at: "now" }]);
+    expect(result.reason).toBeUndefined();
   });
 
   it("builds a speaker turn request", () => {
