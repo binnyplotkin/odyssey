@@ -36,15 +36,29 @@ export async function updateSceneConfig(
     openingBeat?: string;
     defaultAmbience?: string | null;
     narratorVoiceId?: string | null;
+    /** What the scene is driving toward — the director's authored destination. */
+    objective?: string | null;
+    /** How hard the director presses toward goals. null = balanced. */
+    drive?: "gentle" | "balanced" | "insistent" | null;
   },
 ): Promise<ActionResult> {
-  const { title, prompt, status, openingBeat, defaultAmbience, narratorVoiceId } =
-    updates;
+  const {
+    title,
+    prompt,
+    status,
+    openingBeat,
+    defaultAmbience,
+    narratorVoiceId,
+    objective,
+    drive,
+  } = updates;
 
   const definitionPatch: Record<string, unknown> = {};
   if (openingBeat !== undefined) definitionPatch.openingBeat = openingBeat;
   if (defaultAmbience !== undefined) definitionPatch.defaultAmbience = defaultAmbience;
   if (narratorVoiceId !== undefined) definitionPatch.narratorVoiceId = narratorVoiceId;
+  if (objective !== undefined) definitionPatch.objective = objective;
+  if (drive !== undefined) definitionPatch.drive = drive;
 
   const updated = await getSceneStore().updateScene(id, {
     title,

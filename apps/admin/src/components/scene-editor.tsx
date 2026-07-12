@@ -70,6 +70,8 @@ type SceneEditorProps = {
     openingBeat: string;
     defaultAmbience: string | null;
     narratorVoiceId: string | null;
+    objective: string | null;
+    drive: "gentle" | "balanced" | "insistent" | null;
   };
   roster: SceneRosterEntry[];
   graph: SceneGraphPayload;
@@ -120,6 +122,10 @@ export function SceneEditor({
   const [openingBeat, setOpeningBeat] = useState(scene.openingBeat);
   const [defaultAmbience, setDefaultAmbience] = useState(scene.defaultAmbience ?? "");
   const [narratorVoiceId, setNarratorVoiceId] = useState(scene.narratorVoiceId);
+  const [objective, setObjective] = useState(scene.objective ?? "");
+  const [drive, setDrive] = useState<"gentle" | "balanced" | "insistent">(
+    scene.drive ?? "balanced",
+  );
   const [graphNodes, setGraphNodes] = useState(graph.nodes);
 
   useEffect(() => setGraphNodes(graph.nodes), [graph.nodes]);
@@ -177,6 +183,8 @@ export function SceneEditor({
           openingBeat,
           defaultAmbience: defaultAmbience.trim() || null,
           narratorVoiceId,
+          objective: objective.trim() || null,
+          drive: drive === "balanced" ? null : drive,
         });
         if (res.ok) setSaved(true);
         router.refresh();
@@ -186,6 +194,8 @@ export function SceneEditor({
       defaultAmbience,
       narratorVoiceId,
       openingBeat,
+      objective,
+      drive,
       prompt,
       router,
       scene.id,
@@ -337,6 +347,8 @@ export function SceneEditor({
             openingBeat,
             defaultAmbience,
             narratorVoiceId,
+            objective,
+            drive,
           }}
           rosterCount={roster.length}
           addableCharacters={addableCharacters}
@@ -349,6 +361,8 @@ export function SceneEditor({
             setOpeningBeat,
             setDefaultAmbience,
             setNarratorVoiceId,
+            setObjective,
+            setDrive,
             saveConfig,
           }}
           onAddCharacter={addCharacter}
@@ -827,6 +841,8 @@ function SceneInspector({
     openingBeat: string;
     defaultAmbience: string;
     narratorVoiceId: string | null;
+    objective: string;
+    drive: "gentle" | "balanced" | "insistent";
   };
   rosterCount: number;
   addableCharacters: SceneLibraryCharacter[];
@@ -839,6 +855,8 @@ function SceneInspector({
     setOpeningBeat: (next: string) => void;
     setDefaultAmbience: (next: string) => void;
     setNarratorVoiceId: (next: string | null) => void;
+    setObjective: (next: string) => void;
+    setDrive: (next: "gentle" | "balanced" | "insistent") => void;
     saveConfig: (event?: FormEvent) => void;
   };
   onAddCharacter: (characterId: string) => void;
@@ -905,6 +923,8 @@ function SceneSettingsInspector({
     openingBeat: string;
     defaultAmbience: string;
     narratorVoiceId: string | null;
+    objective: string;
+    drive: "gentle" | "balanced" | "insistent";
   };
   rosterCount: number;
   addableCharacters: SceneLibraryCharacter[];
@@ -917,6 +937,8 @@ function SceneSettingsInspector({
     setOpeningBeat: (next: string) => void;
     setDefaultAmbience: (next: string) => void;
     setNarratorVoiceId: (next: string | null) => void;
+    setObjective: (next: string) => void;
+    setDrive: (next: "gentle" | "balanced" | "insistent") => void;
     saveConfig: (event?: FormEvent) => void;
   };
   onAddCharacter: (characterId: string) => void;
@@ -972,6 +994,30 @@ function SceneSettingsInspector({
           placeholder="The beat the scene opens on."
           style={inputStyle}
         />
+      </Field>
+      <Field label="Scene objective">
+        <textarea
+          value={scene.objective}
+          onChange={(event) => onSceneChange.setObjective(event.target.value)}
+          rows={2}
+          placeholder="What the scene is driving toward — the director writes beats in service of this."
+          style={textareaStyle}
+        />
+      </Field>
+      <Field label="Director drive">
+        <select
+          value={scene.drive}
+          onChange={(event) =>
+            onSceneChange.setDrive(
+              event.target.value as "gentle" | "balanced" | "insistent",
+            )
+          }
+          style={{ ...inputStyle, cursor: "pointer" }}
+        >
+          <option value="gentle">gentle — follow the user&apos;s lead</option>
+          <option value="balanced">balanced — default pacing</option>
+          <option value="insistent">insistent — press toward goals</option>
+        </select>
       </Field>
       <Field label="Default ambience">
         <input
@@ -1109,6 +1155,18 @@ function GraphNodeInspector({
   );
   const [motivations, setMotivations] = useState(asString(node.data.motivations));
   const [speakingStyle, setSpeakingStyle] = useState(asString(node.data.speakingStyle));
+  // Condition → behavior pairs the director acts on ("when the promise is
+  // doubted" → "press with the story of the stars"). Rows with either half
+  // empty are dropped on save.
+  const [behaviorTriggers, setBehaviorTriggers] = useState<
+    Array<{ condition: string; behavior: string }>
+  >(
+    Array.isArray(node.data.behaviorTriggers)
+      ? (node.data.behaviorTriggers as Array<{ condition?: string; behavior?: string }>).map(
+          (t) => ({ condition: t.condition ?? "", behavior: t.behavior ?? "" }),
+        )
+      : [],
+  );
   const [trackId, setTrackId] = useState(asString(node.data.trackId));
   const [ambienceDescription, setAmbienceDescription] = useState(
     asString(node.data.description),
@@ -1130,6 +1188,9 @@ function GraphNodeInspector({
     event?.preventDefault();
     setSaved(false);
     const parsedGain = Number(audioGainDb);
+    const cleanedTriggers = behaviorTriggers
+      .map((t) => ({ condition: t.condition.trim(), behavior: t.behavior.trim() }))
+      .filter((t) => t.condition && t.behavior);
     const nextData =
       node.kind === "character"
         ? compactObject({
@@ -1139,6 +1200,7 @@ function GraphNodeInspector({
             emotionalBaseline,
             motivations,
             speakingStyle,
+            behaviorTriggers: cleanedTriggers.length ? cleanedTriggers : undefined,
           })
         : node.kind === "ambience"
           ? compactObject({
@@ -1254,6 +1316,71 @@ function GraphNodeInspector({
               rows={3}
               style={textareaStyle}
             />
+          </Field>
+          <Field label="Behavior triggers (condition → behavior)">
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+              {behaviorTriggers.map((trigger, index) => (
+                <div
+                  key={index}
+                  style={{ display: "flex", gap: "var(--space-6)", alignItems: "center" }}
+                >
+                  <input
+                    value={trigger.condition}
+                    onChange={(event) =>
+                      setBehaviorTriggers((prev) =>
+                        prev.map((t, i) =>
+                          i === index ? { ...t, condition: event.target.value } : t,
+                        ),
+                      )
+                    }
+                    placeholder="when…"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <input
+                    value={trigger.behavior}
+                    onChange={(event) =>
+                      setBehaviorTriggers((prev) =>
+                        prev.map((t, i) =>
+                          i === index ? { ...t, behavior: event.target.value } : t,
+                        ),
+                      )
+                    }
+                    placeholder="they…"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Remove trigger"
+                    onClick={() =>
+                      setBehaviorTriggers((prev) => prev.filter((_, i) => i !== index))
+                    }
+                    style={{
+                      flexShrink: 0,
+                      width: 28,
+                      height: 28,
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--ink-line)",
+                      background: "transparent",
+                      color: T.muted,
+                      cursor: "pointer",
+                      lineHeight: 1,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <AdminButton
+                type="button"
+                variant="secondary"
+                disabled={behaviorTriggers.length >= 6}
+                onClick={() =>
+                  setBehaviorTriggers((prev) => [...prev, { condition: "", behavior: "" }])
+                }
+              >
+                + add trigger
+              </AdminButton>
+            </div>
           </Field>
 	        </>
 	      )}

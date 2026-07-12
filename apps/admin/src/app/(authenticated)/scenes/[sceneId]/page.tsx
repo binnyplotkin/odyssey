@@ -102,6 +102,8 @@ export default async function SceneDetailPage({
         openingBeat: scene.definition.openingBeat,
         defaultAmbience: scene.definition.defaultAmbience,
         narratorVoiceId: scene.definition.narratorVoiceId,
+        objective: scene.definition.objective,
+        drive: scene.definition.drive,
       }}
       roster={roster}
       graph={graph}

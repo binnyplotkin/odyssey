@@ -113,6 +113,40 @@ export function selectDefaultAmbienceTrackId(
   return trackId || fallback || null;
 }
 
+/**
+ * Lift the authored-intention fields off a character node's `data` jsonb
+ * (validated at write time by characterDataSchema, but guarded here since
+ * jsonb reads are untyped). Empty strings are dropped; triggers are capped
+ * to keep the roster token-tight.
+ */
+function liftCharacterIntent(data: Record<string, unknown>): Partial<
+  Pick<SceneCharacter, "roleInScene" | "motivations" | "emotionalBaseline" | "behaviorTriggers">
+> {
+  const str = (v: unknown, max: number): string | undefined =>
+    typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined;
+
+  const roleInScene = str(data.roleInScene, 80);
+  const motivations = str(data.motivations, 400);
+  const emotionalBaseline = str(data.emotionalBaseline, 80);
+  const behaviorTriggers = Array.isArray(data.behaviorTriggers)
+    ? data.behaviorTriggers
+        .map((t) => {
+          const condition = str((t as Record<string, unknown>)?.condition, 120);
+          const behavior = str((t as Record<string, unknown>)?.behavior, 160);
+          return condition && behavior ? { condition, behavior } : null;
+        })
+        .filter((t): t is { condition: string; behavior: string } => !!t)
+        .slice(0, 6)
+    : [];
+
+  return {
+    ...(roleInScene ? { roleInScene } : {}),
+    ...(motivations ? { motivations } : {}),
+    ...(emotionalBaseline ? { emotionalBaseline } : {}),
+    ...(behaviorTriggers.length ? { behaviorTriggers } : {}),
+  };
+}
+
 /* ── Implementation ────────────────────────────────────────────────── */
 
 function neonStore(): SceneStore {
@@ -288,16 +322,25 @@ function neonStore(): SceneStore {
         .map((node) => {
           const ref = charById.get(node.refId!);
           if (!ref) return null;
+          // Authored intention lives on the node's data (canvas inspector):
+          // what this character wants HERE, distinct from their enduring
+          // persona in the L02 envelope. Lifted into the SceneCharacter so
+          // the director roster + speaker context both see it.
+          const intent = liftCharacterIntent(node.data);
           return {
             characterSlug: ref.slug,
             displayName: node.label || ref.title,
             voice: ref.voiceId ?? "default",
             blurb: node.summary ?? ref.summary ?? "",
+            ...intent,
           } satisfies SceneCharacter;
         })
         .filter((c): c is SceneCharacter => !!c);
 
       if (characters.length === 0) return null;
+
+      const objective = record.definition.objective?.trim() || undefined;
+      const drive = record.definition.drive ?? undefined;
 
       return {
         id: record.id,
@@ -308,6 +351,8 @@ function neonStore(): SceneStore {
         defaultAmbience: defaultAmbienceTrackId,
         narratorVoice: record.definition.narratorVoiceId ?? undefined,
         ...(sounds.length > 0 ? { sounds } : {}),
+        ...(objective ? { objective } : {}),
+        ...(drive ? { drive } : {}),
       };
     },
   };

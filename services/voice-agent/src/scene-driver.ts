@@ -6,6 +6,7 @@ import {
   type CharacterRecord,
 } from "@odyssey/db";
 import {
+  buildDirectiveChunk,
   buildSceneDecisionRequest,
   buildSceneSessionSnapshot,
   buildSpeakerTurnRequest,
@@ -332,9 +333,15 @@ export class SceneDriver {
 
     const beat = resolution.decision.beat ?? this.#sceneState.beat;
     const hasCue = Boolean(resolution.decision.beat || resolution.decision.sceneCue);
-    const directive = resolution.decision.sceneCue
-      ? `Direction: ${beat}\nScene note: ${resolution.decision.sceneCue}`
-      : `Direction: ${beat}`;
+    // Shared with the reactive path (buildSpeakerTurnRequest) so the
+    // speaker's authored agenda rides along on proactive turns too.
+    const directive = buildDirectiveChunk({
+      beat,
+      sceneCue: resolution.decision.sceneCue,
+      speaker: this.scene.characters.find(
+        (c) => c.characterSlug === resolution.speakerSlug,
+      ),
+    });
     const history = this.#recentTurns.slice(-RECENT_TURNS_LIMIT).map((turn) => ({
       role: turn.speakerSlug === resolution.speakerSlug ? ("assistant" as const) : ("user" as const),
       content: turn.text,
