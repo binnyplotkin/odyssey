@@ -12,6 +12,7 @@ import { L01Identity } from "./editors/l01-identity";
 import { L02Directive } from "./editors/l02-directive";
 import { L03VoiceStyle } from "./editors/l03-voice-style";
 import { L04BrainModel } from "./editors/l04-brain-model";
+import { SMSound } from "./editors/sm-sound";
 import { LayerPlaceholder } from "./editors/layer-placeholder";
 
 /**
@@ -100,6 +101,8 @@ function renderBody(character: HarnessCharacter, layer: LayerDef, activeTab: str
       return <L03VoiceStyle character={character} activeTab={activeTab} />;
     case "l04":
       return <L04BrainModel character={character} activeTab={activeTab} />;
+    case "sm-sound":
+      return <SMSound character={character} activeTab={activeTab} />;
     default:
       return <LayerPlaceholder layer={layer} />;
   }

@@ -322,4 +322,9 @@ export type HarnessCharacter = {
    * single-paragraph system prompt). The L02 editor handles both cases.
    */
   directive: import("@odyssey/db").CharacterDirective | null;
+  /**
+   * sm-sound Sound design — `null` when no soundscape is bound (character
+   * sandbox stays silent). The sm-sound editor handles both cases.
+   */
+  soundDesign: import("@odyssey/db").CharacterSoundDesign | null;
 };

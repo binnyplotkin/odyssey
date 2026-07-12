@@ -112,6 +112,13 @@ export class SceneDriver {
   static fromCharacter(character: CharacterRecord): SceneDriver {
     const slug = character.slug;
     const blurb = (character.summary ?? character.title).slice(0, 280);
+    // sm-sound: the character's sandbox soundscape. The bound bed becomes
+    // the synthesized scene's default ambience, plus a minimal one-bed
+    // roster so the agent's per-slug gain lookup (and the solo director
+    // prompt, when it runs) see it. Scene-placed beds win in real scenes
+    // structurally — fromCharacter is only used when there IS no scene.
+    const ambienceSlug = character.soundDesign?.ambienceSlug?.trim() || null;
+    const gainDb = character.soundDesign?.gainDb;
     const scene: Scene = {
       id: `character-sandbox:${slug}`,
       title: character.title,
@@ -125,7 +132,21 @@ export class SceneDriver {
         },
       ],
       openingBeat: "The user has just arrived.",
-      defaultAmbience: null,
+      defaultAmbience: ambienceSlug,
+      ...(ambienceSlug
+        ? {
+            sounds: [
+              {
+                slug: ambienceSlug,
+                name: ambienceSlug,
+                description: null,
+                role: "bed" as const,
+                ...(typeof gainDb === "number" ? { gainDb } : {}),
+                loopable: true,
+              },
+            ],
+          }
+        : {}),
     };
     return new SceneDriver(scene);
   }

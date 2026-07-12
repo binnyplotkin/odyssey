@@ -232,6 +232,7 @@ export type {
   CharacterIdentity,
   IdentityTrait,
   CharacterVoiceStyle,
+  CharacterSoundDesign,
   CharacterBrainModel,
   CharacterDirective,
   CreateCharacterInput,

@@ -109,6 +109,13 @@ export type CharacterRecord = {
    */
   voiceId: string | null;
   /**
+   * sm-sound (Sound design) — the character's sandbox soundscape: an
+   * ambience bed bound by audio_assets SLUG + a gain trim. Only used when
+   * the character runs outside a scene (character sandbox / char-… rooms);
+   * scene-placed beds win structurally. Null = silence (legacy default).
+   */
+  soundDesign: CharacterSoundDesign | null;
+  /**
    * Per-binding override of the bound voice's runtime knobs (provider-
    * specific — e.g. ElevenLabs stability/style/modelId). Null = inherit
    * the voice row's `providerConfig` unchanged. Provider-discriminated;
@@ -277,6 +284,23 @@ export type CharacterVoiceStyle = {
   voicePrompt?: string;
   referenceClipUrl?: string;
   prosody?: string[];
+};
+
+/**
+ * The sm-sound (Sound design) shape — the character's sandbox soundscape.
+ * `ambienceSlug` binds an audio_assets row by SLUG (the runtime track id
+ * used by SceneState.ambience and the world-audio channel), mirroring how
+ * voiceId binds a voice. Only applies when the character runs OUTSIDE a
+ * scene (character sandbox / char-… rooms) — a real scene's placed beds
+ * always win, structurally, because fromCharacter is only used scene-less.
+ *
+ * Every field is optional so partial drafts still compile.
+ */
+export type CharacterSoundDesign = {
+  /** audio_assets.slug of the looping ambience bed. */
+  ambienceSlug?: string;
+  /** Gain trim in dB (−24…+12) on top of the asset's normalized level. */
+  gainDb?: number;
 };
 
 /**
