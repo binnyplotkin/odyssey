@@ -113,6 +113,13 @@ export type VoiceStreamBody = {
   // completion (bypass the latency budget) so the graph data is always captured.
   // Off by default — never affects production turns.
   debug?: boolean;
+  // Text-only mode (headless simulation / scene-simulator): run the full brain
+  // (retrieve → curate → LLM) with identical persistence (turns + context
+  // builds), but never call TTS — no `audio`/`first-audio` events, no ack
+  // lane, zero synth spend. The TTS adapter is still RESOLVED (construction
+  // is free and keeps misconfiguration surfacing consistent); it's just never
+  // streamed. Off by default — never affects production turns.
+  textOnly?: boolean;
 };
 
 /** Materials handed to a construction variant: the assembled baseline parts plus the
@@ -735,6 +742,7 @@ export async function* runVoiceStream(
       const ackEnabled =
         contextCacheHit &&
         input.ackMode !== "off" &&
+        !input.textOnly && // acks are audio — meaningless without TTS
         isAckLaneEnabled();
       ackText = selectVoiceAck({
         enabled: ackEnabled,
@@ -1018,6 +1026,11 @@ export async function* runVoiceStream(
       const dispatchTtsChunk = (text: string): void => {
         const trimmed = text.trim();
         if (!trimmed) return;
+        if (input.textOnly) {
+          // headless: count the chunk (empty-reply sentinel) but never synth
+          ttsChunkCount += 1;
+          return;
+        }
         const chunkIdx = ttsChunkCount++;
         if (chunkIdx === 0) {
           serverTrace.mark("server.tts.fetch.requested", {
@@ -1035,6 +1048,7 @@ export async function* runVoiceStream(
       };
 
       const dispatchAckChunk = (text: string): void => {
+        if (input.textOnly) return; // headless: tokens only, never synth
         const trimmed = text.trim();
         if (!trimmed) return;
         const chunkIdx = ttsChunkCount++;

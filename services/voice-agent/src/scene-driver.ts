@@ -114,6 +114,9 @@ export class SceneDriver {
   #spokenTurns = 0;
   #reflecting = false;
   #dramaturgDisabled = !DRAMATURG_ENABLED;
+  // The in-flight reflection (null when idle) — held so headless callers can
+  // await it between turns (see settleReflection).
+  #reflection: Promise<void> | null = null;
 
   private constructor(scene: Scene) {
     this.scene = scene;
@@ -234,7 +237,7 @@ export class SceneDriver {
       recentTurns: this.#recentTurns,
       previousNote: this.#sceneState.directorNote,
     });
-    void provider
+    this.#reflection = provider
       .complete({
         model: DRAMATURG_MODEL,
         system: [{ type: "text", text: request.system }],
@@ -281,7 +284,18 @@ export class SceneDriver {
       })
       .finally(() => {
         this.#reflecting = false;
+        this.#reflection = null;
       });
+  }
+
+  /**
+   * Await the in-flight dramaturg reflection, if any. Headless callers (the
+   * scene simulator) use this between turns so notes and arc landings
+   * deterministically influence the NEXT decision. Live voice never calls
+   * it — real turns are slow enough that reflections land naturally.
+   */
+  async settleReflection(): Promise<void> {
+    if (this.#reflection) await this.#reflection;
   }
 
   #persistState(): void {
