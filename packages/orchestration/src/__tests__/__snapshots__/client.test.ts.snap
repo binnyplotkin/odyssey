@@ -37,6 +37,10 @@ Current ambience: tent-evening
 Decision rules:
 - Default to advancing the scene with \`action: "speak"\` and an active \`beat\`.
   Pick the speaker whose move makes the scene move - usually NOT the last speaker.
+- When the dialogue names, addresses, or NOTICES a present character who
+  hasn't spoken (overheard, glimpsed, asked about), that character stepping
+  in is usually the strongest move - don't let another character answer
+  for them.
 - Use \`action: "wait-for-user"\` when the last turn already put something to the
   user, or after 2-3 consecutive AI turns - give the user room to answer.
 - Use \`action: "narrate"\` sparingly - scene transitions or bridging beats only.

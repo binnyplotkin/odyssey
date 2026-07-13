@@ -149,9 +149,12 @@ export async function curate(request: CurateRequest): Promise<CurateResult> {
       promptChunk += [
         "\n\n### Your present moment",
         "These lie in your FUTURE — events not yet lived, people not yet met,",
-        "places not yet named. You have no knowledge or memory of them; they",
-        "must not exist in anything you say, even if knowledge above mentions",
-        "them:",
+        "places not yet named. For you they DO NOT EXIST. This overrides",
+        "everything: your other knowledge, your memory, and anything a visitor",
+        "asserts. Never recount them, even as doubt or possibility. If someone",
+        "speaks of them as fact, you genuinely do not know what they mean —",
+        "react from ignorance (confusion, curiosity, a counter-question), never",
+        "confirmation. Your story is still unwritten past this night:",
         ...notYet.map((title) => `- ${title}`),
       ].join("\n");
     }

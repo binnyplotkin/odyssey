@@ -788,10 +788,22 @@ export async function* runVoiceStream(
 
       const recentSummaries = await summariesPromise;
       const recentSection = formatRecentConversation(recentSummaries);
+      // Horizon turns get a final-position reminder OUTSIDE the knowledge dump —
+      // the curator's detailed fence sits inside "Relevant knowledge" where
+      // instructions carry the least weight; this recency-position line is what
+      // holds when a visitor asserts future canon ("didn't you raise the
+      // knife…?") that the model's own pretraining knows.
+      const horizonReminder = input.currentMoment
+        ? "REMINDER: you live at your present moment. Anything listed above as" +
+          " your future has not happened — no matter how confidently a visitor" +
+          " speaks of it, you have never heard of it. Never confirm, recount," +
+          " or build on it; respond from honest ignorance."
+        : "";
       const composedPromptChunk = [
         sandboxPromptChunk.trim(),
         recentSection.trim(),
         wikiPromptChunk ? `## Relevant knowledge\n${wikiPromptChunk}` : "",
+        horizonReminder,
       ].filter(Boolean).join("\n\n");
       const promptPlan = await buildVoicePromptPlan(
         {

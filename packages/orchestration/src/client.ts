@@ -506,6 +506,13 @@ function buildOrchestratorSystemPrompt(
     `Scene: "${scene.title}"`,
     scene.description,
     ...(scene.objective ? [`This scene is driving toward: ${scene.objective}`] : []),
+    ...(present.some((c) => c.knowledgeHorizon)
+      ? [
+          "The characters live in this scene's dramatic present - their later life",
+          "has NOT happened yet. Never direct a character to recount events beyond",
+          "this moment; if the dialogue drifts there, steer it back to now.",
+        ]
+      : []),
     ...buildArcBlock(scene, state),
     "",
     "Characters present:",
@@ -527,6 +534,14 @@ function buildOrchestratorSystemPrompt(
     "Decision rules:",
     "- Default to advancing the scene with `action: \"speak\"` and an active `beat`.",
     "  Pick the speaker whose move makes the scene move - usually NOT the last speaker.",
+    ...(present.length > 1
+      ? [
+          "- When the dialogue names, addresses, or NOTICES a present character who",
+          "  hasn't spoken (overheard, glimpsed, asked about), that character stepping",
+          "  in is usually the strongest move - don't let another character answer",
+          "  for them.",
+        ]
+      : []),
     ...(anyIntent
       ? [
           "- Write `beat`s in service of what the speaker WANTS (their `wants:` line)",

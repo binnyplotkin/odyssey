@@ -82,10 +82,23 @@ export function buildDramaturgMessages(input: {
       : []),
   ].join("\n");
 
+  const anyHorizon = scene.characters.some(
+    (c) =>
+      sceneState.presentCharacterSlugs.includes(c.characterSlug) && c.knowledgeHorizon,
+  );
+
   const user = [
     `Scene: "${scene.title}"`,
     scene.description,
     ...(scene.objective ? [`Objective: ${scene.objective}`] : []),
+    ...(anyHorizon
+      ? [
+          "The characters live in this scene's dramatic present — their later",
+          "life has NOT happened yet. A character recounting events beyond this",
+          "moment is a canon break, never a beat landing; flag it in your note",
+          "and steer the scene back.",
+        ]
+      : []),
     ...buildArcBlock(scene, sceneState),
     "",
     "Cast and authored intentions:",
