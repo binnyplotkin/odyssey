@@ -10,6 +10,9 @@ describe("voice-stream SSE event contract", () => {
       "audio",
       "done",
       "error",
+      // Turn-debugging: complete brain input (retrieval hits, system blocks,
+      // messages), emitted only when the request sets debug: true.
+      "debug",
     ]);
   });
 });
