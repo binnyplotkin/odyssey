@@ -1269,6 +1269,15 @@ function GraphNodeInspector({
         )
       : [],
   );
+  // Knowledge horizon: the scene's dramatic present on THIS character's era
+  // timeline. Era "" = no horizon (the character knows their whole life).
+  const savedHorizon = node.data.knowledgeHorizon as
+    | { era?: string; index?: number }
+    | undefined;
+  const [horizonEra, setHorizonEra] = useState(asString(savedHorizon?.era));
+  const [horizonIndex, setHorizonIndex] = useState(
+    typeof savedHorizon?.index === "number" ? String(savedHorizon.index) : "0",
+  );
   const [trackId, setTrackId] = useState(asString(node.data.trackId));
   const [ambienceDescription, setAmbienceDescription] = useState(
     asString(node.data.description),
@@ -1306,6 +1315,14 @@ function GraphNodeInspector({
             motivations,
             speakingStyle,
             behaviorTriggers: cleanedTriggers.length ? cleanedTriggers : undefined,
+            knowledgeHorizon: horizonEra
+              ? {
+                  era: horizonEra,
+                  index: Number.isFinite(Number(horizonIndex))
+                    ? Math.trunc(Number(horizonIndex))
+                    : 0,
+                }
+              : undefined,
           })
         : node.kind === "ambience"
           ? compactObject({
@@ -1493,6 +1510,44 @@ function GraphNodeInspector({
                 + add trigger
               </AdminButton>
             </div>
+          </Field>
+          <Field label="Knowledge horizon">
+            <div style={{ display: "flex", gap: "var(--space-6)", alignItems: "center" }}>
+              <select
+                value={horizonEra}
+                onChange={(event) => setHorizonEra(event.target.value)}
+                style={{ ...inputStyle, flex: 1, cursor: "pointer" }}
+              >
+                <option value="">none — knows their whole life</option>
+                {[...(character?.eras ?? [])]
+                  .sort((a, b) => a.order - b.order)
+                  .map((era) => (
+                    <option key={era.key} value={era.key}>
+                      {era.title}
+                    </option>
+                  ))}
+              </select>
+              <input
+                type="number"
+                value={horizonIndex}
+                onChange={(event) => setHorizonIndex(event.target.value)}
+                disabled={!horizonEra}
+                title="Position within the era (wiki-page timeIndex)"
+                style={{ ...inputStyle, width: 88, flexShrink: 0 }}
+              />
+            </div>
+            <p
+              style={{
+                margin: 0,
+                color: T.muted,
+                lineHeight: "19px",
+                fontSize: "var(--font-size-sm)",
+              }}
+            >
+              The scene&apos;s dramatic present for this character. Wiki pages
+              time-indexed after this moment are withheld from their context
+              (pages marked &quot;knows future&quot; still pass).
+            </p>
           </Field>
 	        </>
 	      )}

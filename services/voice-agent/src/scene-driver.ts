@@ -77,6 +77,9 @@ export interface SceneSpeakInput {
   promptChunk?: string;
   /** Who's speaking — surfaced to the client so it can label the turn. */
   speaker: { slug: string; name: string };
+  /** The speaker's scene-authored knowledge horizon — forwarded to
+   *  runVoiceStream so the curator filters pages after this moment. */
+  currentMoment?: { era: string; index: number };
 }
 export type SceneSpeakFn = (input: SceneSpeakInput, replyId: string) => Promise<string>;
 
@@ -384,10 +387,11 @@ export class SceneDriver {
     });
     if (!turn) return { action: "speak", spoke: false };
 
+    const speakerCharacter = this.scene.characters.find(
+      (c) => c.characterSlug === resolution.speakerSlug,
+    );
     const displayName =
-      this.scene.characters.find((c) => c.characterSlug === resolution.speakerSlug)?.displayName ??
-      character.title ??
-      resolution.speakerSlug;
+      speakerCharacter?.displayName ?? character.title ?? resolution.speakerSlug;
 
     console.log(`[voice-agent] scene: ${resolution.speakerSlug} speaks`);
     // Sandbox solo with no director direction → don't inject a stale "Direction: …"
@@ -405,6 +409,7 @@ export class SceneDriver {
         history: turn.history,
         promptChunk: sandboxNoCue ? undefined : turn.promptChunk,
         speaker: { slug: resolution.speakerSlug, name: displayName },
+        currentMoment: speakerCharacter?.knowledgeHorizon,
       },
       `s${Date.now()}`,
     );
@@ -442,10 +447,11 @@ export class SceneDriver {
       console.warn(`[voice-agent] proactive: speaker "${resolution.speakerSlug}" did not resolve`);
       return false;
     }
+    const speakerCharacter = this.scene.characters.find(
+      (c) => c.characterSlug === resolution.speakerSlug,
+    );
     const displayName =
-      this.scene.characters.find((c) => c.characterSlug === resolution.speakerSlug)?.displayName ??
-      character.title ??
-      resolution.speakerSlug;
+      speakerCharacter?.displayName ?? character.title ?? resolution.speakerSlug;
 
     const beat = resolution.decision.beat ?? this.#sceneState.beat;
     const hasCue = Boolean(resolution.decision.beat || resolution.decision.sceneCue);
@@ -454,9 +460,7 @@ export class SceneDriver {
     const directive = buildDirectiveChunk({
       beat,
       sceneCue: resolution.decision.sceneCue,
-      speaker: this.scene.characters.find(
-        (c) => c.characterSlug === resolution.speakerSlug,
-      ),
+      speaker: speakerCharacter,
     });
     const history = this.#recentTurns.slice(-RECENT_TURNS_LIMIT).map((turn) => ({
       role: turn.speakerSlug === resolution.speakerSlug ? ("assistant" as const) : ("user" as const),
@@ -471,6 +475,7 @@ export class SceneDriver {
         history,
         promptChunk: hasCue ? directive : undefined,
         speaker: { slug: resolution.speakerSlug, name: displayName },
+        currentMoment: speakerCharacter?.knowledgeHorizon,
       },
       `p${Date.now()}`,
     );

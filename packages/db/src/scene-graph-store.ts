@@ -37,6 +37,11 @@ export const characterDataSchema = z
     motivations: z.string().trim().optional(),
     speakingStyle: z.string().trim().optional(),
     behaviorTriggers: z.array(behaviorTriggerSchema).optional(),
+    // Scene-scoped knowledge horizon: this character's dramatic present on
+    // their own era timeline. Curator drops later-timeIndexed pages.
+    knowledgeHorizon: z
+      .object({ era: z.string().trim().min(1), index: z.number().int() })
+      .optional(),
     overrides: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();

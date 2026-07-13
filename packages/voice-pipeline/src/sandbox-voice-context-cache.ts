@@ -1,3 +1,4 @@
+import type { TimeIndex } from "@odyssey/db";
 import {
   curate,
   type CurateResult,
@@ -25,6 +26,9 @@ type CacheLookup = {
   sessionId?: string | null;
   scene?: Scene;
   tokenBudget: number;
+  /** Scene knowledge horizon — part of the cache key: a context curated for
+   *  one dramatic present must never serve a turn with another (or none). */
+  currentMoment?: TimeIndex | null;
 };
 
 type CacheBuildInput = CacheLookup & {
@@ -95,6 +99,7 @@ export function startSandboxVoiceContextCacheWarm(
     sessionId: input.sessionId,
     scene: input.scene,
     tokenBudget: input.tokenBudget,
+    currentMoment: input.currentMoment,
   });
   const pending = inflight().get(key);
   if (pending) return pending;
@@ -116,6 +121,7 @@ export async function buildAndStoreSandboxVoiceContextCache(
     semanticSeeds: input.semanticSeeds,
     tokenBudget,
     excludeVoiceIdentity: input.excludeVoiceIdentity,
+    currentMoment: input.currentMoment ?? undefined,
   });
   return storeSandboxVoiceContextCache({
     ...input,
@@ -136,6 +142,7 @@ export function storeSandboxVoiceContextCache(input: CacheBuildInput & {
       sessionId,
       scene: input.scene,
       tokenBudget: input.tokenBudget,
+      currentMoment: input.currentMoment,
     }),
     characterId: input.characterId,
     sessionId,
@@ -180,6 +187,9 @@ function cacheKey(lookup: CacheLookup): string {
     lookup.sessionId?.trim() || "character",
     lookup.tokenBudget,
     stableJson(normalizeScene(lookup.scene) ?? {}),
+    // Horizoned and horizon-less contexts are curated from different page
+    // pools — never let one satisfy the other's lookup.
+    stableJson(lookup.currentMoment ?? null),
   ].join(":");
 }
 

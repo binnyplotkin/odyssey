@@ -82,7 +82,7 @@ export async function curate(request: CurateRequest): Promise<CurateResult> {
 
   // ── 3. Timeline filter ─────────────────────────────────────────
   const scored = pages.filter((p) => scores.has(p.id) && (scores.get(p.id) ?? 0) > 0);
-  const { kept, filteredSlugs } = filterByTimeline(
+  const { kept, filteredSlugs, futureSlugs } = filterByTimeline(
     scored,
     character.eras,
     request.currentMoment ?? null,
@@ -131,7 +131,31 @@ export async function curate(request: CurateRequest): Promise<CurateResult> {
   // ── 6. Render ──────────────────────────────────────────────────
   const activeEntitySlugs = new Set(request.scene?.activeEntities ?? []);
   if (request.scene?.location) activeEntitySlugs.add(request.scene.location);
-  const promptChunk = renderPromptChunk(selected, { activeEntitySlugs });
+  let promptChunk = renderPromptChunk(selected, { activeEntitySlugs });
+
+  // Horizon fence. The hard filter above removes event pages after
+  // currentMoment, but concept/entity pages legitimately span eras and their
+  // bodies can still recount later life (they're often written
+  // retrospectively). The curator knows exactly which events it withheld, so
+  // pair the filter with an explicit negative instruction: for the character,
+  // those events have not happened yet. Rendered only when a horizon is set —
+  // horizon-less contexts are byte-identical to before.
+  if (request.currentMoment && futureSlugs.length > 0) {
+    const notYet = futureSlugs
+      .map((slug) => pageBySlug.get(slug))
+      .filter((p): p is WikiPageRecord => Boolean(p))
+      .map((p) => p.title);
+    if (notYet.length > 0) {
+      promptChunk += [
+        "\n\n### Your present moment",
+        "These lie in your FUTURE — events not yet lived, people not yet met,",
+        "places not yet named. You have no knowledge or memory of them; they",
+        "must not exist in anything you say, even if knowledge above mentions",
+        "them:",
+        ...notYet.map((title) => `- ${title}`),
+      ].join("\n");
+    }
+  }
 
   // Recompute actual tokensUsed from the final chunk (not the greedy budget
   // estimate), so the caller sees the real cost.
@@ -145,7 +169,6 @@ export async function curate(request: CurateRequest): Promise<CurateResult> {
     scoreDropped,
     budgetDropped,
   };
-  void pageBySlug;
 
   return {
     promptChunk,

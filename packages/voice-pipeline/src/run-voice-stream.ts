@@ -95,6 +95,12 @@ export type VoiceStreamBody = {
   message?: string;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   scene?: CuratorScene;
+  // Scene knowledge horizon: the character's dramatic present on their own
+  // era timeline ({era, index}, same shape as wiki-page timeIndex). The
+  // curator drops later-timeIndexed pages (unless knowsFuture), so canon the
+  // character hasn't lived yet never reaches the prompt. Part of the context
+  // cache key. Absent = full-life knowledge (sandbox default).
+  currentMoment?: { era: string; index: number };
   provider?: LlmProvider;
   model?: string;
   maxTokens?: number;
@@ -529,6 +535,7 @@ export async function* runVoiceStream(
         sessionId: input.sessionId,
         scene: input.scene,
         tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
+        currentMoment: input.currentMoment,
       });
       // Hoisted so we can persist these on the contextBuild record below
       // (the workbench's KnowledgeGraphPanel reads `selectedPages` to render
@@ -546,6 +553,7 @@ export async function* runVoiceStream(
         sessionId: input.sessionId,
         scene: input.scene,
         tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
+        currentMoment: input.currentMoment,
       }, VOICE_CONTEXT_PREP_WAIT_MS);
       // Debug replays always run fresh retrieval + curation (never the cache) so
       // the inspector shows the REAL graph data this message pulls, not a prior
@@ -716,6 +724,7 @@ export async function* runVoiceStream(
             semanticSeeds,
             tokenBudget: VOICE_CONTEXT_TOKEN_BUDGET,
             excludeVoiceIdentity,
+            currentMoment: input.currentMoment,
           });
           wikiPromptChunk = curated.promptChunk;
           curatorSelectedPages = curated.pages;

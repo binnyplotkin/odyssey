@@ -41,6 +41,17 @@ export const sceneCharacterSchema = z.object({
     )
     .max(6)
     .optional(),
+  // The scene's dramatic present for THIS character: a moment on their own
+  // era timeline (era key + index, same shape as wiki-page timeIndex). The
+  // curator drops pages after this moment (unless knowsFuture), so knowledge
+  // the character hasn't lived yet never reaches the prompt. Absent = the
+  // character knows their whole life (sandbox default).
+  knowledgeHorizon: z
+    .object({
+      era: z.string().min(1),
+      index: z.number().int(),
+    })
+    .optional(),
 });
 
 // A sound placed in the scene (hydrated from a library-backed `audio`
