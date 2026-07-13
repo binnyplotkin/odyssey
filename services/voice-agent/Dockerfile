@@ -49,7 +49,12 @@ RUN npm ci
 
 # Pre-bake the bge model into the image AND smoke-test the native dlopen path
 # (onnxruntime-node under node:22-slim glibc). Fails the build if bge can't load.
-RUN npm run -w @odyssey/voice-agent prewarm
+# HF_TOKEN (set as a Railway service variable → auto-exposed as a build arg):
+# HuggingFace 403s anonymous downloads from shared cloud-builder IPs; transformers.js
+# sends the token as a Bearer header when present. Scoped to this RUN, not ENV, so
+# it isn't baked into the runtime image.
+ARG HF_TOKEN
+RUN HF_TOKEN=$HF_TOKEN npm run -w @odyssey/voice-agent prewarm
 
 EXPOSE 8080
 # Runtime env (Railway): LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET.
