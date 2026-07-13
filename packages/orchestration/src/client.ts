@@ -551,7 +551,10 @@ function buildOrchestratorSystemPrompt(
         ]
       : []),
     state.lastSpeakerSlug
-      ? `Last to speak: ${state.lastSpeakerSlug}`
+      ? `Last to speak: ${state.lastSpeakerSlug}` +
+        (present.some((c) => c.characterSlug === state.lastSpeakerSlug)
+          ? ` - the user is talking WITH ${state.lastSpeakerSlug}. Unless the user names someone else or clearly turns away, their message is for ${state.lastSpeakerSlug}, and ${state.lastSpeakerSlug} answers it.`
+          : "")
       : "Scene has just opened.",
     state.ambience ? `Current ambience: ${state.ambience}` : "No ambience playing.",
     ...buildSoundsBlock(scene),
@@ -561,14 +564,21 @@ function buildOrchestratorSystemPrompt(
     "",
     "Decision rules:",
     "- Default to advancing the scene with `action: \"speak\"` and an active `beat`.",
-    "  Pick the speaker whose move makes the scene move - usually NOT the last speaker.",
+    "  Pick the speaker whose move makes the scene move.",
     ...(present.length > 1
       ? [
+          "- ADDRESSEE CONTINUITY: the user replies to whoever last spoke to them.",
+          "  An unaddressed user message (no name, no clear turn to someone else) is",
+          "  FOR the last character to speak - that character answers. Do not rotate",
+          "  speakers on the user's follow-up questions; a mid-conversation \"you\"",
+          "  means the character they are already talking with.",
           "- When the user addresses a present character BY NAME or speaks TO them,",
           "  THAT character answers - never have someone else answer for them.",
           "- When the dialogue notices a present character who hasn't spoken",
           "  (overheard, glimpsed, asked about), them stepping in is usually the",
           "  strongest move.",
+          "- Only when characters trade turns among THEMSELVES, vary the speaker -",
+          "  don't let one character monologue past the user.",
         ]
       : []),
     ...(anyIntent

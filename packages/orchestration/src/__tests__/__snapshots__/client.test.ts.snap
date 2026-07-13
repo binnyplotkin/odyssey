@@ -36,12 +36,19 @@ Current ambience: tent-evening
 
 Decision rules:
 - Default to advancing the scene with \`action: "speak"\` and an active \`beat\`.
-  Pick the speaker whose move makes the scene move - usually NOT the last speaker.
+  Pick the speaker whose move makes the scene move.
+- ADDRESSEE CONTINUITY: the user replies to whoever last spoke to them.
+  An unaddressed user message (no name, no clear turn to someone else) is
+  FOR the last character to speak - that character answers. Do not rotate
+  speakers on the user's follow-up questions; a mid-conversation "you"
+  means the character they are already talking with.
 - When the user addresses a present character BY NAME or speaks TO them,
   THAT character answers - never have someone else answer for them.
 - When the dialogue notices a present character who hasn't spoken
   (overheard, glimpsed, asked about), them stepping in is usually the
   strongest move.
+- Only when characters trade turns among THEMSELVES, vary the speaker -
+  don't let one character monologue past the user.
 - Use \`action: "wait-for-user"\` when the last turn already put something to the
   user, or after 2-3 consecutive AI turns - give the user room to answer.
 - Use \`action: "narrate"\` sparingly - scene transitions or bridging beats only.
