@@ -162,6 +162,23 @@ export function matchArcLabel(raw: string, arcLabels: string[]): string | null {
 }
 
 /**
+ * The arc is ORDERED: a later beat landing means every earlier beat is
+ * behind us — the dramaturg often marks only the beat that just happened
+ * (observed: beat 2 landed while beat 1, clearly done, stayed pending,
+ * stalling the director's steering). Expand a landed set to the full
+ * prefix of the arc up to the furthest landed beat, in arc order.
+ * Labels are matched case-insensitively; labels not in the arc are ignored.
+ */
+export function expandLandedBeats(landed: string[], arcLabels: string[]): string[] {
+  const landedLower = new Set(landed.map((l) => l.trim().toLowerCase()));
+  let maxIdx = -1;
+  arcLabels.forEach((label, i) => {
+    if (landedLower.has(label.toLowerCase())) maxIdx = i;
+  });
+  return maxIdx >= 0 ? arcLabels.slice(0, maxIdx + 1) : [];
+}
+
+/**
  * Normalize a model's free-form note into something safe to inject into
  * the director prompt: strip wrapping quotes / markdown fences / label
  * prefixes, collapse whitespace, cap length. Returns null when nothing

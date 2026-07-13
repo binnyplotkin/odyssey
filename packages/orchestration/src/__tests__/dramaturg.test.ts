@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createInitialSceneState, type Scene } from "../client";
 import {
   buildDramaturgMessages,
+  expandLandedBeats,
   matchArcLabel,
   parseDramaturgReflection,
   sanitizeDramaturgNote,
@@ -145,6 +146,44 @@ describe("matchArcLabel", () => {
   it("rejects prefixes that aren't separator-bounded and unknown labels", () => {
     expect(matchArcLabel("The promise is spoken aloudly", labels)).toBeNull();
     expect(matchArcLabel("Something else entirely", labels)).toBeNull();
+  });
+});
+
+describe("expandLandedBeats", () => {
+  const arc = [
+    "The stranger is tested",
+    "The promise is spoken aloud",
+    "Sarah's laugh — and the denial",
+  ];
+
+  it("landing a later beat lands every earlier beat, in arc order", () => {
+    expect(expandLandedBeats(["The promise is spoken aloud"], arc)).toEqual([
+      "The stranger is tested",
+      "The promise is spoken aloud",
+    ]);
+    expect(expandLandedBeats(["Sarah's laugh — and the denial"], arc)).toEqual(arc);
+  });
+
+  it("is a no-op for the first beat and for empty input", () => {
+    expect(expandLandedBeats(["The stranger is tested"], arc)).toEqual([
+      "The stranger is tested",
+    ]);
+    expect(expandLandedBeats([], arc)).toEqual([]);
+  });
+
+  it("matches case-insensitively and ignores labels not in the arc", () => {
+    expect(
+      expandLandedBeats(["the PROMISE is spoken aloud", "not a real beat"], arc),
+    ).toEqual(["The stranger is tested", "The promise is spoken aloud"]);
+  });
+
+  it("merges prior state with a new later landing", () => {
+    expect(
+      expandLandedBeats(
+        ["The stranger is tested", "Sarah's laugh — and the denial"],
+        arc,
+      ),
+    ).toEqual(arc);
   });
 });
 

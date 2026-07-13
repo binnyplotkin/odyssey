@@ -368,12 +368,15 @@ function sanitizeAudioCues(
 export function buildDirectiveChunk(input: {
   beat: string;
   sceneCue?: string;
-  speaker?: Pick<SceneCharacter, "motivations" | "behaviorTriggers">;
+  speaker?: Pick<SceneCharacter, "motivations" | "behaviorTriggers" | "speakingStyle">;
 }): string {
   const lines = [`Direction: ${input.beat}`];
   if (input.sceneCue) lines.push(`Scene note: ${input.sceneCue}`);
   if (input.speaker?.motivations) {
     lines.push(`Your agenda in this scene: ${input.speaker.motivations}`);
+  }
+  if (input.speaker?.speakingStyle) {
+    lines.push(`Your manner in this scene: ${input.speaker.speakingStyle}`);
   }
   for (const t of (input.speaker?.behaviorTriggers ?? []).slice(0, 3)) {
     lines.push(`When ${t.condition}: ${t.behavior}`);
@@ -536,10 +539,11 @@ function buildOrchestratorSystemPrompt(
     "  Pick the speaker whose move makes the scene move - usually NOT the last speaker.",
     ...(present.length > 1
       ? [
-          "- When the dialogue names, addresses, or NOTICES a present character who",
-          "  hasn't spoken (overheard, glimpsed, asked about), that character stepping",
-          "  in is usually the strongest move - don't let another character answer",
-          "  for them.",
+          "- When the user addresses a present character BY NAME or speaks TO them,",
+          "  THAT character answers - never have someone else answer for them.",
+          "- When the dialogue notices a present character who hasn't spoken",
+          "  (overheard, glimpsed, asked about), them stepping in is usually the",
+          "  strongest move.",
         ]
       : []),
     ...(anyIntent

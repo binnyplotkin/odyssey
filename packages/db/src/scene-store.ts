@@ -129,7 +129,12 @@ export function selectDefaultAmbienceTrackId(
 function liftCharacterIntent(data: Record<string, unknown>): Partial<
   Pick<
     SceneCharacter,
-    "roleInScene" | "motivations" | "emotionalBaseline" | "behaviorTriggers" | "knowledgeHorizon"
+    | "roleInScene"
+    | "motivations"
+    | "emotionalBaseline"
+    | "behaviorTriggers"
+    | "knowledgeHorizon"
+    | "speakingStyle"
   >
 > {
   const str = (v: unknown, max: number): string | undefined =>
@@ -138,6 +143,7 @@ function liftCharacterIntent(data: Record<string, unknown>): Partial<
   const roleInScene = str(data.roleInScene, 80);
   const motivations = str(data.motivations, 400);
   const emotionalBaseline = str(data.emotionalBaseline, 80);
+  const speakingStyle = str(data.speakingStyle, 400);
   const behaviorTriggers = Array.isArray(data.behaviorTriggers)
     ? data.behaviorTriggers
         .map((t) => {
@@ -166,6 +172,7 @@ function liftCharacterIntent(data: Record<string, unknown>): Partial<
     ...(roleInScene ? { roleInScene } : {}),
     ...(motivations ? { motivations } : {}),
     ...(emotionalBaseline ? { emotionalBaseline } : {}),
+    ...(speakingStyle ? { speakingStyle } : {}),
     ...(behaviorTriggers.length ? { behaviorTriggers } : {}),
     ...(knowledgeHorizon ? { knowledgeHorizon } : {}),
   };
