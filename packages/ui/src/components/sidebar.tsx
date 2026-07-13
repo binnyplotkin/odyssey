@@ -326,6 +326,7 @@ export function Sidebar({
       <LinkTag
         key={item.href}
         href={item.href}
+        className={`odyssey-shell-nav-item${active ? " odyssey-shell-nav-item--active" : ""}`}
         style={{
           display: "flex",
           alignItems: "center",
@@ -431,6 +432,7 @@ export function Sidebar({
   /* ── Single stable DOM — sidebar width toggles ────────────── */
   return (
     <div
+      className="odyssey-shell"
       style={{
         display: "flex",
         width: "100%",
@@ -440,6 +442,7 @@ export function Sidebar({
     >
       {/* Sidebar */}
       <nav
+        className="odyssey-shell-sidebar"
         style={{
           width: collapsed ? 0 : SIDEBAR_WIDTH,
           display: "flex",
@@ -459,6 +462,7 @@ export function Sidebar({
       >
         {/* Sidebar header: brand + collapse — exactly aligns with main header */}
         <div
+          className="odyssey-shell-brand"
           style={{
             display: "flex",
             alignItems: "center",
@@ -509,6 +513,7 @@ export function Sidebar({
         {/* Tab row — underlined mono tabs */}
         {tabs && tabs.length > 0 && (
           <div
+            className="odyssey-shell-tabs"
             style={{
               display: "flex",
               flexDirection: "row",
@@ -524,6 +529,7 @@ export function Sidebar({
               return (
                 <button
                   key={tab.key}
+                  className={`odyssey-shell-tab${selected ? " odyssey-shell-tab--active" : ""}`}
                   type="button"
                   onClick={() => selectTab(tab.key)}
                   onMouseEnter={() => setHoveredId(`tab-${tab.key}`)}
@@ -572,6 +578,7 @@ export function Sidebar({
 
         {/* Navigation sections */}
         <div
+          className="odyssey-shell-navigation"
           style={{
             flex: 1,
             display: "flex",
@@ -590,6 +597,7 @@ export function Sidebar({
         {/* User menu */}
         {userName && (
           <div
+            className="odyssey-shell-account"
             ref={userMenuRef}
             style={{
               position: "relative",
@@ -711,6 +719,7 @@ export function Sidebar({
               sidecarPos &&
               createPortal(
                 <div
+                  className="odyssey-shell-sidecar"
                   ref={sidecarRef}
                   style={{
                     position: "fixed",
@@ -1195,6 +1204,7 @@ export function Sidebar({
 
       {/* Right column: header + content */}
       <div
+        className="odyssey-shell-main-column"
         style={{
           flex: 1,
           display: "flex",
@@ -1203,6 +1213,7 @@ export function Sidebar({
         }}
       >
         <header
+          className="odyssey-shell-header"
           style={{
             display: "flex",
             alignItems: "center",
@@ -1338,6 +1349,7 @@ export function Sidebar({
         </header>
 
         <main
+          className="odyssey-shell-content"
           style={{
             flex: 1,
             overflow: "auto",

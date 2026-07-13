@@ -1,6 +1,228 @@
 @import "@odyssey/ui/styles/base.css";
 @import "@odyssey/ui/styles/themes/neutral.css";
 
+/* Admin shell glass language. Structural surfaces stay neutral so the
+   workspace remains calm; mint is reserved for state, focus, and motion. */
+.odyssey-shell {
+  --admin-glass-line: rgba(184, 244, 238, 0.13);
+  --admin-glass-line-strong: rgba(184, 244, 238, 0.24);
+  --admin-glass-highlight: rgba(255, 255, 255, 0.035);
+  --admin-glass-sidebar: linear-gradient(
+    180deg,
+    rgba(15, 20, 21, 0.94),
+    rgba(8, 14, 16, 0.91)
+  );
+  --admin-glass-header: linear-gradient(
+    90deg,
+    rgba(13, 18, 19, 0.9),
+    rgba(8, 15, 17, 0.82)
+  );
+  --sidebar-bg: var(--admin-glass-sidebar);
+  --header-bg: var(--admin-glass-header);
+  --sidebar-border: var(--admin-glass-line);
+  --header-border: var(--admin-glass-line);
+  --sidebar-hover: rgba(201, 255, 247, 0.055);
+  --sidebar-active: linear-gradient(
+    90deg,
+    rgba(133, 222, 213, 0.16),
+    rgba(133, 222, 213, 0.045)
+  );
+  --sidebar-active-border: #8fd9d2;
+  isolation: isolate;
+  background: #0c1112;
+}
+
+.odyssey-shell-sidebar {
+  position: relative;
+  z-index: 20;
+  box-shadow:
+    18px 0 52px rgba(0, 0, 0, 0.2),
+    inset -1px 0 0 var(--admin-glass-highlight) !important;
+  backdrop-filter: blur(28px) saturate(132%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(132%);
+}
+
+.odyssey-shell-sidebar::before,
+.odyssey-shell-header::after {
+  position: absolute;
+  pointer-events: none;
+  content: "";
+}
+
+.odyssey-shell-sidebar::before {
+  inset: 0 0 auto;
+  height: 140px;
+  background: linear-gradient(180deg, rgba(143, 217, 210, 0.055), transparent);
+}
+
+.odyssey-shell-brand,
+.odyssey-shell-tabs,
+.odyssey-shell-account {
+  position: relative;
+  z-index: 1;
+  background: rgba(5, 11, 13, 0.18);
+}
+
+.odyssey-shell-brand {
+  box-shadow: inset 0 1px 0 var(--admin-glass-highlight);
+}
+
+.odyssey-shell-tabs {
+  background: rgba(5, 11, 13, 0.3);
+}
+
+.odyssey-shell-navigation {
+  position: relative;
+  z-index: 1;
+  scrollbar-color: rgba(143, 217, 210, 0.22) transparent;
+}
+
+.odyssey-shell-navigation .sidebar-item,
+.odyssey-shell-sidebar a {
+  position: relative;
+}
+
+.odyssey-shell-nav-item {
+  margin: 2px 8px;
+  border-radius: 4px;
+}
+
+.odyssey-shell-nav-item--active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 0 24px rgba(92, 201, 191, 0.055);
+}
+
+.odyssey-shell-tab--active {
+  text-shadow: 0 0 18px rgba(143, 217, 210, 0.28);
+}
+
+.odyssey-shell-account {
+  box-shadow:
+    0 -18px 38px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(184, 244, 238, 0.08);
+}
+
+.odyssey-shell-header {
+  box-shadow:
+    0 14px 42px rgba(0, 0, 0, 0.17),
+    inset 0 1px 0 var(--admin-glass-highlight);
+  backdrop-filter: blur(28px) saturate(132%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(132%);
+}
+
+.odyssey-shell-header::after {
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(143, 217, 210, 0.28) 28%,
+    rgba(143, 217, 210, 0.08) 76%,
+    transparent
+  );
+}
+
+.odyssey-shell-main-column {
+  position: relative;
+  z-index: 1;
+}
+
+.odyssey-shell-content {
+  background: color-mix(in srgb, var(--page-atmosphere) 96%, transparent);
+}
+
+.odyssey-shell-sidecar {
+  overflow: hidden;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 20, 21, 0.91),
+    rgba(6, 13, 15, 0.86)
+  ) !important;
+  border: 1px solid rgba(184, 244, 238, 0.24) !important;
+  border-radius: 0 8px 8px 0 !important;
+  box-shadow:
+    18px 0 56px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+  backdrop-filter: blur(28px) saturate(138%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(138%);
+}
+
+.admin-agent-glass-rail {
+  background: linear-gradient(
+    180deg,
+    rgba(10, 20, 21, 0.94),
+    rgba(6, 13, 15, 0.91)
+  ) !important;
+  border-left-color: rgba(184, 244, 238, 0.18) !important;
+  box-shadow:
+    -22px 0 58px rgba(0, 0, 0, 0.3),
+    inset 1px 0 0 rgba(255, 255, 255, 0.025) !important;
+  backdrop-filter: blur(28px) saturate(132%);
+  -webkit-backdrop-filter: blur(28px) saturate(132%);
+}
+
+.admin-agent-glass-rail__inner {
+  background: transparent !important;
+}
+
+:root[data-theme="light"] .odyssey-shell {
+  --admin-glass-line: rgba(31, 80, 83, 0.13);
+  --admin-glass-line-strong: rgba(31, 80, 83, 0.2);
+  --admin-glass-highlight: rgba(255, 255, 255, 0.7);
+  --admin-glass-sidebar: linear-gradient(
+    180deg,
+    rgba(244, 250, 250, 0.92),
+    rgba(231, 241, 243, 0.88)
+  );
+  --admin-glass-header: linear-gradient(
+    90deg,
+    rgba(246, 251, 251, 0.91),
+    rgba(235, 245, 246, 0.85)
+  );
+  --sidebar-hover: rgba(15, 112, 117, 0.055);
+  --sidebar-active: linear-gradient(
+    90deg,
+    rgba(15, 142, 164, 0.14),
+    rgba(15, 142, 164, 0.035)
+  );
+  background: #e8f0f2;
+}
+
+:root[data-theme="light"] .odyssey-shell-sidebar::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.64), transparent);
+}
+
+:root[data-theme="light"] .odyssey-shell-brand,
+:root[data-theme="light"] .odyssey-shell-tabs,
+:root[data-theme="light"] .odyssey-shell-account {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+:root[data-theme="light"] .odyssey-shell-nav-item--active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 0 22px rgba(15, 142, 164, 0.05);
+}
+
+:root[data-theme="light"] .odyssey-shell-sidecar,
+:root[data-theme="light"] .admin-agent-glass-rail {
+  background: linear-gradient(
+    180deg,
+    rgba(247, 252, 252, 0.94),
+    rgba(234, 244, 245, 0.9)
+  ) !important;
+}
+
+:root[data-theme="light"] .odyssey-shell-sidecar {
+  border-color: rgba(31, 80, 83, 0.2) !important;
+  box-shadow:
+    18px 0 46px rgba(30, 43, 49, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
+}
+
 .admin-table-header-filters {
   min-width: 0;
   max-width: min(52vw, 560px);

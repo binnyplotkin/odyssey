@@ -11,6 +11,7 @@ export function AgentRail({
 }) {
   return (
     <aside
+      className="admin-agent-glass-rail"
       aria-label="Admin AI agent"
       aria-hidden={!open}
       style={{
@@ -35,6 +36,7 @@ export function AgentRail({
       }}
     >
       <div
+        className="admin-agent-glass-rail__inner"
         style={{
           width: ADMIN_AGENT_PANEL_WIDTH,
           maxWidth: "42vw",
