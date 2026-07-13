@@ -37,6 +37,10 @@ export interface LiveKitVoiceConnectOptions {
   sessionId?: string;
   /** Reuse the sandbox's user-gesture AudioContext so playback is unlocked on Safari. */
   audioContext?: AudioContext;
+  /** Connect and publish without opening the microphone until the scene handoff. */
+  microphoneEnabled?: boolean;
+  /** Attach remote audio muted while the intro is warming the scene. */
+  outputEnabled?: boolean;
 }
 
 /**
@@ -58,6 +62,7 @@ export class LiveKitVoiceSession {
   #source: MediaStreamAudioSourceNode | null = null;
   #raf: number | null = null;
   #state: LiveKitVoiceState = "idle";
+  #outputEnabled = true;
 
   constructor(callbacks: LiveKitVoiceCallbacks = {}) {
     this.#callbacks = callbacks;
@@ -74,6 +79,7 @@ export class LiveKitVoiceSession {
   }
 
   async connect(opts: LiveKitVoiceConnectOptions): Promise<void> {
+    this.#outputEnabled = opts.outputEnabled ?? true;
     const res = await fetch("/api/voice/livekit-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -131,7 +137,9 @@ export class LiveKitVoiceSession {
       });
 
     await room.connect(url, token);
-    await room.localParticipant.setMicrophoneEnabled(true);
+    await room.localParticipant.setMicrophoneEnabled(
+      opts.microphoneEnabled ?? true,
+    );
     this.#setState("listening");
 
     // The agent may have joined and published before us — attach existing tracks.
@@ -146,6 +154,18 @@ export class LiveKitVoiceSession {
 
   async setMicEnabled(enabled: boolean): Promise<void> {
     await this.#room?.localParticipant.setMicrophoneEnabled(enabled);
+  }
+
+  /** Atomically open character output and user input at the scene handoff. */
+  async activate(): Promise<void> {
+    this.#outputEnabled = true;
+    if (this.#audioEl) {
+      this.#audioEl.muted = false;
+      await this.#audioEl.play().catch(() => undefined);
+    }
+    await this.#room?.localParticipant.setMicrophoneEnabled(true);
+    this.#state = "idle";
+    this.#setState("listening");
   }
 
   async disconnect(): Promise<void> {
@@ -171,6 +191,7 @@ export class LiveKitVoiceSession {
     if (!this.#audioEl) {
       const el = document.createElement("audio");
       el.autoplay = true;
+      el.muted = !this.#outputEnabled;
       el.setAttribute("playsinline", "true");
       this.#audioEl = el;
     }

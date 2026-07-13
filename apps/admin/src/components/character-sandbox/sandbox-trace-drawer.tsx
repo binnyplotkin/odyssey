@@ -208,7 +208,7 @@ export function SandboxTraceDrawer({
             }}
           >
             {tab === "trace"
-              ? phase === "pre-session"
+              ? phase === "pre-session" || phase === "intro"
                 ? "Pre-session plan"
                 : "Runtime trace"
               : "Readiness checks"}

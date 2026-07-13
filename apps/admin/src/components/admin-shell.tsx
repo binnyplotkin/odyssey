@@ -95,6 +95,7 @@ const items: SidebarItem[] = [
   { href: "/sessions", label: "Sessions", section: "Database", icon: icons.sessions, tab: "infra" },
   { href: "/ai-icon-test", label: "AI Icon", section: "Tools", icon: icons.tool, tab: "infra" },
   { href: "/loading-indicator", label: "Loading Indicator", section: "Tools", icon: icons.waveform, tab: "infra" },
+  { href: "/intro-test", label: "Intro Test", section: "Tools", icon: icons.sessions, tab: "infra" },
   { href: "/voice-test", label: "Voice Test", section: "Tools", icon: icons.voice, tab: "infra" },
   { href: "/voice-test-2", label: "Voice Test 2", section: "Tools", icon: icons.waveform, tab: "infra" },
   { href: "/3d-waveform", label: "3D Waveform", section: "Tools", icon: icons.waveform, tab: "infra" },
@@ -114,7 +115,13 @@ const items: SidebarItem[] = [
  * 0 once the client component's useLayoutEffect fires setFlush(true).
  * Match by path prefix (the leading "/" makes "/voices" match "/voices"
  * and "/voices/:slug" but not "/voices-something"). */
-const FLUSH_ROUTE_PREFIXES = ["/voices", "/characters", "/wikis", "/sounds"];
+const FLUSH_ROUTE_PREFIXES = [
+  "/voices",
+  "/characters",
+  "/wikis",
+  "/sounds",
+  "/intro-test",
+];
 
 function isFlushRoute(pathname: string | null): boolean {
   if (!pathname) return false;

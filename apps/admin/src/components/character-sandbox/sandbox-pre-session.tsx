@@ -5,7 +5,6 @@ import type {
   SandboxBinding,
   SandboxCharacter,
 } from "@/app/(authenticated)/characters/[slug]/sandbox/page";
-import { resolveAvatarGradient } from "@/lib/avatar-gradients";
 
 /**
  * SandboxPreSession - Paper "Sandbox · Pre-Session" direction.
@@ -29,7 +28,6 @@ export function SandboxPreSession({
   sessionError,
   onStart,
   onCancel,
-  heroBackground,
 }: {
   character: SandboxCharacter;
   bindings: SandboxBinding[];
@@ -37,7 +35,6 @@ export function SandboxPreSession({
   sessionError: string | null;
   onStart: () => void;
   onCancel: () => void;
-  heroBackground?: ReactNode;
 }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -74,12 +71,6 @@ export function SandboxPreSession({
     traits.length === 0 &&
     bindings.length === 0 &&
     !boundVoiceSlug;
-  const avatarBg = character.image
-    ? `center/cover no-repeat url("${character.image}")`
-    : resolveAvatarGradient(character.thumbnailColor, character.slug);
-  const initial =
-    (character.title.trim() || character.slug).charAt(0).toUpperCase() || "?";
-
   return (
     <div
       style={{
@@ -92,13 +83,7 @@ export function SandboxPreSession({
         background: "var(--background)",
       }}
     >
-      <PaperHero
-        character={character}
-        avatarBg={avatarBg}
-        initial={initial}
-        essence={essence}
-        background={heroBackground}
-      />
+      <PaperHero character={character} />
 
       <PaperManifestRail
         character={character}
@@ -127,93 +112,26 @@ export function SandboxPreSession({
 
 function PaperHero({
   character,
-  avatarBg,
-  initial,
-  essence,
-  background,
 }: {
   character: SandboxCharacter;
-  avatarBg: string;
-  initial: string;
-  essence: string | undefined;
-  background?: ReactNode;
 }) {
   return (
     <section
-      aria-label={`${character.title} pre-session identity`}
+      aria-label={`${character.title} session entrance`}
       style={{
         position: "relative",
         zIndex: 0,
         flex: 1,
         minWidth: 0,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        paddingBlock: 60,
-        paddingInline: 48,
-        gap: "var(--space-24)",
         overflow: "hidden",
+        backgroundColor: "#050b0c",
+        backgroundImage:
+          'url("/session-entry-video/kawabunga-intro-poster.jpg?v=1")',
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundSize: "cover",
       }}
-    >
-      {background}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          width: 128,
-          height: 128,
-          borderRadius: "var(--radius-xl)",
-          background: avatarBg,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          fontFamily: FONT_HEAD,
-          fontSize: 60,
-          fontWeight: 600,
-          lineHeight: "95%",
-          letterSpacing: "-0.04em",
-          color: "rgba(12,14,20,0.75)",
-          overflow: "hidden",
-        }}
-      >
-        {character.image ? null : initial}
-      </div>
-      <h1
-        style={{
-          position: "relative",
-          zIndex: 1,
-          margin: 0,
-          maxWidth: 900,
-          fontFamily: FONT_HEAD,
-          fontSize: 88,
-          fontWeight: 600,
-          letterSpacing: "-0.04em",
-          lineHeight: "95%",
-          color: TEXT_PRIMARY,
-          textAlign: "center",
-        }}
-      >
-        {character.title}
-      </h1>
-      <p
-        style={{
-          position: "relative",
-          zIndex: 1,
-          margin: 0,
-          maxWidth: 440,
-          fontFamily: FONT_HEAD,
-          fontSize: 15,
-          fontStyle: "italic",
-          lineHeight: "155%",
-          color: TEXT_MUTED,
-          textAlign: "center",
-        }}
-      >
-        {essence ? `“${essence}”` : "No essence set."}
-      </p>
-    </section>
+    />
   );
 }
 

@@ -18,10 +18,6 @@ import {
   warmSandboxVoiceContext,
   type ChatHistoryTurn,
 } from "@/lib/sandbox-streams";
-import {
-  SessionEntryCue,
-  prefetchSessionEntryCue,
-} from "@/lib/session-entry-audio";
 import { Menu, type MenuItem } from "@/components/menu";
 import { AudioRtStreamingSttSession } from "@/lib/audio-rt-streaming-stt";
 import { ElevenLabsScribeStreamingSttSession } from "@/lib/elevenlabs-scribe-streaming-stt";
@@ -35,9 +31,10 @@ import { SandboxVoiceStage } from "./character-sandbox/sandbox-voice-stage";
 import { SandboxChatStage } from "./character-sandbox/sandbox-chat-stage";
 import { SandboxPreSession } from "./character-sandbox/sandbox-pre-session";
 import {
-  SessionEntryTransition,
-  prefetchSessionEntryTransitionVideo,
-} from "./character-sandbox/session-entry-transition";
+  SessionIntroExperience,
+  prefetchSessionIntroExperience,
+  type SessionIntroExperienceHandle,
+} from "./character-sandbox/session-intro-experience";
 import { SandboxTraceDrawer } from "./character-sandbox/sandbox-trace-drawer";
 import {
   WavefieldStage,
@@ -83,7 +80,7 @@ const STT_FALLBACK_MIN_AUDIO_MS = 1200;
 const STT_SUSPICIOUS_MAX_CHARS = 8;
 
 export type SandboxMode = "voice" | "chat";
-export type SandboxPhase = "pre-session" | "live" | "post-session";
+export type SandboxPhase = "pre-session" | "intro" | "live" | "post-session";
 
 export type SandboxTurn = {
   id: string;
@@ -187,7 +184,9 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   const [worldSessionId, setWorldSessionId] = useState<string | null>(null);
   const worldSessionIdRef = useRef<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [entryTransitionActive, setEntryTransitionActive] = useState(false);
+  const [introActive, setIntroActive] = useState(false);
+  const [introForegroundVisible, setIntroForegroundVisible] = useState(false);
+  const [introSystemsReady, setIntroSystemsReady] = useState(false);
   const [endedSession, setEndedSession] = useState<EndedSandboxSession | null>(
     null,
   );
@@ -216,7 +215,10 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   // the entry cue plays instantly and TTS playback inherits an unlocked
   // context (Safari leaves contexts created outside a gesture suspended).
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const entryCueRef = useRef<SessionEntryCue | null>(null);
+  const sceneInputEnabledRef = useRef(false);
+  const introExperienceRef = useRef<SessionIntroExperienceHandle | null>(null);
+  const launchSequenceRef = useRef(0);
+  const launchInProgressRef = useRef(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recorderStreamRef = useRef<MediaStream | null>(null);
   const recorderChunksRef = useRef<Blob[]>([]);
@@ -297,8 +299,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   // builds and serves fresh entries from cache.
   useEffect(() => {
     if (phase !== "pre-session") return;
-    prefetchSessionEntryCue();
-    prefetchSessionEntryTransitionVideo();
+    prefetchSessionIntroExperience();
     if (mode !== "voice") return;
     void warmSandboxVoiceContext({ characterId: character.id }).catch(
       (err) => {
@@ -325,29 +326,44 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   }, []);
 
   async function handleStart() {
+    if (phase !== "pre-session" || launchInProgressRef.current) return;
+    launchInProgressRef.current = true;
+    const launchSequence = ++launchSequenceRef.current;
     const launchMode: SandboxMode = "voice";
     if (mode !== launchMode) setMode(launchMode);
 
-    // Prepare the cue first, then activate the visual layer. The transition
-    // starts audio on the same frame it starts video, so neither leads.
+    // Unlock playback in the start gesture, then mount the mastered intro.
+    // Its embedded audio and video share one media clock.
     if (!audioCtxRef.current) audioCtxRef.current = createAudioContext();
     if (audioCtxRef.current.state === "suspended") {
       void audioCtxRef.current.resume().catch(() => {});
     }
-    entryCueRef.current?.stop();
-    entryCueRef.current = new SessionEntryCue(audioCtxRef.current);
-    await entryCueRef.current.prepare().catch((err) => {
-      console.warn("[sandbox] entry cue prepare failed", err);
-      return null;
+    sceneInputEnabledRef.current = false;
+    setIntroSystemsReady(false);
+    flushSync(() => {
+      setPhase("intro");
+      setIntroActive(true);
+      setIntroForegroundVisible(false);
+      setTurns([]);
+      setTraceRecords([]);
+      setComposerValue("");
+      setSessionError(null);
+      setEndedSession(null);
+      setMicOn(false);
+      setVoiceState("idle");
     });
-    if (!entryCueRef.current) return;
-    flushSync(() => setEntryTransitionActive(true));
-    setStartedAt(Date.now());
-    setTurns([]);
-    setTraceRecords([]);
-    setComposerValue("");
-    setSessionError(null);
-    setEndedSession(null);
+    try {
+      const intro = introExperienceRef.current;
+      if (!intro) throw new Error("Intro experience failed to mount.");
+      await intro.play();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setSessionError(message);
+      setIntroActive(false);
+      setPhase("pre-session");
+      launchInProgressRef.current = false;
+      return;
+    }
     const sessionId = await createSandboxSceneSession({
       characterId: character.id,
       characterSlug: character.slug,
@@ -363,17 +379,17 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       );
       return null;
     });
-    if (!sessionId) {
-      entryCueRef.current?.stop();
-      entryCueRef.current = null;
-      setEntryTransitionActive(false);
+    if (!sessionId || launchSequence !== launchSequenceRef.current) {
+      launchInProgressRef.current = false;
+      setIntroActive(false);
+      setIntroSystemsReady(false);
       worldSessionIdRef.current = null;
       setWorldSessionId(null);
+      setPhase("pre-session");
       return;
     }
     worldSessionIdRef.current = sessionId;
     setWorldSessionId(sessionId);
-    setPhase("live");
     voiceContextWarmRef.current = warmSandboxVoiceContext({
       characterId: character.id,
       sessionId,
@@ -412,79 +428,104 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         console.warn("[sandbox] voice context warm failed", err);
         return null;
       });
-    if (VOICE_AGENT_ENABLED) {
-      // LiveKit path: join the room, publish mic, play the agent's voice. The
-      // worker does STT + turn detection + brain + TTS; we drive the same wavefield
-      // + state pill from its audio track and surface its transcripts as turns.
-      const sessionStart = Date.now();
-      const lkSession = new LiveKitVoiceSession({
-        onStateChange: (next) => {
-          voiceStateRef.current = next;
-          setVoiceState(next);
-        },
-        onAudioMetrics: (metrics) => {
-          const wave = waveAudioRef.current;
-          wave.energy = metrics.energy;
-          wave.bass = metrics.bass;
-          wave.mid = metrics.mid;
-          wave.high = metrics.high;
-          wave.peak = metrics.peak;
-          wave.active = metrics.active;
-        },
-        onTranscript: (segment) => {
-          // Upsert a turn keyed by the segment id so interim text updates in place
-          // and the final replaces it.
-          const turnId = `lk-${segment.id}`;
-          const speaker = segment.role === "user" ? "user" : "character";
-          setTurns((prev) => {
-            const idx = prev.findIndex((turn) => turn.id === turnId);
-            if (idx >= 0) {
-              const next = [...prev];
-              next[idx] = { ...next[idx], text: segment.text, inFlight: !segment.final };
-              return next;
-            }
-            return [
-              ...prev,
-              {
-                id: turnId,
-                speaker,
-                text: segment.text,
-                timestampMs: Math.max(0, Date.now() - sessionStart),
-                inFlight: !segment.final,
-              },
-            ];
-          });
-        },
-        onError: (message) => setSessionError(message),
-      });
-      liveKitSessionRef.current = lkSession;
-      micOnRef.current = true;
-      setMicOn(true);
-      void lkSession
-        .connect({
-          characterId: character.id,
-          sessionId,
-          audioContext: audioCtxRef.current ?? undefined,
-        })
-        .catch((err) => {
-          const message = err instanceof Error ? err.message : String(err);
-          setSessionError(message);
-          console.warn("[sandbox] livekit connect failed", err);
+    try {
+      if (VOICE_AGENT_ENABLED) {
+        // Join and subscribe during the intro, but keep both directions gated.
+        const sessionStart = Date.now();
+        const lkSession = new LiveKitVoiceSession({
+          onStateChange: (next) => {
+            if (!sceneInputEnabledRef.current) return;
+            voiceStateRef.current = next;
+            setVoiceState(next);
+          },
+          onAudioMetrics: (metrics) => {
+            if (!sceneInputEnabledRef.current) return;
+            const wave = waveAudioRef.current;
+            wave.energy = metrics.energy;
+            wave.bass = metrics.bass;
+            wave.mid = metrics.mid;
+            wave.high = metrics.high;
+            wave.peak = metrics.peak;
+            wave.active = metrics.active;
+          },
+          onTranscript: (segment) => {
+            if (!sceneInputEnabledRef.current) return;
+            const turnId = `lk-${segment.id}`;
+            const speaker = segment.role === "user" ? "user" : "character";
+            setTurns((prev) => {
+              const idx = prev.findIndex((turn) => turn.id === turnId);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = {
+                  ...next[idx],
+                  text: segment.text,
+                  inFlight: !segment.final,
+                };
+                return next;
+              }
+              return [
+                ...prev,
+                {
+                  id: turnId,
+                  speaker,
+                  text: segment.text,
+                  timestampMs: Math.max(0, Date.now() - sessionStart),
+                  inFlight: !segment.final,
+                },
+              ];
+            });
+          },
+          onError: (message) => setSessionError(message),
         });
-      return;
+        liveKitSessionRef.current = lkSession;
+        await Promise.all([
+          voiceContextWarmRef.current,
+          lkSession.connect({
+            characterId: character.id,
+            sessionId,
+            audioContext: audioCtxRef.current ?? undefined,
+            microphoneEnabled: false,
+            outputEnabled: false,
+          }),
+        ]);
+      } else {
+        await Promise.all([
+          voiceContextWarmRef.current,
+          startVoiceInput("session_start", undefined, true),
+        ]);
+      }
+      if (launchSequence === launchSequenceRef.current) {
+        setIntroSystemsReady(true);
+      }
+    } catch (err) {
+      if (launchSequence !== launchSequenceRef.current) return;
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn("[sandbox] scene warmup failed", err);
+      setSessionError(message);
+      sceneInputEnabledRef.current = false;
+      void liveKitSessionRef.current?.disconnect();
+      liveKitSessionRef.current = null;
+      stopStreamingStt();
+      stopRecorder();
+      setIntroSystemsReady(false);
+      setIntroActive(false);
+      launchInProgressRef.current = false;
+      worldSessionIdRef.current = null;
+      setWorldSessionId(null);
+      setPhase("pre-session");
     }
-    void startVoiceInput("session_start");
   }
 
   function handleEnd() {
     // End the persisted run and retain the local transcript/telemetry for the
     // post-session review surface.
     abortRef.current?.abort();
+    launchSequenceRef.current += 1;
+    launchInProgressRef.current = false;
+    sceneInputEnabledRef.current = false;
     void liveKitSessionRef.current?.disconnect();
     liveKitSessionRef.current = null;
     pcmPlayerRef.current?.stop();
-    entryCueRef.current?.stop();
-    entryCueRef.current = null;
     stopRecorder();
     stopStreamingStt();
     voiceContextWarmRef.current = null;
@@ -492,6 +533,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     lastPrepareRef.current = null;
     setVoiceState("idle");
     setMicOn(false);
+    setIntroSystemsReady(false);
     const sessionId = worldSessionIdRef.current;
     worldSessionIdRef.current = null;
     if (!sessionId) {
@@ -543,9 +585,45 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     }
   }
 
-  const handleEntryTransitionStart = useCallback(() => {
-    entryCueRef.current?.play();
-  }, []);
+  function releasePreparedVoiceInput() {
+    sceneInputEnabledRef.current = true;
+    for (const track of recorderStreamRef.current?.getAudioTracks() ?? []) {
+      track.enabled = true;
+    }
+    recorderChunksRef.current = [];
+    recorderStartedAtRef.current = performance.now();
+    streamingTranscriptRef.current = "";
+    streamingTurnIdRef.current = `chr-${crypto.randomUUID()}`;
+    lastPrepareRef.current = null;
+    micOnRef.current = true;
+    voiceStateRef.current = "listening";
+    setMicOn(true);
+    setVoiceState("listening");
+  }
+
+  async function handleEntryTransitionComplete() {
+    if (!introSystemsReady) return;
+    flushSync(() => {
+      setStartedAt(Date.now());
+      setIntroActive(false);
+      setPhase("live");
+    });
+    launchInProgressRef.current = false;
+    sceneInputEnabledRef.current = true;
+    if (VOICE_AGENT_ENABLED) {
+      try {
+        await liveKitSessionRef.current?.activate();
+        micOnRef.current = true;
+        setMicOn(true);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setSessionError(message);
+        console.warn("[sandbox] livekit scene activation failed", err);
+      }
+    } else {
+      releasePreparedVoiceInput();
+    }
+  }
 
   function handleCancel() {
     router.push(`/characters/${character.slug}`);
@@ -553,9 +631,10 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 
   function handlePrepareNextSession() {
     abortRef.current?.abort();
+    launchSequenceRef.current += 1;
+    launchInProgressRef.current = false;
+    sceneInputEnabledRef.current = false;
     pcmPlayerRef.current?.stop();
-    entryCueRef.current?.stop();
-    entryCueRef.current = null;
     stopRecorder();
     stopStreamingStt();
     voiceContextWarmRef.current = null;
@@ -572,6 +651,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     setMode("voice");
     setVoiceState("idle");
     setMicOn(false);
+    setIntroSystemsReady(false);
     setPhase("pre-session");
   }
 
@@ -588,6 +668,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       audioInput?: { blob: Blob; mimeType: string; durationMs: number | null },
       options?: { turnId?: string },
     ): Promise<void> => {
+      if (!sceneInputEnabledRef.current) return;
       const trimmed = text.trim();
       if (!trimmed) return;
       const now = Date.now();
@@ -781,8 +862,6 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             },
             onFirstAudio: (latencyMs) => {
               firstAudioAt = performance.now();
-              // Duck the entry cue if the character starts speaking mid-cue.
-              entryCueRef.current?.fadeOut();
               voiceStateRef.current = "speaking";
               setVoiceState("speaking");
               finalize((t) => ({
@@ -1279,6 +1358,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   }
 
   function handleStreamingTranscript(text: string) {
+    if (!sceneInputEnabledRef.current) return;
     if (voiceStateRef.current !== "listening") return;
     const next = text.trim();
     if (!next || next === streamingTranscriptRef.current.trim()) return;
@@ -1290,6 +1370,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   async function startVoiceInput(
     reason: SttStartReason = "manual_toggle",
     providerOverride?: StreamingSttProvider,
+    gated = false,
   ): Promise<void> {
     if (micOnRef.current || recorderRef.current || streamingSttRef.current) return;
     const sttStartedAt = performance.now();
@@ -1315,6 +1396,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       recorderStreamRef.current = stream;
       recorderMimeRef.current = mimeType || "audio/webm";
       const primaryTrack = stream.getAudioTracks()[0] ?? null;
+      if (gated && primaryTrack) primaryTrack.enabled = false;
       const syncTrackStatus = () => {
         setMicConnection((current) => ({
           ...current,
@@ -1322,7 +1404,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             ? "error"
             : primaryTrack.readyState === "ended"
               ? "ended"
-              : primaryTrack.muted
+              : primaryTrack.muted || !primaryTrack.enabled
                 ? "muted"
                 : "active",
           deviceLabel: primaryTrack?.label || current.deviceLabel,
@@ -1355,6 +1437,16 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
       const activeStreamingSession =
         elevenLabsStreamingSession ?? streamingSession;
       streamingSttRef.current = activeStreamingSession;
+      let streamingReadySettled = false;
+      let resolveStreamingReady = () => {};
+      const streamingReady = new Promise<void>((resolve) => {
+        resolveStreamingReady = resolve;
+      });
+      const markStreamingReady = () => {
+        if (streamingReadySettled) return;
+        streamingReadySettled = true;
+        resolveStreamingReady();
+      };
       setMicConnection((current) => ({
         ...current,
         provider,
@@ -1387,6 +1479,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         },
       });
       const handleOpen = () => {
+        markStreamingReady();
         setMicConnection((current) => ({
           ...current,
           provider,
@@ -1406,6 +1499,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         });
       };
       const handleError = (message: string) => {
+        markStreamingReady();
         console.warn("[sandbox] streaming STT error", message);
         setMicConnection((current) => ({
           ...current,
@@ -1469,6 +1563,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
 
       void startPromise
         .catch((err) => {
+          markStreamingReady();
           console.warn(
             "[sandbox] streaming STT start failed; blob STT fallback remains active",
             err,
@@ -1493,10 +1588,25 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             },
           });
         });
-      micOnRef.current = true;
-      voiceStateRef.current = "listening";
-      setMicOn(true);
-      setVoiceState("listening");
+      if (gated) {
+        micOnRef.current = false;
+        voiceStateRef.current = "idle";
+        setMicOn(false);
+        setVoiceState("idle");
+      } else {
+        sceneInputEnabledRef.current = true;
+        micOnRef.current = true;
+        voiceStateRef.current = "listening";
+        setMicOn(true);
+        setVoiceState("listening");
+      }
+      await new Promise<void>((resolve) => {
+        const timeout = window.setTimeout(resolve, 5_000);
+        void streamingReady.then(() => {
+          window.clearTimeout(timeout);
+          resolve();
+        });
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMicConnection((current) => ({
@@ -1678,11 +1788,12 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   // streaming after the user navigates away.
   useEffect(() => {
     return () => {
+      launchSequenceRef.current += 1;
+      launchInProgressRef.current = false;
+      sceneInputEnabledRef.current = false;
       abortRef.current?.abort();
       pcmPlayerRef.current?.stop();
       pcmPlayerRef.current = null;
-      entryCueRef.current?.stop();
-      entryCueRef.current = null;
       void audioCtxRef.current?.close().catch(() => {});
       audioCtxRef.current = null;
       stopRecorder();
@@ -1782,7 +1893,6 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
             sessionError={sessionError}
             onStart={handleStart}
             onCancel={handleCancel}
-            heroBackground={<SandboxWavefieldCell audioData={waveAudioRef.current} />}
           />
         ) : phase === "post-session" && endedSession ? (
           <SandboxPostSession
@@ -1807,6 +1917,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
           >
             <SandboxWavefieldCell audioData={waveAudioRef.current} />
             <div
+              aria-hidden={phase !== "live" && !introForegroundVisible}
               style={{
                 position: "relative",
                 zIndex: 1,
@@ -1814,6 +1925,17 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                 minHeight: 0,
                 display: "flex",
                 flexDirection: "column",
+                visibility:
+                  phase === "live" || introForegroundVisible
+                    ? "visible"
+                    : "hidden",
+                opacity: phase === "live" || introForegroundVisible ? 1 : 0,
+                filter:
+                  phase === "live" || introForegroundVisible
+                    ? "blur(0px)"
+                    : "blur(10px)",
+                transition:
+                  "opacity 1500ms cubic-bezier(.22,.61,.36,1), filter 1500ms cubic-bezier(.22,.61,.36,1)",
               }}
             >
               <TelemetryStrip
@@ -1845,13 +1967,12 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                 />
               )}
             </div>
-            <SessionEntryTransition
-              active={entryTransitionActive}
-              onStart={handleEntryTransitionStart}
-              onComplete={() => {
-                entryCueRef.current?.fadeOut();
-                setEntryTransitionActive(false);
-              }}
+            <SessionIntroExperience
+              ref={introExperienceRef}
+              active={introActive}
+              readyToReveal={introSystemsReady}
+              onForegroundReveal={() => setIntroForegroundVisible(true)}
+              onComplete={() => void handleEntryTransitionComplete()}
             />
           </div>
         )}
@@ -1889,7 +2010,7 @@ function SandboxWavefieldCell({
         pointerEvents: "none",
       }}
     >
-      <WavefieldStage audioData={audioData} idleMotion="static" />
+      <WavefieldStage audioData={audioData} idleMotion="ambient" />
     </div>
   );
 }
