@@ -511,6 +511,9 @@ function buildOrchestratorSystemPrompt(
     roster,
     "",
     `Current situation: ${state.beat}`,
+    ...(state.directorNote
+      ? [`Director's note (your own earlier reflection): ${state.directorNote}`]
+      : []),
     state.lastSpeakerSlug
       ? `Last to speak: ${state.lastSpeakerSlug}`
       : "Scene has just opened.",

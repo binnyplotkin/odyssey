@@ -171,6 +171,11 @@ export const sceneStateSchema = z.object({
   // orchestrator to avoid repeating the same speaker by default — it can
   // still pick them again if the beat demands it.
   lastSpeakerSlug: z.string().nullable(),
+  // The dramaturg's latest reflection — a short director's note written
+  // ASYNC (off the voice hot path) by a stronger model reviewing goal
+  // progress. The fast per-turn director reads it as its own memory.
+  // Latest wins; carried forward by decision application until replaced.
+  directorNote: z.string().min(1).max(400).optional(),
   // Monotonic counter — incremented on every orchestration decision so we
   // can correlate decisions with the turns they spawned.
   turnIndex: z.number().int().min(0),
