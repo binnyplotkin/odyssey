@@ -19,6 +19,12 @@ ENV HOME=/app \
     NODE_ENV=production \
     PORT=8080
 
+# onnxruntime-node's postinstall downloads CUDA EP binaries from a Microsoft CDN
+# on linux/x64 — useless on this CPU-only host and a build-breaking network
+# dependency (ETIMEDOUT kills `npm ci`). The CPU binaries are bundled in the npm
+# package; skip the download. The prewarm below still smoke-tests the dlopen path.
+ENV ONNXRUNTIME_NODE_INSTALL=skip
+
 WORKDIR /app
 
 # The root .dockerignore strips node_modules/.next/.git, so this copies sources
