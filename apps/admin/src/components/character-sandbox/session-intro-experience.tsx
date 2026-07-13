@@ -14,6 +14,7 @@ const INTRO_POSTER_URL =
   "/session-entry-video/kawabunga-intro-poster.jpg?v=1";
 export const SESSION_INTRO_TIMELINE = Object.freeze({
   portalProgress: 1,
+  entryCrossfadeMs: 180,
   illuminationAtSeconds: 1.2,
   whiteoutAtSeconds: 3,
   foregroundRevealAtSeconds: 4.2,
@@ -64,6 +65,7 @@ export const SessionIntroExperience = forwardRef<
     active: boolean;
     readyToReveal: boolean;
     onComplete: () => void;
+    onFirstFrame?: () => void;
     onForegroundReveal?: () => void;
     onPlaybackStateChange?: (state: SessionIntroPlaybackState) => void;
     onProgress?: (sample: SessionIntroProgress) => void;
@@ -73,6 +75,7 @@ export const SessionIntroExperience = forwardRef<
     active,
     readyToReveal,
     onComplete,
+    onFirstFrame,
     onForegroundReveal,
     onPlaybackStateChange,
     onProgress,
@@ -84,13 +87,16 @@ export const SessionIntroExperience = forwardRef<
   const whiteoutRef = useRef<HTMLDivElement | null>(null);
   const videoFrameRef = useRef<number | null>(null);
   const fallbackFrameRef = useRef<number | null>(null);
+  const sceneCoverTimerRef = useRef<number | null>(null);
   const frameGenerationRef = useRef(0);
+  const playbackStartedAtRef = useRef(0);
   const waitingAtEndRef = useRef(false);
   const exitingRef = useRef(false);
   const firstFramePresentedRef = useRef(false);
   const foregroundRevealedRef = useRef(false);
   const readyToRevealRef = useRef(readyToReveal);
   const onCompleteRef = useRef(onComplete);
+  const onFirstFrameRef = useRef(onFirstFrame);
   const onForegroundRevealRef = useRef(onForegroundReveal);
   const onPlaybackStateChangeRef = useRef(onPlaybackStateChange);
   const onProgressRef = useRef(onProgress);
@@ -99,11 +105,13 @@ export const SessionIntroExperience = forwardRef<
   useLayoutEffect(() => {
     readyToRevealRef.current = readyToReveal;
     onCompleteRef.current = onComplete;
+    onFirstFrameRef.current = onFirstFrame;
     onForegroundRevealRef.current = onForegroundReveal;
     onPlaybackStateChangeRef.current = onPlaybackStateChange;
     onProgressRef.current = onProgress;
   }, [
     onComplete,
+    onFirstFrame,
     onForegroundReveal,
     onPlaybackStateChange,
     onProgress,
@@ -115,6 +123,10 @@ export const SessionIntroExperience = forwardRef<
     if (fallbackFrameRef.current !== null) {
       window.cancelAnimationFrame(fallbackFrameRef.current);
       fallbackFrameRef.current = null;
+    }
+    if (sceneCoverTimerRef.current !== null) {
+      window.clearTimeout(sceneCoverTimerRef.current);
+      sceneCoverTimerRef.current = null;
     }
     const video = videoRef.current;
     if (videoFrameRef.current !== null && video?.cancelVideoFrameCallback) {
@@ -195,12 +207,24 @@ export const SessionIntroExperience = forwardRef<
         if (generation !== frameGenerationRef.current || video.ended) return;
         const handleFrame = (mediaTime: number) => {
           if (generation !== frameGenerationRef.current) return;
-          if (!firstFramePresentedRef.current) {
+          const isFirstFrame = !firstFramePresentedRef.current;
+          if (isFirstFrame) {
             firstFramePresentedRef.current = true;
-            if (posterRef.current) posterRef.current.style.opacity = "0";
           }
           const duration = Number.isFinite(video.duration) ? video.duration : 0;
           updateVisuals(mediaTime, duration);
+          if (isFirstFrame) {
+            if (posterRef.current) posterRef.current.style.opacity = "0";
+            const elapsed = performance.now() - playbackStartedAtRef.current;
+            const coverDelay = Math.max(
+              0,
+              SESSION_INTRO_TIMELINE.entryCrossfadeMs - elapsed,
+            );
+            sceneCoverTimerRef.current = window.setTimeout(() => {
+              sceneCoverTimerRef.current = null;
+              onFirstFrameRef.current?.();
+            }, coverDelay);
+          }
           schedule();
         };
         if (typeof video.requestVideoFrameCallback === "function") {
@@ -234,10 +258,11 @@ export const SessionIntroExperience = forwardRef<
     setExiting(false);
     if (posterRef.current) posterRef.current.style.opacity = "1";
     video.style.opacity = "0";
-    video.currentTime = 0;
+    if (video.ended || video.currentTime > 0.01) video.currentTime = 0;
     video.volume = 1;
     updateVisuals(0, video.duration);
     const generation = frameGenerationRef.current;
+    playbackStartedAtRef.current = performance.now();
 
     try {
       await video.play();
@@ -307,9 +332,12 @@ export const SessionIntroExperience = forwardRef<
         inset: 0,
         zIndex: 5,
         overflow: "hidden",
-        pointerEvents: "auto",
         background: "transparent",
-        display: active ? "block" : "none",
+        display: "block",
+        opacity: active ? 1 : 0,
+        pointerEvents: active ? "auto" : "none",
+        transition: `opacity ${SESSION_INTRO_TIMELINE.entryCrossfadeMs}ms ease-out`,
+        willChange: "opacity",
       }}
     >
       <div

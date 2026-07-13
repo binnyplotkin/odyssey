@@ -341,7 +341,6 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     sceneInputEnabledRef.current = false;
     setIntroSystemsReady(false);
     flushSync(() => {
-      setPhase("intro");
       setIntroActive(true);
       setIntroForegroundVisible(false);
       setTurns([]);
@@ -1967,16 +1966,17 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                 />
               )}
             </div>
-            <SessionIntroExperience
-              ref={introExperienceRef}
-              active={introActive}
-              readyToReveal={introSystemsReady}
-              onForegroundReveal={() => setIntroForegroundVisible(true)}
-              onComplete={() => void handleEntryTransitionComplete()}
-            />
           </div>
         )}
       </div>
+      <SessionIntroExperience
+        ref={introExperienceRef}
+        active={introActive}
+        readyToReveal={introSystemsReady}
+        onFirstFrame={() => setPhase("intro")}
+        onForegroundReveal={() => setIntroForegroundVisible(true)}
+        onComplete={() => void handleEntryTransitionComplete()}
+      />
       <SandboxTraceDrawer
         open={debugOpen}
         phase={phase}
