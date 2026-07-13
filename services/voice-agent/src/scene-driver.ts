@@ -16,6 +16,7 @@ import {
   defaultSceneDecision,
   getScene,
   PROACTIVE_SILENCE_MARKER,
+  expandLandedBeats,
   matchArcLabel,
   parseDramaturgReflection,
   resolveOrchestratorExecutor,
@@ -251,24 +252,26 @@ export class SceneDriver {
       .then((response) => {
         const { note, landed } = parseDramaturgReflection(response.text);
         // Validate landed labels against the authored arc (tolerant match →
-        // canonical label), merge with prior state in arc order.
+        // canonical label), then expand: the arc is ordered, so a later beat
+        // landing implies every earlier beat landed too (the dramaturg often
+        // marks only the beat that just happened).
         const arcLabels = (this.scene.arc ?? []).map((b) => b.label);
         const already = new Set(
           (this.#sceneState.arcLanded ?? []).map((l) => l.toLowerCase()),
         );
-        const newlyLanded = landed
+        const validated = landed
           .map((raw) => matchArcLabel(raw, arcLabels))
-          .filter((l): l is string => !!l && !already.has(l.toLowerCase()));
+          .filter((l): l is string => !!l);
+        const mergedLanded = expandLandedBeats(
+          [...(this.#sceneState.arcLanded ?? []), ...validated],
+          arcLabels,
+        );
+        const newlyLanded = mergedLanded.filter((l) => !already.has(l.toLowerCase()));
         if (!note && newlyLanded.length === 0) return;
 
         for (const label of newlyLanded) {
           console.log(`[dramaturg] beat landed: ${label}`);
         }
-        const mergedLanded = arcLabels.filter(
-          (l) =>
-            already.has(l.toLowerCase()) ||
-            newlyLanded.some((n) => n.toLowerCase() === l.toLowerCase()),
-        );
         // Race-safe: decisions may have advanced #sceneState while we
         // reflected — we only write our own fields, onto whatever the
         // CURRENT state is.

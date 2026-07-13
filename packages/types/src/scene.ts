@@ -31,6 +31,10 @@ export const sceneCharacterSchema = z.object({
   motivations: z.string().min(1).max(400).optional(),
   /** Their resting emotional state: "guarded", "hopeful"… */
   emotionalBaseline: z.string().min(1).optional(),
+  /** HOW they speak in this scene (imagery, cadence, deflections) — rides
+   *  the per-turn directive as "Your manner in this scene". Scene-local
+   *  color on top of the character's global voice envelope. */
+  speakingStyle: z.string().min(1).max(400).optional(),
   /** Condition → behavior pairs the director (and character) can act on. */
   behaviorTriggers: z
     .array(
