@@ -1147,8 +1147,8 @@ function SceneSettingsInspector({
           >
             <option value="" disabled>
               {librarySounds.length === 0
-                ? "Sound library is empty — add sounds at /sounds"
-                : "Pick a sound from the library"}
+                ? "Enviro sounds library is empty - add enviro sounds at /sounds"
+                : "Pick an enviro sound from the library"}
             </option>
             {librarySounds.map((sound) => (
               <option key={sound.id} value={sound.id}>
@@ -1389,7 +1389,7 @@ function GraphNodeInspector({
       )}
       {node.kind === "audio" && (
         <Link href="/sounds" style={subtleLinkStyle}>
-          open sound library
+          open enviro sounds library
         </Link>
       )}
       <Field label="Label">

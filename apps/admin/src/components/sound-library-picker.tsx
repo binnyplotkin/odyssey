@@ -295,7 +295,7 @@ export function SoundLibraryPicker({ currentSlug, sounds, onChange }: Props) {
             >
               <input
                 type="text"
-                placeholder="search sounds…"
+                placeholder="search enviro sounds..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 autoFocus
@@ -394,7 +394,7 @@ export function SoundLibraryPicker({ currentSlug, sounds, onChange }: Props) {
               ))}
               {filtered.length === 0 && (
                 <div style={{ padding: "20px 14px", fontFamily: FONT_BODY, fontSize: "var(--font-size-base)", color: "var(--text-tertiary)", textAlign: "center" }}>
-                  No sounds match{search ? ` "${search}"` : ""}.
+                  No enviro sounds match{search ? ` "${search}"` : ""}.
                 </div>
               )}
             </div>
@@ -425,7 +425,7 @@ export function SoundLibraryPicker({ currentSlug, sounds, onChange }: Props) {
                   textDecoration: "none",
                 }}
               >
-                manage sounds
+                manage enviro sounds
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M7 17 17 7" />
                   <path d="M7 7h10v10" />

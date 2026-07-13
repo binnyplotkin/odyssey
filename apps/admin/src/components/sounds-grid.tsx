@@ -274,7 +274,7 @@ export function SoundsGrid({ sounds }: Props) {
               boxShadow: `0 0 8px ${ACCENT}`,
             }}
           />
-          Sounds · Ready to populate
+          Enviro Sounds · Ready to populate
         </div>
         <h2
           style={{
@@ -287,7 +287,7 @@ export function SoundsGrid({ sounds }: Props) {
             textAlign: "center",
           }}
         >
-          Your sound library is empty
+          Your enviro sounds library is empty
         </h2>
         <p
           style={{
@@ -322,7 +322,7 @@ export function SoundsGrid({ sounds }: Props) {
             cursor: "pointer",
           }}
         >
-          + Add your first sound
+          + Add your first enviro sound
         </button>
         <SoundCreateDialog
           open={createOpen}
@@ -393,7 +393,7 @@ export function SoundsGrid({ sounds }: Props) {
             </svg>
             <input
               type="text"
-              placeholder="search sounds…"
+              placeholder="search enviro sounds..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
