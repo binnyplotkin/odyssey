@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import type { CSSProperties, FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import {
   Background,
@@ -38,11 +38,17 @@ import {
   AdminRightRail,
   AdminStatusPill,
   adminTokens,
+  RailResizeHandle,
+  useResizableRail,
 } from "@/components/admin-ui";
 import { CharacterNodeCard } from "@/components/character-node-card";
+import { EditableText } from "@/components/editable-text";
+import { Menu } from "@/components/menu";
 import { Pathname } from "@/components/pathname";
+import { TabBar, type TabItem } from "@/components/tab-bar";
 import { useHeaderContent } from "@/components/header-context";
 import { VoiceLibraryPicker, type PickerVoice } from "@/components/voice-library-picker";
+import { resolveAvatarGradient } from "@/lib/avatar-gradients";
 import { DEFAULT_CHAT_MODEL } from "@/lib/model-registry";
 
 const ROOT_NODE_ID = "__scene";
@@ -113,7 +119,7 @@ export function SceneEditor({
 }: SceneEditorProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [saved, setSaved] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(ROOT_NODE_ID);
 
@@ -172,45 +178,64 @@ export function SceneEditor({
     [graphNodes, selectedNodeId],
   );
 
-  const saveConfig = useCallback(
-    (event?: FormEvent) => {
-      event?.preventDefault();
-      setSaved(false);
-      start(async () => {
-        const res = await updateSceneConfig(scene.id, {
-          title: title.trim(),
-          prompt,
-          status,
-          openingBeat,
-          defaultAmbience: defaultAmbience.trim() || null,
-          narratorVoiceId,
-          objective: objective.trim() || null,
-          drive: drive === "balanced" ? null : drive,
-        });
-        if (res.ok) setSaved(true);
-        router.refresh();
+  const saveConfig = useCallback(() => {
+    start(async () => {
+      const res = await updateSceneConfig(scene.id, {
+        title: title.trim(),
+        prompt,
+        status,
+        openingBeat,
+        defaultAmbience: defaultAmbience.trim() || null,
+        narratorVoiceId,
+        objective: objective.trim() || null,
+        drive: drive === "balanced" ? null : drive,
       });
-    },
-    [
-      defaultAmbience,
-      narratorVoiceId,
-      openingBeat,
-      objective,
-      drive,
-      prompt,
-      router,
-      scene.id,
-      status,
-      title,
-    ],
-  );
+      if (res.ok) setSavedAt(Date.now());
+      router.refresh();
+    });
+  }, [
+    defaultAmbience,
+    narratorVoiceId,
+    openingBeat,
+    objective,
+    drive,
+    prompt,
+    router,
+    scene.id,
+    status,
+    title,
+  ]);
+
+  /* Auto-save the scene config — the sidebar has no save button (parity
+   * with the character config sidebar). Debounced 900ms past the last edit;
+   * the snapshot ref keeps the mount (and post-save refresh) from
+   * re-triggering a write. */
+  const configSnapshot = JSON.stringify([
+    title,
+    prompt,
+    status,
+    openingBeat,
+    defaultAmbience,
+    narratorVoiceId,
+    objective,
+    drive,
+  ]);
+  const savedConfigSnapshot = useRef(configSnapshot);
+  useEffect(() => {
+    if (configSnapshot === savedConfigSnapshot.current) return;
+    const timer = setTimeout(() => {
+      savedConfigSnapshot.current = configSnapshot;
+      saveConfig();
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [configSnapshot, saveConfig]);
 
   const saveTitle = useCallback(
     async (next: string) => {
       setTitle(next);
       const res = await updateSceneConfig(scene.id, { title: next.trim() });
       if (res.ok) {
-        setSaved(true);
+        setSavedAt(Date.now());
         router.refresh();
       }
     },
@@ -350,7 +375,7 @@ export function SceneEditor({
           key={selectedNodeId ?? "none"}
           sceneId={scene.id}
           pending={pending}
-          saved={saved}
+          savedAt={savedAt}
           selectedNode={selectedGraphNode}
           selectedCharacter={
             selectedGraphNode?.kind === "character" && selectedGraphNode.refId
@@ -377,7 +402,7 @@ export function SceneEditor({
           librarySounds={librarySounds}
           voiceOptions={voiceOptions}
           onSceneChange={{
-            setTitle,
+            setTitle: saveTitle,
             setPrompt,
             setStatus,
             setOpeningBeat,
@@ -385,7 +410,6 @@ export function SceneEditor({
             setNarratorVoiceId,
             setObjective,
             setDrive,
-            saveConfig,
           }}
           onAddCharacter={addCharacter}
           onAddAudio={addAudio}
@@ -876,7 +900,7 @@ function SceneGraphNode({
 function SceneInspector({
   sceneId,
   pending,
-  saved,
+  savedAt,
   selectedNode,
   selectedCharacter,
   selectedSound,
@@ -894,7 +918,7 @@ function SceneInspector({
 }: {
   sceneId: string;
   pending: boolean;
-  saved: boolean;
+  savedAt: number | null;
   selectedNode: SceneGraphPayload["nodes"][number] | null;
   selectedCharacter: SceneLibraryCharacter | null;
   selectedSound: SceneLibrarySound | null;
@@ -913,7 +937,7 @@ function SceneInspector({
   librarySounds: SceneLibrarySound[];
   voiceOptions: PickerVoice[];
   onSceneChange: {
-    setTitle: (next: string) => void;
+    setTitle: (next: string) => void | Promise<void>;
     setPrompt: (next: string) => void;
     setStatus: (next: SceneEditorProps["scene"]["status"]) => void;
     setOpeningBeat: (next: string) => void;
@@ -921,7 +945,6 @@ function SceneInspector({
     setNarratorVoiceId: (next: string | null) => void;
     setObjective: (next: string) => void;
     setDrive: (next: "gentle" | "balanced" | "insistent") => void;
-    saveConfig: (event?: FormEvent) => void;
   };
   onAddCharacter: (characterId: string) => void;
   onAddAudio: (input: {
@@ -937,8 +960,21 @@ function SceneInspector({
     patch: Partial<SceneGraphPayload["nodes"][number]>,
   ) => void;
 }) {
+  /* Same rail behavior as the character config sidebar: 480px floor,
+   * 720px cap, width persisted per browser. */
+  const { railRef, width, isResizing, onResizeStart } = useResizableRail({
+    storageKey: "scene-inspector-sidebar-width",
+    minWidth: 480,
+    maxWidth: 720,
+  });
+
   return (
-    <AdminRightRail width={430}>
+    <AdminRightRail
+      ref={railRef}
+      width={width}
+      style={{ transition: isResizing ? "none" : "width 160ms ease" }}
+    >
+      <RailResizeHandle isResizing={isResizing} onResizeStart={onResizeStart} />
       {selectedNode ? (
         <GraphNodeInspector
           sceneId={sceneId}
@@ -952,7 +988,7 @@ function SceneInspector({
       ) : (
         <SceneSettingsInspector
           pending={pending}
-          saved={saved}
+          savedAt={savedAt}
           scene={scene}
           rosterCount={rosterCount}
           addableCharacters={addableCharacters}
@@ -970,7 +1006,7 @@ function SceneInspector({
 
 function SceneSettingsInspector({
   pending,
-  saved,
+  savedAt,
   scene,
   rosterCount,
   addableCharacters,
@@ -982,7 +1018,7 @@ function SceneSettingsInspector({
   onAddEvent,
 }: {
   pending: boolean;
-  saved: boolean;
+  savedAt: number | null;
   scene: {
     title: string;
     prompt: string;
@@ -998,7 +1034,7 @@ function SceneSettingsInspector({
   librarySounds: SceneLibrarySound[];
   voiceOptions: PickerVoice[];
   onSceneChange: {
-    setTitle: (next: string) => void;
+    setTitle: (next: string) => void | Promise<void>;
     setPrompt: (next: string) => void;
     setStatus: (next: SceneEditorProps["scene"]["status"]) => void;
     setOpeningBeat: (next: string) => void;
@@ -1006,7 +1042,6 @@ function SceneSettingsInspector({
     setNarratorVoiceId: (next: string | null) => void;
     setObjective: (next: string) => void;
     setDrive: (next: "gentle" | "balanced" | "insistent") => void;
-    saveConfig: (event?: FormEvent) => void;
   };
   onAddCharacter: (characterId: string) => void;
   onAddAudio: (input: {
@@ -1017,6 +1052,7 @@ function SceneSettingsInspector({
   }) => void;
   onAddEvent: (input: { label: string; summary?: string }) => void;
 }) {
+  const [tab, setTab] = useState<"scene" | "cast" | "arc">("scene");
   const [audioAssetId, setAudioAssetId] = useState("");
   const [audioRole, setAudioRole] = useState<"bed" | "oneshot">("bed");
   const [audioDefault, setAudioDefault] = useState(false);
@@ -1038,193 +1074,254 @@ function SceneSettingsInspector({
     setAudioTriggerHint("");
   };
 
+  const tabs: Array<TabItem<"scene" | "cast" | "arc">> = [
+    { key: "scene", label: "Scene", onClick: () => setTab("scene") },
+    { key: "cast", label: "Cast & sound", onClick: () => setTab("cast") },
+    { key: "arc", label: "Arc", onClick: () => setTab("arc") },
+  ];
+
   return (
-    <form onSubmit={onSceneChange.saveConfig} style={inspectorFormStyle}>
-      <InspectorHeader eyebrow="scene" title={scene.title} meta={`${rosterCount} cast nodes`} />
-      <Field label="Title">
-        <input
-          value={scene.title}
-          onChange={(event) => onSceneChange.setTitle(event.target.value)}
-          style={inputStyle}
-        />
-      </Field>
-      <Field label="Description / premise">
-        <textarea
-          value={scene.prompt}
-          onChange={(event) => onSceneChange.setPrompt(event.target.value)}
-          rows={4}
-          placeholder="1-3 sentences the orchestrator reads to understand the setting."
-          style={textareaStyle}
-        />
-      </Field>
-      <Field label="Opening beat">
-        <input
-          value={scene.openingBeat}
-          onChange={(event) => onSceneChange.setOpeningBeat(event.target.value)}
-          placeholder="The beat the scene opens on."
-          style={inputStyle}
-        />
-      </Field>
-      <Field label="Scene objective">
-        <textarea
-          value={scene.objective}
-          onChange={(event) => onSceneChange.setObjective(event.target.value)}
-          rows={2}
-          placeholder="What the scene is driving toward — the director writes beats in service of this."
-          style={textareaStyle}
-        />
-      </Field>
-      <Field label="Director drive">
-        <select
-          value={scene.drive}
-          onChange={(event) =>
-            onSceneChange.setDrive(
-              event.target.value as "gentle" | "balanced" | "insistent",
-            )
-          }
-          style={{ ...inputStyle, cursor: "pointer" }}
-        >
-          <option value="gentle">gentle — follow the user&apos;s lead</option>
-          <option value="balanced">balanced — default pacing</option>
-          <option value="insistent">insistent — press toward goals</option>
-        </select>
-      </Field>
-      <Field label="Default ambience">
-        <input
-          value={scene.defaultAmbience}
-          onChange={(event) => onSceneChange.setDefaultAmbience(event.target.value)}
-          placeholder="Ambience track id, or blank for silence."
-          style={inputStyle}
-        />
-      </Field>
-      <Field label="Narrator voice">
-        <VoiceLibraryPicker
-          currentVoiceId={scene.narratorVoiceId}
-          voices={voiceOptions}
-          onChange={onSceneChange.setNarratorVoiceId}
-        />
-      </Field>
-      <Field label="Status">
-        <select
-          value={scene.status}
-          onChange={(event) =>
-            onSceneChange.setStatus(event.target.value as SceneEditorProps["scene"]["status"])
-          }
-          style={{ ...inputStyle, cursor: "pointer" }}
-        >
-          <option value="draft">draft</option>
-          <option value="active">active</option>
-          <option value="archived">archived</option>
-        </select>
-      </Field>
-      <Field label="Add character">
-        <select
-          defaultValue=""
-          onChange={(event) => {
-            onAddCharacter(event.target.value);
-            event.target.value = "";
-          }}
-          disabled={pending || addableCharacters.length === 0}
-          style={{ ...inputStyle, cursor: "pointer" }}
-        >
-          <option value="" disabled>
-            {addableCharacters.length === 0 ? "All characters are in this scene" : "Add a character"}
-          </option>
-          {addableCharacters.map((character) => (
-            <option key={character.id} value={character.id}>
-              {character.title}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Add audio">
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
-          <select
-            value={audioAssetId}
-            onChange={(event) => setAudioAssetId(event.target.value)}
-            disabled={pending || librarySounds.length === 0}
-            style={{ ...inputStyle, cursor: "pointer" }}
+    <>
+      <InspectorShellHeader
+        tile={<InspectorTile kind="scene" />}
+        title={scene.title}
+        onTitleChange={onSceneChange.setTitle}
+        meta={`${rosterCount} cast · ${
+          pending ? "saving…" : savedAt ? `auto-saved · ${relativeTime(savedAt)}` : "auto-save on"
+        }`}
+      />
+
+      <InspectorTabBand tabs={tabs} active={tab} />
+
+      <div style={inspectorScrollStyle}>
+        {tab === "scene" && (
+          <>
+            <InspectorSection
+              title="Premise"
+              hint="What the director reads to understand the setting."
+            >
+              <Field label="Description / premise">
+                <textarea
+                  value={scene.prompt}
+                  onChange={(event) => onSceneChange.setPrompt(event.target.value)}
+                  rows={4}
+                  placeholder="1-3 sentences the orchestrator reads to understand the setting."
+                  style={textareaStyle}
+                />
+              </Field>
+              <Field label="Opening beat">
+                <input
+                  value={scene.openingBeat}
+                  onChange={(event) => onSceneChange.setOpeningBeat(event.target.value)}
+                  placeholder="The beat the scene opens on."
+                  style={inputStyle}
+                />
+              </Field>
+            </InspectorSection>
+            <InspectorSection
+              title="Direction"
+              hint="Where the scene is going, and how hard the director presses."
+            >
+              <Field label="Scene objective">
+                <textarea
+                  value={scene.objective}
+                  onChange={(event) => onSceneChange.setObjective(event.target.value)}
+                  rows={2}
+                  placeholder="What the scene is driving toward — the director writes beats in service of this."
+                  style={textareaStyle}
+                />
+              </Field>
+              <Field label="Director drive">
+                <select
+                  value={scene.drive}
+                  onChange={(event) =>
+                    onSceneChange.setDrive(
+                      event.target.value as "gentle" | "balanced" | "insistent",
+                    )
+                  }
+                  style={{ ...inputStyle, cursor: "pointer" }}
+                >
+                  <option value="gentle">gentle — follow the user&apos;s lead</option>
+                  <option value="balanced">balanced — default pacing</option>
+                  <option value="insistent">insistent — press toward goals</option>
+                </select>
+              </Field>
+            </InspectorSection>
+            <InspectorSection title="Status">
+              <Field label="Status">
+                <select
+                  value={scene.status}
+                  onChange={(event) =>
+                    onSceneChange.setStatus(
+                      event.target.value as SceneEditorProps["scene"]["status"],
+                    )
+                  }
+                  style={{ ...inputStyle, cursor: "pointer" }}
+                >
+                  <option value="draft">draft</option>
+                  <option value="active">active</option>
+                  <option value="archived">archived</option>
+                </select>
+              </Field>
+            </InspectorSection>
+          </>
+        )}
+
+        {tab === "cast" && (
+          <>
+            <InspectorSection
+              title="Cast"
+              hint="Characters join the canvas as nodes; select one to direct it."
+            >
+              <Field label="Add character">
+                <select
+                  defaultValue=""
+                  onChange={(event) => {
+                    onAddCharacter(event.target.value);
+                    event.target.value = "";
+                  }}
+                  disabled={pending || addableCharacters.length === 0}
+                  style={{ ...inputStyle, cursor: "pointer" }}
+                >
+                  <option value="" disabled>
+                    {addableCharacters.length === 0
+                      ? "All characters are in this scene"
+                      : "Add a character"}
+                  </option>
+                  {addableCharacters.map((character) => (
+                    <option key={character.id} value={character.id}>
+                      {character.title}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Narrator voice">
+                <VoiceLibraryPicker
+                  currentVoiceId={scene.narratorVoiceId}
+                  voices={voiceOptions}
+                  onChange={onSceneChange.setNarratorVoiceId}
+                />
+              </Field>
+            </InspectorSection>
+            <InspectorSection
+              title="Sound"
+              hint="Beds loop under the scene; one-shots wait for a director cue."
+            >
+              <Field label="Add audio">
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}
+                >
+                  <select
+                    value={audioAssetId}
+                    onChange={(event) => setAudioAssetId(event.target.value)}
+                    disabled={pending || librarySounds.length === 0}
+                    style={{ ...inputStyle, cursor: "pointer" }}
+                  >
+                    <option value="" disabled>
+                      {librarySounds.length === 0
+                        ? "Enviro sounds library is empty - add enviro sounds at /sounds"
+                        : "Pick an enviro sound from the library"}
+                    </option>
+                    {librarySounds.map((sound) => (
+                      <option key={sound.id} value={sound.id}>
+                        {sound.name}
+                        {sound.status !== "ready" ? " (needs processing)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={audioRole}
+                    onChange={(event) =>
+                      setAudioRole(event.target.value as "bed" | "oneshot")
+                    }
+                    style={{ ...inputStyle, cursor: "pointer" }}
+                  >
+                    <option value="bed">bed — looping ambience</option>
+                    <option value="oneshot">one-shot — cueable effect</option>
+                  </select>
+                  <input
+                    value={audioTriggerHint}
+                    onChange={(event) => setAudioTriggerHint(event.target.value)}
+                    placeholder="Cue hint for the director, optional"
+                    style={inputStyle}
+                  />
+                  {audioRole === "bed" && (
+                    <label style={checkboxRowStyle}>
+                      <input
+                        type="checkbox"
+                        checked={audioDefault}
+                        onChange={(event) => setAudioDefault(event.target.checked)}
+                      />
+                      Default background bed
+                    </label>
+                  )}
+                  <AdminButton
+                    type="button"
+                    variant="secondary"
+                    disabled={pending || !audioAssetId}
+                    onClick={addAudio}
+                  >
+                    Add audio
+                  </AdminButton>
+                </div>
+              </Field>
+              <Field label="Default ambience (legacy track id)">
+                <input
+                  value={scene.defaultAmbience}
+                  onChange={(event) =>
+                    onSceneChange.setDefaultAmbience(event.target.value)
+                  }
+                  placeholder="Ambience track id, or blank for silence."
+                  style={inputStyle}
+                />
+              </Field>
+            </InspectorSection>
+          </>
+        )}
+
+        {tab === "arc" && (
+          <InspectorSection
+            title="Arc"
+            hint="Ordered beats the dramaturg tracks; landed beats advance the director."
           >
-            <option value="" disabled>
-              {librarySounds.length === 0
-                ? "Enviro sounds library is empty - add enviro sounds at /sounds"
-                : "Pick an enviro sound from the library"}
-            </option>
-            {librarySounds.map((sound) => (
-              <option key={sound.id} value={sound.id}>
-                {sound.name}
-                {sound.status !== "ready" ? " (needs processing)" : ""}
-              </option>
-            ))}
-          </select>
-          <select
-            value={audioRole}
-            onChange={(event) => setAudioRole(event.target.value as "bed" | "oneshot")}
-            style={{ ...inputStyle, cursor: "pointer" }}
-          >
-            <option value="bed">bed — looping ambience</option>
-            <option value="oneshot">one-shot — cueable effect</option>
-          </select>
-          <input
-            value={audioTriggerHint}
-            onChange={(event) => setAudioTriggerHint(event.target.value)}
-            placeholder="Cue hint for the director, optional"
-            style={inputStyle}
-          />
-          {audioRole === "bed" && (
-            <label style={checkboxRowStyle}>
-              <input
-                type="checkbox"
-                checked={audioDefault}
-                onChange={(event) => setAudioDefault(event.target.checked)}
-              />
-              Default background bed
-            </label>
-          )}
-          <AdminButton
-            type="button"
-            variant="secondary"
-            disabled={pending || !audioAssetId}
-            onClick={addAudio}
-          >
-            Add audio
-          </AdminButton>
-        </div>
-      </Field>
-      <Field label="Add arc beat">
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
-          <input
-            value={beatLabel}
-            onChange={(event) => setBeatLabel(event.target.value)}
-            placeholder="Beat name, e.g. Sarah's laugh — and the denial"
-            style={inputStyle}
-          />
-          <textarea
-            value={beatSummary}
-            onChange={(event) => setBeatSummary(event.target.value)}
-            rows={2}
-            placeholder="What it looks like when this beat lands (optional)."
-            style={textareaStyle}
-          />
-          <AdminButton
-            type="button"
-            variant="secondary"
-            disabled={pending || !beatLabel.trim()}
-            onClick={() => {
-              onAddEvent({
-                label: beatLabel.trim(),
-                summary: beatSummary.trim() || undefined,
-              });
-              setBeatLabel("");
-              setBeatSummary("");
-            }}
-          >
-            Add arc beat
-          </AdminButton>
-        </div>
-      </Field>
-      <InspectorFooter pending={pending} saved={saved} />
-    </form>
+            <Field label="Add arc beat">
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}
+              >
+                <input
+                  value={beatLabel}
+                  onChange={(event) => setBeatLabel(event.target.value)}
+                  placeholder="Beat name, e.g. Sarah's laugh — and the denial"
+                  style={inputStyle}
+                />
+                <textarea
+                  value={beatSummary}
+                  onChange={(event) => setBeatSummary(event.target.value)}
+                  rows={2}
+                  placeholder="What it looks like when this beat lands (optional)."
+                  style={textareaStyle}
+                />
+                <AdminButton
+                  type="button"
+                  variant="secondary"
+                  disabled={pending || !beatLabel.trim()}
+                  onClick={() => {
+                    onAddEvent({
+                      label: beatLabel.trim(),
+                      summary: beatSummary.trim() || undefined,
+                    });
+                    setBeatLabel("");
+                    setBeatSummary("");
+                  }}
+                >
+                  Add arc beat
+                </AdminButton>
+              </div>
+            </Field>
+          </InspectorSection>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1248,6 +1345,8 @@ function GraphNodeInspector({
     patch: Partial<SceneGraphPayload["nodes"][number]>,
   ) => void;
 }) {
+  const router = useRouter();
+  const [tab, setTab] = useState<"casting" | "intention" | "knowledge">("casting");
   const [label, setLabel] = useState(node.label);
   const [summary, setSummary] = useState(node.summary ?? "");
   const [roleInScene, setRoleInScene] = useState(asString(node.data.roleInScene));
@@ -1295,12 +1394,10 @@ function GraphNodeInspector({
   const [eventTimeIndex, setEventTimeIndex] = useState(
     typeof node.data.timeIndex === "number" ? String(node.data.timeIndex) : "0",
   );
-  const [saved, setSaved] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saving, startSaving] = useTransition();
 
-  const saveNode = (event?: FormEvent) => {
-    event?.preventDefault();
-    setSaved(false);
+  const saveNode = useCallback(() => {
     const parsedGain = Number(audioGainDb);
     const cleanedTriggers = behaviorTriggers
       .map((t) => ({ condition: t.condition.trim(), behavior: t.behavior.trim() }))
@@ -1359,7 +1456,7 @@ function GraphNodeInspector({
         data: nextData,
       });
       if (res.ok) {
-        setSaved(true);
+        setSavedAt(Date.now());
         onNodeSaved(node.id, {
           label: label.trim() || node.label,
           summary: summary.trim() || null,
@@ -1367,151 +1464,269 @@ function GraphNodeInspector({
         });
       }
     });
-  };
+  }, [
+    ambienceDescription,
+    archetype,
+    audioGainDb,
+    audioRole,
+    audioTriggerHint,
+    behaviorTriggers,
+    emotionalBaseline,
+    eventTimeIndex,
+    horizonEra,
+    horizonIndex,
+    isDefaultAmbience,
+    label,
+    motivations,
+    node,
+    onNodeSaved,
+    roleInScene,
+    sceneId,
+    speakingStyle,
+    summary,
+    trackId,
+  ]);
+
+  /* Auto-save — no save button, matching the character config sidebar.
+   * Debounced 900ms past the last edit; the snapshot ref stops the mount
+   * from writing before anything changed. */
+  const fieldSnapshot = JSON.stringify([
+    label,
+    summary,
+    roleInScene,
+    archetype,
+    emotionalBaseline,
+    motivations,
+    speakingStyle,
+    behaviorTriggers,
+    horizonEra,
+    horizonIndex,
+    trackId,
+    ambienceDescription,
+    isDefaultAmbience,
+    audioRole,
+    audioTriggerHint,
+    audioGainDb,
+    eventTimeIndex,
+  ]);
+  const savedFieldSnapshot = useRef(fieldSnapshot);
+  useEffect(() => {
+    if (fieldSnapshot === savedFieldSnapshot.current) return;
+    const timer = setTimeout(() => {
+      savedFieldSnapshot.current = fieldSnapshot;
+      saveNode();
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [fieldSnapshot, saveNode]);
+
+  const metaSlug = character
+    ? character.slug
+    : sound
+      ? sound.slug
+      : asString(node.data.trackId) || (node.refId ?? "native node");
+  const saveState = saving || pending
+    ? "saving…"
+    : savedAt
+      ? `auto-saved · ${relativeTime(savedAt)}`
+      : "auto-save on";
+
+  const menuItems = [
+    ...(character
+      ? [{ value: "open-character", label: "Open character", meta: character.slug }]
+      : []),
+    ...(node.kind === "audio"
+      ? [{ value: "open-sounds", label: "Open enviro sounds", meta: "library" }]
+      : []),
+    { value: "remove", label: "Remove from scene", meta: "deletes this node" },
+  ];
+
+  const characterTabs: Array<TabItem<"casting" | "intention" | "knowledge">> = [
+    { key: "casting", label: "Casting", onClick: () => setTab("casting") },
+    { key: "intention", label: "Intention", onClick: () => setTab("intention") },
+    { key: "knowledge", label: "Knowledge", onClick: () => setTab("knowledge") },
+  ];
 
   return (
-    <form onSubmit={saveNode} style={inspectorFormStyle}>
-      <InspectorHeader
-	        eyebrow={node.kind === "audio" ? `audio · ${audioRole}` : node.kind}
-	        title={sound?.name ?? label}
-	        meta={
-	          character
-	            ? character.slug
-	            : sound
-	              ? sound.slug
-	              : asString(node.data.trackId) || (node.refId ?? "native node")
-	        }
-	      />
-      {character && (
-        <Link href={`/characters/${character.slug}`} style={subtleLinkStyle}>
-          open character
-        </Link>
+    <>
+      <InspectorShellHeader
+        tile={
+          <InspectorTile
+            kind={node.kind}
+            image={character?.image ?? null}
+            gradient={
+              character
+                ? resolveAvatarGradient(character.thumbnailColor, character.slug)
+                : undefined
+            }
+            initial={(label || "•").charAt(0).toUpperCase()}
+          />
+        }
+        title={label}
+        onTitleChange={setLabel}
+        meta={`${node.kind === "audio" ? `audio · ${audioRole}` : node.kind} · ${metaSlug} · ${saveState}`}
+        menuItems={menuItems}
+        onMenuAction={(action) => {
+          if (action === "open-character" && character) {
+            router.push(`/characters/${character.slug}`);
+          } else if (action === "open-sounds") {
+            router.push("/sounds");
+          } else if (action === "remove") {
+            onRemoveCharacter(node.id);
+          }
+        }}
+      />
+
+      {node.kind === "character" && (
+        <InspectorTabBand tabs={characterTabs} active={tab} />
       )}
-      {node.kind === "audio" && (
-        <Link href="/sounds" style={subtleLinkStyle}>
-          open enviro sounds library
-        </Link>
-      )}
-      <Field label="Label">
-        <input value={label} onChange={(event) => setLabel(event.target.value)} style={inputStyle} />
-      </Field>
-      <Field label="Scene summary">
-        <textarea
-          value={summary}
-          onChange={(event) => setSummary(event.target.value)}
-          rows={3}
-          placeholder="How this node matters in this scene."
-          style={textareaStyle}
-        />
-      </Field>
-	      {node.kind === "character" && (
-	        <>
-          <Field label="Role in scene">
-            <input
-              value={roleInScene}
-              onChange={(event) => setRoleInScene(event.target.value)}
-              placeholder="Host, witness, antagonist..."
-              style={inputStyle}
-            />
-          </Field>
-          <Field label="Archetype">
-            <input
-              value={archetype}
-              onChange={(event) => setArchetype(event.target.value)}
-              placeholder="Reluctant matriarch, anxious servant..."
-              style={inputStyle}
-            />
-          </Field>
-          <Field label="Emotional baseline">
-            <input
-              value={emotionalBaseline}
-              onChange={(event) => setEmotionalBaseline(event.target.value)}
-              placeholder="Guarded, hopeful, defensive..."
-              style={inputStyle}
-            />
-          </Field>
-          <Field label="Motivations">
-            <textarea
-              value={motivations}
-              onChange={(event) => setMotivations(event.target.value)}
-              rows={3}
-              style={textareaStyle}
-            />
-          </Field>
-          <Field label="Speaking style">
-            <textarea
-              value={speakingStyle}
-              onChange={(event) => setSpeakingStyle(event.target.value)}
-              rows={3}
-              style={textareaStyle}
-            />
-          </Field>
-          <Field label="Behavior triggers (condition → behavior)">
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
-              {behaviorTriggers.map((trigger, index) => (
-                <div
-                  key={index}
-                  style={{ display: "flex", gap: "var(--space-6)", alignItems: "center" }}
-                >
-                  <input
-                    value={trigger.condition}
-                    onChange={(event) =>
-                      setBehaviorTriggers((prev) =>
-                        prev.map((t, i) =>
-                          i === index ? { ...t, condition: event.target.value } : t,
-                        ),
-                      )
-                    }
-                    placeholder="when…"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <input
-                    value={trigger.behavior}
-                    onChange={(event) =>
-                      setBehaviorTriggers((prev) =>
-                        prev.map((t, i) =>
-                          i === index ? { ...t, behavior: event.target.value } : t,
-                        ),
-                      )
-                    }
-                    placeholder="they…"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    aria-label="Remove trigger"
-                    onClick={() =>
-                      setBehaviorTriggers((prev) => prev.filter((_, i) => i !== index))
-                    }
-                    style={{
-                      flexShrink: 0,
-                      width: 28,
-                      height: 28,
-                      borderRadius: "var(--radius-md)",
-                      border: "1px solid var(--ink-line)",
-                      background: "transparent",
-                      color: T.muted,
-                      cursor: "pointer",
-                      lineHeight: 1,
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <AdminButton
-                type="button"
-                variant="secondary"
-                disabled={behaviorTriggers.length >= 6}
-                onClick={() =>
-                  setBehaviorTriggers((prev) => [...prev, { condition: "", behavior: "" }])
-                }
+
+      <div style={inspectorScrollStyle}>
+        {node.kind === "character" && tab === "casting" && (
+          <InspectorSection
+            title="Casting"
+            hint="How this character sits in the scene — the director reads all of it."
+          >
+            <Field label="Scene summary">
+              <textarea
+                value={summary}
+                onChange={(event) => setSummary(event.target.value)}
+                rows={3}
+                placeholder="How this node matters in this scene."
+                style={textareaStyle}
+              />
+            </Field>
+            <Field label="Role in scene">
+              <input
+                value={roleInScene}
+                onChange={(event) => setRoleInScene(event.target.value)}
+                placeholder="Host, witness, antagonist..."
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Archetype">
+              <input
+                value={archetype}
+                onChange={(event) => setArchetype(event.target.value)}
+                placeholder="Reluctant matriarch, anxious servant..."
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Emotional baseline">
+              <input
+                value={emotionalBaseline}
+                onChange={(event) => setEmotionalBaseline(event.target.value)}
+                placeholder="Guarded, hopeful, defensive..."
+                style={inputStyle}
+              />
+            </Field>
+          </InspectorSection>
+        )}
+
+        {node.kind === "character" && tab === "intention" && (
+          <>
+            <InspectorSection
+              title="Intention"
+              hint="What they want here, and how they speak while wanting it."
+            >
+              <Field label="Motivations">
+                <textarea
+                  value={motivations}
+                  onChange={(event) => setMotivations(event.target.value)}
+                  rows={3}
+                  style={textareaStyle}
+                />
+              </Field>
+              <Field label="Speaking style">
+                <textarea
+                  value={speakingStyle}
+                  onChange={(event) => setSpeakingStyle(event.target.value)}
+                  rows={3}
+                  placeholder="Imagery, cadence, deflections — rides every turn as their manner in this scene."
+                  style={textareaStyle}
+                />
+              </Field>
+            </InspectorSection>
+            <InspectorSection
+              title="Behavior triggers"
+              hint="Condition → behavior pairs the director fires when the moment matches."
+            >
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}
               >
-                + add trigger
-              </AdminButton>
-            </div>
-          </Field>
-          <Field label="Knowledge horizon">
+                {behaviorTriggers.map((trigger, index) => (
+                  <div
+                    key={index}
+                    style={{ display: "flex", gap: "var(--space-6)", alignItems: "center" }}
+                  >
+                    <input
+                      value={trigger.condition}
+                      onChange={(event) =>
+                        setBehaviorTriggers((prev) =>
+                          prev.map((t, i) =>
+                            i === index ? { ...t, condition: event.target.value } : t,
+                          ),
+                        )
+                      }
+                      placeholder="when…"
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <input
+                      value={trigger.behavior}
+                      onChange={(event) =>
+                        setBehaviorTriggers((prev) =>
+                          prev.map((t, i) =>
+                            i === index ? { ...t, behavior: event.target.value } : t,
+                          ),
+                        )
+                      }
+                      placeholder="they…"
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Remove trigger"
+                      onClick={() =>
+                        setBehaviorTriggers((prev) => prev.filter((_, i) => i !== index))
+                      }
+                      style={{
+                        flexShrink: 0,
+                        width: 28,
+                        height: 28,
+                        borderRadius: "var(--radius-md)",
+                        border: "1px solid var(--ink-line)",
+                        background: "transparent",
+                        color: T.muted,
+                        cursor: "pointer",
+                        lineHeight: 1,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <AdminButton
+                  type="button"
+                  variant="secondary"
+                  disabled={behaviorTriggers.length >= 6}
+                  onClick={() =>
+                    setBehaviorTriggers((prev) => [
+                      ...prev,
+                      { condition: "", behavior: "" },
+                    ])
+                  }
+                >
+                  + add trigger
+                </AdminButton>
+              </div>
+            </InspectorSection>
+          </>
+        )}
+
+        {node.kind === "character" && tab === "knowledge" && (
+          <InspectorSection
+            title="Knowledge horizon"
+            hint="The scene's dramatic present on this character's own timeline."
+          >
             <div style={{ display: "flex", gap: "var(--space-6)", alignItems: "center" }}>
               <select
                 value={horizonEra}
@@ -1544,151 +1759,420 @@ function GraphNodeInspector({
                 fontSize: "var(--font-size-sm)",
               }}
             >
-              The scene&apos;s dramatic present for this character. Wiki pages
-              time-indexed after this moment are withheld from their context
-              (pages marked &quot;knows future&quot; still pass).
+              Wiki pages time-indexed after this moment are withheld from their
+              context (pages marked &quot;knows future&quot; still pass).
             </p>
-          </Field>
-	        </>
-	      )}
-	      {node.kind === "ambience" && (
-	        <>
-	          <Field label="Track ID">
-	            <input
-	              value={trackId}
-	              onChange={(event) => setTrackId(event.target.value)}
-	              placeholder="Existing public ambience filename without .mp3"
-	              style={inputStyle}
-	            />
-	          </Field>
-	          <Field label="Description">
-	            <textarea
-	              value={ambienceDescription}
-	              onChange={(event) => setAmbienceDescription(event.target.value)}
-	              rows={3}
-	              placeholder="How this bed should feel in the scene."
-	              style={textareaStyle}
-	            />
-	          </Field>
-	          <label style={checkboxRowStyle}>
-	            <input
-	              type="checkbox"
-	              checked={isDefaultAmbience}
-	              onChange={(event) => setIsDefaultAmbience(event.target.checked)}
-	            />
-	            Default background bed
-	          </label>
-	        </>
-	      )}
-	      {node.kind === "audio" && (
-	        <>
-	          {sound?.description && (
-	            <p
-	              style={{
-	                margin: 0,
-	                color: T.muted,
-	                fontFamily: T.fontBody,
-	                fontSize: "var(--font-size-base)",
-	                lineHeight: "19px",
-	              }}
-	            >
-	              {sound.description}
-	            </p>
-	          )}
-	          <Field label="Role">
-	            <select
-	              value={audioRole}
-	              onChange={(event) =>
-	                setAudioRole(event.target.value as "bed" | "oneshot")
-	              }
-	              style={{ ...inputStyle, cursor: "pointer" }}
-	            >
-	              <option value="bed">bed — looping ambience</option>
-	              <option value="oneshot">one-shot — cueable effect</option>
-	            </select>
-	          </Field>
-	          <Field label="Cue hint (what the director reads)">
-	            <input
-	              value={audioTriggerHint}
-	              onChange={(event) => setAudioTriggerHint(event.target.value)}
-	              placeholder="e.g. when the fire is mentioned"
-	              style={inputStyle}
-	            />
-	          </Field>
-	          <Field label="Gain trim (dB, −24…+12)">
-	            <input
-	              value={audioGainDb}
-	              onChange={(event) => setAudioGainDb(event.target.value)}
-	              placeholder="0"
-	              inputMode="decimal"
-	              style={inputStyle}
-	            />
-	          </Field>
-	          {audioRole === "bed" && (
-	            <label style={checkboxRowStyle}>
-	              <input
-	                type="checkbox"
-	                checked={isDefaultAmbience}
-	                onChange={(event) => setIsDefaultAmbience(event.target.checked)}
-	              />
-	              Default background bed
-	            </label>
-	          )}
-	        </>
-	      )}
-	      {node.kind === "event" && (
-	        <Field label="Arc position (0 = first beat)">
-	          <input
-	            value={eventTimeIndex}
-	            onChange={(event) => setEventTimeIndex(event.target.value)}
-	            inputMode="numeric"
-	            style={inputStyle}
-	          />
-	        </Field>
-	      )}
-	      <InspectorFooter pending={pending || saving} saved={saved} label="Save node" />
-	      {(node.kind === "character" || node.kind === "ambience" || node.kind === "audio" || node.kind === "event") && (
-	        <button
-	          type="button"
-	          onClick={() => onRemoveCharacter(node.id)}
-	          disabled={pending || saving}
-	          style={dangerButtonStyle}
-	        >
-	          Remove from scene
-	        </button>
-	      )}
-    </form>
+          </InspectorSection>
+        )}
+
+        {node.kind === "ambience" && (
+          <InspectorSection title="Ambience">
+            <Field label="Track ID">
+              <input
+                value={trackId}
+                onChange={(event) => setTrackId(event.target.value)}
+                placeholder="Existing public ambience filename without .mp3"
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Description">
+              <textarea
+                value={ambienceDescription}
+                onChange={(event) => setAmbienceDescription(event.target.value)}
+                rows={3}
+                placeholder="How this bed should feel in the scene."
+                style={textareaStyle}
+              />
+            </Field>
+            <label style={checkboxRowStyle}>
+              <input
+                type="checkbox"
+                checked={isDefaultAmbience}
+                onChange={(event) => setIsDefaultAmbience(event.target.checked)}
+              />
+              Default background bed
+            </label>
+          </InspectorSection>
+        )}
+
+        {node.kind === "audio" && (
+          <>
+            <InspectorSection title="In the scene">
+              {sound?.description && (
+                <p
+                  style={{
+                    margin: 0,
+                    color: T.muted,
+                    fontFamily: T.fontBody,
+                    fontSize: "var(--font-size-base)",
+                    lineHeight: "19px",
+                  }}
+                >
+                  {sound.description}
+                </p>
+              )}
+              <Field label="Scene summary">
+                <textarea
+                  value={summary}
+                  onChange={(event) => setSummary(event.target.value)}
+                  rows={3}
+                  placeholder="How this sound matters in this scene."
+                  style={textareaStyle}
+                />
+              </Field>
+            </InspectorSection>
+            <InspectorSection
+              title="Playback"
+              hint="Beds loop under the scene; one-shots wait for a director cue."
+            >
+              <Field label="Role">
+                <select
+                  value={audioRole}
+                  onChange={(event) =>
+                    setAudioRole(event.target.value as "bed" | "oneshot")
+                  }
+                  style={{ ...inputStyle, cursor: "pointer" }}
+                >
+                  <option value="bed">bed — looping ambience</option>
+                  <option value="oneshot">one-shot — cueable effect</option>
+                </select>
+              </Field>
+              <Field label="Cue hint (what the director reads)">
+                <input
+                  value={audioTriggerHint}
+                  onChange={(event) => setAudioTriggerHint(event.target.value)}
+                  placeholder="e.g. when the fire is mentioned"
+                  style={inputStyle}
+                />
+              </Field>
+              <Field label="Gain trim (dB, −24…+12)">
+                <input
+                  value={audioGainDb}
+                  onChange={(event) => setAudioGainDb(event.target.value)}
+                  placeholder="0"
+                  inputMode="decimal"
+                  style={inputStyle}
+                />
+              </Field>
+              {audioRole === "bed" && (
+                <label style={checkboxRowStyle}>
+                  <input
+                    type="checkbox"
+                    checked={isDefaultAmbience}
+                    onChange={(event) => setIsDefaultAmbience(event.target.checked)}
+                  />
+                  Default background bed
+                </label>
+              )}
+            </InspectorSection>
+          </>
+        )}
+
+        {node.kind === "event" && (
+          <InspectorSection
+            title="Arc beat"
+            hint="The dramaturg lands this when it happens on stage."
+          >
+            <Field label="Scene summary">
+              <textarea
+                value={summary}
+                onChange={(event) => setSummary(event.target.value)}
+                rows={3}
+                placeholder="What it looks like when this beat lands."
+                style={textareaStyle}
+              />
+            </Field>
+            <Field label="Arc position (0 = first beat)">
+              <input
+                value={eventTimeIndex}
+                onChange={(event) => setEventTimeIndex(event.target.value)}
+                inputMode="numeric"
+                style={inputStyle}
+              />
+            </Field>
+          </InspectorSection>
+        )}
+
+        {node.kind === "character" && tab === "casting" && (
+          <p style={{ margin: 0 }}>
+            <Link href={`/characters/${character?.slug ?? ""}`} style={subtleLinkStyle}>
+              open character
+            </Link>
+          </p>
+        )}
+      </div>
+    </>
   );
 }
 
-function InspectorHeader({
-  eyebrow,
+/* ── Inspector shell primitives (parity with the character config
+ *    sidebar: header + tab band + section styling) ─────────────── */
+
+function InspectorShellHeader({
+  tile,
   title,
+  onTitleChange,
   meta,
+  menuItems,
+  onMenuAction,
 }: {
-  eyebrow: string;
+  tile: React.ReactNode;
   title: string;
+  onTitleChange?: (next: string) => void | Promise<void>;
   meta: string;
+  menuItems?: Array<{ value: string; label: string; meta?: string }>;
+  onMenuAction?: (value: string) => void;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-      <span style={kickerStyle}>{eyebrow}</span>
-      <h2
+    <div
+      style={{
+        padding: "20px 24px 0",
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        gap: "var(--space-8)",
+      }}
+    >
+      <div
         style={{
-          margin: 0,
-          color: T.fg,
-          fontFamily: T.fontHeading,
-          fontSize: "var(--font-size-xl)",
-          fontWeight: 600,
-          overflowWrap: "anywhere",
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-10)",
+          minWidth: 0,
         }}
       >
-        {title}
-      </h2>
-      <span style={{ ...kickerStyle, color: T.muted }}>{meta}</span>
+        {tile}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-1)",
+            minWidth: 0,
+          }}
+        >
+          {onTitleChange ? (
+            <EditableText
+              value={title}
+              onChange={onTitleChange}
+              ariaLabel="Name"
+              style={{
+                fontFamily: T.fontHeading,
+                fontSize: "var(--font-size-xl)",
+                fontWeight: 600,
+                color: T.fg,
+                letterSpacing: "-0.01em",
+              }}
+            />
+          ) : (
+            <h2
+              style={{
+                margin: 0,
+                fontFamily: T.fontHeading,
+                fontSize: "var(--font-size-xl)",
+                fontWeight: 600,
+                color: T.fg,
+                letterSpacing: "-0.01em",
+                overflowWrap: "anywhere",
+              }}
+            >
+              {title}
+            </h2>
+          )}
+          <span
+            style={{
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-xs)",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--text-tertiary)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {meta}
+          </span>
+        </div>
+      </div>
+      {menuItems && menuItems.length > 0 && onMenuAction && (
+        <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+          <Menu<string>
+            value=""
+            onChange={onMenuAction}
+            items={menuItems}
+            ariaLabel="Node actions"
+            showChevron={false}
+            align="right"
+            minWidth={240}
+            triggerStyle={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              padding: 0,
+              borderRadius: "var(--radius-pill)",
+              border:
+                "1px solid color-mix(in srgb, var(--text-primary) 8%, transparent)",
+              background: "transparent",
+              color: "var(--text-tertiary)",
+              fontFamily: T.fontMono,
+              fontSize: "var(--font-size-base)",
+              lineHeight: 1,
+              transition: "border-color 120ms ease, background 120ms ease",
+            }}
+            renderTrigger={() => <span aria-hidden>⋯</span>}
+          />
+        </div>
+      )}
     </div>
   );
 }
+
+/** The 34px tab band between header and content — same band as the
+ *  character config sidebar (full-bleed borders, 24px left gutter). */
+function InspectorTabBand<K extends string>({
+  tabs,
+  active,
+}: {
+  tabs: Array<TabItem<K>>;
+  active: K;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        height: 34,
+        marginTop: "var(--space-20)",
+        paddingLeft: "var(--space-24)",
+        borderTop: "1px solid var(--ink-fill)",
+        borderBottom: "1px solid var(--ink-fill)",
+        flexShrink: 0,
+      }}
+    >
+      <TabBar items={tabs} active={active} />
+    </div>
+  );
+}
+
+/** Section with the character-sidebar heading treatment. */
+function InspectorSection({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}
+    >
+      <div
+        style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
+      >
+        <h3
+          style={{
+            fontFamily: T.fontHeading,
+            fontSize: "var(--font-size-2xl)",
+            fontWeight: 600,
+            color: T.fg,
+            margin: 0,
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {title}
+        </h3>
+        {hint && (
+          <p
+            style={{
+              margin: 0,
+              color: T.muted,
+              fontFamily: T.fontBody,
+              fontSize: "var(--font-size-sm)",
+              lineHeight: "19px",
+            }}
+          >
+            {hint}
+          </p>
+        )}
+      </div>
+      <div
+        style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}
+      >
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** 44px identity tile: character avatar (image or gradient+initial),
+ *  glyphs for the other node kinds, ⌂ for the scene itself. */
+function InspectorTile({
+  kind,
+  image,
+  gradient,
+  initial,
+}: {
+  kind: "scene" | SceneGraphPayload["nodes"][number]["kind"];
+  image?: string | null;
+  gradient?: string;
+  initial?: string;
+}) {
+  const glyph =
+    kind === "scene" ? "⌂" : kind === "audio" ? "♪" : kind === "ambience" ? "≋" : kind === "event" ? "◆" : null;
+  return (
+    <div
+      aria-hidden
+      style={{
+        width: 44,
+        height: 44,
+        flexShrink: 0,
+        borderRadius: "var(--radius-lg)",
+        border: "1px solid var(--ink-line)",
+        background:
+          kind === "character"
+            ? image
+              ? `center / cover no-repeat url(${image})`
+              : gradient ?? "var(--ink-soft)"
+            : "var(--ink-soft)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: kind === "character" ? "var(--accent-on)" : T.muted,
+        fontFamily: T.fontHeading,
+        fontSize: "var(--font-size-lg)",
+        fontWeight: 600,
+        overflow: "hidden",
+      }}
+    >
+      {kind === "character" ? (image ? null : initial ?? "•") : glyph}
+    </div>
+  );
+}
+
+function relativeTime(ts: number): string {
+  const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (seconds < 10) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  return `${hours}h ago`;
+}
+
+const inspectorScrollStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  overflow: "auto",
+  padding: "20px 24px 140px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 28,
+  color: T.fg,
+  fontFamily: T.fontBody,
+};
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -1696,29 +2180,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span style={fieldLabelStyle}>{label}</span>
       {children}
     </label>
-  );
-}
-
-function InspectorFooter({
-  pending,
-  saved,
-  label = "Save changes",
-}: {
-  pending: boolean;
-  saved: boolean;
-  label?: string;
-}) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
-      <AdminButton type="submit" variant="primary" disabled={pending}>
-        {pending ? "Saving..." : label}
-      </AdminButton>
-      {saved && !pending && (
-        <span style={{ color: "var(--accent-strong)", fontSize: "var(--font-size-sm)" }}>
-          Saved.
-        </span>
-      )}
-    </div>
   );
 }
 
@@ -1819,16 +2280,6 @@ const headerIconButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-const inspectorFormStyle: CSSProperties = {
-  minHeight: "100%",
-  padding: "24px 24px 120px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "var(--space-18)",
-  color: T.fg,
-  fontFamily: T.fontBody,
-};
-
 const inputStyle: CSSProperties = {
   height: 38,
   width: "100%",
@@ -1885,19 +2336,3 @@ const subtleLinkStyle: CSSProperties = {
   textDecoration: "none",
 };
 
-const dangerButtonStyle: CSSProperties = {
-  minHeight: 38,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "0 16px",
-  border: `1px solid color-mix(in srgb, ${T.danger} 40%, transparent)`,
-  borderRadius: "var(--radius-pill)",
-  background: T.dangerSoft,
-  color: T.danger,
-  fontFamily: T.fontMono,
-  fontSize: "var(--font-size-sm)",
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};

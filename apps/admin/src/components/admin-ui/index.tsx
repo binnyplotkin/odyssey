@@ -2,7 +2,12 @@
 
 import {
   forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
   type ButtonHTMLAttributes,
+  type PointerEvent as ReactPointerEvent,
   type CSSProperties,
   type HTMLAttributes,
   type ReactNode,
@@ -159,6 +164,107 @@ export function AdminSplitLayout({
         </div>
       )}
     </div>
+  );
+}
+
+/* ── Resizable right rail ──────────────────────────────────────────
+ * Drag-to-resize support for AdminRightRail. The handle sits on the rail's
+ * LEFT edge, so dragging left grows the rail. Width persists per browser
+ * via localStorage under `storageKey`. Extracted from the character config
+ * sidebar so every right rail resizes the same way. */
+export function useResizableRail(input: {
+  storageKey: string;
+  minWidth: number;
+  maxWidth: number;
+}) {
+  const { storageKey, minWidth, maxWidth } = input;
+  const railRef = useRef<HTMLElement | null>(null);
+  const [width, setWidth] = useState<number>(minWidth);
+  const [isResizing, setIsResizing] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      if (saved) {
+        const n = Number.parseInt(saved, 10);
+        if (Number.isFinite(n)) {
+          setWidth(Math.min(maxWidth, Math.max(minWidth, n)));
+        }
+      }
+    } catch {
+      /* localStorage can throw in private modes; non-fatal. */
+    }
+  }, [storageKey, minWidth, maxWidth]);
+
+  const onResizeStart = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const rail = railRef.current;
+      if (!rail) return;
+      const rightEdge = rail.getBoundingClientRect().right;
+      const target = e.currentTarget;
+      target.setPointerCapture(e.pointerId);
+      setIsResizing(true);
+
+      const onMove = (ev: PointerEvent) => {
+        setWidth(Math.min(maxWidth, Math.max(minWidth, rightEdge - ev.clientX)));
+      };
+      const onUp = (ev: PointerEvent) => {
+        target.releasePointerCapture?.(ev.pointerId);
+        target.removeEventListener("pointermove", onMove);
+        target.removeEventListener("pointerup", onUp);
+        target.removeEventListener("pointercancel", onUp);
+        setIsResizing(false);
+        try {
+          /* Persist the final width — not every intermediate value. */
+          setWidth((w) => {
+            window.localStorage.setItem(storageKey, String(Math.round(w)));
+            return w;
+          });
+        } catch {
+          /* non-fatal */
+        }
+      };
+      target.addEventListener("pointermove", onMove);
+      target.addEventListener("pointerup", onUp);
+      target.addEventListener("pointercancel", onUp);
+    },
+    [storageKey, minWidth, maxWidth],
+  );
+
+  return { railRef, width, isResizing, onResizeStart };
+}
+
+/** The 6px grab strip `useResizableRail` drives. Render as the first child
+ *  of the rail (which is `position: sticky` → containing block). */
+export function RailResizeHandle({
+  isResizing,
+  onResizeStart,
+}: {
+  isResizing: boolean;
+  onResizeStart: (e: ReactPointerEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      onPointerDown={onResizeStart}
+      style={{
+        position: "absolute",
+        left: -3,
+        top: 0,
+        bottom: 0,
+        width: 6,
+        cursor: "ew-resize",
+        background: isResizing
+          ? "color-mix(in srgb, var(--accent-strong) 35%, transparent)"
+          : "transparent",
+        transition: isResizing ? "none" : "background 120ms ease",
+        zIndex: 2,
+        touchAction: "none",
+      }}
+    />
   );
 }
 
