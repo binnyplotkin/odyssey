@@ -10,8 +10,9 @@
  * honors `AudioContext.resume()` from a user gesture.
  */
 
-const ENTRY_CUE_URL = "/session-entry-audio/odyssey_breath_session.m4a";
-const FADE_OUT_SECONDS = 0.2;
+const ENTRY_CUE_URL = "/session-entry-audio/odyssey_breath_full.m4a";
+const FADE_IN_SECONDS = 0.18;
+const FADE_OUT_SECONDS = 0.9;
 
 let cueBytes: Promise<ArrayBuffer | null> | null = null;
 
@@ -45,23 +46,40 @@ export function prefetchSessionEntryCue(): void {
 export class SessionEntryCue {
   private gain: GainNode | null = null;
   private source: AudioBufferSourceNode | null = null;
+  private buffer: AudioBuffer | null = null;
+  private bufferPromise: Promise<AudioBuffer | null> | null = null;
   private stopped = false;
 
   constructor(private readonly ctx: AudioContext) {}
+
+  prepare(): Promise<AudioBuffer | null> {
+    if (this.buffer) return Promise.resolve(this.buffer);
+    if (!this.bufferPromise) {
+      this.bufferPromise = getCueBytes()
+        .then((bytes) =>
+          // Decode a copy: decodeAudioData detaches its input buffer, and the
+          // cached bytes are reused on the next session start.
+          bytes ? this.ctx.decodeAudioData(bytes.slice(0)) : null,
+        )
+        .then((buffer) => {
+          this.buffer = buffer;
+          return buffer;
+        });
+    }
+    return this.bufferPromise;
+  }
 
   play(): void {
     if (this.ctx.state === "suspended") {
       void this.ctx.resume().catch(() => {});
     }
-    void getCueBytes()
-      .then((bytes) =>
-        // Decode a copy: decodeAudioData detaches its input buffer, and the
-        // cached bytes are reused on the next session start.
-        bytes ? this.ctx.decodeAudioData(bytes.slice(0)) : null,
-      )
+    void this.prepare()
       .then((buffer) => {
         if (!buffer || this.stopped || this.ctx.state === "closed") return;
         const gain = this.ctx.createGain();
+        const now = this.ctx.currentTime;
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(1, now + FADE_IN_SECONDS);
         gain.connect(this.ctx.destination);
         const source = this.ctx.createBufferSource();
         source.buffer = buffer;
@@ -70,7 +88,7 @@ export class SessionEntryCue {
           this.source = null;
           this.gain = null;
         };
-        source.start();
+        source.start(now);
         this.gain = gain;
         this.source = source;
       })

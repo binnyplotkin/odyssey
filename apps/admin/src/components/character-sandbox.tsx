@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { type ModelOption } from "@/lib/model-registry";
 import type { OrchestratorDecision, SceneState } from "@odyssey/types";
 import { useHeaderContent } from "@/components/header-context";
@@ -33,6 +34,10 @@ import type {
 import { SandboxVoiceStage } from "./character-sandbox/sandbox-voice-stage";
 import { SandboxChatStage } from "./character-sandbox/sandbox-chat-stage";
 import { SandboxPreSession } from "./character-sandbox/sandbox-pre-session";
+import {
+  SessionEntryTransition,
+  prefetchSessionEntryTransitionVideo,
+} from "./character-sandbox/session-entry-transition";
 import { SandboxTraceDrawer } from "./character-sandbox/sandbox-trace-drawer";
 import {
   WavefieldStage,
@@ -182,6 +187,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   const [worldSessionId, setWorldSessionId] = useState<string | null>(null);
   const worldSessionIdRef = useRef<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [entryTransitionActive, setEntryTransitionActive] = useState(false);
   const [endedSession, setEndedSession] = useState<EndedSandboxSession | null>(
     null,
   );
@@ -292,6 +298,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
   useEffect(() => {
     if (phase !== "pre-session") return;
     prefetchSessionEntryCue();
+    prefetchSessionEntryTransitionVideo();
     if (mode !== "voice") return;
     void warmSandboxVoiceContext({ characterId: character.id }).catch(
       (err) => {
@@ -321,13 +328,20 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     const launchMode: SandboxMode = "voice";
     if (mode !== launchMode) setMode(launchMode);
 
-    // Play the entry cue synchronously inside the start gesture — before
-    // the session-create round-trip — so the user hears the session boot
-    // instantly while warmup continues behind it.
+    // Prepare the cue first, then activate the visual layer. The transition
+    // starts audio on the same frame it starts video, so neither leads.
     if (!audioCtxRef.current) audioCtxRef.current = createAudioContext();
+    if (audioCtxRef.current.state === "suspended") {
+      void audioCtxRef.current.resume().catch(() => {});
+    }
     entryCueRef.current?.stop();
     entryCueRef.current = new SessionEntryCue(audioCtxRef.current);
-    entryCueRef.current.play();
+    await entryCueRef.current.prepare().catch((err) => {
+      console.warn("[sandbox] entry cue prepare failed", err);
+      return null;
+    });
+    if (!entryCueRef.current) return;
+    flushSync(() => setEntryTransitionActive(true));
     setStartedAt(Date.now());
     setTurns([]);
     setTraceRecords([]);
@@ -352,6 +366,7 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
     if (!sessionId) {
       entryCueRef.current?.stop();
       entryCueRef.current = null;
+      setEntryTransitionActive(false);
       worldSessionIdRef.current = null;
       setWorldSessionId(null);
       return;
@@ -527,6 +542,10 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
         });
     }
   }
+
+  const handleEntryTransitionStart = useCallback(() => {
+    entryCueRef.current?.play();
+  }, []);
 
   function handleCancel() {
     router.push(`/characters/${character.slug}`);
@@ -1826,6 +1845,14 @@ export function CharacterSandbox({ character, bindings, defaultModel }: Props) {
                 />
               )}
             </div>
+            <SessionEntryTransition
+              active={entryTransitionActive}
+              onStart={handleEntryTransitionStart}
+              onComplete={() => {
+                entryCueRef.current?.fadeOut();
+                setEntryTransitionActive(false);
+              }}
+            />
           </div>
         )}
       </div>
