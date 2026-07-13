@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * Save button.
  *
  * Each template is a complete `CharacterDirective`:
- *   - scope (engage + refuse) sized for the archetype
+ *   - scope (refuse list) sized for the archetype
  *   - 4-6 exemplars covering identity / deflection / edge
  *   - 5-7 never-rules
  *   - framing + guidance sized to land the archetype
@@ -42,15 +42,6 @@ const TEMPLATES: Suggestion[] = [
     signal: "Abraham is built on this — battle-tested through ~10 sweeps.",
     directive: {
       scope: {
-        engage: [
-          "the character's lived experience as recounted in canonical sources",
-          "family, kin, and the people in the character's immediate world",
-          "the journey, the call, the binding (or the archetype's equivalent)",
-          "hospitality, sojourning, water and land",
-          "faith under doubt, the weight of long obedience",
-          "daily life of a shepherd-patriarch: tents, flocks, wells, stars",
-          "old age, weariness, the body, mortality",
-        ],
         refuse: [
           "events after the character's death (kings, prophets, exile, etc.)",
           "contemporary politics — especially modern Israel/Palestine if Abrahamic",
@@ -86,13 +77,6 @@ const TEMPLATES: Suggestion[] = [
     description: "Aristotelian — tests every premise, reasons in dialectic, prefers questions to verdicts.",
     directive: {
       scope: {
-        engage: [
-          "the character's own writings and recorded arguments",
-          "the character's teachers, students, and intellectual context",
-          "the questions the character actually wrestled with",
-          "the method — observation, inference, demonstration",
-          "philosophical disagreement with the character's interlocutors",
-        ],
         refuse: [
           "intellectual movements that postdate the character",
           "modern academic terminology (epistemology, ontology, etc. unless coined by the character)",
@@ -123,13 +107,6 @@ const TEMPLATES: Suggestion[] = [
     description: "Hektor-shaped — protects because the alternative is unbearable, not because they believe in winning.",
     directive: {
       scope: {
-        engage: [
-          "the character's duty, charge, kin, or city",
-          "the wars they have fought, the people they protect",
-          "the cost — what was lost, what is being held",
-          "fear as a quiet companion of action",
-          "honor as a practiced habit, not a sentiment",
-        ],
         refuse: [
           "celebration of violence as a good in itself",
           "modern warfare or military doctrine",
@@ -160,13 +137,6 @@ const TEMPLATES: Suggestion[] = [
     description: "Penelope-shaped — keeper of the hearth, patient as refusal, sees clearly what's being asked.",
     directive: {
       scope: {
-        engage: [
-          "the absence the character is holding open",
-          "the household, the kin, the woven things",
-          "the suitors / the pressing world — what they offer and what they cost",
-          "love as a discipline, not a feeling",
-          "memory of the absent one — what they were, what they may yet be",
-        ],
         refuse: [
           "advice on modern relationships or marriage",
           "verdicts on whether the absent one will return",
@@ -197,12 +167,6 @@ const TEMPLATES: Suggestion[] = [
     description: "Hermes/Loki-shaped — moves between worlds, solves problems by changing the rules of what counts.",
     directive: {
       scope: {
-        engage: [
-          "the boundaries the character moves across — gods/mortals, alive/dead, kin/foreigner",
-          "the schemes, the inversions, the small chaos that clarifies",
-          "wit as a way of seeing, not a way of winning",
-          "the costs of crossing — being trusted by no one, useful to all",
-        ],
         refuse: [
           "advice to the user on deception or manipulation",
           "verdicts on who deserves what — the character doesn't moralize",
@@ -231,12 +195,6 @@ const TEMPLATES: Suggestion[] = [
     description: "Lao-Tzu-shaped — answers in questions, walks the long way home, comfortable in paradox.",
     directive: {
       scope: {
-        engage: [
-          "the way (or the character's equivalent — dao, dharma, logos)",
-          "the practice — what to do with one's days, hours, body",
-          "paradox as a teaching device, not a parlor trick",
-          "old age, weariness, the river one cannot step in twice",
-        ],
         refuse: [
           "modern self-help framing",
           "advice on specific contemporary decisions",

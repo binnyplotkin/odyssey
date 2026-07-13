@@ -10,7 +10,8 @@ import { formatRelative } from "../shared/format-relative";
 /**
  * L02 Directive editor — Frontier Playbook XML inputs.
  *
- *   - Scope: engage / refuse chip lists (free text, add via Enter)
+ *   - Scope: refuse chip list (free text, add via Enter). Engage chips were
+ *     retired — positive topic scope emerges from exemplar tags.
  *   - Exemplars: ordered USER/YOU pairs, max 5
  *   - Never: anti-pattern bullets
  *   - Framing & Guidance: free-form textareas
@@ -58,7 +59,6 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
     [character.directive],
   );
 
-  const [engage, setEngage] = useState<string[]>(initial.engage);
   const [refuse, setRefuse] = useState<string[]>(initial.refuse);
   const [exemplars, setExemplars] = useState(initial.exemplars);
   const [never, setNever] = useState<string[]>(initial.never);
@@ -67,10 +67,10 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
   const [save, setSave] = useState<SaveState>({ status: "idle" });
 
   const isDirty = useMemo(() => {
-    const current = JSON.stringify({ engage, refuse, exemplars, never, framing, guidance });
+    const current = JSON.stringify({ refuse, exemplars, never, framing, guidance });
     const base = JSON.stringify(initial);
     return current !== base;
-  }, [engage, refuse, exemplars, never, framing, guidance, initial]);
+  }, [refuse, exemplars, never, framing, guidance, initial]);
 
   // Authoring advisories — antipatterns common in L02 drafts. Soft
   // warnings, not save-blockers. Each one explains the *why* (citation,
@@ -89,23 +89,11 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
     const cleanNever = never.filter((r) => r.trim());
 
     // ── Structural absences (warn) ─────────────────────────
-    if (engage.length === 0 && refuse.length === 0) {
-      out.push({
-        severity: "warn",
-        title: "no scope authored",
-        body: "Without engage or refuse chips the model has no positive frame and no anti-frame. Even three or four entries per side anchor the directive measurably — see the Frontier Playbook on <scope> as the leading wedge of behavioural shaping.",
-      });
-    } else if (engage.length === 0) {
-      out.push({
-        severity: "warn",
-        title: "no engage scope",
-        body: "Refuse chips alone tell the model what NOT to do. Add engage entries (topics, eras, kinship) so the model knows where to lean in.",
-      });
-    } else if (refuse.length === 0) {
+    if (refuse.length === 0) {
       out.push({
         severity: "warn",
         title: "no refuse scope",
-        body: "Engage chips alone are permissive. Add refuse entries (modern politics, medical advice, post-canon events) so deflection has explicit anchors — refusal-shaped negative space helps the model hold scope.",
+        body: "Add refuse entries (modern politics, medical advice, post-canon events) so deflection has explicit anchors — refusal-shaped negative space helps the model hold scope. Positive scope comes from exemplar tags, so refuse chips are the only <scope> input.",
       });
     }
 
@@ -135,27 +123,6 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
     }
 
     // ── Phrasing nudges (info) ────────────────────────────
-    // Engage chips that look like full instructions ("Be hospitable to
-    // strangers") instead of topics ("hospitality"). Heuristic: starts
-    // with an imperative verb OR contains > 6 words.
-    const IMPERATIVES = new Set([
-      "be", "act", "speak", "show", "make", "use", "give", "answer",
-      "stay", "remain", "keep", "do", "always", "never",
-    ]);
-    const wordyEngage = engage.filter((c) => {
-      const trimmed = c.trim();
-      const wc = trimmed.split(/\s+/).filter(Boolean).length;
-      const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase() ?? "";
-      return wc > 6 || IMPERATIVES.has(firstWord);
-    });
-    if (wordyEngage.length > 0) {
-      out.push({
-        severity: "info",
-        title: `${wordyEngage.length} engage chip${wordyEngage.length === 1 ? " reads" : "s read"} as instruction${wordyEngage.length === 1 ? "" : "s"}`,
-        body: `Scope chips are topics, not behaviours — short noun phrases ("hospitality, kinship", "the call from Ur"). Behavioural instructions belong in <guidance>. Look at: ${wordyEngage.slice(0, 2).map((c) => `"${c}"`).join(", ")}${wordyEngage.length > 2 ? ", …" : ""}`,
-      });
-    }
-
     // Refuse chips phrased as positive statements ("medical advice")
     // are correct in the refuse list — these compile into
     // <refuse>medical advice</refuse>, which the model reads as a topic
@@ -217,7 +184,7 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
     }
 
     return out;
-  }, [engage, refuse, exemplars, never]);
+  }, [refuse, exemplars, never]);
 
   // Live preview of the compiled directive XML. Same compiler the chat
   // route uses (packages/engine/src/directive-xml.ts), so what authors
@@ -230,11 +197,7 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
   // shape before they ship.
   const previewXml = useMemo(() => {
     const draftDirective: CharacterDirective = {};
-    if (engage.length || refuse.length) {
-      draftDirective.scope = {};
-      if (engage.length) draftDirective.scope.engage = engage;
-      if (refuse.length) draftDirective.scope.refuse = refuse;
-    }
+    if (refuse.length) draftDirective.scope = { refuse };
     const cleanExemplars = exemplars.filter((e) => e.user.trim() && e.you.trim());
     if (cleanExemplars.length) draftDirective.exemplars = cleanExemplars;
     const cleanNever = never.filter(Boolean);
@@ -247,17 +210,13 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
     // explicitly so authors see "no directive will be emitted — the
     // legacy single-paragraph template will be used instead."
     return xml || "(no directive — legacy single-paragraph template will be used)";
-  }, [engage, refuse, exemplars, never, framing, guidance]);
+  }, [refuse, exemplars, never, framing, guidance]);
 
   const onSave = useCallback(async () => {
     setSave({ status: "saving" });
     try {
       const directive: CharacterDirective = {};
-      if (engage.length || refuse.length) {
-        directive.scope = {};
-        if (engage.length) directive.scope.engage = engage;
-        if (refuse.length) directive.scope.refuse = refuse;
-      }
+      if (refuse.length) directive.scope = { refuse };
       const cleanExemplars = exemplars.filter(
         (e) => e.user.trim() && e.you.trim(),
       );
@@ -286,7 +245,7 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
         message: err instanceof Error ? err.message : String(err),
       });
     }
-  }, [character.id, engage, refuse, exemplars, never, framing, guidance]);
+  }, [character.id, refuse, exemplars, never, framing, guidance]);
 
   return (
     <div
@@ -306,7 +265,6 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
           // Replace the full draft from the template. Templates are
           // meant to be complete starting points — authors can clear
           // individual sections after if they want a partial seed.
-          setEngage(directive.scope?.engage ?? []);
           setRefuse(directive.scope?.refuse ?? []);
           setExemplars(directive.exemplars ?? []);
           setNever(directive.never ?? []);
@@ -333,25 +291,28 @@ function L02Configure({ character }: { character: HarnessCharacter }) {
 
       <Card
         accent="phosphor"
-        eyebrow="scope · <scope>"
-        title="What this character will engage with"
+        eyebrow="scope · <refuse>"
+        title="What this character deflects"
       >
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-16)" }}>
-          <ChipList
-            variant="engage"
-            label="engage"
-            placeholder="Add an in-scope topic (Genesis 11–25 …)"
-            items={engage}
-            onChange={setEngage}
-          />
-          <ChipList
-            variant="refuse"
-            label="refuse"
-            placeholder="Add an out-of-scope request (contemporary politics …)"
-            items={refuse}
-            onChange={setRefuse}
-          />
-        </div>
+        <p
+          style={{
+            margin: 0,
+            fontFamily: T.fontBody,
+            fontSize: 11.5,
+            color: "var(--text-tertiary)",
+            lineHeight: 1.5,
+          }}
+        >
+          Positive topic scope emerges from exemplar tags — the refuse list is
+          the only authored half of <code style={{ fontFamily: T.fontMono }}>{`<scope>`}</code>.
+        </p>
+        <ChipList
+          variant="refuse"
+          label="refuse"
+          placeholder="Add an out-of-scope request (contemporary politics …)"
+          items={refuse}
+          onChange={setRefuse}
+        />
       </Card>
 
       <Card
@@ -622,7 +583,6 @@ function DirectiveTemplateRow({
 }) {
   const firstExemplar = template.directive.exemplars?.[0];
   const counts = {
-    engage: template.directive.scope?.engage?.length ?? 0,
     refuse: template.directive.scope?.refuse?.length ?? 0,
     exemplars: template.directive.exemplars?.length ?? 0,
     never: template.directive.never?.length ?? 0,
@@ -669,7 +629,7 @@ function DirectiveTemplateRow({
           </span>
         )}
         <span style={{ fontFamily: T.fontMono, fontSize: "var(--font-size-xs)", color: "var(--text-quaternary)" }}>
-          scope {counts.engage}↑ {counts.refuse}↓ · {counts.exemplars} exemplar{counts.exemplars === 1 ? "" : "s"} · {counts.never} never-rule{counts.never === 1 ? "" : "s"}
+          scope {counts.refuse}↓ · {counts.exemplars} exemplar{counts.exemplars === 1 ? "" : "s"} · {counts.never} never-rule{counts.never === 1 ? "" : "s"}
         </span>
       </div>
       <button
@@ -1685,9 +1645,8 @@ function L02History({ character }: { character: HarnessCharacter }) {
 function summarizeDirective(d: CharacterDirective | null): string {
   if (!d) return "(unset — legacy single-paragraph template)";
   const bits: string[] = [];
-  const engage = d.scope?.engage?.length ?? 0;
   const refuse = d.scope?.refuse?.length ?? 0;
-  if (engage || refuse) bits.push(`scope ${engage}↑ ${refuse}↓`);
+  if (refuse) bits.push(`scope ${refuse}↓`);
   const ex = d.exemplars?.length ?? 0;
   if (ex) bits.push(`${ex} exemplar${ex === 1 ? "" : "s"}`);
   const never = d.never?.length ?? 0;
@@ -1700,7 +1659,6 @@ function summarizeDirective(d: CharacterDirective | null): string {
 /* ── Draft conversion ──────────────────────────────────────── */
 
 type DirectiveDraft = {
-  engage: string[];
   refuse: string[];
   exemplars: Array<{ user: string; you: string }>;
   never: string[];
@@ -1710,7 +1668,6 @@ type DirectiveDraft = {
 
 function toDraft(directive: CharacterDirective | null): DirectiveDraft {
   return {
-    engage: directive?.scope?.engage ?? [],
     refuse: directive?.scope?.refuse ?? [],
     exemplars: directive?.exemplars ?? [],
     never: directive?.never ?? [],
@@ -1878,27 +1835,25 @@ function Card({
   );
 }
 
-/* ── Chip list (engage/refuse) ─────────────────────────────── */
+/* ── Chip list (refuse) ────────────────────────────────────── */
 
 function ChipList({
-  variant,
   label,
   placeholder,
   items,
   onChange,
 }: {
-  variant: "engage" | "refuse";
+  /** Kept for call-site readability; only the refuse variant exists now. */
+  variant: "refuse";
   label: string;
   placeholder: string;
   items: string[];
   onChange: (next: string[]) => void;
 }) {
   const [draft, setDraft] = useState("");
-  const accent = variant === "engage" ? "var(--accent-strong)" : "var(--status-error)";
-  const chipBg =
-    variant === "engage" ? "rgba(140,231,210,0.08)" : "rgba(248,113,113,0.06)";
-  const chipBorder =
-    variant === "engage" ? "rgba(140,231,210,0.22)" : "rgba(248,113,113,0.22)";
+  const accent = "var(--status-error)";
+  const chipBg = "rgba(248,113,113,0.06)";
+  const chipBorder = "rgba(248,113,113,0.22)";
 
   const add = useCallback(() => {
     const v = draft.trim();

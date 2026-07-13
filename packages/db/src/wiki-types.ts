@@ -347,7 +347,11 @@ export type CharacterSoundDesign = {
  */
 export type CharacterDirective = {
   scope?: {
-    /** What this character will engage with — topics, eras, domains. */
+    /**
+     * @deprecated Retired — positive topic scope now emerges from exemplar
+     * tags. Never compiled into the prompt and never persisted by the
+     * directive API; the field remains only so stale JSONB rows still parse.
+     */
     engage?: string[];
     /** What they will deflect or reframe — out-of-bounds requests. */
     refuse?: string[];

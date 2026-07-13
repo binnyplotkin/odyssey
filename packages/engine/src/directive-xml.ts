@@ -22,17 +22,15 @@ export function compileDirectiveXml(
 
   const sections: string[] = [];
 
-  const engage = cleanList(directive.scope?.engage);
+  // Engage-with topics were retired by design: positive topic scope now
+  // emerges from exemplar tags, so `scope.engage` is never emitted — even
+  // when stale data survives in older directive rows. Only the refuse list
+  // (negative space) still compiles.
   const refuse = cleanList(directive.scope?.refuse);
-  if (engage.length || refuse.length) {
-    const parts: string[] = [];
-    if (engage.length) {
-      parts.push(`  <engage>\n${formatList(engage, 4)}\n  </engage>`);
-    }
-    if (refuse.length) {
-      parts.push(`  <refuse>\n${formatList(refuse, 4)}\n  </refuse>`);
-    }
-    sections.push(`<scope>\n${parts.join("\n")}\n</scope>`);
+  if (refuse.length) {
+    sections.push(
+      `<scope>\n  <refuse>\n${formatList(refuse, 4)}\n  </refuse>\n</scope>`,
+    );
   }
 
   const exemplars = (directive.exemplars ?? []).filter(

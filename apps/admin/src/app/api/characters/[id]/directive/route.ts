@@ -31,6 +31,9 @@ const ExemplarSchema = z.object({
 const DirectiveSchema = z.object({
   scope: z
     .object({
+      // Accepted for back-compat with older clients but never persisted:
+      // engage-with topics were retired — positive scope emerges from
+      // exemplar tags, and the compiler no longer emits <engage>.
       engage: z.array(z.string().trim()).max(40).optional(),
       refuse: z.array(z.string().trim()).max(40).optional(),
     })
@@ -74,10 +77,8 @@ export async function POST(
   // Strip empty sub-objects so the persisted shape stays tight — the XML
   // compiler will skip absent sections rather than emitting empty tags.
   const cleaned: CharacterDirective = {};
-  if (parsed.data.scope?.engage?.length || parsed.data.scope?.refuse?.length) {
-    cleaned.scope = {};
-    if (parsed.data.scope.engage?.length) cleaned.scope.engage = parsed.data.scope.engage.filter(Boolean);
-    if (parsed.data.scope.refuse?.length) cleaned.scope.refuse = parsed.data.scope.refuse.filter(Boolean);
+  if (parsed.data.scope?.refuse?.length) {
+    cleaned.scope = { refuse: parsed.data.scope.refuse.filter(Boolean) };
   }
   if (parsed.data.exemplars?.length) cleaned.exemplars = parsed.data.exemplars;
   if (parsed.data.never?.length) cleaned.never = parsed.data.never.filter(Boolean);
