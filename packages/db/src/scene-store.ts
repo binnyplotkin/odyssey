@@ -1,5 +1,12 @@
 import { eq, inArray } from "drizzle-orm";
-import type { Scene, SceneCharacter, SceneDefinition, SceneRecord, SceneSound } from "@odyssey/types";
+import type {
+  Scene,
+  SceneArcBeat,
+  SceneCharacter,
+  SceneDefinition,
+  SceneRecord,
+  SceneSound,
+} from "@odyssey/types";
 import { sceneDefinitionSchema } from "@odyssey/types";
 import { getDb } from "./client";
 import { retryRead } from "./retry";
@@ -342,6 +349,28 @@ function neonStore(): SceneStore {
       const objective = record.definition.objective?.trim() || undefined;
       const drive = record.definition.drive ?? undefined;
 
+      // The authored arc: every `event` node is a beat, ordered by
+      // data.timeIndex (fallback: creation order). Label = the beat's
+      // name; summary = what it looks like when it lands.
+      const arc: SceneArcBeat[] = graph.nodes
+        .filter((n) => n.kind === "event")
+        .sort((a, b) => {
+          const ai = typeof a.data.timeIndex === "number" ? a.data.timeIndex : Number.MAX_SAFE_INTEGER;
+          const bi = typeof b.data.timeIndex === "number" ? b.data.timeIndex : Number.MAX_SAFE_INTEGER;
+          if (ai !== bi) return ai - bi;
+          const byCreatedAt = a.createdAt.localeCompare(b.createdAt);
+          return byCreatedAt === 0 ? a.id.localeCompare(b.id) : byCreatedAt;
+        })
+        .map((n) => {
+          const summary =
+            n.summary?.trim() ||
+            (typeof n.data.summary === "string" ? n.data.summary.trim() : "");
+          return {
+            label: n.label.slice(0, 120),
+            ...(summary ? { summary: summary.slice(0, 400) } : {}),
+          };
+        });
+
       return {
         id: record.id,
         title: record.title,
@@ -353,6 +382,7 @@ function neonStore(): SceneStore {
         ...(sounds.length > 0 ? { sounds } : {}),
         ...(objective ? { objective } : {}),
         ...(drive ? { drive } : {}),
+        ...(arc.length > 0 ? { arc } : {}),
       };
     },
   };

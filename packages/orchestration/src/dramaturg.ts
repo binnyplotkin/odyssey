@@ -15,7 +15,7 @@
  * call, cadence, and state write.
  */
 import type { Scene, SceneState } from "@odyssey/types";
-import type { SceneTurnForPlanning } from "./client";
+import { buildArcBlock, type SceneTurnForPlanning } from "./client";
 
 const NOTE_MAX_CHARS = 300;
 
@@ -67,12 +67,26 @@ export function buildDramaturgMessages(input: {
     "question is still unanswered — steer back to what the stranger knows'),",
     "never generic ('keep up the good work'). Plain text only: no quotes, no",
     "markdown, no preamble.",
+    ...(scene.arc?.length
+      ? [
+          "",
+          "The scene has an authored arc (shown with progress markers). Reply in",
+          "EXACTLY this format — nothing else:",
+          "LANDED: <beat label only, copied verbatim — not its summary>",
+          "NOTE: <your note>",
+          "Emit one LANDED line per pending ([next]/[ahead]) beat that has now",
+          "clearly happened in the dialogue; zero LANDED lines if none did. If",
+          "your NOTE says a beat happened, its LANDED line must be present too.",
+          "Only mark beats that unambiguously happened — when in doubt, don't.",
+        ]
+      : []),
   ].join("\n");
 
   const user = [
     `Scene: "${scene.title}"`,
     scene.description,
     ...(scene.objective ? [`Objective: ${scene.objective}`] : []),
+    ...buildArcBlock(scene, sceneState),
     "",
     "Cast and authored intentions:",
     cast,
@@ -85,10 +99,53 @@ export function buildDramaturgMessages(input: {
       ? ["", `Your previous note: ${previousNote}`, "Revise or replace it in light of the dialogue above."]
       : []),
     "",
-    "Your note:",
+    scene.arc?.length ? "Your reply (LANDED lines if any, then NOTE):" : "Your note:",
   ].join("\n");
 
   return { system, user };
+}
+
+/**
+ * Split a reflection into the director's note and any `LANDED: <label>`
+ * beat declarations (case-insensitive, one per line, wherever they
+ * appear). Labels are returned RAW — the caller validates them against
+ * the scene's actual arc before trusting them.
+ */
+export function parseDramaturgReflection(raw: string): {
+  note: string | null;
+  landed: string[];
+} {
+  const landed: string[] = [];
+  const noteLines: string[] = [];
+  for (const line of raw.split("\n")) {
+    const m = line.match(/^\s*landed\s*:\s*(.+?)\s*$/i);
+    if (m) landed.push(m[1]!);
+    else noteLines.push(line);
+  }
+  return { note: sanitizeDramaturgNote(noteLines.join("\n")), landed };
+}
+
+/**
+ * Match a raw LANDED label against the authored arc, tolerantly: exact
+ * (case-insensitive, trimmed) or the raw string starting with the label
+ * followed by a separator — models sometimes copy the rendered
+ * `label - summary` line despite instructions. Returns the canonical
+ * label or null.
+ */
+export function matchArcLabel(raw: string, arcLabels: string[]): string | null {
+  const needle = raw.trim().toLowerCase();
+  if (!needle) return null;
+  for (const label of arcLabels) {
+    const l = label.toLowerCase();
+    if (needle === l) return label;
+    if (
+      needle.startsWith(l) &&
+      /^[\s\-–—:.,]/.test(needle.slice(l.length) || " ")
+    ) {
+      return label;
+    }
+  }
+  return null;
 }
 
 /**

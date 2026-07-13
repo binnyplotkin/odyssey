@@ -62,6 +62,15 @@ export const sceneSoundSchema = z.object({
   loopable: z.boolean(),
 });
 
+// One authored beat of the scene's arc — hydrated from a scene-graph
+// `event` node (label = the beat's name, summary = what it looks like
+// when it lands). The dramaturg judges landing; the director steers
+// toward the first un-landed beat.
+export const sceneArcBeatSchema = z.object({
+  label: z.string().min(1).max(120),
+  summary: z.string().min(1).max(400).optional(),
+});
+
 export const sceneSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -91,6 +100,9 @@ export const sceneSchema = z.object({
   // ("The promise of a son is spoken — and met with Sarah's laughter").
   // Distinct from openingBeat (where it starts) and beat (this turn).
   objective: z.string().min(1).max(400).optional(),
+  // The authored arc: ordered beats hydrated from the scene's `event`
+  // nodes. Optional — arc-less scenes keep pure objective-driven play.
+  arc: z.array(sceneArcBeatSchema).optional(),
   // How hard the director presses toward goals. Absent = balanced (the
   // current default behavior).
   drive: z.enum(["gentle", "balanced", "insistent"]).optional(),
@@ -98,6 +110,7 @@ export const sceneSchema = z.object({
 
 export type SceneCharacter = z.infer<typeof sceneCharacterSchema>;
 export type SceneSound = z.infer<typeof sceneSoundSchema>;
+export type SceneArcBeat = z.infer<typeof sceneArcBeatSchema>;
 export type Scene = z.infer<typeof sceneSchema>;
 
 // ── Scene DB record (the `scenes` table) ─────────────────────────────
@@ -176,6 +189,9 @@ export const sceneStateSchema = z.object({
   // progress. The fast per-turn director reads it as its own memory.
   // Latest wins; carried forward by decision application until replaced.
   directorNote: z.string().min(1).max(400).optional(),
+  // Labels of arc beats the dramaturg has judged LANDED (subset of
+  // Scene.arc labels, in arc order). Spread-carried like directorNote.
+  arcLanded: z.array(z.string()).optional(),
   // Monotonic counter — incremented on every orchestration decision so we
   // can correlate decisions with the turns they spawned.
   turnIndex: z.number().int().min(0),

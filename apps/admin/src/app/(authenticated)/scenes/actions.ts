@@ -134,6 +134,38 @@ export async function addAudioToScene(
   }
 }
 
+export async function addEventToScene(
+  sceneId: string,
+  input: {
+    label: string;
+    summary?: string | null;
+    /** Position in the arc — the client passes max(existing)+1. */
+    timeIndex: number;
+  },
+): Promise<ActionResult<{ nodeId: string }>> {
+  const label = input.label.trim();
+  if (!label) return { ok: false, error: "Beat label is required." };
+
+  try {
+    const node = await getSceneGraphStore().createNode({
+      sceneId,
+      kind: "event",
+      label,
+      summary: input.summary?.trim() || null,
+      data: { timeIndex: Math.trunc(input.timeIndex) },
+    });
+    revalidatePath(`/scenes/${sceneId}`);
+    revalidatePath("/scenes");
+    invalidateScenesList();
+    return { ok: true, data: { nodeId: node.id } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed to add arc beat.",
+    };
+  }
+}
+
 export async function removeSceneNode(
   sceneId: string,
   nodeId: string,

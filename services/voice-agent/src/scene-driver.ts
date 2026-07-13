@@ -16,9 +16,10 @@ import {
   defaultSceneDecision,
   getScene,
   PROACTIVE_SILENCE_MARKER,
+  matchArcLabel,
+  parseDramaturgReflection,
   resolveOrchestratorExecutor,
   resolveSceneDecision,
-  sanitizeDramaturgNote,
   updateSceneMemory,
   type SceneSessionSnapshot,
   type SceneTurnForPlanning,
@@ -242,16 +243,38 @@ export class SceneDriver {
         signal: AbortSignal.timeout(DRAMATURG_TIMEOUT_MS),
       })
       .then((response) => {
-        const note = sanitizeDramaturgNote(response.text);
-        if (!note) return;
-        // Race-safe: decisions may have advanced #sceneState while we
-        // reflected — the note is the only field we write, onto whatever
-        // the CURRENT state is.
-        this.#sceneState = { ...this.#sceneState, directorNote: note };
-        this.#persistState();
-        console.log(
-          `[dramaturg] note (${Date.now() - startedAt}ms): ${note}`,
+        const { note, landed } = parseDramaturgReflection(response.text);
+        // Validate landed labels against the authored arc (tolerant match →
+        // canonical label), merge with prior state in arc order.
+        const arcLabels = (this.scene.arc ?? []).map((b) => b.label);
+        const already = new Set(
+          (this.#sceneState.arcLanded ?? []).map((l) => l.toLowerCase()),
         );
+        const newlyLanded = landed
+          .map((raw) => matchArcLabel(raw, arcLabels))
+          .filter((l): l is string => !!l && !already.has(l.toLowerCase()));
+        if (!note && newlyLanded.length === 0) return;
+
+        for (const label of newlyLanded) {
+          console.log(`[dramaturg] beat landed: ${label}`);
+        }
+        const mergedLanded = arcLabels.filter(
+          (l) =>
+            already.has(l.toLowerCase()) ||
+            newlyLanded.some((n) => n.toLowerCase() === l.toLowerCase()),
+        );
+        // Race-safe: decisions may have advanced #sceneState while we
+        // reflected — we only write our own fields, onto whatever the
+        // CURRENT state is.
+        this.#sceneState = {
+          ...this.#sceneState,
+          ...(note ? { directorNote: note } : {}),
+          ...(mergedLanded.length ? { arcLanded: mergedLanded } : {}),
+        };
+        this.#persistState();
+        if (note) {
+          console.log(`[dramaturg] note (${Date.now() - startedAt}ms): ${note}`);
+        }
       })
       .catch((err) => {
         console.warn(`[dramaturg] reflection failed: ${(err as Error).message}`);

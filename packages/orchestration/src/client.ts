@@ -506,6 +506,7 @@ function buildOrchestratorSystemPrompt(
     `Scene: "${scene.title}"`,
     scene.description,
     ...(scene.objective ? [`This scene is driving toward: ${scene.objective}`] : []),
+    ...buildArcBlock(scene, state),
     "",
     "Characters present:",
     roster,
@@ -543,6 +544,12 @@ function buildOrchestratorSystemPrompt(
             "  resistance; don't wait to be asked.",
           ]
         : []),
+    ...(scene.arc?.length
+      ? [
+          "- Steer toward the [next] arc beat when the moment allows - set up its",
+          "  conditions, don't force or announce it, and never skip ahead of the arc.",
+        ]
+      : []),
     "- Use `action: \"wait-for-user\"` when the last turn already put something to the",
     "  user, or after 2-3 consecutive AI turns - give the user room to answer.",
     "- Use `action: \"narrate\"` sparingly - scene transitions or bridging beats only.",
@@ -564,6 +571,33 @@ function buildOrchestratorSystemPrompt(
     "",
     "Return your decision as JSON matching the provided schema.",
   ].join("\n");
+}
+
+/**
+ * The authored arc with progress markers — rendered into both the fast
+ * director's prompt and the dramaturg's review. `[landed]` beats come
+ * from state.arcLanded (label match); the first un-landed beat is
+ * `[next]`, the rest `[ahead]`. Exported for the dramaturg module.
+ */
+export function buildArcBlock(scene: Scene, state: SceneState): string[] {
+  if (!scene.arc?.length) return [];
+  const landed = new Set((state.arcLanded ?? []).map((l) => l.toLowerCase()));
+  let nextSeen = false;
+  const lines = scene.arc.map((beat) => {
+    const isLanded = landed.has(beat.label.toLowerCase());
+    let marker: string;
+    if (isLanded) {
+      marker = "[landed]";
+    } else if (!nextSeen) {
+      marker = "[next]  ";
+      nextSeen = true;
+    } else {
+      marker = "[ahead] ";
+    }
+    const summary = beat.summary ? ` - ${beat.summary}` : "";
+    return `  ${marker} ${beat.label}${summary}`;
+  });
+  return ["Scene arc (authored beats, in order):", ...lines];
 }
 
 /** The director's audio roster — only rendered when the scene has placed
