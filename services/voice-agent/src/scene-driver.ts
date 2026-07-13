@@ -5,8 +5,10 @@ import {
   soundDesignToSceneSounds,
   type CharacterRecord,
 } from "@odyssey/db";
+import { getChatProviderForModel } from "@odyssey/engine";
 import {
   buildDirectiveChunk,
+  buildDramaturgMessages,
   buildSceneDecisionRequest,
   buildSceneSessionSnapshot,
   buildSpeakerTurnRequest,
@@ -16,6 +18,7 @@ import {
   PROACTIVE_SILENCE_MARKER,
   resolveOrchestratorExecutor,
   resolveSceneDecision,
+  sanitizeDramaturgNote,
   updateSceneMemory,
   type SceneSessionSnapshot,
   type SceneTurnForPlanning,
@@ -41,6 +44,16 @@ const SOLO_CUE_ON_MISS = process.env.VOICE_AGENT_SOLO_CUE_ON_MISS === "1";
  *  not a request, so they continue in-voice rather than answer a meta-instruction.
  *  The actual direction rides in the promptChunk (the orchestrator's beat). */
 const PROACTIVE_TURN_MESSAGE = "(The user has gone quiet.)";
+
+/** The dramaturg — async reflection loop writing SceneState.directorNote (step 2
+ *  of the intention architecture). Fire-and-forget after spoken turns; the fast
+ *  director reads the note as its own earlier reflection. Kill-switch: =0. */
+const DRAMATURG_ENABLED = process.env.VOICE_AGENT_DRAMATURG !== "0";
+/** Strong model, off the hot path — quality is the point, latency is free. */
+const DRAMATURG_MODEL = process.env.VOICE_AGENT_DRAMATURG_MODEL ?? "claude-sonnet-4-5";
+/** Reflect every N completed spoken turns (1 = every turn). */
+const DRAMATURG_EVERY = Math.max(1, Number(process.env.VOICE_AGENT_DRAMATURG_EVERY ?? 2));
+const DRAMATURG_TIMEOUT_MS = 20_000;
 
 /** Lowercase, collapse whitespace, drop trailing punctuation — for prefix matching
  *  a speculated partial against the final transcript. */
@@ -95,6 +108,11 @@ export class SceneDriver {
   // Optional persistence hook — invoked with a fresh snapshot after every decision.
   #onState: ((snapshot: SceneSessionSnapshot) => void) | null = null;
   #onSfx: ((cues: SfxCue[]) => void) | null = null;
+  // Dramaturg: completed-spoken-turn counter (cadence), single-flight guard, and a
+  // once-only disable if the provider can't be constructed (e.g. missing key).
+  #spokenTurns = 0;
+  #reflecting = false;
+  #dramaturgDisabled = !DRAMATURG_ENABLED;
 
   private constructor(scene: Scene) {
     this.scene = scene;
@@ -181,6 +199,66 @@ export class SceneDriver {
     } catch {
       // best-effort — audio must never disrupt the turn
     }
+  }
+
+  /**
+   * The dramaturg tick — fire-and-forget after a spoken turn lands. Every
+   * DRAMATURG_EVERY turns (single-flight), review the scene with a strong
+   * model OFF the hot path and write a short director's note into
+   * SceneState; the fast director reads it on its next decision. Failures
+   * warn only — the scene loop must never feel this.
+   */
+  #maybeReflect(): void {
+    if (this.#dramaturgDisabled || this.#reflecting) return;
+    this.#spokenTurns += 1;
+    if (this.#spokenTurns % DRAMATURG_EVERY !== 0) return;
+
+    let provider: ReturnType<typeof getChatProviderForModel>;
+    try {
+      provider = getChatProviderForModel(DRAMATURG_MODEL);
+    } catch (err) {
+      // No key / unknown model — disable for the session, warn once.
+      this.#dramaturgDisabled = true;
+      console.warn(
+        `[dramaturg] disabled: ${(err as Error).message} (model=${DRAMATURG_MODEL})`,
+      );
+      return;
+    }
+
+    this.#reflecting = true;
+    const startedAt = Date.now();
+    const request = buildDramaturgMessages({
+      scene: this.scene,
+      sceneState: this.#sceneState,
+      recentTurns: this.#recentTurns,
+      previousNote: this.#sceneState.directorNote,
+    });
+    void provider
+      .complete({
+        model: DRAMATURG_MODEL,
+        system: [{ type: "text", text: request.system }],
+        messages: [{ role: "user", content: request.user }],
+        maxTokens: 200,
+        signal: AbortSignal.timeout(DRAMATURG_TIMEOUT_MS),
+      })
+      .then((response) => {
+        const note = sanitizeDramaturgNote(response.text);
+        if (!note) return;
+        // Race-safe: decisions may have advanced #sceneState while we
+        // reflected — the note is the only field we write, onto whatever
+        // the CURRENT state is.
+        this.#sceneState = { ...this.#sceneState, directorNote: note };
+        this.#persistState();
+        console.log(
+          `[dramaturg] note (${Date.now() - startedAt}ms): ${note}`,
+        );
+      })
+      .catch((err) => {
+        console.warn(`[dramaturg] reflection failed: ${(err as Error).message}`);
+      })
+      .finally(() => {
+        this.#reflecting = false;
+      });
   }
 
   #persistState(): void {
@@ -295,6 +373,7 @@ export class SceneDriver {
     );
     this.#recentTurns.push({ speakerSlug: resolution.speakerSlug, text: replyText });
     this.#trim();
+    this.#maybeReflect();
     return { action: "speak", spoke: true };
   }
 
@@ -361,6 +440,7 @@ export class SceneDriver {
     if (replyText) {
       this.#recentTurns.push({ speakerSlug: resolution.speakerSlug, text: replyText });
       this.#trim();
+      this.#maybeReflect();
     }
     return true;
   }

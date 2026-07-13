@@ -357,6 +357,28 @@ describe("@odyssey/orchestration client", () => {
     expect(plainRequest?.promptChunk).toBe("Direction: Answer plainly.");
   });
 
+  it("renders the director's note when present and carries it through decisions", () => {
+    const state = { ...createInitialSceneState(scene), directorNote: "Press Ada now." };
+    const request = buildSceneDecisionRequest({ scene, sceneState: state });
+    expect(request.messages[0].content).toContain(
+      "Director's note (your own earlier reflection): Press Ada now.",
+    );
+
+    // Absent → no line.
+    const plain = buildSceneDecisionRequest({
+      scene,
+      sceneState: createInitialSceneState(scene),
+    });
+    expect(plain.messages[0].content).not.toContain("Director's note");
+
+    // The note survives decision application (spread carry-forward).
+    const resolution = resolveSceneDecision(
+      { scene, sceneState: state },
+      { action: "speak", speakerId: "ada", beat: "Answer." },
+    );
+    expect(resolution.sceneState.directorNote).toBe("Press Ada now.");
+  });
+
   it("builds a speaker turn request", () => {
     const state = createInitialSceneState(scene);
     const request = buildSpeakerTurnRequest({
