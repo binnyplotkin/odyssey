@@ -379,6 +379,33 @@ describe("@odyssey/orchestration client", () => {
     expect(resolution.sceneState.directorNote).toBe("Press Ada now.");
   });
 
+  it("renders the scene arc with progress markers in the director prompt", () => {
+    const arcScene: Scene = {
+      ...scene,
+      arc: [
+        { label: "First beat", summary: "how it lands" },
+        { label: "Second beat" },
+        { label: "Third beat" },
+      ],
+    };
+    const state = { ...createInitialSceneState(arcScene), arcLanded: ["First beat"] };
+    const system = buildSceneDecisionRequest({ scene: arcScene, sceneState: state })
+      .messages[0].content;
+    expect(system).toContain("Scene arc (authored beats, in order):");
+    expect(system).toContain("[landed] First beat - how it lands");
+    expect(system).toContain("[next]   Second beat");
+    expect(system).toContain("[ahead]  Third beat");
+    expect(system).toContain("Steer toward the [next] arc beat");
+
+    // Arc-less scenes render the exact prior prompt.
+    const plain = buildSceneDecisionRequest({
+      scene,
+      sceneState: createInitialSceneState(scene),
+    }).messages[0].content;
+    expect(plain).not.toContain("Scene arc");
+    expect(plain).not.toContain("Steer toward");
+  });
+
   it("builds a speaker turn request", () => {
     const state = createInitialSceneState(scene);
     const request = buildSpeakerTurnRequest({

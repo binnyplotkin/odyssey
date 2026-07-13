@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createInitialSceneState, type Scene } from "../client";
-import { buildDramaturgMessages, sanitizeDramaturgNote } from "../dramaturg";
+import {
+  buildDramaturgMessages,
+  matchArcLabel,
+  parseDramaturgReflection,
+  sanitizeDramaturgNote,
+} from "../dramaturg";
 
 const scene: Scene = {
   id: "test-scene",
@@ -60,6 +65,86 @@ describe("buildDramaturgMessages", () => {
     expect(request.user).not.toContain("Objective:");
     expect(request.user).not.toContain("previous note");
     expect(request.user).toContain("(no dialogue yet)");
+  });
+});
+
+describe("arc in the dramaturg review", () => {
+  const arcScene: Scene = {
+    ...scene,
+    arc: [
+      { label: "The machine is named", summary: "someone says its name aloud" },
+      { label: "Ada's admission" },
+    ],
+  };
+
+  it("renders the arc with markers and the LANDED instruction", () => {
+    const state = {
+      ...createInitialSceneState(arcScene),
+      arcLanded: ["The machine is named"],
+    };
+    const request = buildDramaturgMessages({
+      scene: arcScene,
+      sceneState: state,
+      recentTurns: [],
+    });
+    expect(request.user).toContain("[landed] The machine is named - someone says its name aloud");
+    expect(request.user).toContain("[next]   Ada's admission");
+    expect(request.system).toContain("LANDED: <beat label only, copied verbatim");
+  });
+
+  it("omits the arc block and instruction for arc-less scenes", () => {
+    const request = buildDramaturgMessages({
+      scene,
+      sceneState: createInitialSceneState(scene),
+      recentTurns: [],
+    });
+    expect(request.user).not.toContain("Scene arc");
+    expect(request.system).not.toContain("LANDED:");
+  });
+});
+
+describe("parseDramaturgReflection", () => {
+  it("splits the note from LANDED lines regardless of position", () => {
+    const { note, landed } = parseDramaturgReflection(
+      "LANDED: The machine is named\nAda is cornered; press the admission now.\nLANDED: Ada's admission",
+    );
+    expect(note).toBe("Ada is cornered; press the admission now.");
+    expect(landed).toEqual(["The machine is named", "Ada's admission"]);
+  });
+
+  it("handles note-only and landed-only replies", () => {
+    expect(parseDramaturgReflection("Just a note.")).toEqual({
+      note: "Just a note.",
+      landed: [],
+    });
+    expect(parseDramaturgReflection("landed: Something Happened")).toEqual({
+      note: null,
+      landed: ["Something Happened"],
+    });
+  });
+});
+
+describe("matchArcLabel", () => {
+  const labels = ["The promise is spoken aloud", "Sarah's laugh — and the denial"];
+
+  it("matches exact (case-insensitive) labels", () => {
+    expect(matchArcLabel("the promise is spoken aloud", labels)).toBe(
+      "The promise is spoken aloud",
+    );
+  });
+
+  it("tolerates a copied label-with-summary suffix", () => {
+    expect(
+      matchArcLabel(
+        "The promise is spoken aloud - The promise of a son is said where Sarah can hear it.",
+        labels,
+      ),
+    ).toBe("The promise is spoken aloud");
+  });
+
+  it("rejects prefixes that aren't separator-bounded and unknown labels", () => {
+    expect(matchArcLabel("The promise is spoken aloudly", labels)).toBeNull();
+    expect(matchArcLabel("Something else entirely", labels)).toBeNull();
   });
 });
 

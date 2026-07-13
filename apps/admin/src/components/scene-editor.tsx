@@ -26,6 +26,7 @@ import type {
 import {
   addAudioToScene,
   addCharacterToScene,
+  addEventToScene,
   archiveScene,
   removeSceneNode,
   updateSceneConfig,
@@ -242,6 +243,27 @@ export function SceneEditor({
     [router, scene.id],
   );
 
+  const addEvent = useCallback(
+    (input: { label: string; summary?: string }) => {
+      // Next slot in the arc: max existing timeIndex + 1 (0-based start).
+      const timeIndex =
+        graphNodes
+          .filter((n) => n.kind === "event")
+          .reduce(
+            (max, n) =>
+              typeof n.data.timeIndex === "number" && n.data.timeIndex > max
+                ? n.data.timeIndex
+                : max,
+            -1,
+          ) + 1;
+      start(async () => {
+        await addEventToScene(scene.id, { ...input, timeIndex });
+        router.refresh();
+      });
+    },
+    [router, scene.id, graphNodes],
+  );
+
   const removeCharacter = useCallback(
     (nodeId: string) => {
       start(async () => {
@@ -367,6 +389,7 @@ export function SceneEditor({
           }}
           onAddCharacter={addCharacter}
           onAddAudio={addAudio}
+          onAddEvent={addEvent}
           onRemoveCharacter={removeCharacter}
           onNodeSaved={updateLocalNode}
         />
@@ -729,6 +752,46 @@ function SceneGraphNode({
       </div>
     );
   }
+  if (node.kind === "event") {
+    const timeIndex =
+      typeof node.data.timeIndex === "number" ? node.data.timeIndex : null;
+    return (
+      <div
+        style={{
+          width: 300,
+          padding: "var(--space-16)",
+          borderRadius: "var(--radius-xl)",
+          border: selected
+            ? "1.5px solid color-mix(in srgb, var(--accent-strong) 55%, transparent)"
+            : "1px solid var(--border-subtle)",
+          background: "var(--background)",
+          boxShadow: selected
+            ? "0 0 0 3px color-mix(in srgb, var(--accent-strong) 12%, transparent)"
+            : "none",
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-8)",
+        }}
+      >
+        <span style={kickerStyle}>
+          arc{timeIndex !== null ? ` · beat ${timeIndex + 1}` : ""}
+        </span>
+        <strong
+          style={{
+            color: T.fg,
+            fontFamily: T.fontHeading,
+            fontSize: "var(--font-size-lg)",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {node.label}
+        </strong>
+        <p style={{ margin: 0, color: T.muted, lineHeight: "19px", fontSize: "var(--font-size-sm)" }}>
+          {node.summary || "What it looks like when this beat lands — add a summary."}
+        </p>
+      </div>
+    );
+  }
   if (node.kind === "ambience") {
     const trackId = asString(node.data.trackId);
     const isDefault = node.data.isDefault === true;
@@ -825,6 +888,7 @@ function SceneInspector({
   onSceneChange,
   onAddCharacter,
   onAddAudio,
+  onAddEvent,
   onRemoveCharacter,
   onNodeSaved,
 }: {
@@ -866,6 +930,7 @@ function SceneInspector({
     isDefault?: boolean;
     triggerHint?: string;
   }) => void;
+  onAddEvent: (input: { label: string; summary?: string }) => void;
   onRemoveCharacter: (nodeId: string) => void;
   onNodeSaved: (
     nodeId: string,
@@ -896,6 +961,7 @@ function SceneInspector({
           onSceneChange={onSceneChange}
           onAddCharacter={onAddCharacter}
           onAddAudio={onAddAudio}
+          onAddEvent={onAddEvent}
         />
       )}
     </AdminRightRail>
@@ -913,6 +979,7 @@ function SceneSettingsInspector({
   onSceneChange,
   onAddCharacter,
   onAddAudio,
+  onAddEvent,
 }: {
   pending: boolean;
   saved: boolean;
@@ -948,11 +1015,14 @@ function SceneSettingsInspector({
     isDefault?: boolean;
     triggerHint?: string;
   }) => void;
+  onAddEvent: (input: { label: string; summary?: string }) => void;
 }) {
   const [audioAssetId, setAudioAssetId] = useState("");
   const [audioRole, setAudioRole] = useState<"bed" | "oneshot">("bed");
   const [audioDefault, setAudioDefault] = useState(false);
   const [audioTriggerHint, setAudioTriggerHint] = useState("");
+  const [beatLabel, setBeatLabel] = useState("");
+  const [beatSummary, setBeatSummary] = useState("");
 
   const addAudio = () => {
     if (!audioAssetId) return;
@@ -1121,6 +1191,38 @@ function SceneSettingsInspector({
           </AdminButton>
         </div>
       </Field>
+      <Field label="Add arc beat">
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+          <input
+            value={beatLabel}
+            onChange={(event) => setBeatLabel(event.target.value)}
+            placeholder="Beat name, e.g. Sarah's laugh — and the denial"
+            style={inputStyle}
+          />
+          <textarea
+            value={beatSummary}
+            onChange={(event) => setBeatSummary(event.target.value)}
+            rows={2}
+            placeholder="What it looks like when this beat lands (optional)."
+            style={textareaStyle}
+          />
+          <AdminButton
+            type="button"
+            variant="secondary"
+            disabled={pending || !beatLabel.trim()}
+            onClick={() => {
+              onAddEvent({
+                label: beatLabel.trim(),
+                summary: beatSummary.trim() || undefined,
+              });
+              setBeatLabel("");
+              setBeatSummary("");
+            }}
+          >
+            Add arc beat
+          </AdminButton>
+        </div>
+      </Field>
       <InspectorFooter pending={pending} saved={saved} />
     </form>
   );
@@ -1181,6 +1283,9 @@ function GraphNodeInspector({
   const [audioGainDb, setAudioGainDb] = useState(
     typeof node.data.gainDb === "number" ? String(node.data.gainDb) : "",
   );
+  const [eventTimeIndex, setEventTimeIndex] = useState(
+    typeof node.data.timeIndex === "number" ? String(node.data.timeIndex) : "0",
+  );
   const [saved, setSaved] = useState(false);
   const [saving, startSaving] = useTransition();
 
@@ -1207,6 +1312,13 @@ function GraphNodeInspector({
               trackId,
               description: ambienceDescription,
               isDefault: isDefaultAmbience,
+            })
+        : node.kind === "event"
+          ? compactObject({
+              ...node.data,
+              timeIndex: Number.isFinite(Number(eventTimeIndex))
+                ? Math.trunc(Number(eventTimeIndex))
+                : 0,
             })
         : node.kind === "audio"
           ? {
@@ -1469,8 +1581,18 @@ function GraphNodeInspector({
 	          )}
 	        </>
 	      )}
+	      {node.kind === "event" && (
+	        <Field label="Arc position (0 = first beat)">
+	          <input
+	            value={eventTimeIndex}
+	            onChange={(event) => setEventTimeIndex(event.target.value)}
+	            inputMode="numeric"
+	            style={inputStyle}
+	          />
+	        </Field>
+	      )}
 	      <InspectorFooter pending={pending || saving} saved={saved} label="Save node" />
-	      {(node.kind === "character" || node.kind === "ambience" || node.kind === "audio") && (
+	      {(node.kind === "character" || node.kind === "ambience" || node.kind === "audio" || node.kind === "event") && (
 	        <button
 	          type="button"
 	          onClick={() => onRemoveCharacter(node.id)}
