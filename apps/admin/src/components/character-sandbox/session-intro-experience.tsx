@@ -10,6 +10,8 @@ import {
 } from "react";
 
 const INTRO_MEDIA_URL = "/session-entry-video/kawabunga-intro.mp4?v=1";
+const INTRO_POSTER_URL =
+  "/session-entry-video/kawabunga-intro-poster.jpg?v=1";
 export const SESSION_INTRO_TIMELINE = Object.freeze({
   portalProgress: 1,
   illuminationAtSeconds: 1.2,
@@ -78,12 +80,14 @@ export const SessionIntroExperience = forwardRef<
   ref,
 ) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const posterRef = useRef<HTMLDivElement | null>(null);
   const whiteoutRef = useRef<HTMLDivElement | null>(null);
   const videoFrameRef = useRef<number | null>(null);
   const fallbackFrameRef = useRef<number | null>(null);
   const frameGenerationRef = useRef(0);
   const waitingAtEndRef = useRef(false);
   const exitingRef = useRef(false);
+  const firstFramePresentedRef = useRef(false);
   const foregroundRevealedRef = useRef(false);
   const readyToRevealRef = useRef(readyToReveal);
   const onCompleteRef = useRef(onComplete);
@@ -98,7 +102,13 @@ export const SessionIntroExperience = forwardRef<
     onForegroundRevealRef.current = onForegroundReveal;
     onPlaybackStateChangeRef.current = onPlaybackStateChange;
     onProgressRef.current = onProgress;
-  }, [onComplete, onForegroundReveal, onPlaybackStateChange, onProgress, readyToReveal]);
+  }, [
+    onComplete,
+    onForegroundReveal,
+    onPlaybackStateChange,
+    onProgress,
+    readyToReveal,
+  ]);
 
   const stopPlayback = useCallback(() => {
     frameGenerationRef.current += 1;
@@ -159,7 +169,9 @@ export const SessionIntroExperience = forwardRef<
           ? illumination
           : 1 - reveal;
 
-      video.style.opacity = String(1 - videoFade);
+      video.style.opacity = firstFramePresentedRef.current
+        ? String(1 - videoFade)
+        : "0";
       video.style.filter = `brightness(${1 + illumination * 1.9}) saturate(${1 + illumination * 0.08})`;
       whiteout.style.opacity = String(clamp01(whiteoutOpacity));
 
@@ -183,6 +195,10 @@ export const SessionIntroExperience = forwardRef<
         if (generation !== frameGenerationRef.current || video.ended) return;
         const handleFrame = (mediaTime: number) => {
           if (generation !== frameGenerationRef.current) return;
+          if (!firstFramePresentedRef.current) {
+            firstFramePresentedRef.current = true;
+            if (posterRef.current) posterRef.current.style.opacity = "0";
+          }
           const duration = Number.isFinite(video.duration) ? video.duration : 0;
           updateVisuals(mediaTime, duration);
           schedule();
@@ -192,9 +208,13 @@ export const SessionIntroExperience = forwardRef<
             (_now, metadata) => handleFrame(metadata.mediaTime),
           );
         } else {
-          fallbackFrameRef.current = window.requestAnimationFrame(() =>
-            handleFrame(video.currentTime),
-          );
+          fallbackFrameRef.current = window.requestAnimationFrame(() => {
+            if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+              schedule();
+              return;
+            }
+            handleFrame(video.currentTime);
+          });
         }
       };
       schedule();
@@ -209,8 +229,11 @@ export const SessionIntroExperience = forwardRef<
     stopPlayback();
     waitingAtEndRef.current = false;
     exitingRef.current = false;
+    firstFramePresentedRef.current = false;
     foregroundRevealedRef.current = false;
     setExiting(false);
+    if (posterRef.current) posterRef.current.style.opacity = "1";
+    video.style.opacity = "0";
     video.currentTime = 0;
     video.volume = 1;
     updateVisuals(0, video.duration);
@@ -242,8 +265,11 @@ export const SessionIntroExperience = forwardRef<
     stopPlayback();
     waitingAtEndRef.current = false;
     exitingRef.current = false;
+    firstFramePresentedRef.current = false;
     foregroundRevealedRef.current = false;
     setExiting(false);
+    if (posterRef.current) posterRef.current.style.opacity = "1";
+    if (videoRef.current) videoRef.current.style.opacity = "0";
     onPlaybackStateChangeRef.current?.("idle");
   }, [active, stopPlayback]);
 
@@ -286,6 +312,20 @@ export const SessionIntroExperience = forwardRef<
         display: active ? "block" : "none",
       }}
     >
+      <div
+        ref={posterRef}
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundColor: "#050b0c",
+          backgroundImage: `url("${INTRO_POSTER_URL}")`,
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundSize: "cover",
+          opacity: 1,
+          pointerEvents: "none",
+        }}
+      />
       <video
         ref={videoRef}
         data-session-intro-media
@@ -301,8 +341,8 @@ export const SessionIntroExperience = forwardRef<
           width: "100%",
           height: "100%",
           objectFit: "cover",
-          background: "#000",
-          opacity: 1,
+          background: "transparent",
+          opacity: 0,
           willChange: "filter, opacity",
         }}
       />
