@@ -158,11 +158,18 @@ async function main() {
   });
 
   // ── speak(): the character brain, text-only, production persistence.
-  let currentSpeak: { speaker: string; direction: string | null } | null = null;
+  let currentSpeak: {
+    speaker: string;
+    direction: string | null;
+    horizon: string | null;
+  } | null = null;
   const speak = async (input: SceneSpeakInput, _replyId: string): Promise<string> => {
     currentSpeak = {
       speaker: input.speaker.name,
       direction: input.promptChunk ?? null,
+      horizon: input.currentMoment
+        ? `${input.currentMoment.era}:${input.currentMoment.index}`
+        : null,
     };
     let reply = "";
     const abort = new AbortController();
@@ -172,6 +179,7 @@ async function main() {
         message: input.message,
         history: input.history,
         promptChunk: input.promptChunk,
+        currentMoment: input.currentMoment,
         textOnly: true,
         ...(sessionId ? { sessionId, turnId: crypto.randomUUID() } : {}),
       },
@@ -269,6 +277,9 @@ async function main() {
         for (const line of currentSpeak.direction.split("\n")) {
           console.log(dim(`▸ ${line}`));
         }
+      }
+      if (currentSpeak?.horizon) {
+        console.log(dim(`▸ knowledge horizon: ${currentSpeak.horizon}`));
       }
       for (const cue of pendingSfx) console.log(yellow(`▸ sfx: ${cue.id} (${cue.at})`));
       console.log(`${green(`${currentSpeak?.speaker?.toUpperCase() ?? "CHARACTER"}:`)} ${reply}`);

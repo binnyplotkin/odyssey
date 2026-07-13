@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type {
   CharacterBrainModel,
   CharacterIdentity,
+  EraConfig,
   SceneEdgeRecord,
   SceneNodeRecord,
 } from "@odyssey/db";
@@ -31,6 +32,9 @@ export type SceneLibraryCharacter = {
   identity: CharacterIdentity | null;
   brainModel: CharacterBrainModel | null;
   voiceId: string | null;
+  // The character's era timeline — populates the knowledge-horizon era
+  // picker on this character's scene node.
+  eras: EraConfig[];
 };
 
 export type SceneGraphPayload = {
@@ -80,6 +84,7 @@ export default async function SceneDetailPage({
     identity: c.identity,
     brainModel: c.brainModel,
     voiceId: c.voiceId,
+    eras: c.eras ?? [],
   }));
 
   const librarySounds: SceneLibrarySound[] = soundLibrary.map((a) => ({

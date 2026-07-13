@@ -18,9 +18,12 @@ export function filterByTimeline(
   pages: WikiPageRecord[],
   eras: EraConfig[],
   currentMoment: TimeIndex | null | undefined,
-): { kept: WikiPageRecord[]; filteredSlugs: string[] } {
+): { kept: WikiPageRecord[]; filteredSlugs: string[]; futureSlugs: string[] } {
+  // futureSlugs ⊆ filteredSlugs: only the pages dropped because they sit
+  // AFTER currentMoment (not the curator-only ones). The renderer lists these
+  // in the horizon fence ("these have not happened yet").
   if (!currentMoment) {
-    return { kept: pages, filteredSlugs: [] };
+    return { kept: pages, filteredSlugs: [], futureSlugs: [] };
   }
 
   // Map each era key → order index for O(1) comparison.
@@ -31,11 +34,12 @@ export function filterByTimeline(
   if (currentOrder === undefined) {
     // currentMoment references an era the character doesn't have configured.
     // Be permissive and keep everything — don't silently break a session.
-    return { kept: pages, filteredSlugs: [] };
+    return { kept: pages, filteredSlugs: [], futureSlugs: [] };
   }
 
   const kept: WikiPageRecord[] = [];
   const filteredSlugs: string[] = [];
+  const futureSlugs: string[] = [];
 
   for (const p of pages) {
     if (!isKnowledgeAccessible(p)) {
@@ -62,14 +66,19 @@ export function filterByTimeline(
     if (otherOrder < currentOrder) {
       kept.push(p);
     } else if (otherOrder === currentOrder) {
-      if (p.timeIndex.index <= currentMoment.index) kept.push(p);
-      else filteredSlugs.push(p.slug);
+      if (p.timeIndex.index <= currentMoment.index) {
+        kept.push(p);
+      } else {
+        filteredSlugs.push(p.slug);
+        futureSlugs.push(p.slug);
+      }
     } else {
       filteredSlugs.push(p.slug);
+      futureSlugs.push(p.slug);
     }
   }
 
-  return { kept, filteredSlugs };
+  return { kept, filteredSlugs, futureSlugs };
 }
 
 function isKnowledgeAccessible(page: WikiPageRecord): boolean {

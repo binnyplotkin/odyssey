@@ -127,7 +127,10 @@ export function selectDefaultAmbienceTrackId(
  * to keep the roster token-tight.
  */
 function liftCharacterIntent(data: Record<string, unknown>): Partial<
-  Pick<SceneCharacter, "roleInScene" | "motivations" | "emotionalBaseline" | "behaviorTriggers">
+  Pick<
+    SceneCharacter,
+    "roleInScene" | "motivations" | "emotionalBaseline" | "behaviorTriggers" | "knowledgeHorizon"
+  >
 > {
   const str = (v: unknown, max: number): string | undefined =>
     typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined;
@@ -146,11 +149,25 @@ function liftCharacterIntent(data: Record<string, unknown>): Partial<
         .slice(0, 6)
     : [];
 
+  // Horizon: {era, index} on the node data. Both halves must be present and
+  // well-typed or the horizon is dropped (no half-authored filtering).
+  const rawHorizon = data.knowledgeHorizon as Record<string, unknown> | undefined;
+  const horizonEra = str(rawHorizon?.era, 80);
+  const horizonIndex =
+    typeof rawHorizon?.index === "number" && Number.isFinite(rawHorizon.index)
+      ? Math.trunc(rawHorizon.index)
+      : undefined;
+  const knowledgeHorizon =
+    horizonEra && horizonIndex !== undefined
+      ? { era: horizonEra, index: horizonIndex }
+      : undefined;
+
   return {
     ...(roleInScene ? { roleInScene } : {}),
     ...(motivations ? { motivations } : {}),
     ...(emotionalBaseline ? { emotionalBaseline } : {}),
     ...(behaviorTriggers.length ? { behaviorTriggers } : {}),
+    ...(knowledgeHorizon ? { knowledgeHorizon } : {}),
   };
 }
 

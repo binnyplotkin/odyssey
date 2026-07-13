@@ -356,6 +356,9 @@ export default defineAgent({
         history?: Array<{ role: "user" | "assistant"; content: string }>;
         promptChunk?: string;
         speaker?: { slug: string; name: string };
+        // Speaker's scene knowledge horizon — rides the spread into
+        // runVoiceStream, which filters later-timeIndexed pages.
+        currentMoment?: { era: string; index: number };
       },
       signal: AbortSignal,
       replyId: string,
