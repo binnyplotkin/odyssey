@@ -370,7 +370,14 @@ export function buildDirectiveChunk(input: {
   sceneCue?: string;
   speaker?: Pick<SceneCharacter, "motivations" | "behaviorTriggers" | "speakingStyle">;
 }): string {
-  const lines = [`Direction: ${input.beat}`];
+  const lines = [
+    `Direction: ${input.beat}`,
+    // Characters habitually append a question to every reply (observed:
+    // Abraham closing "Friend, what…?" even under "pause, let it settle").
+    // The direction sets the SHAPE of the turn, including how it ends.
+    "Match your reply's shape to the direction - if it says to pause, land,",
+    "concede, or act, end there; do not tack a question onto the end.",
+  ];
   if (input.sceneCue) lines.push(`Scene note: ${input.sceneCue}`);
   if (input.speaker?.motivations) {
     lines.push(`Your agenda in this scene: ${input.speaker.motivations}`);
@@ -397,6 +404,15 @@ function applyDecision(
   const reason =
     [meta?.reason, ...notes].filter(Boolean).join("; ") || undefined;
 
+  // Director's working memory: log the DIRECTION it just issued (the
+  // per-turn `beat`, not the `beatLabel` situation) so the next decision
+  // can see — and avoid repeating — its own recent moves. Newest last,
+  // capped at 8 (matches sceneStateSchema.recentBeats).
+  const issuedBeat = decision.action === "speak" ? decision.beat?.trim() : undefined;
+  const recentBeats = issuedBeat
+    ? [...(input.sceneState.recentBeats ?? []), issuedBeat].slice(-8)
+    : input.sceneState.recentBeats;
+
   const nextState: SceneState = {
     ...input.sceneState,
     beat: decision.beatLabel ?? input.sceneState.beat,
@@ -406,6 +422,7 @@ function applyDecision(
         : input.sceneState.ambience,
     lastSpeakerSlug: speakerSlug ?? input.sceneState.lastSpeakerSlug,
     turnIndex: input.sceneState.turnIndex + 1,
+    ...(recentBeats?.length ? { recentBeats } : {}),
   };
 
   return {
@@ -494,15 +511,15 @@ function buildOrchestratorSystemPrompt(
     "",
     "Direct, don't transcribe. The `beat` is the character's intent THIS turn: what",
     "they react to and how they push the scene forward. Make it active - invent the",
-    "goal for this character in the moment, don't wait to be asked. A strong turn",
-    "usually ends by putting something back to the user: a question, a challenge, an",
-    "invitation. Good beats:",
-    "  - \"Turn the question back on them - ask why they're really asking.\"",
-    "  - \"Name the thing they're avoiding; press, don't soothe.\"",
-    "  - \"Draw out what they came here looking for.\"",
-    "Set `beat` on EVERY `speak`. But vary the move - not every turn is a question;",
-    "sometimes reveal, sometimes press, sometimes land a hard truth. Never script the",
-    "words - that's the character's job; the `beat` is intent, not lines.",
+    "goal for this character in the moment, don't wait to be asked. Rotate the MOVE",
+    "turn to turn - a scene where every line ends in a question is dead. Moves:",
+    "  - reveal: \"Let slip the thing they've been guarding - then stop talking.\"",
+    "  - press: \"Name the thing they're avoiding; press, don't soothe.\"",
+    "  - concede: \"Give ground - admit the doubt, and let it hang.\"",
+    "  - act: \"Turn to the fire / pour the water / stand - let the action speak.\"",
+    "  - ask: \"Turn the question back on them - ask why they're really asking.\"",
+    "Set `beat` on EVERY `speak`. Never script the words - that's the character's",
+    "job; the `beat` is intent, not lines.",
     "",
     "Set `speakerId` to the character's slug from the roster below (NOT their name).",
     "",
@@ -524,6 +541,14 @@ function buildOrchestratorSystemPrompt(
     `Current situation: ${state.beat}`,
     ...(state.directorNote
       ? [`Director's note (your own earlier reflection): ${state.directorNote}`]
+      : []),
+    ...(state.recentBeats?.length
+      ? [
+          "Directions you already gave (oldest to newest). Do NOT repeat a direction,",
+          "device, or image from this list - each new `beat` must be a DIFFERENT move.",
+          "If the last two both ended on a question, this one must not:",
+          ...state.recentBeats.map((b) => `  - ${b}`),
+        ]
       : []),
     state.lastSpeakerSlug
       ? `Last to speak: ${state.lastSpeakerSlug}`

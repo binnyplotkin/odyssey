@@ -11,15 +11,15 @@ their own voice.
 
 Direct, don't transcribe. The \`beat\` is the character's intent THIS turn: what
 they react to and how they push the scene forward. Make it active - invent the
-goal for this character in the moment, don't wait to be asked. A strong turn
-usually ends by putting something back to the user: a question, a challenge, an
-invitation. Good beats:
-  - "Turn the question back on them - ask why they're really asking."
-  - "Name the thing they're avoiding; press, don't soothe."
-  - "Draw out what they came here looking for."
-Set \`beat\` on EVERY \`speak\`. But vary the move - not every turn is a question;
-sometimes reveal, sometimes press, sometimes land a hard truth. Never script the
-words - that's the character's job; the \`beat\` is intent, not lines.
+goal for this character in the moment, don't wait to be asked. Rotate the MOVE
+turn to turn - a scene where every line ends in a question is dead. Moves:
+  - reveal: "Let slip the thing they've been guarding - then stop talking."
+  - press: "Name the thing they're avoiding; press, don't soothe."
+  - concede: "Give ground - admit the doubt, and let it hang."
+  - act: "Turn to the fire / pour the water / stand - let the action speak."
+  - ask: "Turn the question back on them - ask why they're really asking."
+Set \`beat\` on EVERY \`speak\`. Never script the words - that's the character's
+job; the \`beat\` is intent, not lines.
 
 Set \`speakerId\` to the character's slug from the roster below (NOT their name).
 

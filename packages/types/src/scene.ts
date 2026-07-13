@@ -207,6 +207,11 @@ export const sceneStateSchema = z.object({
   // Labels of arc beats the dramaturg has judged LANDED (subset of
   // Scene.arc labels, in arc order). Spread-carried like directorNote.
   arcLanded: z.array(z.string()).optional(),
+  // The director's own recent moves — the last few `beat` directions it
+  // issued, newest last. Fed back into its prompt so it can see (and stop)
+  // itself repeating a direction or device. Session working memory, not
+  // authored config; capped small.
+  recentBeats: z.array(z.string()).max(8).optional(),
   // Monotonic counter — incremented on every orchestration decision so we
   // can correlate decisions with the turns they spawned.
   turnIndex: z.number().int().min(0),

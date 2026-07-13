@@ -210,6 +210,33 @@ describe("@odyssey/orchestration client", () => {
     expect(end.sceneState.turnIndex).toBe(4);
   });
 
+  it("logs issued directions into recentBeats, newest last, capped at 8", () => {
+    let state = createInitialSceneState(scene);
+    for (let i = 1; i <= 10; i += 1) {
+      state = resolveSceneDecision(
+        { scene, sceneState: state },
+        { action: "speak", speakerId: "ada", beat: `Direction ${i}.` },
+      ).sceneState;
+    }
+    expect(state.recentBeats).toEqual([
+      "Direction 3.",
+      "Direction 4.",
+      "Direction 5.",
+      "Direction 6.",
+      "Direction 7.",
+      "Direction 8.",
+      "Direction 9.",
+      "Direction 10.",
+    ]);
+
+    // Non-speak decisions leave the log untouched.
+    const wait = resolveSceneDecision(
+      { scene, sceneState: state },
+      { action: "wait-for-user" },
+    );
+    expect(wait.sceneState.recentBeats).toEqual(state.recentBeats);
+  });
+
   it("falls back safely on unknown speaker", () => {
     const result = resolveSceneDecision(
       { scene, sceneState: createInitialSceneState(scene) },
@@ -342,19 +369,27 @@ describe("@odyssey/orchestration client", () => {
     expect(request?.promptChunk).toBe(
       [
         "Direction: Deflect, then probe.",
+        "Match your reply's shape to the direction - if it says to pause, land,",
+        "concede, or act, end there; do not tack a question onto the end.",
         "Your agenda in this scene: protect the lab's secret while learning what the user knows",
         "When the machine is mentioned: deflect with a question",
       ].join("\n"),
     );
 
-    // No authored intention → directive is just the direction (current behavior).
+    // No authored intention → directive is direction + shape rule only.
     const plainRequest = buildSpeakerTurnRequest({
       scene,
       sceneState: createInitialSceneState(scene),
       decision: { action: "speak", speakerId: "ada", beat: "Answer plainly." },
       recentTurns: [{ speakerSlug: "user", text: "Hello?" }],
     });
-    expect(plainRequest?.promptChunk).toBe("Direction: Answer plainly.");
+    expect(plainRequest?.promptChunk).toBe(
+      [
+        "Direction: Answer plainly.",
+        "Match your reply's shape to the direction - if it says to pause, land,",
+        "concede, or act, end there; do not tack a question onto the end.",
+      ].join("\n"),
+    );
   });
 
   it("renders the director's note when present and carries it through decisions", () => {
@@ -431,7 +466,12 @@ describe("@odyssey/orchestration client", () => {
       // twice (here AND as the appended user message downstream).
       history: [{ role: "user", content: "What happened here?" }],
       // Director `beat` framed as "Direction:"; `sceneCue` is the optional scene note.
-      promptChunk: "Direction: Ada responds to the visitor.\nScene note: Keep it quiet.",
+      promptChunk: [
+        "Direction: Ada responds to the visitor.",
+        "Match your reply's shape to the direction - if it says to pause, land,",
+        "concede, or act, end there; do not tack a question onto the end.",
+        "Scene note: Keep it quiet.",
+      ].join("\n"),
       voiceSlug: "ada-voice",
     });
   });
