@@ -1,25 +1,22 @@
 "use client";
 
 import { type ReactNode, useEffect } from "react";
+import { Play } from "react-feather";
 import type {
   SandboxBinding,
   SandboxCharacter,
 } from "@/app/(authenticated)/characters/[slug]/sandbox/page";
 
 /**
- * SandboxPreSession - Paper "Sandbox · Pre-Session" direction.
- * A full-height centered character hero sits beside the fixed 420px
- * session-manifest rail. Keyboard: Cmd/Ctrl+Enter launches, Esc cancels.
+ * SandboxPreSession - cinematic entrance with a glass session manifest.
+ * Keyboard: Cmd/Ctrl+Enter launches, Esc cancels.
  */
 
 const FONT_HEAD = "'Inter', system-ui, sans-serif";
 const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const ACCENT = "var(--accent-strong)";
-const TEXT_PRIMARY = "var(--text-primary)";
 const TEXT_MUTED = "var(--text-tertiary)";
-const TEXT_VALUE = "var(--text-secondary)";
 const DANGER = "var(--status-error)";
-const MANIFEST_BG = "var(--surface-1)";
 
 export function SandboxPreSession({
   character,
@@ -80,7 +77,12 @@ export function SandboxPreSession({
         minHeight: 0,
         overflow: "hidden",
         display: "flex",
-        background: "var(--background)",
+        backgroundColor: "#050b0c",
+        backgroundImage:
+          'url("/session-entry-video/kawabunga-intro-poster.jpg?v=1")',
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundSize: "cover",
       }}
     >
       <PaperHero character={character} />
@@ -124,12 +126,6 @@ function PaperHero({
         flex: 1,
         minWidth: 0,
         overflow: "hidden",
-        backgroundColor: "#050b0c",
-        backgroundImage:
-          'url("/session-entry-video/kawabunga-intro-poster.jpg?v=1")',
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        backgroundSize: "cover",
       }}
     />
   );
@@ -184,45 +180,75 @@ function PaperManifestRail({
       style={{
         position: "relative",
         zIndex: 100,
-        width: 420,
+        width: "clamp(380px, 29vw, 420px)",
         minHeight: 0,
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",
-        backgroundColor: MANIFEST_BG,
-        borderLeft: "1px solid var(--border-medium)",
+        margin: 14,
+        marginLeft: 0,
+        overflow: "hidden",
+        border: "1px solid rgba(184, 244, 238, 0.2)",
+        borderRadius: 8,
+        background:
+          "linear-gradient(180deg, rgba(8, 18, 19, 0.78), rgba(5, 12, 14, 0.62))",
+        backdropFilter: "blur(26px) saturate(138%)",
+        WebkitBackdropFilter: "blur(26px) saturate(138%)",
+        boxShadow:
+          "-24px 0 64px rgba(0, 0, 0, 0.34), inset 1px 0 rgba(220, 255, 251, 0.08), inset 0 1px rgba(255, 255, 255, 0.05)",
       }}
     >
+      <style>{GLASS_MANIFEST_CSS}</style>
       <header
         style={{
-          padding: "24px 28px 16px",
+          padding: "26px 28px 20px",
           display: "flex",
           flexDirection: "column",
           gap: "var(--space-8)",
-          backgroundColor: MANIFEST_BG,
-          borderBottom: "1px solid var(--border-medium)",
+          background:
+            "linear-gradient(180deg, rgba(218, 255, 250, 0.055), rgba(218, 255, 250, 0))",
+          borderBottom: "1px solid rgba(199, 245, 240, 0.12)",
         }}
       >
-        <span
+        <div
           style={{
-            fontFamily: FONT_MONO,
-            fontSize: "var(--font-size-sm)",
-            letterSpacing: "0.22em",
-            lineHeight: "14px",
-            textTransform: "uppercase",
-            color: ACCENT,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
           }}
         >
-          session manifest
-        </span>
+          <span
+            aria-hidden
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: ACCENT,
+              boxShadow: "0 0 14px var(--accent-glow)",
+            }}
+          />
+          <span
+            style={{
+              fontFamily: FONT_MONO,
+              fontSize: "var(--font-size-xs)",
+              letterSpacing: "0.2em",
+              lineHeight: "14px",
+              textTransform: "uppercase",
+              color: ACCENT,
+            }}
+          >
+            session manifest
+          </span>
+        </div>
         <span
           style={{
             fontFamily: FONT_HEAD,
-            fontSize: "var(--font-size-4xl)",
+            fontSize: 30,
             fontWeight: 600,
-            letterSpacing: "-0.02em",
-            lineHeight: "30px",
-            color: TEXT_PRIMARY,
+            letterSpacing: 0,
+            lineHeight: "34px",
+            color: "rgba(245, 251, 250, 0.94)",
+            textShadow: "0 2px 20px rgba(0, 0, 0, 0.28)",
           }}
         >
           v0.3.7 · latest
@@ -233,7 +259,7 @@ function PaperManifestRail({
             fontSize: "var(--font-size-xs)",
             letterSpacing: "0.10em",
             lineHeight: "12px",
-            color: TEXT_MUTED,
+            color: "rgba(205, 222, 220, 0.54)",
           }}
         >
           saved just now · {character.slug}
@@ -245,14 +271,14 @@ function PaperManifestRail({
           flex: 1,
           minHeight: 0,
           overflow: "hidden",
-          paddingBlock: "var(--space-6)",
+          paddingBlock: "var(--space-4)",
           paddingInline: 28,
-          backgroundColor: MANIFEST_BG,
+          background: "rgba(0, 0, 0, 0.04)",
         }}
       >
         <ManifestRailRow
           label="identity"
-          status={hasIdentity ? "● set" : "not set"}
+          status={hasIdentity ? "set" : "not set"}
           tone={hasIdentity ? "accent" : "muted"}
         >
           {traits.length > 0 ? (
@@ -266,7 +292,7 @@ function PaperManifestRail({
 
         <ManifestRailRow
           label="voice"
-          status={boundVoiceSlug ? "● bound" : "not bound"}
+          status={boundVoiceSlug ? "bound" : "not bound"}
           tone={boundVoiceSlug ? "accent" : "muted"}
         >
           {tones.length > 0 ? (
@@ -288,7 +314,7 @@ function PaperManifestRail({
 
         <ManifestRailRow
           label="mind"
-          status={activeModel ? "● routed" : "not set"}
+          status={activeModel ? "routed" : "not set"}
           tone={activeModel ? "accent" : "muted"}
         >
           <ManifestRailValue>{activeModel || "no model set"}</ManifestRailValue>
@@ -354,8 +380,9 @@ function PaperManifestRail({
           display: "flex",
           flexDirection: "column",
           gap: "var(--space-14)",
-          backgroundColor: MANIFEST_BG,
-          borderTop: "1px solid var(--border-medium)",
+          background:
+            "linear-gradient(180deg, rgba(4, 11, 13, 0.18), rgba(4, 10, 12, 0.52))",
+          borderTop: "1px solid rgba(199, 245, 240, 0.12)",
         }}
       >
         {sessionError ? (
@@ -378,6 +405,7 @@ function PaperManifestRail({
         <button
           type="button"
           onClick={onStart}
+          className="session-launch-button"
           style={{
             width: "100%",
             display: "flex",
@@ -386,8 +414,8 @@ function PaperManifestRail({
             gap: "var(--space-12)",
             padding: "18px 22px",
             borderRadius: "var(--radius-pill)",
-            border: "none",
-            background: ACCENT,
+            border: "1px solid rgba(220, 255, 251, 0.54)",
+            background: "rgba(136, 216, 208, 0.96)",
             color: "var(--accent-on)",
             fontFamily: FONT_MONO,
             fontSize: "var(--font-size-md)",
@@ -397,17 +425,11 @@ function PaperManifestRail({
             textTransform: "uppercase",
             cursor: "pointer",
             opacity: isEmpty ? 0.82 : 1,
+            boxShadow:
+              "0 12px 30px rgba(40, 151, 143, 0.2), inset 0 1px rgba(255, 255, 255, 0.45)",
           }}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="var(--accent-on)"
-            aria-hidden
-          >
-            <path d="M8 5v14l11-7z" />
-          </svg>
+          <Play size={14} fill="currentColor" aria-hidden />
           start session
         </button>
         <span
@@ -421,7 +443,7 @@ function PaperManifestRail({
             color: TEXT_MUTED,
           }}
         >
-          ⌘ ↵ to launch · esc to cancel
+          ⌘ ↵ to launch&nbsp;&nbsp;·&nbsp;&nbsp;esc to cancel
         </span>
       </footer>
     </aside>
@@ -449,7 +471,7 @@ function ManifestRailRow({
         justifyContent: "space-between",
         gap: "var(--space-12)",
         paddingBlock: "var(--space-14)",
-        borderBottom: "1px solid var(--ink-soft)",
+        borderBottom: "1px solid rgba(206, 245, 240, 0.09)",
       }}
     >
       <span
@@ -460,7 +482,7 @@ function ManifestRailRow({
           letterSpacing: "0.20em",
           lineHeight: "12px",
           textTransform: "uppercase",
-          color: TEXT_MUTED,
+          color: "rgba(203, 220, 218, 0.5)",
         }}
       >
         {label}
@@ -485,8 +507,26 @@ function ManifestRailRow({
               lineHeight: "12px",
               textTransform: "uppercase",
               color: statusColor,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
             }}
           >
+            {tone !== "muted" ? (
+              <span
+                aria-hidden
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: "50%",
+                  background: statusColor,
+                  boxShadow:
+                    tone === "accent"
+                      ? "0 0 10px var(--accent-glow)"
+                      : undefined,
+                }}
+              />
+            ) : null}
             {status}
           </span>
         ) : null}
@@ -512,7 +552,8 @@ function ManifestRailValue({
         fontFamily: FONT_MONO,
         fontSize: "var(--font-size-sm)",
         lineHeight: "14px",
-        color: tone === "danger" ? DANGER : TEXT_VALUE,
+        color:
+          tone === "danger" ? DANGER : "rgba(226, 236, 234, 0.76)",
       }}
     >
       {children}
@@ -532,7 +573,7 @@ function ManifestRailHint({ children }: { children: ReactNode }) {
         fontSize: "var(--font-size-2xs)",
         letterSpacing: "0.06em",
         lineHeight: "12px",
-        color: TEXT_MUTED,
+        color: "rgba(193, 211, 208, 0.48)",
       }}
     >
       {children}
@@ -544,3 +585,21 @@ function fmtSigned(n: number): string {
   if (n === 0) return "0.0";
   return (n > 0 ? "+" : "") + n.toFixed(1);
 }
+
+const GLASS_MANIFEST_CSS = `
+.session-launch-button {
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.session-launch-button:hover {
+  transform: translateY(-1px);
+  background: rgba(154, 229, 222, 1) !important;
+  box-shadow: 0 16px 38px rgba(40, 151, 143, 0.28), inset 0 1px rgba(255, 255, 255, 0.52) !important;
+}
+.session-launch-button:active {
+  transform: translateY(0);
+}
+.session-launch-button:focus-visible {
+  outline: 2px solid rgba(184, 244, 238, 0.9);
+  outline-offset: 3px;
+}
+`;
