@@ -7,6 +7,63 @@
   --admin-glass-line: rgba(184, 244, 238, 0.13);
   --admin-glass-line-strong: rgba(184, 244, 238, 0.24);
   --admin-glass-highlight: rgba(255, 255, 255, 0.035);
+  --background: #071112;
+  --sidebar: rgba(7, 16, 17, 0.92);
+  --surface-1: rgba(13, 27, 27, 0.72);
+  --surface-2: rgba(18, 35, 34, 0.72);
+  --surface-hover: rgba(29, 51, 49, 0.76);
+  --surface-active: rgba(35, 61, 58, 0.78);
+  --canvas-surface: #081415;
+  --canvas-base: #071112;
+  --foreground: #e4efed;
+  --text-primary: #d8e5e2;
+  --text-secondary: #9eb2ae;
+  --text-tertiary: #6f8985;
+  --text-quaternary: #49625f;
+  --text-placeholder: #819793;
+  --border-subtle: rgba(184, 244, 238, 0.085);
+  --border-medium: rgba(184, 244, 238, 0.14);
+  --border-active: rgba(184, 244, 238, 0.3);
+  --control-bg: rgba(19, 37, 36, 0.68);
+  --control-border: rgba(184, 244, 238, 0.14);
+  --popover-bg: rgba(8, 20, 21, 0.92);
+  --popover-border: rgba(184, 244, 238, 0.2);
+  --material-highlight: rgba(222, 255, 250, 0.045);
+  --card-highlight: rgba(222, 255, 250, 0.035);
+  --material-surface:
+    linear-gradient(145deg, rgba(215, 255, 249, 0.05), transparent 48%),
+    rgba(10, 24, 24, 0.76);
+  --material-card:
+    linear-gradient(145deg, rgba(215, 255, 249, 0.055), transparent 44%),
+    linear-gradient(180deg, rgba(11, 29, 28, 0.78), rgba(7, 20, 21, 0.72));
+  --page-atmosphere:
+    radial-gradient(circle at 18% 12%, rgba(67, 143, 134, 0.1), transparent 30%),
+    radial-gradient(circle at 82% 88%, rgba(23, 80, 78, 0.09), transparent 34%),
+    #071112;
+  --canvas-atmosphere:
+    radial-gradient(circle at 50% 26%, rgba(82, 177, 166, 0.09), transparent 42%),
+    #071112;
+  --ink-wash: rgba(215, 255, 249, 0.025);
+  --ink-soft: rgba(215, 255, 249, 0.055);
+  --ink-fill: rgba(215, 255, 249, 0.075);
+  --ink-line: rgba(215, 255, 249, 0.12);
+  --ink-edge: rgba(215, 255, 249, 0.2);
+  --shadow: rgba(0, 0, 0, 0.42);
+  --elevation-surface:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 14px 44px rgba(0, 0, 0, 0.2);
+  --elevation-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 14px 44px rgba(0, 0, 0, 0.2);
+  --elevation-panel:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 24px 70px rgba(0, 0, 0, 0.34);
+  --radius-button: 8px;
+  --radius-card: 8px;
+  --radius-panel: 8px;
+  --radius-floating: 8px;
+  --radius-2xl: 8px;
+  --radius-3xl: 8px;
   --admin-glass-sidebar: linear-gradient(
     180deg,
     rgba(15, 20, 21, 0.94),
@@ -131,7 +188,45 @@
 }
 
 .odyssey-shell-content {
-  background: color-mix(in srgb, var(--page-atmosphere) 96%, transparent);
+  background: var(--page-atmosphere) !important;
+}
+
+.odyssey-shell-content :is(
+  .panel,
+  .odyssey-surface,
+  .odyssey-card,
+  .admin-table-grid,
+  .odyssey-compact-card,
+  .odyssey-log-panel,
+  [style*="var(--material-card)"],
+  [style*="var(--material-surface)"],
+  [style*="var(--surface-1)"]
+) {
+  background-clip: padding-box;
+  backdrop-filter: blur(20px) saturate(128%);
+  -webkit-backdrop-filter: blur(20px) saturate(128%);
+}
+
+.odyssey-shell-content :is(
+  .odyssey-control,
+  .odyssey-search,
+  .odyssey-select-shell,
+  .odyssey-filter-pill,
+  .odyssey-icon-button,
+  .odyssey-ghost-button,
+  [style*="var(--control-bg)"]
+) {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(14px) saturate(124%);
+  -webkit-backdrop-filter: blur(14px) saturate(124%);
+}
+
+.odyssey-shell-content :is(
+  .odyssey-dropdown,
+  [style*="var(--popover-bg)"]
+) {
+  backdrop-filter: blur(28px) saturate(138%);
+  -webkit-backdrop-filter: blur(28px) saturate(138%);
 }
 
 .odyssey-shell-sidecar {
@@ -172,6 +267,55 @@
   --admin-glass-line: rgba(31, 80, 83, 0.13);
   --admin-glass-line-strong: rgba(31, 80, 83, 0.2);
   --admin-glass-highlight: rgba(255, 255, 255, 0.7);
+  --background: #dce9e8;
+  --sidebar: rgba(234, 245, 244, 0.9);
+  --surface-1: rgba(250, 255, 254, 0.7);
+  --surface-2: rgba(235, 246, 244, 0.72);
+  --surface-hover: rgba(221, 238, 235, 0.78);
+  --surface-active: rgba(208, 230, 226, 0.8);
+  --canvas-surface: #dce9e8;
+  --canvas-base: #dce9e8;
+  --foreground: #152b2a;
+  --text-primary: #1c3331;
+  --text-secondary: #526c68;
+  --text-tertiary: #718b87;
+  --text-quaternary: #9bafac;
+  --text-placeholder: #728b87;
+  --border-subtle: rgba(24, 80, 76, 0.09);
+  --border-medium: rgba(24, 80, 76, 0.14);
+  --border-active: rgba(15, 142, 164, 0.3);
+  --control-bg: rgba(255, 255, 255, 0.55);
+  --control-border: rgba(24, 80, 76, 0.14);
+  --popover-bg: rgba(244, 251, 250, 0.92);
+  --popover-border: rgba(24, 80, 76, 0.18);
+  --material-surface:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.7), transparent 52%),
+    rgba(237, 248, 246, 0.72);
+  --material-card:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.74), transparent 48%),
+    rgba(230, 244, 241, 0.7);
+  --page-atmosphere:
+    radial-gradient(circle at 18% 12%, rgba(15, 142, 164, 0.09), transparent 30%),
+    radial-gradient(circle at 82% 88%, rgba(47, 155, 114, 0.07), transparent 34%),
+    #dce9e8;
+  --canvas-atmosphere:
+    radial-gradient(circle at 50% 24%, rgba(15, 142, 164, 0.08), transparent 42%),
+    #dce9e8;
+  --ink-wash: rgba(24, 80, 76, 0.025);
+  --ink-soft: rgba(24, 80, 76, 0.055);
+  --ink-fill: rgba(24, 80, 76, 0.075);
+  --ink-line: rgba(24, 80, 76, 0.12);
+  --ink-edge: rgba(24, 80, 76, 0.2);
+  --shadow: rgba(30, 64, 61, 0.16);
+  --elevation-surface:
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    0 14px 40px rgba(30, 64, 61, 0.1);
+  --elevation-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 14px 40px rgba(30, 64, 61, 0.1);
+  --elevation-panel:
+    inset 0 1px 0 rgba(255, 255, 255, 0.74),
+    0 24px 64px rgba(30, 64, 61, 0.14);
   --admin-glass-sidebar: linear-gradient(
     180deg,
     rgba(244, 250, 250, 0.92),
