@@ -293,8 +293,9 @@ export type CharacterVoiceStyle = {
  * channel).
  *
  * `name`/`description` are snapshots taken from the library at bind time
- * so the SYNC `SceneDriver.fromCharacter()` can build the director's
- * audio roster without a DB join; the canvas refreshes them on every save.
+ * so scene-less synthesis paths (SceneDriver.syntheticFromCharacter) can
+ * build the director's audio roster without a DB join; the canvas
+ * refreshes them on every save.
  */
 export type CharacterSceneSound = {
   slug: string;
@@ -314,9 +315,10 @@ export type CharacterSceneSound = {
 
 /**
  * The sm-sound (Sound design) shape — the character's sandbox soundscape.
- * Only applies when the character runs OUTSIDE a scene (character sandbox
- * / char-… rooms) — a real scene's placed sounds always win, structurally,
- * because fromCharacter is only used scene-less.
+ * Applies when no scene-placed audio nodes exist: the character's SOLO
+ * scene falls back to it in resolveOrchestratorScene, and the legacy
+ * synthetic path uses it directly. The moment audio nodes are authored on
+ * a scene, they win, structurally.
  *
  * `sounds` is the canonical shape (character-canvas sound nodes). The
  * top-level `ambienceSlug`/`gainDb` are the LEGACY single-bed binding —

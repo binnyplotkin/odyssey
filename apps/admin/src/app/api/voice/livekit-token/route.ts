@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AccessToken } from "livekit-server-sdk";
+import { getSceneStore } from "@odyssey/db";
 import { auth } from "@/lib/auth";
 
 // Mints a short-lived LiveKit room-join token — the WebRTC twin of
 // /api/voice/host-token's SSE bearer. auth() has already verified the signed-in
 // admin (middleware + auth()); this grants join + mic-publish on a room. The
 // registered voice-agent worker auto-dispatches in and voices whoever the room
-// names: a `sceneId` → the multi-character SceneDriver (`scene-…` room); a
-// `characterId` → a single character (`char-…` room). The worker parses the
-// subject out of the room name — no per-worker env selects it.
+// names — always a SCENE (`scene-…` room): a `sceneId` names it directly; a
+// `characterId` resolves to the character's canonical SOLO scene (auto-
+// provisioned — a character session is just a scene with a roster of one).
+// The worker parses the subject out of the room name — no per-worker env
+// selects it. Legacy `char-…` rooms remain parseable by the worker as a shim.
 //
 // Requires LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET on the admin server.
 export const runtime = "nodejs";
@@ -49,14 +52,25 @@ export async function POST(req: NextRequest) {
   }
 
   // One room per (subject, session): the browser publishes its mic here; the agent
-  // worker dispatches in and publishes voice back. A sceneId routes to the
-  // multi-character SceneDriver (`scene-…`); a characterId to a single character
-  // (`char-…`). The sessionId is just a uniqueness token in the room name — the
-  // worker creates its own scene_session for the brain.
+  // worker dispatches in and publishes voice back. Everything is a scene: a
+  // sceneId names it directly; a characterId resolves to the character's solo
+  // scene (auto-provisioned on first session). If solo-scene provisioning fails
+  // (DB hiccup), fall back to the legacy `char-…` naming — the worker's shim
+  // still resolves it, so voice never hard-fails on observability plumbing.
+  // The sessionId is just a uniqueness token in the room name — the worker
+  // reuses the sandbox's pre-created scene_session for the brain.
   const sessionToken = payload.sessionId ?? crypto.randomUUID();
-  const room = sceneId
-    ? `scene-${sceneId}-${sessionToken}`
-    : `char-${characterId}-${sessionToken}`;
+  let room: string;
+  if (sceneId) {
+    room = `scene-${sceneId}-${sessionToken}`;
+  } else {
+    const soloScene = await getSceneStore()
+      .getOrCreateSoloScene(characterId!)
+      .catch(() => null);
+    room = soloScene
+      ? `scene-${soloScene.id}-${sessionToken}`
+      : `char-${characterId}-${sessionToken}`;
+  }
 
   const at = new AccessToken(apiKey, apiSecret, {
     identity: session.user.id,

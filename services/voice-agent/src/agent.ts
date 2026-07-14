@@ -122,11 +122,12 @@ function toAudioFrame(pcmBase64: string, sampleRate: number): AudioFrame {
   return new AudioFrame(i16, sampleRate, 1, i16.length);
 }
 
-/** Rooms are named `char-<characterId>-<sessionId>` by the browser's token route, so
- *  both the character AND the sandbox's pre-created scene_session are per-ROOM. Pull
- *  out both: the characterId picks who to voice; the sessionId lets the agent persist
- *  turns to the SAME session /sessions shows (so they're gradeable) instead of an
- *  orphan it invents. */
+/** LEGACY shim: `char-<characterId>-<sessionId>` rooms, minted by pre-unification
+ *  token routes. The characterId resolves to the character's SOLO scene via
+ *  SceneDriver.fromCharacter — same destination as the `scene-…` rooms the token
+ *  route mints today. Keep until no deployed client mints char- rooms; the
+ *  sessionId lets the agent persist turns to the SAME session /sessions shows
+ *  (so they're gradeable) instead of an orphan it invents. */
 function parseCharacterFromRoom(
   roomName: string | undefined,
 ): { characterId: string; sessionId: string } | null {
@@ -217,7 +218,7 @@ export default defineAgent({
       if (!character) {
         throw new Error(`character "${characterRef}" (from room "${ctx.room.name}") did not resolve`);
       }
-      sceneDriver = SceneDriver.fromCharacter(character);
+      sceneDriver = await SceneDriver.fromCharacter(character);
     }
 
     // Persist to the sandbox's OWN scene_session — the one in the room name, already
