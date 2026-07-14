@@ -9,6 +9,7 @@ export default defineConfig({
       "packages/db/src/**/*.test.ts",
       "packages/wiki-curator/src/**/*.test.ts",
       "packages/orchestration/src/**/*.test.ts",
+      "packages/voice-pipeline/src/**/*.test.ts",
       "apps/admin/src/**/*.test.ts",
       "services/voice-agent/src/**/*.test.ts",
     ],
