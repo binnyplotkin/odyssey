@@ -52,7 +52,10 @@ import { SceneDriver } from "./scene-driver";
 import { WorldAudioChannel } from "./world-audio";
 
 // --- Railway healthcheck: the agents worker doesn't serve HTTP itself, so expose
-// a tiny /healthz on its own port. embedderReady flips when bge is resident.
+// a tiny /healthz on its own port. It reports process liveness only: prewarm (and
+// thus bge readiness) happens in forked job subprocesses whose module state this
+// process can't see, and the model is baked into the image at build time anyway —
+// unlike voice-host, whose single process warms bge itself and can report it.
 //
 // IMPORTANT: @livekit/agents forks job + inference SUBPROCESSES that re-import
 // this module (worker.js / job_proc_executor use child_process.fork). A forked
@@ -60,13 +63,12 @@ import { WorldAudioChannel } from "./world-audio";
 // does not. Bind /healthz ONLY in the main process — otherwise the subprocess
 // double-binds the port → EADDRINUSE → "process exited before initializing" →
 // the dispatched job dies before the session ever starts. ---
-let embedderReady = false;
 const HEALTH_PORT = Number(process.env.HEALTH_PORT ?? process.env.PORT ?? 8080);
 if (!process.send) {
   const healthServer = createServer((req, res) => {
     if (req.url === "/healthz") {
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true, service: "voice-agent", embedderReady }));
+      res.end(JSON.stringify({ ok: true, service: "voice-agent" }));
       return;
     }
     res.writeHead(404).end();
@@ -177,7 +179,6 @@ export default defineAgent({
   // real turn is hot, matching voice-host's warm-bge boot.
   prewarm: async () => {
     await warmLocalEmbedder();
-    embedderReady = true;
     console.log("[voice-agent] bge warm — embedder ready");
   },
 

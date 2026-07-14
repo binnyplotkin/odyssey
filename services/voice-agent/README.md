@@ -42,7 +42,8 @@ Sequenced next:
    [voice-agent] participant joined: <identity>
    [voice-agent] track audio from <identity>
    ```
-   `GET /healthz` → `{ "ok": true, "service": "voice-agent", "embedderReady": true }`.
+   `GET /healthz` → `{ "ok": true, "service": "voice-agent" }` (process liveness only —
+   prewarm runs in forked job subprocesses, so the health process can't see bge state).
 
 That round-trip (worker registers → joins a room → sees the user's audio track) is the A1
 exit criterion: transport is proven before any brain wiring.
