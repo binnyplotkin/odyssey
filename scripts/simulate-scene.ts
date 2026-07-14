@@ -107,7 +107,9 @@ async function main() {
     const character =
       (await store.getBySlug(characterRef!)) ?? (await store.getById(characterRef!));
     if (!character) throw new Error(`character "${characterRef}" did not resolve`);
-    driver = SceneDriver.fromCharacter(character);
+    // Loads (auto-provisioning) the character's solo scene — a real scene row,
+    // so --persist writes a valid scene_sessions.scene_id.
+    driver = await SceneDriver.fromCharacter(character);
   }
   const scene = driver.scene;
 
@@ -180,6 +182,7 @@ async function main() {
         history: input.history,
         promptChunk: input.promptChunk,
         currentMoment: input.currentMoment,
+        sceneFeatures: input.sceneFeatures,
         textOnly: true,
         ...(sessionId ? { sessionId, turnId: crypto.randomUUID() } : {}),
       },

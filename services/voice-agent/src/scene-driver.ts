@@ -141,12 +141,37 @@ export class SceneDriver {
     return scene ? new SceneDriver(scene) : null;
   }
 
-  /** Synthesize a one-actor scene for a `character-sandbox:<slug>` room, so the
-   *  single-character cell runs through the SAME driver as a multi-character scene
-   *  (it's just the 1-char fastpath). The character's voice + brain are resolved by
-   *  runVoiceStream from the id at speak time, so the scene `voice` field here is
-   *  only a non-empty placeholder. */
-  static fromCharacter(character: CharacterRecord): SceneDriver {
+  /** A character session IS a scene — load (auto-provisioning on first use) the
+   *  character's canonical SOLO scene: a real scenesTable row with a one-character
+   *  node, so scene-authored features (knowledgeHorizon, arc, audio nodes) apply to
+   *  character sessions through the exact same resolve path as any scene. Falls back
+   *  to the legacy synthetic scene if provisioning/resolution fails — a DB hiccup
+   *  must degrade observability, never take voice down. */
+  static async fromCharacter(character: CharacterRecord): Promise<SceneDriver> {
+    try {
+      const record = await getSceneStore().getOrCreateSoloScene(character.id);
+      const scene = record
+        ? await getSceneStore().resolveOrchestratorScene(record.id)
+        : null;
+      if (scene) return new SceneDriver(scene);
+      console.warn(
+        `[voice-agent] solo scene for "${character.slug}" did not resolve — falling back to synthetic scene`,
+      );
+    } catch (err) {
+      console.warn(
+        `[voice-agent] solo scene provisioning failed for "${character.slug}" — falling back to synthetic scene`,
+        err,
+      );
+    }
+    return SceneDriver.syntheticFromCharacter(character);
+  }
+
+  /** LEGACY floor: synthesize a one-actor scene (`character-sandbox:<slug>`) with no
+   *  scene record behind it. Only used when the solo scene can't be provisioned or
+   *  resolved (DB unavailable, character deleted mid-flight). The character's voice +
+   *  brain are resolved by runVoiceStream from the id at speak time, so the scene
+   *  `voice` field here is only a non-empty placeholder. */
+  static syntheticFromCharacter(character: CharacterRecord): SceneDriver {
     const slug = character.slug;
     const blurb = (character.summary ?? character.title).slice(0, 280);
     // sm-sound: the character's sandbox soundscape — the sound nodes placed
@@ -403,10 +428,11 @@ export class SceneDriver {
     console.log(`[voice-agent] scene: ${resolution.speakerSlug} speaks`);
     // Sandbox solo with no director direction → don't inject a stale "Direction: …"
     // line (preserves the pre-unification single-char floor, which sent no
-    // promptChunk). Once the orchestrator supplies a per-turn `beat`/`sceneCue`
-    // (Phase 3), it flows through to the character unchanged.
+    // promptChunk). Applies to the character's solo scene (scene.solo) and the
+    // legacy synthetic fallback alike. Once the orchestrator supplies a per-turn
+    // `beat`/`sceneCue` (Phase 3), it flows through to the character unchanged.
     const sandboxNoCue =
-      this.scene.id.startsWith("character-sandbox:") &&
+      (this.scene.solo === true || this.scene.id.startsWith("character-sandbox:")) &&
       !resolution.decision.beat &&
       !resolution.decision.sceneCue;
     const replyText = await speak(
@@ -507,7 +533,9 @@ export class SceneDriver {
     return {
       sceneDefinition: this.scene.id.startsWith("character-sandbox:")
         ? `synthetic — ${this.scene.id} (no scene graph; scene-authored features unavailable)`
-        : `scene ${this.scene.id}`,
+        : this.scene.solo
+          ? `solo scene ${this.scene.id} (auto-provisioned one-character scene; editable in /scenes)`
+          : `scene ${this.scene.id}`,
       arc: arc.length > 0
         ? `active — ${arc.length} beat(s), ${landed} landed`
         : "inactive — no arc event nodes on this scene",

@@ -121,6 +121,11 @@ export const sceneSchema = z.object({
   // How hard the director presses toward goals. Absent = balanced (the
   // current default behavior).
   drive: z.enum(["gentle", "balanced", "insistent"]).optional(),
+  // True when this is a character's canonical solo scene (auto-provisioned;
+  // definition.soloCharacterId set) — the character-sandbox floor. The driver
+  // uses it to preserve sandbox behaviors (e.g. no stale Direction line on
+  // cue-less turns). Distinct from an *authored* one-character scene.
+  solo: z.boolean().optional(),
 });
 
 export type SceneCharacter = z.infer<typeof sceneCharacterSchema>;
@@ -163,6 +168,11 @@ export const sceneDefinitionSchema = z.object({
   // Authored intention on the scene root (see sceneSchema.objective/drive).
   objective: z.string().nullable().default(null),
   drive: z.enum(["gentle", "balanced", "insistent"]).nullable().default(null),
+  // Solo scene marker: the character this scene is the canonical one-actor
+  // scene FOR (auto-provisioned by getOrCreateSoloScene). A character session
+  // IS this scene — editing it (horizon, arc, audio nodes) configures the
+  // character sandbox. At most one non-archived solo scene per character.
+  soloCharacterId: z.string().nullable().default(null),
 });
 
 export const sceneRecordSchema = z.object({

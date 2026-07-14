@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type {
   Scene,
   SceneArcBeat,
@@ -8,10 +8,12 @@ import type {
   SceneSound,
 } from "@odyssey/types";
 import { sceneDefinitionSchema } from "@odyssey/types";
+import { normalizeSoundDesign, soundDesignToSceneSounds } from "./character-store";
 import { getDb } from "./client";
 import { retryRead } from "./retry";
 import { audioAssetsTable, charactersTable, scenesTable } from "./schema";
 import { getSceneGraphStore, type SceneNodeRecord } from "./scene-graph-store";
+import type { CharacterSoundDesign } from "./wiki-types";
 
 /* ── Shape ─────────────────────────────────────────────────────────── */
 
@@ -44,6 +46,19 @@ export interface SceneStore {
    * roster through the graph.
    */
   resolveOrchestratorScene(id: string): Promise<Scene | null>;
+
+  /**
+   * The character's canonical SOLO scene — a real scenesTable row with a
+   * single character node, lazily auto-provisioned on first use. This is
+   * what a "character session" runs as: everything is a scene, a character
+   * session is a scene with a roster of one. Editing it (knowledgeHorizon on
+   * the character node, arc event nodes, audio nodes) configures the
+   * character sandbox through the exact same machinery as any scene.
+   * Accepts a character id or slug; returns null if the character doesn't
+   * resolve. Identified by definition.soloCharacterId; concurrent creates
+   * converge on the oldest row.
+   */
+  getOrCreateSoloScene(characterRef: string): Promise<SceneRecord | null>;
 }
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -261,6 +276,63 @@ function neonStore(): SceneStore {
       return result.length > 0;
     },
 
+    async getOrCreateSoloScene(characterRef) {
+      const db = requireDb();
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(characterRef);
+      const [character] = await retryRead(() =>
+        db
+          .select({
+            id: charactersTable.id,
+            slug: charactersTable.slug,
+            title: charactersTable.title,
+            summary: charactersTable.summary,
+          })
+          .from(charactersTable)
+          .where(
+            isUuid
+              ? eq(charactersTable.id, characterRef)
+              : eq(charactersTable.slug, characterRef),
+          )
+          .limit(1),
+      );
+      if (!character) return null;
+
+      // Oldest non-archived solo row wins — deterministic under the (benign)
+      // race where two sessions provision concurrently: both re-select after
+      // insert and converge on the same row; the loser is harmless clutter.
+      const findExisting = async () => {
+        const rows = await retryRead(() =>
+          db
+            .select()
+            .from(scenesTable)
+            .where(
+              sql`${scenesTable.definition}->>'soloCharacterId' = ${character.id} and ${scenesTable.status} != 'archived'`,
+            ),
+        );
+        return rows
+          .map(normalizeRow)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0] ?? null;
+      };
+
+      const existing = await findExisting();
+      if (existing) return existing;
+
+      const created = await this.createScene({
+        userId: null,
+        title: character.title,
+        prompt: (character.summary ?? character.title).slice(0, 600),
+        definition: {
+          soloCharacterId: character.id,
+          openingBeat: "The user has just arrived.",
+        },
+      });
+      await getSceneGraphStore().ingestCharacter(created.id, character.id, {
+        mergeOnExist: true,
+      });
+      return (await findExisting()) ?? created;
+    },
+
     async resolveOrchestratorScene(id) {
       const record = await this.getSceneById(id);
       if (!record) return null;
@@ -343,6 +415,7 @@ function neonStore(): SceneStore {
             title: charactersTable.title,
             summary: charactersTable.summary,
             voiceId: charactersTable.voiceId,
+            soundDesign: charactersTable.soundDesign,
           })
           .from(charactersTable)
           .where(inArray(charactersTable.id, charIds)),
@@ -369,6 +442,28 @@ function neonStore(): SceneStore {
         .filter((c): c is SceneCharacter => !!c);
 
       if (characters.length === 0) return null;
+
+      // Solo scene (definition.soloCharacterId): when no audio nodes are
+      // placed on the scene, fall back to the character's own sandbox
+      // soundscape (sm-sound binding) — same rule as the pre-unification
+      // synthetic scene. Scene-placed audio nodes win structurally the
+      // moment any are authored.
+      const soloCharacterId = record.definition.soloCharacterId ?? null;
+      let soloSounds: SceneSound[] = [];
+      let soloDefaultBed: string | null = null;
+      if (soloCharacterId && sounds.length === 0) {
+        const soloChar = charById.get(soloCharacterId);
+        const soundDesign = normalizeSoundDesign(
+          (soloChar?.soundDesign ?? null) as CharacterSoundDesign | null,
+        );
+        soloSounds = soundDesignToSceneSounds(soundDesign);
+        const entries = soundDesign?.sounds ?? [];
+        soloDefaultBed =
+          (entries.find((s) => s.role === "bed" && s.isDefault) ??
+            entries.find((s) => s.role === "bed"))?.slug ?? null;
+      }
+      const effectiveSounds = sounds.length > 0 ? sounds : soloSounds;
+      const effectiveAmbience = defaultAmbienceTrackId ?? soloDefaultBed;
 
       const objective = record.definition.objective?.trim() || undefined;
       const drive = record.definition.drive ?? undefined;
@@ -401,12 +496,13 @@ function neonStore(): SceneStore {
         description: record.prompt || record.title,
         characters,
         openingBeat: record.definition.openingBeat || "Scene opens.",
-        defaultAmbience: defaultAmbienceTrackId,
+        defaultAmbience: effectiveAmbience,
         narratorVoice: record.definition.narratorVoiceId ?? undefined,
-        ...(sounds.length > 0 ? { sounds } : {}),
+        ...(effectiveSounds.length > 0 ? { sounds: effectiveSounds } : {}),
         ...(objective ? { objective } : {}),
         ...(drive ? { drive } : {}),
         ...(arc.length > 0 ? { arc } : {}),
+        ...(soloCharacterId ? { solo: true } : {}),
       };
     },
   };
