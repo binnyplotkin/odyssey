@@ -40,6 +40,7 @@ import {
   type CachedVoiceAckAudio,
 } from "./voice-ack-audio-cache";
 import { isAckLaneEnabled, selectVoiceAck } from "./voice-ack-lane";
+import { isStageDirection } from "./stage-direction";
 import { createEmbeddingSignedUrl } from "./voice-embedding-url";
 import { estimateSessionTurnCost } from "./session-cost";
 import { createEventQueue } from "./event-queue";
@@ -1082,6 +1083,19 @@ export async function* runVoiceStream(
       const dispatchTtsChunk = (text: string): void => {
         const trimmed = text.trim();
         if (!trimmed) return;
+        // Stage-direction guard: never voice a chunk that is purely a
+        // parenthesized/bracketed aside (the proactive path's "(No reply
+        // needed)" was reaching ElevenLabs and being spoken aloud). Counted
+        // like a dispatched chunk so a direction-only reply is a valid
+        // *silent* turn rather than an "empty reply" error.
+        if (isStageDirection(trimmed)) {
+          ttsChunkCount += 1;
+          serverTrace.mark("server.tts.chunk.skipped_stage_direction", {
+            chars: trimmed.length,
+            text: trimmed.slice(0, 80),
+          });
+          return;
+        }
         if (input.textOnly) {
           // headless: count the chunk (empty-reply sentinel) but never synth
           ttsChunkCount += 1;

@@ -1,3 +1,5 @@
+import { isStageDirection } from "./stage-direction";
+
 type AckSelectedPage = {
   page: {
     slug: string;
@@ -14,6 +16,11 @@ export function selectVoiceAck(input: {
   if (!input.enabled) return null;
   const message = input.message.trim();
   if (!message || isTrivialAckMessage(message)) return null;
+  // Stage directions are not user speech. The proactive silence tick sends
+  // "(The user has gone quiet.)" as the message — acknowledging it ("I can
+  // speak to that.") answers something nobody said, and dangles as an orphan
+  // when the brain then decides not to reply at all.
+  if (isStageDirection(message)) return null;
   const messageLower = message.toLowerCase();
   // Candidate entity pages (exclude the always-seeded *-voice-identity sheet —
   // its title is an editorial meta-name, not an in-world topic).
