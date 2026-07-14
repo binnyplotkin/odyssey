@@ -81,6 +81,10 @@ export interface SceneSpeakInput {
   /** The speaker's scene-authored knowledge horizon — forwarded to
    *  runVoiceStream so the curator filters pages after this moment. */
   currentMoment?: { era: string; index: number };
+  /** Observability only: director-side feature statuses (arc, speaker
+   *  selection) — the pipeline can't see the scene definition, so the driver
+   *  states them; they surface in the turn's `sceneFeatures` trace block. */
+  sceneFeatures?: Record<string, string>;
 }
 export type SceneSpeakFn = (input: SceneSpeakInput, replyId: string) => Promise<string>;
 
@@ -413,6 +417,7 @@ export class SceneDriver {
         promptChunk: sandboxNoCue ? undefined : turn.promptChunk,
         speaker: { slug: resolution.speakerSlug, name: displayName },
         currentMoment: speakerCharacter?.knowledgeHorizon,
+        sceneFeatures: this.#featureStatus(),
       },
       `s${Date.now()}`,
     );
@@ -479,6 +484,7 @@ export class SceneDriver {
         promptChunk: hasCue ? directive : undefined,
         speaker: { slug: resolution.speakerSlug, name: displayName },
         currentMoment: speakerCharacter?.knowledgeHorizon,
+        sceneFeatures: this.#featureStatus(),
       },
       `p${Date.now()}`,
     );
@@ -488,6 +494,27 @@ export class SceneDriver {
       this.#maybeReflect();
     }
     return true;
+  }
+
+  /** Director-side statuses for the observability `sceneFeatures` block (see
+   *  run-voice-stream): the pipeline can't see the arc or the roster, so the
+   *  driver states them — explicitly INACTIVE when absent, so a trace never
+   *  reads as "ran and found nothing" for a feature that never applied. */
+  #featureStatus(): Record<string, string> {
+    const roster = this.scene.characters.length;
+    const arc = this.scene.arc ?? [];
+    const landed = this.#sceneState.arcLanded?.length ?? 0;
+    return {
+      sceneDefinition: this.scene.id.startsWith("character-sandbox:")
+        ? `synthetic — ${this.scene.id} (no scene graph; scene-authored features unavailable)`
+        : `scene ${this.scene.id}`,
+      arc: arc.length > 0
+        ? `active — ${arc.length} beat(s), ${landed} landed`
+        : "inactive — no arc event nodes on this scene",
+      speakerSelection: roster > 1
+        ? `active — roster of ${roster} (orchestrated; addressee continuity in effect)`
+        : "solo fastpath — roster of 1 (no speaker selection; addressee continuity n/a)",
+    };
   }
 
   /** Slugs in the roster that are currently present — a real choice needs ≥ 2. */

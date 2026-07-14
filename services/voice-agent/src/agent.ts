@@ -360,6 +360,9 @@ export default defineAgent({
         // Speaker's scene knowledge horizon — rides the spread into
         // runVoiceStream, which filters later-timeIndexed pages.
         currentMoment?: { era: string; index: number };
+        // Director-side feature statuses (arc, speaker selection) — ride the
+        // spread into runVoiceStream's `sceneFeatures` observability block.
+        sceneFeatures?: Record<string, string>;
       },
       signal: AbortSignal,
       replyId: string,

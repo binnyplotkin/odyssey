@@ -101,6 +101,11 @@ export type VoiceStreamBody = {
   // character hasn't lived yet never reaches the prompt. Part of the context
   // cache key. Absent = full-life knowledge (sandbox default).
   currentMoment?: { era: string; index: number };
+  // Observability only: caller-supplied scene-feature statuses (facts the
+  // pipeline can't see — the arc, speaker selection) merged into the
+  // `sceneFeatures` block on server.context.attached and the persisted
+  // context build. Never read by retrieval/curation.
+  sceneFeatures?: Record<string, string>;
   provider?: LlmProvider;
   model?: string;
   maxTokens?: number;
@@ -838,6 +843,34 @@ export async function* runVoiceStream(
       const systemPrompt = [promptPlan.systemPromptParts.cached, promptPlan.systemPromptParts.perTurn]
         .filter(Boolean)
         .join("\n\n");
+      // Scene-feature status — observability only, never feeds behavior.
+      // Scene-scoped features silently no-op when a turn runs without a full
+      // scene definition (e.g. the character sandbox's synthetic scene), and
+      // an empty `timelineFiltered` then reads as "fence ran, nothing
+      // filtered" when the fence never applied at all. State ACTIVE/INACTIVE
+      // + why, explicitly. Pipeline-known facts are computed here;
+      // director-side facts (arc, speaker selection) ride in via
+      // input.sceneFeatures from the caller that owns them.
+      const sceneFeatures: Record<string, string> = {
+        knowledgeHorizon: input.currentMoment
+          ? `active — ${input.currentMoment.era}·${input.currentMoment.index}`
+          : "inactive — no knowledgeHorizon for this speaker (timeline fence not applied)",
+        timelineFilter: input.currentMoment
+          ? `applied — ${curatorTrace.timelineFiltered?.length ?? 0} page(s) filtered`
+          : "not applied — no horizon",
+        sceneContext:
+          input.scene?.activeEntities?.length || input.scene?.location
+            ? `active — ${[
+                input.scene?.location ? `location: ${input.scene.location}` : null,
+                input.scene?.activeEntities?.length
+                  ? `${input.scene.activeEntities.length} active entit${input.scene.activeEntities.length === 1 ? "y" : "ies"}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(", ")}`
+            : "none — no scene context on this turn",
+        ...input.sceneFeatures,
+      };
       serverTrace.mark("server.context.attached", {
         characterId: character.id,
         sessionId: input.sessionId ?? null,
@@ -859,6 +892,7 @@ export async function* runVoiceStream(
         ackEnabled,
         ackSelected: Boolean(ackText),
         ackAudioCacheHit: Boolean(cachedAckAudio),
+        sceneFeatures,
       });
       sendEvent(VOICE_STREAM_SSE_EVENT_NAMES.trace, serverTrace.toJSON());
 
@@ -916,6 +950,7 @@ export async function* runVoiceStream(
               ackEnabled,
               ackText,
               ackAudioCacheHit: Boolean(cachedAckAudio),
+              sceneFeatures,
             },
           });
         } catch (ctxErr) {

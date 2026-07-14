@@ -78,6 +78,7 @@ export function SandboxTraceDrawer({
   const elapsed = selected
     ? traceElapsedMs(selected.trace)
     : (rows.at(-1)?.elapsedMs ?? 0);
+  const sceneFeatures = useMemo(() => extractSceneFeatures(rows), [rows]);
 
   if (!open) return null;
 
@@ -309,6 +310,31 @@ export function SandboxTraceDrawer({
               value={voiceModel || "unset"}
               hint="tts prompt path"
             />
+            {sceneFeatures.length > 0 && (
+              <>
+                <div
+                  style={{
+                    marginTop: "var(--space-6)",
+                    fontFamily: FONT_MONO,
+                    fontSize: "var(--font-size-2xs)",
+                    letterSpacing: "0.18em",
+                    textTransform: "uppercase",
+                    color: "var(--text-tertiary)",
+                  }}
+                >
+                  scene features · this turn
+                </div>
+                {sceneFeatures.map((feature) => (
+                  <TraceCell
+                    key={feature.key}
+                    label={feature.key}
+                    value={feature.status}
+                    hint={feature.detail}
+                    tone={feature.inactive ? "inactive" : "active"}
+                  />
+                ))}
+              </>
+            )}
           </div>
 
           <div
@@ -574,10 +600,12 @@ function TraceCell({
   label,
   value,
   hint,
+  tone,
 }: {
   label: string;
   value: string;
   hint?: string | null;
+  tone?: "active" | "inactive";
 }) {
   return (
     <div
@@ -605,7 +633,12 @@ function TraceCell({
           fontFamily: FONT_MONO,
           fontSize: "var(--font-size-sm)",
           lineHeight: "14px",
-          color: "var(--text-primary)",
+          color:
+            tone === "active"
+              ? ACCENT
+              : tone === "inactive"
+                ? "var(--text-tertiary)"
+                : "var(--text-primary)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -711,6 +744,29 @@ function buildPreSessionRows({
         : { shortcut: "Cmd/Ctrl+Enter" },
     },
   ];
+}
+
+/** Pull the `sceneFeatures` observability block out of the turn's
+ *  server.context.attached event. Statuses are "head — detail" strings
+ *  (e.g. "inactive — no knowledgeHorizon..."); split for cell rendering.
+ *  Absent block (older traces, pre-session rows) → empty, section hidden. */
+function extractSceneFeatures(
+  rows: TraceRow[],
+): Array<{ key: string; status: string; detail: string | null; inactive: boolean }> {
+  const attached = rows.find((row) => row.name === "server.context.attached");
+  const raw = attached?.meta?.sceneFeatures;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  return Object.entries(raw as Record<string, unknown>)
+    .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+    .map(([key, value]) => {
+      const [status = value, ...rest] = value.split(" — ");
+      return {
+        key,
+        status,
+        detail: rest.length > 0 ? rest.join(" — ") : null,
+        inactive: /^(inactive|not applied|none|synthetic|solo fastpath)/i.test(value),
+      };
+    });
 }
 
 function normalizeTraceRows(trace: TracePayload): TraceRow[] {
