@@ -2318,6 +2318,49 @@ function truncateLabel(value: string, limit: number) {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
 
+/** Scene-feature status panel — renders the `sceneFeatures` observability
+ *  block persisted with each context build, so inactive scene-scoped features
+ *  (horizon, arc, speaker selection) read as explicitly INACTIVE with a
+ *  reason instead of empty arrays. Hidden entirely for older turns that
+ *  predate the block. */
+function SceneFeaturesPanel({ features }: { features: Record<string, unknown> | null }) {
+  if (!features) return null;
+  const entries = Object.entries(features).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string",
+  );
+  if (entries.length === 0) return null;
+  return (
+    <Panel>
+      <Eyebrow>Scene features · what applied on this turn</Eyebrow>
+      <div style={{ marginTop: "var(--space-10)", display: "flex", flexDirection: "column" }}>
+        {entries.map(([key, value], i) => {
+          const inactive = /^(inactive|not applied|none|synthetic|solo fastpath)/i.test(value);
+          return (
+            <div
+              key={key}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "200px minmax(0, 1fr)",
+                gap: "var(--space-12)",
+                padding: "10px 0",
+                borderTop: i === 0 ? `1px solid ${C.borderSoft}` : "none",
+                borderBottom: `1px solid ${C.borderSoft}`,
+                fontFamily: FONT_MONO,
+                fontSize: "var(--font-size-sm)",
+              }}
+            >
+              <span style={{ color: C.textLow }}>{key}</span>
+              <span style={{ color: inactive ? C.amber : C.mint, overflowWrap: "break-word" }}>
+                {value}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
 function GraphPanel({ context }: { context: SceneSessionContextBuildRecord | null }) {
   if (!context) return <Panel>No context build recorded.</Panel>;
   const trace = asRecord(context.curatorTrace);
@@ -2332,12 +2375,20 @@ function GraphPanel({ context }: { context: SceneSessionContextBuildRecord | nul
       .filter(Boolean) as string[],
   );
 
+  // Scene-feature statuses (observability block persisted by run-voice-stream).
+  // When the horizon fence never applied, "0 time-gated" is misleading — show
+  // n/a instead, and render the full status panel below the topology.
+  const sceneFeatures = asRecord(asRecord(context.metadata)?.sceneFeatures);
+  const horizonInactive =
+    typeof sceneFeatures?.timelineFilter === "string" &&
+    sceneFeatures.timelineFilter.startsWith("not applied");
+
   const summary: { label: string; value: string; tone?: "mint" | "amber" }[] = [
     { label: "Total pages", value: String(pages.length) },
     { label: "Seeds", value: String(seeds.length) },
     { label: "Edges traversed", value: String(edges.length) },
     { label: "Selected", value: `${pages.length} / ${seeds.length + edges.length}`, tone: "mint" },
-    { label: "Time-gated", value: String(timeGated.length), tone: "amber" },
+    { label: "Time-gated", value: horizonInactive ? "n/a" : String(timeGated.length), tone: "amber" },
     { label: "Budget-dropped", value: String(dropped.length) },
     { label: "Tokens", value: `${context.tokensUsed ?? "?"} / ${context.tokensBudget ?? "?"}` },
   ];
@@ -2386,6 +2437,8 @@ function GraphPanel({ context }: { context: SceneSessionContextBuildRecord | nul
           ))}
         </div>
       </Panel>
+
+      <SceneFeaturesPanel features={sceneFeatures} />
 
       <KnowledgeGraphViz context={context} pages={pages} timeGated={timeGated} dropped={dropped} seedSlugs={seedSlugs} />
 
