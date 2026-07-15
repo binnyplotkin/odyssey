@@ -21,6 +21,9 @@ const failAckTts = vi.hoisted(() => ({ current: false }));
 // the default single-reply stream. Inputs are captured for prompt assertions.
 const llmScript = vi.hoisted(() => ({ current: [] as string[][] }));
 const llmCallInputs = vi.hoisted(() => [] as unknown[]);
+// When set, the NEXT provider stream call hangs (no tokens) until aborted —
+// simulates a stalled first-token attempt for the watchdog test.
+const llmStallNextCall = vi.hoisted(() => ({ current: false }));
 const characterVoiceId = vi.hoisted(() => ({ current: null as string | null }));
 const buildVoicePromptPlan = vi.hoisted(() =>
   vi.fn(async (input: {
@@ -156,6 +159,20 @@ vi.mock("@odyssey/engine", () => ({
       onEvent: (event: unknown) => void,
     ) => {
       llmCallInputs.push(opts);
+      if (llmStallNextCall.current) {
+        llmStallNextCall.current = false;
+        const signal = (opts as { signal?: AbortSignal }).signal;
+        await new Promise((_, reject) => {
+          if (signal?.aborted) {
+            reject(new Error("request aborted"));
+            return;
+          }
+          signal?.addEventListener("abort", () => reject(new Error("request aborted")), {
+            once: true,
+          });
+        });
+        return;
+      }
       const tokens = llmScript.current.shift() ?? ["Testing voice pipeline."];
       for (const delta of tokens) {
         onEvent({ type: "token", delta });
@@ -273,6 +290,7 @@ describe("character voice-stream persistence", () => {
     failAckTts.current = false;
     llmScript.current = [];
     llmCallInputs.length = 0;
+    llmStallNextCall.current = false;
     characterVoiceId.current = null;
     buildVoicePromptPlan.mockClear();
     curate.mockClear();
@@ -832,6 +850,49 @@ describe("character voice-stream persistence", () => {
     expect(upsertTurn).toHaveBeenLastCalledWith(
       expect.objectContaining({
         assistantText: "Destruction is no gift I will receive. Speak plainly of what you seek, or be gone.",
+        status: "completed",
+      }),
+    );
+  });
+
+  it("watchdog aborts a stalled first attempt and the retry completes the turn", async () => {
+    vi.stubEnv("VOICE_FIRST_TOKEN_WATCHDOG_MS", "40");
+    llmStallNextCall.current = true; // attempt 1 hangs with no tokens
+    llmScript.current = [["The stall is behind us."]]; // attempt 2 answers
+
+    const response = await POST(
+      request({
+        sessionId: "session_1",
+        turnId: "turn_stall",
+        message: "Tell me of the road from Haran.",
+        history: [],
+        model: "gpt-oss-120b",
+      }),
+      routeCtx,
+    );
+    expect(response.status).toBe(200);
+
+    const events = await collectSse(response);
+    const tokenText = events
+      .filter((event) => event.event === "token")
+      .map((event) => (event.data as { delta: string }).delta)
+      .join("");
+    expect(tokenText).toContain("The stall is behind us.");
+    expect(events.some((event) => event.event === "error")).toBe(false);
+
+    const done = events.find((event) => event.event === "done")?.data as {
+      serverTrace?: { events?: Array<{ name?: string; meta?: Record<string, unknown> }> };
+    };
+    const traceNames = (done.serverTrace?.events ?? []).map((event) => event.name);
+    expect(traceNames).toContain("server.llm.watchdog_abort");
+    expect(
+      (done.serverTrace?.events ?? []).filter((event) => event.name === "server.llm.attempt"),
+    ).toHaveLength(2);
+    expect(llmCallInputs).toHaveLength(2);
+
+    expect(upsertTurn).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        assistantText: "The stall is behind us.",
         status: "completed",
       }),
     );

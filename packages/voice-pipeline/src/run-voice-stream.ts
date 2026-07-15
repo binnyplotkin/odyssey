@@ -166,6 +166,16 @@ const TTS_FIRST_CHUNK_TARGET_CHARS = 80;
 // releases and streaming proceeds (bounding the added first-audio latency to
 // the tokens between TTS_FIRST_CHUNK_TARGET_CHARS and this cap).
 const REFUSAL_HOLD_MAX_CHARS = 121;
+// First-token watchdog: a provider attempt that produces NO tokens within
+// this budget is aborted and retried once — transient Cerebras stalls (6–10s
+// of dead air observed live) rarely repeat on a fresh request. The retry runs
+// UNBOUNDED so a genuinely slow-but-working generation still completes; we
+// never fail a turn the old code would have finished. 0 disables. Read
+// per-turn (not at module load) so tests and live env changes take effect.
+function firstTokenWatchdogMs(): number {
+  const raw = Number(process.env.VOICE_FIRST_TOKEN_WATCHDOG_MS ?? 3000);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 3000;
+}
 const VOICE_CONTEXT_TOKEN_BUDGET = 2500;
 const VOICE_CONTEXT_PREP_WAIT_MS = 100;
 // Relevant-passage cosine similarity differs by embedder: bge-small clusters
@@ -1158,10 +1168,15 @@ export async function* runVoiceStream(
       let rerollRequested = false;
       let rerolled = false;
       let currentRollAbort: AbortController | null = null;
+      // Counts every token callback — the watchdog compares against a snapshot
+      // taken at attempt start to know whether THIS attempt has produced
+      // anything (emittedAnyToken/replyText reset on different boundaries).
+      let tokenEventCount = 0;
 
       const onToken = (delta: string) => {
         if (signal.aborted || rerollRequested) return;
         if (!delta) return;
+        tokenEventCount += 1;
         if (!emittedAnyToken) {
           brainFirstTokenAt = performance.now();
           serverTrace.mark("server.llm.first-token");
@@ -1237,8 +1252,6 @@ export async function* runVoiceStream(
       // in-character-deflection instruction appended to the per-turn part (the
       // cached envelope is untouched, so provider prompt caching still holds).
       for (let roll = 0; roll < 2 && !signal.aborted; roll += 1) {
-        const rollAbort = new AbortController();
-        currentRollAbort = rollAbort;
         const systemPromptParts = rerolled
           ? {
               ...promptPlan.systemPromptParts,
@@ -1252,6 +1265,30 @@ export async function* runVoiceStream(
           : promptPlan.systemPromptParts;
         const attempts = provider === "cerebras" || provider === "groq" ? 2 : 1;
         for (let attempt = 1; attempt <= attempts; attempt += 1) {
+          // Per-attempt controller: the refusal guard and the first-token
+          // watchdog both abort just THIS attempt, never the user's signal.
+          const attemptAbort = new AbortController();
+          currentRollAbort = attemptAbort;
+          // Watchdog only arms on the first attempt — the retry runs
+          // unbounded so slow-but-working generations still complete.
+          let watchdogFired = false;
+          const watchdogMs = firstTokenWatchdogMs();
+          const tokensAtAttemptStart = tokenEventCount;
+          const watchdogTimer =
+            watchdogMs > 0 && attempt === 1 && attempts > 1
+              ? setTimeout(() => {
+                  if (tokenEventCount === tokensAtAttemptStart && !signal.aborted) {
+                    watchdogFired = true;
+                    serverTrace.mark("server.llm.watchdog_abort", {
+                      provider,
+                      model: modelId,
+                      attempt,
+                      watchdogMs,
+                    });
+                    attemptAbort.abort();
+                  }
+                }, watchdogMs)
+              : null;
           serverTrace.mark("server.llm.attempt", {
             provider,
             model: modelId,
@@ -1267,7 +1304,7 @@ export async function* runVoiceStream(
               maxTokens,
               temperature: voiceCfg?.temperature ?? character.brainModel?.temperature,
               topP: voiceCfg?.topP ?? character.brainModel?.topP,
-              signal: AbortSignal.any([signal, rollAbort.signal]),
+              signal: AbortSignal.any([signal, attemptAbort.signal]),
               onToken,
             }));
             chosenProvider = provider;
@@ -1288,12 +1325,19 @@ export async function* runVoiceStream(
               attempt,
               message: providerErr instanceof Error ? providerErr.message : String(providerErr),
             });
+            // Stalled attempt (watchdog) — retry immediately on a fresh
+            // request; transient provider stalls rarely repeat.
+            if (watchdogFired && attempt < attempts && !signal.aborted) {
+              continue;
+            }
             const rateLimited = isRateLimitError(providerErr);
             if (rateLimited && attempt < attempts && !emittedAnyToken && !signal.aborted) {
               await new Promise((resolve) => setTimeout(resolve, 200));
               continue;
             }
             throw providerErr;
+          } finally {
+            if (watchdogTimer) clearTimeout(watchdogTimer);
           }
         }
         // A refusal can also arrive with no sentence terminator at all — the
