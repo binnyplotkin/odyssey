@@ -232,9 +232,35 @@ export default defineAgent({
     const existingSession = roomSessionId
       ? await sessionStore.getSession(roomSessionId).catch(() => null)
       : null;
-    const sceneSession =
-      existingSession ??
-      (await sessionStore.createSession({ characterId: character?.id ?? null, mode: "voice" }));
+    // Solo scenes carry their character on the roster — resolve it so the
+    // session row is filterable by BOTH sceneId and characterId in /sessions.
+    const soloRosterSlug =
+      sceneDriver.scene.characters.length === 1
+        ? sceneDriver.scene.characters[0]!.characterSlug
+        : null;
+    const sessionCharacterId =
+      character?.id ??
+      (soloRosterSlug
+        ? (await getCharacterStore().getBySlug(soloRosterSlug).catch(() => null))?.id ?? null
+        : null);
+    const createStampedSession = async () => {
+      const base = {
+        // Keep the room's session id: the browser generated it and uses it for
+        // /sessions detail lookups — creating under a fresh id orphans the row.
+        id: roomSessionId ?? undefined,
+        characterId: sessionCharacterId,
+        mode: "voice",
+        metadata: { source: sceneRef ? "scene-voice" : "character-voice" },
+      };
+      try {
+        return await sessionStore.createSession({ ...base, sceneId: sceneDriver.scene.id });
+      } catch {
+        // Registry-only scenes (no scenesTable row) fail the sceneId FK —
+        // fall back to an unstamped row rather than losing the session.
+        return await sessionStore.createSession({ ...base, sceneId: null });
+      }
+    };
+    const sceneSession = existingSession ?? (await createStampedSession());
     const sessionId = sceneSession.id;
     console.log(
       `[voice-agent] session ${sessionId} (${existingSession ? "reused sandbox session — gradeable" : "created"})`,
