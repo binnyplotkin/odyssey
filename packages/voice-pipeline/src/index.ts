@@ -9,3 +9,4 @@
 export * from "./voice-stream-events";
 export * from "./run-voice-stream";
 export * from "./eval";
+export * from "./refusal-guard";

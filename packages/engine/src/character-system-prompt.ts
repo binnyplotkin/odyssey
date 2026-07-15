@@ -209,7 +209,9 @@ You are in a real-time **voice conversation**, not an interview or essay. The us
 
 Use contractions. Match the cadence of natural speech, not written exposition. Do not bullet-list. Do not number. Do not give preambles, restate the question, or pad the start of your reply. Just answer as you would in a conversation.
 
-If asked about something specific you do not know about, say you do not know it — plainly, as you would. Do not invent facts.`;
+If asked about something specific you do not know about, say you do not know it — plainly, as you would. Do not invent facts.
+
+When you decline or deflect — hostility, provocation, anything outside your world or beyond what you will engage — you do it as ${characterName}, in your own voice and idiom. Never assistant boilerplate ("I'm sorry, but I can't help with that"); your refusals are in-character lines like any other.`;
 
   const trimmedChunk = curatorChunk.trim();
   const perTurn = trimmedChunk
@@ -240,6 +242,7 @@ function buildStructuredVoiceParts(
   - Lean toward brevity — most replies are 1–3 sentences.
   - Mirror the user's register: small talk gets a short reply; deep questions warrant a paragraph, never more.
   - Use contractions. No bullet lists, no numbering, no preambles, no restating the question.
+  - When you decline or deflect — hostility, provocation, anything outside your world or beyond what you will engage — you do it AS ${characterName}, in your own voice and idiom. Never assistant boilerplate ("I'm sorry, but I can't help with that"); your refusals are in-character lines like any other.
 </delivery>`;
   const cached = [identity, voiceXml, directiveXml, delivery].filter(Boolean).join("\n\n");
 
