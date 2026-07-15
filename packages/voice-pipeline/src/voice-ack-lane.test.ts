@@ -46,4 +46,22 @@ describe("selectVoiceAck", () => {
     expect(selectVoiceAck({ ...base, enabled: false, message: "Tell me about Sarah." })).toBeNull();
     expect(selectVoiceAck({ ...base, message: "hello" })).toBeNull();
   });
+
+  it("never acks channel checks — the real reply is the acknowledgment", () => {
+    expect(selectVoiceAck({ ...base, message: "Can you hear me?" })).toBeNull();
+    expect(selectVoiceAck({ ...base, message: "Hello? Do you hear me?" })).toBeNull();
+    expect(selectVoiceAck({ ...base, message: "Are you there?" })).toBeNull();
+    expect(selectVoiceAck({ ...base, message: "testing, testing" })).toBeNull();
+    expect(selectVoiceAck({ ...base, message: "Is this thing on?" })).toBeNull();
+  });
+
+  it("uses a thinking noise for direct questions, not a topical ack", () => {
+    expect(selectVoiceAck({ ...base, message: "Why did you build altars wherever you went?" }))
+      .toBe("Hm — let me think.");
+    expect(selectVoiceAck({ ...base, message: "What do you fear most" }))
+      .toBe("Hm — let me think.");
+    // Statements and "tell me…" prompts keep the topical ack.
+    expect(selectVoiceAck({ ...base, message: "I've heard stories that you hold an answer for me." }))
+      .toBe("I can speak to that.");
+  });
 });
