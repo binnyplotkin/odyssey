@@ -41,6 +41,7 @@ import {
 } from "./voice-ack-audio-cache";
 import { isAckLaneEnabled, selectVoiceAck } from "./voice-ack-lane";
 import { isStageDirection } from "./stage-direction";
+import { isRefusalBoilerplate, inCharacterDeflectionInstruction } from "./refusal-guard";
 import { createEmbeddingSignedUrl } from "./voice-embedding-url";
 import { estimateSessionTurnCost } from "./session-cost";
 import { createEventQueue } from "./event-queue";
@@ -159,6 +160,12 @@ const TTS_DEFAULT_VOICE_SLUG = "abraham";
 const TTS_DEFAULT_PROVIDER: StreamingTtsProvider = "pocket_tts";
 const TTS_MAX_CHUNK_CHARS = 220;
 const TTS_FIRST_CHUNK_TARGET_CHARS = 80;
+// Refusal guard: hold token emission + TTS until the FIRST sentence clears the
+// boilerplate check. 121 aligns with the detector's short-sentence cap — a
+// first sentence longer than that can't be bare boilerplate, so the hold
+// releases and streaming proceeds (bounding the added first-audio latency to
+// the tokens between TTS_FIRST_CHUNK_TARGET_CHARS and this cap).
+const REFUSAL_HOLD_MAX_CHARS = 121;
 const VOICE_CONTEXT_TOKEN_BUDGET = 2500;
 const VOICE_CONTEXT_PREP_WAIT_MS = 100;
 // Relevant-passage cosine similarity differs by embedder: bge-small clusters
@@ -1142,8 +1149,18 @@ export async function* runVoiceStream(
           });
       };
 
+      // Refusal guard state. While the hold is active, tokens accumulate in
+      // replyText but nothing is emitted to the client and no TTS is
+      // dispatched — so a detected persona break can be re-rolled with zero
+      // externally visible residue (no spoken audio, no transcript flash,
+      // no refusal text echoed into scene history).
+      let refusalHoldActive = true;
+      let rerollRequested = false;
+      let rerolled = false;
+      let currentRollAbort: AbortController | null = null;
+
       const onToken = (delta: string) => {
-        if (signal.aborted) return;
+        if (signal.aborted || rerollRequested) return;
         if (!delta) return;
         if (!emittedAnyToken) {
           brainFirstTokenAt = performance.now();
@@ -1151,7 +1168,30 @@ export async function* runVoiceStream(
           emittedAnyToken = true;
         }
         replyText += delta;
-        emitMainTokenDelta(delta);
+
+        if (refusalHoldActive) {
+          const firstBoundary = findTtsBoundary(replyText, 0);
+          if (firstBoundary < 0 && replyText.length <= REFUSAL_HOLD_MAX_CHARS) {
+            return; // keep holding — not enough text to judge yet
+          }
+          if (firstBoundary >= 0 && !rerolled) {
+            const firstSentence = replyText.slice(0, firstBoundary);
+            if (isRefusalBoilerplate(firstSentence)) {
+              rerollRequested = true;
+              serverTrace.mark("server.llm.refusal_detected", {
+                text: firstSentence.trim().slice(0, 120),
+              });
+              currentRollAbort?.abort();
+              return;
+            }
+          }
+          // Clean first sentence (or too long to be boilerplate) — release
+          // the hold and emit everything accumulated as one delta.
+          refusalHoldActive = false;
+          emitMainTokenDelta(replyText);
+        } else {
+          emitMainTokenDelta(delta);
+        }
 
         // Flush every sentence boundary visible in the new tail. One token
         // can include multiple boundaries (rare but possible — "Yes. Why?").
@@ -1191,46 +1231,116 @@ export async function* runVoiceStream(
       }
 
       let chosenProvider: LlmProvider | null = null;
-      const attempts = provider === "cerebras" || provider === "groq" ? 2 : 1;
-      for (let attempt = 1; attempt <= attempts; attempt += 1) {
-        serverTrace.mark("server.llm.attempt", { provider, model: modelId, attempt });
-        try {
-          ({ inputTokens, outputTokens } = await streamFromCharacterModel({
-            model: modelId,
-            systemPromptParts: promptPlan.systemPromptParts,
-            history,
-            message,
-            maxTokens,
-            temperature: voiceCfg?.temperature ?? character.brainModel?.temperature,
-            topP: voiceCfg?.topP ?? character.brainModel?.topP,
-            signal,
-            onToken,
-          }));
-          chosenProvider = provider;
-          serverTrace.mark("server.llm.succeeded", {
+      const characterDisplayName = character.title ?? character.slug ?? character.id;
+      // Outer roll loop: roll 0 is the normal turn; roll 1 only runs when the
+      // refusal guard caught assistant boilerplate — same call with an explicit
+      // in-character-deflection instruction appended to the per-turn part (the
+      // cached envelope is untouched, so provider prompt caching still holds).
+      for (let roll = 0; roll < 2 && !signal.aborted; roll += 1) {
+        const rollAbort = new AbortController();
+        currentRollAbort = rollAbort;
+        const systemPromptParts = rerolled
+          ? {
+              ...promptPlan.systemPromptParts,
+              perTurn: [
+                promptPlan.systemPromptParts.perTurn,
+                inCharacterDeflectionInstruction(characterDisplayName),
+              ]
+                .filter(Boolean)
+                .join("\n\n"),
+            }
+          : promptPlan.systemPromptParts;
+        const attempts = provider === "cerebras" || provider === "groq" ? 2 : 1;
+        for (let attempt = 1; attempt <= attempts; attempt += 1) {
+          serverTrace.mark("server.llm.attempt", {
             provider,
             model: modelId,
             attempt,
+            ...(rerolled ? { reroll: true } : {}),
           });
-          break;
-        } catch (providerErr) {
-          serverTrace.mark("server.llm.failed", {
-            provider,
-            model: modelId,
-            attempt,
-            message: providerErr instanceof Error ? providerErr.message : String(providerErr),
-          });
-          const rateLimited = isRateLimitError(providerErr);
-          if (rateLimited && attempt < attempts && !emittedAnyToken && !signal.aborted) {
-            await new Promise((resolve) => setTimeout(resolve, 200));
-            continue;
+          try {
+            ({ inputTokens, outputTokens } = await streamFromCharacterModel({
+              model: modelId,
+              systemPromptParts,
+              history,
+              message,
+              maxTokens,
+              temperature: voiceCfg?.temperature ?? character.brainModel?.temperature,
+              topP: voiceCfg?.topP ?? character.brainModel?.topP,
+              signal: AbortSignal.any([signal, rollAbort.signal]),
+              onToken,
+            }));
+            chosenProvider = provider;
+            serverTrace.mark("server.llm.succeeded", {
+              provider,
+              model: modelId,
+              attempt,
+              ...(rerolled ? { reroll: true } : {}),
+            });
+            break;
+          } catch (providerErr) {
+            // The guard aborted this roll on purpose — hand control to the
+            // re-roll logic below instead of the failure path.
+            if (rerollRequested && !signal.aborted) break;
+            serverTrace.mark("server.llm.failed", {
+              provider,
+              model: modelId,
+              attempt,
+              message: providerErr instanceof Error ? providerErr.message : String(providerErr),
+            });
+            const rateLimited = isRateLimitError(providerErr);
+            if (rateLimited && attempt < attempts && !emittedAnyToken && !signal.aborted) {
+              await new Promise((resolve) => setTimeout(resolve, 200));
+              continue;
+            }
+            throw providerErr;
           }
-          throw providerErr;
         }
+        // A refusal can also arrive with no sentence terminator at all — the
+        // stream ends while the hold is still active. Check the full reply.
+        if (
+          !rerollRequested &&
+          !rerolled &&
+          refusalHoldActive &&
+          chosenProvider &&
+          isRefusalBoilerplate(replyText.trim())
+        ) {
+          rerollRequested = true;
+          serverTrace.mark("server.llm.refusal_detected", {
+            text: replyText.trim().slice(0, 120),
+            at: "stream-end",
+          });
+        }
+        if (rerollRequested && !signal.aborted) {
+          serverTrace.mark("server.llm.refusal_rerolled", {
+            refusedText: replyText.trim().slice(0, 160),
+          });
+          // Nothing was emitted or dispatched while the hold was active —
+          // reset the roll-local state and run the deflection roll.
+          replyText = "";
+          ttsCursor = 0;
+          rerollRequested = false;
+          refusalHoldActive = true;
+          rerolled = true;
+          chosenProvider = null;
+          continue;
+        }
+        break;
       }
+      currentRollAbort = null;
+
+      if (signal.aborted) return;
 
       if (!chosenProvider) {
         throw new Error("LLM call did not complete.");
+      }
+
+      // Stream ended while the hold was still active (a short reply with no
+      // sentence terminator that wasn't a refusal) — release it now so the
+      // text reaches the client and the final flush below can dispatch TTS.
+      if (refusalHoldActive) {
+        refusalHoldActive = false;
+        if (replyText) emitMainTokenDelta(replyText);
       }
 
       serverTrace.mark("server.llm.done", {

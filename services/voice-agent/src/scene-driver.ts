@@ -26,6 +26,7 @@ import {
   type SceneTurnForPlanning,
 } from "@odyssey/orchestration";
 import type { OrchestratorDecision, Scene, SceneState, SfxCue } from "@odyssey/types";
+import { isRefusalBoilerplate } from "@odyssey/voice-pipeline";
 
 const RECENT_TURNS_LIMIT = 6;
 /** Don't speculate off a stray opener ("uh", "so") — wait for some real intent. */
@@ -460,6 +461,15 @@ export class SceneDriver {
    * The silence is NOT recorded as a user turn. Returns true iff a character spoke.
    */
   async driveProactive(speak: SceneSpeakFn): Promise<boolean> {
+    // Refusal echo guard: if the last spoken line was assistant boilerplate
+    // that slipped past the pipeline's re-roll, a proactive turn tends to
+    // parrot it verbatim (the model anchors on its own last line). Hold for
+    // the user instead of doubling the persona break.
+    const lastTurn = this.#recentTurns[this.#recentTurns.length - 1];
+    if (lastTurn && lastTurn.speakerSlug !== "user" && isRefusalBoilerplate(lastTurn.text)) {
+      console.log("[voice-agent] proactive: hold (last reply was refusal boilerplate)");
+      return false;
+    }
     const decision = await this.#decide(PROACTIVE_SILENCE_MARKER, "proactive");
     const resolution = resolveSceneDecision(
       { scene: this.scene, sceneState: this.#sceneState },

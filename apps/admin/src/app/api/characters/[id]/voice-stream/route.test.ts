@@ -17,6 +17,10 @@ const recordContextBuild = vi.hoisted(() => vi.fn());
 const appendEvent = vi.hoisted(() => vi.fn());
 const ttsTexts = vi.hoisted(() => [] as string[]);
 const failAckTts = vi.hoisted(() => ({ current: false }));
+// Scripted LLM replies (token arrays), consumed one per stream call. Empty ⇒
+// the default single-reply stream. Inputs are captured for prompt assertions.
+const llmScript = vi.hoisted(() => ({ current: [] as string[][] }));
+const llmCallInputs = vi.hoisted(() => [] as unknown[]);
 const characterVoiceId = vi.hoisted(() => ({ current: null as string | null }));
 const buildVoicePromptPlan = vi.hoisted(() =>
   vi.fn(async (input: {
@@ -148,10 +152,14 @@ vi.mock("@odyssey/engine", () => ({
   getChatProviderForModel: vi.fn(() => ({
     id: "cerebras",
     stream: async (
-      _opts: unknown,
+      opts: unknown,
       onEvent: (event: unknown) => void,
     ) => {
-      onEvent({ type: "token", delta: "Testing voice pipeline." });
+      llmCallInputs.push(opts);
+      const tokens = llmScript.current.shift() ?? ["Testing voice pipeline."];
+      for (const delta of tokens) {
+        onEvent({ type: "token", delta });
+      }
       onEvent({
         type: "done",
         inputTokens: 100,
@@ -263,6 +271,8 @@ describe("character voice-stream persistence", () => {
     appendEvent.mockReset();
     ttsTexts.length = 0;
     failAckTts.current = false;
+    llmScript.current = [];
+    llmCallInputs.length = 0;
     characterVoiceId.current = null;
     buildVoicePromptPlan.mockClear();
     curate.mockClear();
@@ -770,6 +780,59 @@ describe("character voice-stream persistence", () => {
           ackText: "I can speak to that.",
           ackDelivered: false,
         }),
+      }),
+    );
+  });
+
+  it("re-rolls assistant refusal boilerplate into an in-character reply with no residue", async () => {
+    llmScript.current = [
+      // Roll 0: persona break — trained assistant refusal.
+      ["I'm sorry, but I can't", " help with that."],
+      // Roll 1: the deflection roll answers in character.
+      ["Destruction is no gift I will receive.", " Speak plainly of what you seek, or be gone."],
+    ];
+    const response = await POST(
+      request({
+        sessionId: "session_1",
+        turnId: "turn_refusal",
+        message: "I seek to bring destruction and chaos.",
+        history: [],
+        model: "gpt-oss-120b",
+      }),
+      routeCtx,
+    );
+    expect(response.status).toBe(200);
+
+    const events = await collectSse(response);
+    const tokenText = events
+      .filter((event) => event.event === "token")
+      .map((event) => (event.data as { delta: string }).delta)
+      .join("");
+    // The refused draft never reaches the client transcript or TTS…
+    expect(tokenText).not.toContain("can't help");
+    expect(ttsTexts.join(" ")).not.toContain("can't help");
+    // …only the in-character deflection does.
+    expect(tokenText).toContain("Destruction is no gift I will receive.");
+    expect(ttsTexts.join(" ")).toContain("Speak plainly of what you seek");
+
+    const done = events.find((event) => event.event === "done")?.data as {
+      serverTrace?: { events?: Array<{ name?: string; meta?: Record<string, unknown> }> };
+    };
+    const traceNames = (done.serverTrace?.events ?? []).map((event) => event.name);
+    expect(traceNames).toContain("server.llm.refusal_detected");
+    expect(traceNames).toContain("server.llm.refusal_rerolled");
+
+    // The re-roll carried the in-character-deflection instruction; the first
+    // roll did not.
+    expect(llmCallInputs).toHaveLength(2);
+    expect(JSON.stringify(llmCallInputs[0])).not.toContain("refusal-style");
+    expect(JSON.stringify(llmCallInputs[1])).toContain("refusal-style");
+
+    // Persisted turn carries only the in-character reply.
+    expect(upsertTurn).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        assistantText: "Destruction is no gift I will receive. Speak plainly of what you seek, or be gone.",
+        status: "completed",
       }),
     );
   });
