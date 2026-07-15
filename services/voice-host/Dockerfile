@@ -46,4 +46,6 @@ RUN HF_TOKEN=$HF_TOKEN npm run -w @odyssey/voice-host prewarm
 
 EXPOSE 8080
 # Leave EMBEDDING_PROVIDER unset → the pipeline uses warm in-process bge.
-CMD ["npm", "run", "host:voice"]
+# node as PID 1 (no npm wrapper) so SIGTERM reaches the server directly on
+# deploy swaps — see the voice-agent Dockerfile for the full rationale.
+CMD ["node", "--import", "tsx", "services/voice-host/src/server.ts"]

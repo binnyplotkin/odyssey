@@ -60,4 +60,11 @@ EXPOSE 8080
 # Runtime env (Railway): LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET.
 # Leave EMBEDDING_PROVIDER unset → warm in-process bge.
 # "start" tells the @livekit/agents CLI to run in production worker mode.
-CMD ["npm", "run", "agent:voice", "--", "start"]
+#
+# node is PID 1 ON PURPOSE (no npm wrapper): the @livekit/agents CLI drains on
+# SIGTERM — stops taking new rooms, finishes active sessions — but only if the
+# signal actually reaches node. `npm run` as PID 1 swallows/mishandles TERM, so
+# deploy swaps were hard-killing live conversations mid-turn. Pair with a
+# generous RAILWAY_DEPLOYMENT_DRAINING_SECONDS (e.g. 300) on the service so
+# Railway waits for the drain instead of SIGKILLing after the default grace.
+CMD ["node", "--import", "tsx", "services/voice-agent/src/agent.ts", "start"]
