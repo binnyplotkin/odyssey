@@ -25,9 +25,9 @@ const siteDescription =
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
-  title: "Odyssey",
+  title: "Kawabunga",
   description: siteDescription,
-  applicationName: "Odyssey",
+  applicationName: "Kawabunga",
   manifest: "/site.webmanifest",
   icons: {
     icon: [
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     other: [{ rel: "mask-icon", url: "/safari-pinned-tab.svg", color: "#5f4025" }],
   },
   openGraph: {
-    title: "Odyssey",
+    title: "Kawabunga",
     description: siteDescription,
     type: "website",
     images: [
@@ -49,13 +49,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Odyssey icon",
+        alt: "Kawabunga icon",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Odyssey",
+    title: "Kawabunga",
     description: siteDescription,
     images: ["/og-image.png"],
   },
